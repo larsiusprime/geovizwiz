@@ -7,27 +7,50 @@
   <link rel="icon" href="data:,">
   <style>
     :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
+    /* prevent overflow from form controls */
+    *, *::before, *::after { box-sizing: border-box; }
+
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
     #map { position: absolute; inset: 0; }
+
     #controls {
-      position: absolute; top: 10px; left: 10px; max-width: 380px;
-      background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
-      display: grid; gap: var(--gap); z-index: 10;
+    position: absolute; top: 10px; left: 10px;
+    width: min(92vw, 420px);   /* a touch wider so two columns breathe */
+    background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
+    display: grid; gap: var(--gap); z-index: 10;
     }
+
     #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
-    #controls label { font-size: 12px; color: #333; }
-    #controls select, #controls input[type="number"] {
-      width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
+    #controls label { display:block; font-size: 12px; color: #333; }
+
+    #controls select, #controls input[type="number"], #controls input[type="text"] {
+    width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
     }
-    #controls .row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap); }
+
+    /* two-column rows with safe shrinking to avoid overlap */
+    #controls .row {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    gap: var(--gap);
+    align-items: end;
+    }
+    #controls .row > * { min-width: 0; } /* allow items to shrink inside columns */
+
+    /* buttons + legend */
     #controls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
     #controls button {
-      border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+    border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
     }
     #controls button:hover { background: #f0f0f0; }
+
     #legend { display: none; align-items: center; gap: 6px; }
     #legend .swatch { width: 18px; height: 12px; border-radius: 2px; border: 1px solid #00000022; }
     .muted { color:#666; font-size:12px; }
+
+    /* tidy range slider and keep it inside the panel */
+    .inline { display:grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
+    input[type="range"] { width: 100%; margin: 0; }
+    output { font-size: 12px; color:#333; min-width: 2.8ch; text-align: right; }
   </style>
 </head>
 <body>
@@ -56,15 +79,18 @@
           <select id="ramp"></select>
         </div>
         <div>
-          <label for="opacity">Opacity</label>
-          <input id="opacity" type="number" step="0.1" min="0" max="1" value="0.9" />
-        </div>
+		  <label for="opacity">Opacity</label>
+		  <div class="inline">
+			<input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+			<output id="opacityVal">0.9</output>
+		  </div>
+		</div>
       </fieldset>
 
       <fieldset class="row">
         <div>
           <label for="mult">4) Extrusion multiplier</label>
-          <input id="mult" type="number" step="0.1" value="1" />
+          <input id="mult" type="number" step="1" value="1" />
         </div>
         <div>
           <label for="units">Units</label>

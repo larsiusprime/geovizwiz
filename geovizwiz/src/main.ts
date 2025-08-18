@@ -1,7 +1,23 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl, { Expression } from 'maplibre-gl';
-import { asyncBufferFromUrl, toGeoJson } from 'geoparquet';
+import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
+
+// Browser AsyncBuffer wrapper for a File/Blob
+type AsyncBuffer = {
+  byteLength: number;
+  slice(start: number, end?: number): Promise<ArrayBuffer>;
+};
+
+function fileToAsyncBuffer(file: File): AsyncBuffer {
+  return {
+    byteLength: file.size,
+    async slice(start: number, end?: number) {
+      const blob = file.slice(start, end ?? file.size);
+      return await blob.arrayBuffer(); // MUST return ArrayBuffer
+    }
+  };
+}
 
 /** ---------- Basemap: OpenStreetMap raster style (good for local dev) ----------
  * Note: OSM tiles are community-run; for production, use a commercial/free tile host
@@ -45,6 +61,7 @@ const rampSelect = document.getElementById('ramp') as HTMLSelectElement;
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
+const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement;
 
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 
@@ -86,24 +103,41 @@ fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
 
-  const url = URL.createObjectURL(file);
   try {
-    const gpBuffer = await asyncBufferFromUrl({ url });
-    const geojson = toGeoJson({ file: gpBuffer, compressors });
+	const gpBuffer = fileToAsyncBuffer(file);
+    // ⬇️ await: toGeoJson is async in your build
+	const result: any = await toGeoJson({ file: gpBuffer, compressors });
 
-    const features = geojson.features.filter(f =>
-      f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+    // Handle both return shapes:
+    //  - FeatureCollection directly
+    //  - { geojson: FeatureCollection, ... }
+    const fc: GeoJSON.FeatureCollection | undefined =
+      result?.type === 'FeatureCollection' ? result : result?.geojson;
+
+    if (!fc?.features) {
+      throw new Error('Parser returned no FeatureCollection. Is this a valid GeoParquet with geometry metadata?');
+    }
+
+    // (Optional) If your file isn’t polygons, extrusion won’t show anything
+    const features = fc.features.filter(
+      f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
     );
-    currentGeoJSON = { type: 'FeatureCollection', features };
+    if (features.length === 0) {
+      throw new Error('No Polygon/MultiPolygon features found. Load polygons for extrusion, or remove the polygon-only filter.');
+    }
 
+    currentGeoJSON = { type: 'FeatureCollection', features };
     populateFieldDropdown(features);
     addOrUpdateSource(currentGeoJSON);
     fitToData(currentGeoJSON);
     legendEl.style.display = 'none';
-  } finally {
-    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    console.error('GeoParquet load failed:', err);
+    alert(`GeoParquet load failed: ${err?.message ?? err}`);
   }
 });
+
+
 
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;
@@ -116,7 +150,10 @@ fieldSelect.addEventListener('change', () => {
 rampSelect.addEventListener('change', () => { applyExtrusion(); updateLegend(); });
 multInput.addEventListener('change', applyExtrusion);
 unitsSelect.addEventListener('change', applyExtrusion);
-opacityInput.addEventListener('change', applyExtrusion);
+opacityInput.addEventListener('input', () => { 
+  if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
+  applyExtrusion();
+});
 
 /** ---------- Map helpers ---------- */
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {

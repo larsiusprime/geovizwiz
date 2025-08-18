@@ -214,6 +214,67 @@ function isKeyField(name: string) {
   return valueHits || sizeHits;
 }
 
+const SIZE_UNIT_RE = /(sq_?ft|sqft|ft2|ft\^2|sq_?m|sqm|m2|m\^2|acres?|acre|hectares?|ha|km2|sqkm|mi2|sqmi)\b/i;
+const BLDG_KEY_RE = /\b(bldg|build|impr)\b/i;
+const LAND_KEY_RE = /\bland\b/i;
+
+function tokenizeName(name: string): string[] {
+  return name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+}
+
+// Token sets we match against
+const UNIT_TOKENS = new Set([
+  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares'
+]);
+
+function containsUnit(name: string): boolean {
+  const tokens = tokenizeName(name);
+  return tokens.some(t => UNIT_TOKENS.has(t));
+}
+
+function containsKeyword(name: string, kind: 'building'|'land'): boolean {
+  const tokens = tokenizeName(name);
+  if (kind === 'building') return tokens.some(t => /^(bldg|build|building|impr|improv)/.test(t));
+  return tokens.some(t => /^land/.test(t));
+}
+
+// score lower = better
+function scoreSizeField(name: string, kind: 'building'|'land'): number {
+  const tokens = tokenizeName(name);
+  const kwIdx = tokens.findIndex(t =>
+    kind === 'building' ? /^(bldg|build|building|impr|improv)/.test(t) : /^land/.test(t)
+  );
+  const unitIdx = tokens.findIndex(t => UNIT_TOKENS.has(t));
+  if (kwIdx === -1 || unitIdx === -1) return Number.POSITIVE_INFINITY;
+
+  const extras = tokens.filter((t, i) => i !== kwIdx && i !== unitIdx && t !== 'area' && t !== 'total');
+
+  let score = 0;
+  score += extras.length * 10;              // simpler name preferred
+  score += tokens.length * 0.5;             // shorter preferred
+  if (unitIdx !== tokens.length - 1) score += 2;  // prefer unit suffix at end
+  if (kwIdx > 0) score += 0.5;              // slight bonus if keyword is at start
+  return score;
+}
+
+function guessAreaUnitKey(name: string | null): string | undefined {
+  const g = guessAreaUnitFromFieldName(name || '');
+  return g || undefined; // reuse your existing unit-guess function
+}
+
+function autoPickOne(kind: 'building'|'land', fields: string[]): { field?: string, unitKey?: string } {
+  let best: { field?: string, unitKey?: string } = {};
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const f of fields) {
+    const s = scoreSizeField(f, kind);
+    if (s < bestScore) {
+      bestScore = s;
+      best = { field: f, unitKey: guessAreaUnitKey(f) };
+    }
+  }
+  return best;
+}
+
 /* ---------------- Modal 1: chooser ---------------- */
 function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; numericFields: string[] }) {
   rowCountEl.textContent = opts.rowCount.toLocaleString();
@@ -304,6 +365,21 @@ function openSizeModal() {
   fillFieldSelect(landFieldSel, chosenNumericFields);
   fillUnitSelect(bldgUnitSel);
   fillUnitSelect(landUnitSel);
+  
+  // --- AUTO-PICK using heuristic ---
+  const bGuess = autoPickOne('building', chosenNumericFields);
+  const lGuess = autoPickOne('land', chosenNumericFields);
+
+  if (bGuess.field) {
+    bldgFieldSel.value = bGuess.field;
+    const u = bGuess.unitKey || guessAreaUnitFromFieldName(bGuess.field);
+    if (u) bldgUnitSel.value = u;
+  }
+  if (lGuess.field) {
+    landFieldSel.value = lGuess.field;
+    const u = lGuess.unitKey || guessAreaUnitFromFieldName(lGuess.field);
+    if (u) landUnitSel.value = u;
+  }
 
   bldgFieldSel.onchange = () => {
     const g = guessAreaUnitFromFieldName(bldgFieldSel.value);

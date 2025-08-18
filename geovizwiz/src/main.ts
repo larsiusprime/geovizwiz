@@ -12,6 +12,20 @@ function coerceScalar(v: any): any {
     const min = BigInt(Number.MIN_SAFE_INTEGER);
     return (big <= max && big >= min) ? Number(big) : big.toString();
   }
+  if (typeof v === 'string') {
+    const s = v.trim();
+    if (!s) return v;
+
+    // Handle (123) as -123, strip $ and thousands separators
+    const negMatch = s.match(/^\(([^)]+)\)$/);
+    const core = (negMatch ? negMatch[1] : s)
+      .replace(/[$,\s]/g, ''); // "$12,345.67" -> "12345.67"
+
+    const n = Number(core);
+    if (Number.isFinite(n)) return negMatch ? -n : n;
+
+    return v; // leave other strings as-is
+  }
   return v;
 }
 function sanitizeFeatureInPlace(f: GeoJSON.Feature) {
@@ -124,6 +138,7 @@ let currentField: string | null = null;
 let currentStats: { min: number; max: number } | null = null;
 
 let normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
+let colorDomain: { lo: number; hi: number; label: string } | null = null;
 
 // staged loading
 let lastFile: File | null = null;
@@ -607,12 +622,14 @@ function applyExtrusion() {
   const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
   const valueExpr = buildValueExpression();
 
-  const colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, min, max);
+  const cmin = colorDomain?.lo ?? min;
+  const cmax = colorDomain?.hi ?? max;
+  const colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
 
   const rawMult = Number(multInput.value);
   const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-  const heightExpr: Expression = ['*', ['coalesce', ['to-number', valueExpr], 0], multiplier * unitFactor] as any;
+  const heightExpr: Expression = ['*', valueExpr, multiplier * unitFactor] as any;
 
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
@@ -832,11 +849,20 @@ function computeAndApplyAutoMultiplier(
 ) {
   if (!currentGeoJSON || !currentField) return;
 
-  // pXX over the CURRENT normalization mode
+  // pXX over the CURRENT normalized metric
   const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
   const pVal = percentile(vals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
+  // ---- robust color domain: p1 → p99 ----
+  const pLow = percentile(vals, 1);
+  const pHigh = percentile(vals, 99);
+  let lo = Number.isFinite(pLow) ? pLow : (currentStats?.min ?? 0);
+  let hi = Number.isFinite(pHigh) ? pHigh : (currentStats?.max ?? 1);
+  if (!(hi > lo)) { lo = 0; hi = 1; }
+  colorDomain = { lo, hi, label: 'p1–p99' };
+
+  // ---- choose units/multiplier for height so p99 hits cap ----
   let unitKey: keyof typeof UNIT_TO_METERS;
   let multiplier: number;
 
@@ -854,17 +880,26 @@ function computeAndApplyAutoMultiplier(
   unitsSelect.value = unitKey;
   multInput.value = String(multiplier);
 
-  // recompute stats on the normalized distribution so the COLOR RAMP adapts
+  // recompute min/max for legend text (we’ll prefer colorDomain below)
   currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
+
+  // optional debug
+  console.debug('autoScale', { mode: normalizationMode, field: currentField, min: currentStats?.min, max: currentStats?.max });
+  console.debug('colorDomain', colorDomain);
 
   applyExtrusion();
 }
 
-
 function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], min: number, max: number): Expression {
-  const n = colors.length - 1; const stops: (number | string)[] = [];
-  for (let i = 0; i < colors.length; i++) { const t = i / n; stops.push(min + t * (max - min), colors[i]); }
-  return ['interpolate', ['linear'], ['coalesce', ['to-number', valueExpr], min], ...stops] as any;
+  const n = colors.length - 1;
+  const stops: (number | string)[] = [];
+  for (let i = 0; i < colors.length; i++) {
+    const t = i / n;
+    stops.push(min + t * (max - min), colors[i]);
+  }
+  // Clamp value into [min,max] to avoid outliers crushing the ramp
+  const clamped: Expression = ['max', min, ['min', max, valueExpr]] as any;
+  return ['interpolate', ['linear'], clamped, ...stops] as any;
 }
 
 function makeColorExpression(field: string, colors: string[], min: number, max: number): Expression {
@@ -890,15 +925,19 @@ function bbox(fc: GeoJSON.FeatureCollection): [number, number, number, number] |
 
 function updateLegend() {
   const ramp = COLOR_RAMPS[rampSelect.value] || []; legendEl.replaceChildren();
-  if (ramp.length && currentStats) {
+  if (ramp.length && (currentStats || colorDomain)) {
     const row = document.createElement('div');
     row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.flexWrap = 'wrap';
     const label = document.createElement('div'); label.textContent = 'Legend:'; label.style.fontSize = '12px';
     row.appendChild(label);
     ramp.forEach(c => { const s = document.createElement('div'); s.className = 'swatch'; (s as any).style = `background:${c}`; row.appendChild(s); });
+
+    const lo = colorDomain?.lo ?? currentStats!.min;
+    const hi = colorDomain?.hi ?? currentStats!.max;
     const range = document.createElement('div'); range.className = 'muted';
-    range.textContent = `min ${currentStats.min.toLocaleString()} → max ${currentStats.max.toLocaleString()}`;
+    range.textContent = `${colorDomain?.label ? colorDomain.label + ' ' : ''}${lo.toLocaleString()} → ${hi.toLocaleString()}`;
     row.appendChild(range);
+
     legendEl.appendChild(row);
     legendEl.style.display = 'grid';
   } else legendEl.style.display = 'none';

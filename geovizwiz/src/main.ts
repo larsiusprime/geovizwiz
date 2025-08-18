@@ -3,12 +3,31 @@ import maplibregl, { Expression } from 'maplibre-gl';
 import { asyncBufferFromUrl, toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
+/** ---------- Basemap: OpenStreetMap raster style (good for local dev) ----------
+ * Note: OSM tiles are community-run; for production, use a commercial/free tile host
+ * (Stadia Maps, MapTiler, CARTO, Thunderforest, etc.) with an API key and your own usage plan.
+ */
+const OSM_STYLE: any = {
+  version: 8,
+  sources: {
+    'osm-tiles': {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors'
+    }
+  },
+  layers: [
+    { id: 'osm-tiles', type: 'raster', source: 'osm-tiles', minzoom: 0, maxzoom: 19 }
+  ]
+};
+
 /** ---------- Map bootstrap ---------- */
 const map = new maplibregl.Map({
   container: 'map',
-  style: 'https://demotiles.maplibre.org/style.json',
-  center: [-96, 37.8],
-  zoom: 4,
+  style: OSM_STYLE,
+  center: [-95.3698, 29.7604], // Houston, TX
+  zoom: 10,
   pitch: 45,
   bearing: -20,
   hash: true
@@ -35,6 +54,12 @@ const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[da
 
 viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 
+/** New buttons */
+const btnSample = document.getElementById('btn-sample') as HTMLButtonElement;
+const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
+btnSample.onclick = () => loadSampleHouston();
+btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
+
 /** ---------- Color ramps (hard-coded choices) ---------- */
 const COLOR_RAMPS: Record<string, string[]> = {
   Viridis: ['#440154','#46327E','#365C8D','#277F8E','#1FA187','#4AC16D','#A0DA39','#FDE725'],
@@ -56,19 +81,27 @@ let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
 let currentField: string | null = null;
 let currentStats: { min: number; max: number } | null = null;
 
-/** ---------- File load + to GeoJSON ---------- */
+/** ---------- File load (GeoParquet -> GeoJSON) ---------- */
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
 
-  // Turn the File into a blob: URL, then let geoparquet fetch it
   const url = URL.createObjectURL(file);
   try {
     const gpBuffer = await asyncBufferFromUrl({ url });
-    const geojson = toGeoJson({ file: gpBuffer, compressors }); // compressors from 'hyparquet-compressors'
-    // ...keep your filtering / setData / fit code here
+    const geojson = toGeoJson({ file: gpBuffer, compressors });
+
+    const features = geojson.features.filter(f =>
+      f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+    );
+    currentGeoJSON = { type: 'FeatureCollection', features };
+
+    populateFieldDropdown(features);
+    addOrUpdateSource(currentGeoJSON);
+    fitToData(currentGeoJSON);
+    legendEl.style.display = 'none';
   } finally {
-    URL.revokeObjectURL(url); // cleanup
+    URL.revokeObjectURL(url);
   }
 });
 
@@ -128,23 +161,17 @@ function applyExtrusion() {
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-  // Units for fill-extrusion are meters, so we convert the chosen units to meters here. :contentReference[oaicite:5]{index=5}
 }
 
 function fitToData(fc: GeoJSON.FeatureCollection) {
   const b = bbox(fc);
   if (!b) return;
-  map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 1000 });
+  map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 800 });
 }
 
 /** ---------- Camera presets ---------- */
-function setPerspective() {
-  map.easeTo({ pitch: 60, duration: 600 });
-}
-function setOrtho() {
-  // Ortho-like: top-down, zero pitch. True orthographic is not available in MapLibre. :contentReference[oaicite:6]{index=6}
-  map.easeTo({ pitch: 0, duration: 600 });
-}
+function setPerspective() { map.easeTo({ pitch: 60, duration: 600 }); }
+function setOrtho() { map.easeTo({ pitch: 0, duration: 600 }); }
 function setView(which: string) {
   const views: Record<string, Partial<maplibregl.CameraOptions>> = {
     top: { pitch: 0, bearing: 0 },
@@ -158,7 +185,7 @@ function setView(which: string) {
   map.easeTo({ duration: 700, ...opts });
 }
 
-/** ---------- Utils ---------- */
+/** ---------- Units ---------- */
 const UNIT_TO_METERS = {
   meters: 1,
   feet: 0.3048,
@@ -166,6 +193,71 @@ const UNIT_TO_METERS = {
   miles: 1609.344,
   stories: 3.3
 };
+
+/** ---------- Sample data (Houston) ---------- */
+function loadSampleHouston() {
+  // Three simple rectangles around Houston with a numeric "value" field
+  const rect = (lon: number, lat: number, dx: number, dy: number) => ([
+    [lon - dx, lat - dy],
+    [lon + dx, lat - dy],
+    [lon + dx, lat + dy],
+    [lon - dx, lat + dy],
+    [lon - dx, lat - dy]
+  ]);
+
+  const fc: GeoJSON.FeatureCollection = {
+    type: 'FeatureCollection',
+    features: [
+      {
+        type: 'Feature',
+        properties: { name: 'Downtown', value: 500 },
+        geometry: { type: 'Polygon', coordinates: [rect(-95.3698, 29.7604, 0.020, 0.015)] }
+      },
+      {
+        type: 'Feature',
+        properties: { name: 'Midtown', value: 250 },
+        geometry: { type: 'Polygon', coordinates: [rect(-95.3750, 29.7350, 0.018, 0.014)] }
+      },
+      {
+        type: 'Feature',
+        properties: { name: 'Uptown/Galleria', value: 800 },
+        geometry: { type: 'Polygon', coordinates: [rect(-95.4620, 29.7400, 0.025, 0.018)] }
+      }
+    ]
+  };
+
+  currentGeoJSON = fc;
+  populateFieldDropdown(fc.features);
+
+  // Default to the "value" field if present
+  if ([...fieldSelect.options].some(o => o.value === 'value')) {
+    fieldSelect.value = 'value';
+    currentField = 'value';
+  } else {
+    currentField = fieldSelect.value || null;
+  }
+
+  if (currentField) {
+    currentStats = computeStats(fc, currentField);
+  }
+
+  addOrUpdateSource(fc);
+  applyExtrusion();
+  updateLegend();
+  fitToData(fc);
+}
+
+/** ---------- Helpers ---------- */
+function populateFieldDropdown(features: GeoJSON.Feature[]) {
+  const numeric = detectNumericFields(features);
+  fieldSelect.replaceChildren();
+  if (numeric.length === 0) {
+    fieldSelect.append(new Option('No numeric fields found', ''));
+  } else {
+    fieldSelect.append(new Option('— choose —', ''));
+    numeric.forEach(n => fieldSelect.append(new Option(n, n)));
+  }
+}
 
 function detectNumericFields(features: GeoJSON.Feature[]): string[] {
   const counts: Record<string, number> = {};
@@ -179,7 +271,6 @@ function detectNumericFields(features: GeoJSON.Feature[]): string[] {
       }
     }
   }
-  // numeric if it’s numeric in most rows (robust to some nulls/strings)
   return Object.keys(nums).filter(k => nums[k] >= Math.max(5, (counts[k] || 0) * 0.7)).sort();
 }
 
@@ -193,9 +284,7 @@ function computeStats(fc: GeoJSON.FeatureCollection, field: string) {
       if (v > max) max = v;
     }
   }
-  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
-    min = 0; max = min + 1; // avoid degenerate
-  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) { min = 0; max = min + 1; }
   return { min, max };
 }
 

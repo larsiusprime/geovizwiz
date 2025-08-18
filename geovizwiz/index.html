@@ -5,13 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>geovizwiz</title>
   <link rel="icon" href="data:,">
-  <!-- Minimal styling so the map + controls feel decent -->
   <style>
-    :root { --panel: #ffffff; --shadow: 0 6px 24px rgba(0,0,0,.12); --gap: 10px; }
+    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
     #map { position: absolute; inset: 0; }
     #controls {
-      position: absolute; top: 10px; left: 10px; max-width: 360px;
+      position: absolute; top: 10px; left: 10px; max-width: 380px;
       background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
       display: grid; gap: var(--gap); z-index: 10;
     }
@@ -39,6 +38,10 @@
       <fieldset>
         <label for="file">1) Load a GeoParquet file (.parquet)</label>
         <input id="file" type="file" accept=".parquet,.parq" />
+        <div class="buttons">
+          <button id="btn-sample">Load sample (Houston)</button>
+          <button id="btn-zoomto">Zoom to data</button>
+        </div>
         <div class="muted">Tip: polygons will extrude; points/lines won’t.</div>
       </fieldset>
 
@@ -93,7 +96,7 @@
           <button id="btn-persp">Perspective</button>
           <button id="btn-ortho">Ortho-like (top-down)</button>
         </div>
-        <div class="muted">MapLibre uses perspective; orthographic is approximated with pitch=0. :contentReference[oaicite:3]{index=3}</div>
+        <div class="muted">MapLibre uses perspective; “ortho” here is pitch=0.</div>
       </fieldset>
 
       <fieldset id="legend"></fieldset>

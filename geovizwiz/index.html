@@ -7,39 +7,35 @@
   <link rel="icon" href="data:,">
   <style>
     :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
-    /* prevent overflow from form controls */
     *, *::before, *::after { box-sizing: border-box; }
 
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
     #map { position: absolute; inset: 0; }
 
     #controls {
-    position: absolute; top: 10px; left: 10px;
-    width: min(92vw, 420px);   /* a touch wider so two columns breathe */
-    background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
-    display: grid; gap: var(--gap); z-index: 10;
+      position: absolute; top: 10px; left: 10px;
+      width: min(92vw, 420px);
+      background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
+      display: grid; gap: var(--gap); z-index: 10;
     }
 
     #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
     #controls label { display:block; font-size: 12px; color: #333; }
-
     #controls select, #controls input[type="number"], #controls input[type="text"] {
-    width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
+      width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
     }
 
-    /* two-column rows with safe shrinking to avoid overlap */
     #controls .row {
-    display: grid;
-    grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-    gap: var(--gap);
-    align-items: end;
+      display: grid;
+      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+      gap: var(--gap);
+      align-items: end;
     }
-    #controls .row > * { min-width: 0; } /* allow items to shrink inside columns */
+    #controls .row > * { min-width: 0; }
 
-    /* buttons + legend */
     #controls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
     #controls button {
-    border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+      border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
     }
     #controls button:hover { background: #f0f0f0; }
 
@@ -47,10 +43,30 @@
     #legend .swatch { width: 18px; height: 12px; border-radius: 2px; border: 1px solid #00000022; }
     .muted { color:#666; font-size:12px; }
 
-    /* tidy range slider and keep it inside the panel */
     .inline { display:grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
     input[type="range"] { width: 100%; margin: 0; }
     output { font-size: 12px; color:#333; min-width: 2.8ch; text-align: right; }
+
+    /* overlays */
+    .overlay {
+      position: absolute; inset: 0; display: none; place-items: center;
+      background: rgba(0,0,0,.35); z-index: 30;
+    }
+    .overlay.show { display: grid; }
+    .modal {
+      width: min(96vw, 680px); max-height: 88vh; overflow: hidden;
+      background: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 14px; display: grid; gap: 10px;
+    }
+    .modal .grid2 { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .modal h3 { margin: 0 0 4px; font-size: 16px; }
+    .modal .footer { display: flex; gap: 8px; justify-content: flex-end; }
+	
+	#fieldList { max-height: 60vh; overflow: auto; padding-right: 4px; }
+	
+    .progress { height: 8px; background: #eee; border-radius: 999px; overflow: hidden; }
+    .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width .2s linear; }
+    .progress.indeterminate .bar { width: 30%; animation: indet 1.2s infinite linear; }
+    @keyframes indet { 0% { margin-left: -30% } 100% { margin-left: 100% } }
   </style>
 </head>
 <body>
@@ -79,27 +95,29 @@
           <select id="ramp"></select>
         </div>
         <div>
-		  <label for="opacity">Opacity</label>
-		  <div class="inline">
-			<input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-			<output id="opacityVal">0.9</output>
-		  </div>
-		</div>
+          <label for="opacity">Opacity</label>
+          <div class="inline">
+            <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+            <output id="opacityVal">0.9</output>
+          </div>
+        </div>
       </fieldset>
 
       <fieldset class="row">
         <div>
           <label for="mult">4) Extrusion multiplier</label>
-          <input id="mult" type="number" step="1" value="1" />
+          <input id="mult" type="number" step=".1" value="1" />
         </div>
         <div>
           <label for="units">Units</label>
           <select id="units">
-            <option value="meters">meters</option>
-            <option value="feet">feet</option>
-            <option value="kilometers">kilometers</option>
-            <option value="miles">miles</option>
-            <option value="stories">stories (~3.3m)</option>
+            <option value="centimeters" selected>centimeters</option>
+			<option value="meters">meters</option>
+			<option value="inches">inches</option>
+			<option value="feet">feet</option>
+			<option value="kilometers">kilometers</option>
+			<option value="miles">miles</option>
+			<option value="stories">stories (~3.3m)</option>
           </select>
         </div>
       </fieldset>
@@ -126,6 +144,35 @@
       </fieldset>
 
       <fieldset id="legend"></fieldset>
+    </div>
+  </div>
+
+  <!-- Metadata chooser -->
+  <div id="modalOverlay" class="overlay">
+    <div class="modal">
+      <h3>Select numeric fields to load</h3>
+      <div class="muted">Rows: <span id="rowCount">–</span>. Geometry column: <code id="geomCol">–</code></div>
+      <div class="buttons">
+        <button id="btnAll">Select all</button>
+        <button id="btnNone">Select none</button>
+      </div>
+      <div id="fieldList" class="grid2"></div>
+      <div class="footer">
+        <button id="btnCancelModal">Cancel</button>
+        <button id="btnConfirmModal">Load selected</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading / progress -->
+  <div id="loadingOverlay" class="overlay">
+    <div class="modal">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+        <div>Loading…</div>
+        <button id="btnCancelLoading">Cancel</button>
+      </div>
+      <div id="progress" class="progress indeterminate"><div id="progressBar" class="bar"></div></div>
+      <div id="progressMsg" class="muted">Parsing GeoParquet…</div>
     </div>
   </div>
 

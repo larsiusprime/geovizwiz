@@ -57,12 +57,16 @@
       width: min(96vw, 680px); max-height: 88vh; overflow: hidden;
       background: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 14px; display: grid; gap: 10px;
     }
-    .modal .grid2 { display: grid; grid-template-columns: 1fr; gap: 8px; }
     .modal h3 { margin: 0 0 4px; font-size: 16px; }
     .modal .footer { display: flex; gap: 8px; justify-content: flex-end; }
-	
-	#fieldList { max-height: 60vh; overflow: auto; padding-right: 4px; }
-	
+
+    .section-title { font-weight: 600; margin-top: 4px; }
+    .divider { height: 1px; background: #e6e6e6; margin: 6px 0; }
+
+    /* field lists */
+    .fieldlist { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    #fieldList { max-height: 60vh; overflow: auto; padding-right: 4px; }
+
     .progress { height: 8px; background: #eee; border-radius: 999px; overflow: hidden; }
     .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width .2s linear; }
     .progress.indeterminate .bar { width: 30%; animation: indet 1.2s infinite linear; }
@@ -87,6 +91,22 @@
       <fieldset>
         <label for="field">2) Numeric field to visualize</label>
         <select id="field"><option value="" disabled selected>— load a file first —</option></select>
+
+        <!-- NEW: normalization choices -->
+        <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
+            <span>as-is</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="normMode" id="norm-land" value="perLand" disabled />
+            <span>…per land size <em id="normLandUnit">(unit)</em></span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" disabled />
+            <span>…per building size <em id="normBldgUnit">(unit)</em></span>
+          </label>
+        </div>
       </fieldset>
 
       <fieldset class="row">
@@ -112,12 +132,12 @@
           <label for="units">Units</label>
           <select id="units">
             <option value="centimeters" selected>centimeters</option>
-			<option value="meters">meters</option>
-			<option value="inches">inches</option>
-			<option value="feet">feet</option>
-			<option value="kilometers">kilometers</option>
-			<option value="miles">miles</option>
-			<option value="stories">stories (~3.3m)</option>
+            <option value="meters">meters</option>
+            <option value="inches">inches</option>
+            <option value="feet">feet</option>
+            <option value="kilometers">kilometers</option>
+            <option value="miles">miles</option>
+            <option value="stories">stories (~3.3m)</option>
           </select>
         </div>
       </fieldset>
@@ -134,20 +154,11 @@
         </div>
       </fieldset>
 
-      <fieldset>
-        <label>Camera mode</label>
-        <div class="buttons">
-          <button id="btn-persp">Perspective</button>
-          <button id="btn-ortho">Ortho-like (top-down)</button>
-        </div>
-        <div class="muted">MapLibre uses perspective; “ortho” here is pitch=0.</div>
-      </fieldset>
-
       <fieldset id="legend"></fieldset>
     </div>
   </div>
 
-  <!-- Metadata chooser -->
+  <!-- Modal 1: Field chooser -->
   <div id="modalOverlay" class="overlay">
     <div class="modal">
       <h3>Select numeric fields to load</h3>
@@ -156,10 +167,38 @@
         <button id="btnAll">Select all</button>
         <button id="btnNone">Select none</button>
       </div>
-      <div id="fieldList" class="grid2"></div>
+      <div id="fieldList" class="fieldlist"></div>
       <div class="footer">
         <button id="btnCancelModal">Cancel</button>
-        <button id="btnConfirmModal">Load selected</button>
+        <button id="btnConfirmModal">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Size identification -->
+  <div id="sizeOverlay" class="overlay">
+    <div class="modal">
+      <h3>Identify land & building size fields</h3>
+      <div class="muted">Please identify which of your loaded fields represent: (a) total finished floor area for all buildings, and (b) total land area.</div>
+
+      <div style="display:grid; gap:8px;">
+        <label>Building size field</label>
+        <select id="bldgField"></select>
+        <label>Building size unit</label>
+        <select id="bldgUnit"></select>
+
+        <div class="divider"></div>
+
+        <label>Land size field</label>
+        <select id="landField"></select>
+        <label>Land size unit</label>
+        <select id="landUnit"></select>
+      </div>
+
+      <div class="footer">
+        <button id="btnSizeBack">Back</button>
+        <button id="btnSizeSkip">Skip</button>
+        <button id="btnSizeOk">Continue</button>
       </div>
     </div>
   </div>

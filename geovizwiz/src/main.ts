@@ -196,7 +196,7 @@ const UNIT_TO_METERS = {
 
 /** ---------- Sample data (Houston) ---------- */
 function loadSampleHouston() {
-  // Three simple rectangles around Houston with a numeric "value" field
+  // Three small rectangles around Houston with multiple numeric fields
   const rect = (lon: number, lat: number, dx: number, dy: number) => ([
     [lon - dx, lat - dy],
     [lon + dx, lat - dy],
@@ -210,17 +210,17 @@ function loadSampleHouston() {
     features: [
       {
         type: 'Feature',
-        properties: { name: 'Downtown', value: 500 },
+        properties: { name: 'Downtown', value: 80, assessed: 320, density: 60 },
         geometry: { type: 'Polygon', coordinates: [rect(-95.3698, 29.7604, 0.020, 0.015)] }
       },
       {
         type: 'Feature',
-        properties: { name: 'Midtown', value: 250 },
+        properties: { name: 'Midtown', value: 30, assessed: 120, density: 35 },
         geometry: { type: 'Polygon', coordinates: [rect(-95.3750, 29.7350, 0.018, 0.014)] }
       },
       {
         type: 'Feature',
-        properties: { name: 'Uptown/Galleria', value: 800 },
+        properties: { name: 'Uptown/Galleria', value: 120, assessed: 480, density: 50 },
         geometry: { type: 'Polygon', coordinates: [rect(-95.4620, 29.7400, 0.025, 0.018)] }
       }
     ]
@@ -237,9 +237,7 @@ function loadSampleHouston() {
     currentField = fieldSelect.value || null;
   }
 
-  if (currentField) {
-    currentStats = computeStats(fc, currentField);
-  }
+  if (currentField) currentStats = computeStats(fc, currentField);
 
   addOrUpdateSource(fc);
   applyExtrusion();
@@ -262,16 +260,24 @@ function populateFieldDropdown(features: GeoJSON.Feature[]) {
 function detectNumericFields(features: GeoJSON.Feature[]): string[] {
   const counts: Record<string, number> = {};
   const nums: Record<string, number> = {};
+
   for (const f of features) {
     const p = (f.properties || {}) as Record<string, unknown>;
     for (const [k, v] of Object.entries(p)) {
       counts[k] = (counts[k] ?? 0) + 1;
-      if (typeof v === 'number' && Number.isFinite(v)) {
-        nums[k] = (nums[k] ?? 0) + 1;
-      }
+      if (typeof v === 'number' && Number.isFinite(v)) nums[k] = (nums[k] ?? 0) + 1;
     }
   }
-  return Object.keys(nums).filter(k => nums[k] >= Math.max(5, (counts[k] || 0) * 0.7)).sort();
+
+  // Consider a field numeric if at least 60% of its values are numbers (and at least 1).
+  return Object.keys(counts)
+    .filter(k => {
+      const c = counts[k] || 0;
+      const n = nums[k] || 0;
+      const need = Math.max(1, Math.ceil(0.6 * c));
+      return n >= need;
+    })
+    .sort();
 }
 
 function computeStats(fc: GeoJSON.FeatureCollection, field: string) {

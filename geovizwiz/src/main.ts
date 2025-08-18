@@ -48,6 +48,7 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
 const SOURCE_ID = 'gp-source';
 const LAYER_ID = 'gp-extrusions';
+const ERROR_LAYER_ID = 'gp-error';
 
 /* ---------------- UI elements ---------------- */
 const fileInput = document.getElementById('file') as HTMLInputElement;
@@ -399,7 +400,7 @@ async function loadSelectedColumns() {
     addOrUpdateSource(currentGeoJSON);
 
     // auto-multiplier for current normalization mode → p99 = 2km (centimeters)
-    computeAndApplyAutoMultiplier('auto', 1000, 100);
+    scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
 
     updateLegend();
     fitToData(currentGeoJSON);
@@ -412,6 +413,39 @@ async function loadSelectedColumns() {
 }
 
 /* ---------------- Map helpers ---------------- */
+function ensureErrorLayer() {
+  if (map.getLayer(ERROR_LAYER_ID)) return;
+  map.addLayer({
+    id: ERROR_LAYER_ID,
+    type: 'line',
+    source: SOURCE_ID,
+    paint: {
+      'line-color': '#ff3b30',          // red outline
+      'line-width': 1.5,
+      'line-dasharray': [1, 1.3],
+      'line-opacity': 0.9
+    }
+  });
+  // keep it above extrusions for visibility
+  try { map.moveLayer(ERROR_LAYER_ID); } catch {}
+}
+
+function updateErrorLayer() {
+  if (!map.getSource(SOURCE_ID)) return;
+  ensureErrorLayer();
+
+  let filter: any = ['==', ['literal', 1], 2]; // matches nothing by default
+
+  if (normalizationMode === 'perLand' && landSizeField) {
+    // land invalid when ≤ 0  (zero not allowed)
+    filter = ['<=', ['to-number', ['get', landSizeField]], 0];
+  } else if (normalizationMode === 'perBuilding' && bldgSizeField) {
+    // building invalid when negative (zero is allowed and not flagged)
+    filter = ['<', ['to-number', ['get', bldgSizeField]], 0];
+  }
+
+  map.setFilter(ERROR_LAYER_ID, filter);
+}
 function clearData() {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
@@ -445,6 +479,7 @@ function addExtrusionLayer() {
   });
   map.on('mouseenter', LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
+  ensureErrorLayer();
 }
 
 function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
@@ -466,15 +501,28 @@ function buildValueExpression(): Expression {
   const base: Expression = ['to-number', ['get', currentField]] as any;
 
   if (normalizationMode === 'perLand' && landSizeField) {
-    const d = ['max', 1e-12, ['to-number', ['get', landSizeField]]] as any;
-    return ['/', base, d] as any;
+    const den: Expression = ['to-number', ['get', landSizeField]] as any;
+    // Land invalid when ≤ 0 ⇒ height 0 (flat); outline layer will flag it.
+    return ['case',
+      ['<=', den, 0], 0,
+      ['/', base, den]
+    ] as any;
   }
+
   if (normalizationMode === 'perBuilding' && bldgSizeField) {
-    const d = ['max', 1e-12, ['to-number', ['get', bldgSizeField]]] as any;
-    return ['/', base, d] as any;
+    const den: Expression = ['to-number', ['get', bldgSizeField]] as any;
+    // Building invalid when < 0 ⇒ height 0 (flat) and flagged.
+    // Building == 0 is allowed conceptually (no building) but we can't divide by 0 ⇒ also 0 height (not flagged).
+    return ['case',
+      ['<', den, 0], 0,
+      ['==', den, 0], 0,
+      ['/', base, den]
+    ] as any;
   }
+
   return base;
 }
+
 
 function applyExtrusion() {
   if (!currentGeoJSON || !currentField || !currentStats) return;
@@ -486,18 +534,22 @@ function applyExtrusion() {
   const colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, min, max);
 
   const rawMult = Number(multInput.value);
-  const multiplier = Number.isFinite(rawMult) ? rawMult : 0; // 0 = flat extrusions
+  const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
   const heightExpr: Expression = ['*', ['coalesce', ['to-number', valueExpr], 0], multiplier * unitFactor] as any;
 
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-  
+
+  // refresh which features are flagged as erroneous for current mode
+  updateErrorLayer();
+
   if (activePopup && lastPicked) {
     activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
   }
 }
+
 
 function fitToData(fc: GeoJSON.FeatureCollection) {
   const b = bbox(fc); if (!b) return;
@@ -552,7 +604,7 @@ function loadSampleHouston() {
   fieldSelect.value = 'value';
   currentStats = computeStatsNormalized(fc, 'value', normalizationMode);
 
-  computeAndApplyAutoMultiplier('auto', 1000, 100);
+  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
   addOrUpdateSource(fc); applyExtrusion(); updateLegend(); fitToData(fc);
 }
 
@@ -597,6 +649,31 @@ function computeExtrusionHeightMeters(metricValue: number): number {
   const mult = Number(multInput.value);
   const multiplier = Number.isFinite(mult) ? mult : 0;
   return metricValue * multiplier * unitFactor;
+}
+
+// ---- Coalesced updates: only the last request runs ----
+type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
+
+let _updTimer: number | null = null;
+let _pendingMode: UpdateMode = 'applyOnly';
+let _pendingRefreshLegend = false;
+
+/** Queue an update; newer calls replace older ones. */
+function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
+  _pendingMode = mode;                    // last request wins
+  _pendingRefreshLegend = refreshLegend;
+  if (_updTimer) clearTimeout(_updTimer);
+  _updTimer = window.setTimeout(() => {
+    _updTimer = null;
+    if (_pendingMode === 'recomputeAndAutoScale') {
+      // recompute stats on normalized metric + pick best unit + apply
+      computeAndApplyAutoMultiplier('auto', 1000, 100);
+      if (_pendingRefreshLegend) updateLegend();
+    } else {
+      applyExtrusion();
+      if (_pendingRefreshLegend) updateLegend();
+    }
+  }, debounceMs);
 }
 
 type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
@@ -751,6 +828,18 @@ function updateLegend() {
   } else legendEl.style.display = 'none';
 }
 
+function currentModeErrorMessage(props: Record<string, any>): string | null {
+  if (normalizationMode === 'perLand' && landSizeField) {
+    const v = Number((props as any)[landSizeField]);
+    if (!Number.isFinite(v) || v <= 0) return '⚠ Invalid land size (≤ 0 or missing)';
+  } else if (normalizationMode === 'perBuilding' && bldgSizeField) {
+    const v = Number((props as any)[bldgSizeField]);
+    if (Number.isFinite(v) && v < 0) return '⚠ Negative building size';
+    if (v === 0) return 'ℹ Building size is 0 — shown flat (not an error)';
+  }
+  return null;
+}
+
 function buildPopupHTML(props: Record<string, any>): string {
   const title = props.name ?? props.NAME ?? props.id ?? props.ID ?? '';
   const metric = computeDisplayedMetricFromProps(props);
@@ -792,11 +881,15 @@ function buildPopupHTML(props: Record<string, any>): string {
     ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
     : `<div><strong>Extrusion height</strong>: —</div>`;
 
+  const errMsg = currentModeErrorMessage(props);
+  const errRow = errMsg ? `<div style="margin-top:4px;color:#b00020;">${errMsg}</div>` : '';
+
   return `
     <div class="gvw-pop" style="max-width:min(92vw, 460px); font-size:12.5px; line-height:1.35;">
       ${title ? `<div style="font-weight:600;margin-bottom:4px; overflow-wrap:anywhere;">${title}</div>` : ''}
       ${metricRow}
       ${heightRow}
+	  ${errRow}
       <div style="margin-top:6px; font-size:12px; color:#666">
         Multiplier × unit: ${fmt(Number(multInput.value))} × ${unitKey}
       </div>
@@ -815,40 +908,33 @@ function buildPopupHTML(props: Record<string, any>): string {
 }
 
 /* ---------------- Events ---------------- */
-rampSelect.addEventListener('change', () => { applyExtrusion(); updateLegend(); });
+rampSelect.addEventListener('change', () => scheduleUpdate('applyOnly', /*refreshLegend*/ true));
+
 function onMultInput() {
   const v = Number(multInput.value);
-  if (!Number.isFinite(v)) return; // ignore invalid interim states
-  applyExtrusion();
+  if (!Number.isFinite(v)) return; // ignore interim typing states
+  scheduleUpdate('applyOnly');
 }
-let raf = 0;
-function scheduleApply() {
-  cancelAnimationFrame(raf);
-  raf = requestAnimationFrame(onMultInput);
-}
-multInput.addEventListener('input', scheduleApply);
+multInput.addEventListener('input', onMultInput);
 multInput.addEventListener('change', onMultInput);
 
-multInput.addEventListener('change', onMultInput);  // fallback on blur/enter
-unitsSelect.addEventListener('change', () => { applyExtrusion(); });
-opacityInput.addEventListener('input', () => { if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2); applyExtrusion(); });
+unitsSelect.addEventListener('change', () => scheduleUpdate('applyOnly'));
+opacityInput.addEventListener('input', () => {
+  if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
+  scheduleUpdate('applyOnly');
+});
 
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;
-  if (currentGeoJSON && currentField) {
-    currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
-    computeAndApplyAutoMultiplier('auto', 1000, 100);
-    updateLegend();
-  }
+  if (!currentGeoJSON || !currentField) return;
+  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true)
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
   r.addEventListener('change', () => {
     normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
     if (!currentGeoJSON || !currentField) return;
-    currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
-    computeAndApplyAutoMultiplier('auto', 1000, 100);
-    updateLegend();
+    scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
   });
 });
 

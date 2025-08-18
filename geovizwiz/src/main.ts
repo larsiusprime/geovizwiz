@@ -3,6 +3,29 @@ import maplibregl, { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
+// Coerce BigInt → number when safe, else → string
+function coerceScalar(v: any): any {
+  if (typeof v === 'bigint') {
+    const big = v as bigint;
+    const max = BigInt(Number.MAX_SAFE_INTEGER);
+    const min = BigInt(Number.MIN_SAFE_INTEGER);
+    return (big <= max && big >= min) ? Number(big) : big.toString();
+  }
+  return v;
+}
+
+function sanitizeFeatureInPlace(f: GeoJSON.Feature) {
+  // id
+  if (typeof (f as any).id === 'bigint') (f as any).id = (f as any).id.toString();
+  // properties
+  const p = (f.properties || {}) as Record<string, any>;
+  for (const k in p) p[k] = coerceScalar(p[k]);
+}
+
+function sanitizeFeaturesInPlace(features: GeoJSON.Feature[]) {
+  for (const f of features) sanitizeFeatureInPlace(f);
+}
+
 // Browser AsyncBuffer wrapper for a File/Blob
 type AsyncBuffer = {
   byteLength: number;
@@ -122,10 +145,13 @@ fileInput.addEventListener('change', async () => {
     const features = fc.features.filter(
       f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
     );
-    if (features.length === 0) {
+	
+	if (features.length === 0) {
       throw new Error('No Polygon/MultiPolygon features found. Load polygons for extrusion, or remove the polygon-only filter.');
     }
-
+	
+	sanitizeFeaturesInPlace(features);
+	
     currentGeoJSON = { type: 'FeatureCollection', features };
     populateFieldDropdown(features);
     addOrUpdateSource(currentGeoJSON);
@@ -298,34 +324,31 @@ function detectNumericFields(features: GeoJSON.Feature[]): string[] {
   const counts: Record<string, number> = {};
   const nums: Record<string, number> = {};
 
+  const isNumLike = (v: any) =>
+    (typeof v === 'number' && Number.isFinite(v)) ||
+    (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
+
   for (const f of features) {
     const p = (f.properties || {}) as Record<string, unknown>;
     for (const [k, v] of Object.entries(p)) {
       counts[k] = (counts[k] ?? 0) + 1;
-      if (typeof v === 'number' && Number.isFinite(v)) nums[k] = (nums[k] ?? 0) + 1;
+      if (isNumLike(v)) nums[k] = (nums[k] ?? 0) + 1;
     }
   }
-
-  // Consider a field numeric if at least 60% of its values are numbers (and at least 1).
-  return Object.keys(counts)
-    .filter(k => {
-      const c = counts[k] || 0;
-      const n = nums[k] || 0;
-      const need = Math.max(1, Math.ceil(0.6 * c));
-      return n >= need;
-    })
-    .sort();
+  const fieldIsNumeric = (k: string) => {
+    const c = counts[k] || 0, n = nums[k] || 0;
+    const need = Math.max(1, Math.ceil(0.6 * c)); // ≥60% numeric
+    return n >= need;
+  };
+  return Object.keys(counts).filter(fieldIsNumeric).sort();
 }
 
 function computeStats(fc: GeoJSON.FeatureCollection, field: string) {
-  let min = Number.POSITIVE_INFINITY;
-  let max = Number.NEGATIVE_INFINITY;
+  let min = Infinity, max = -Infinity;
   for (const f of fc.features) {
-    const v = Number((f.properties as any)?.[field]);
-    if (Number.isFinite(v)) {
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
+    const raw = (f.properties as any)?.[field];
+    const v = typeof raw === 'bigint' ? Number(raw) : Number(raw);
+    if (Number.isFinite(v)) { if (v < min) min = v; if (v > max) max = v; }
   }
   if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) { min = 0; max = min + 1; }
   return { min, max };

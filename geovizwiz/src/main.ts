@@ -64,6 +64,10 @@ const SOURCE_ID = 'gp-source';
 const LAYER_ID = 'gp-extrusions';
 const ERROR_LAYER_ID = 'gp-error';
 
+// Robust autoscale defaults
+const HEIGHT_CAP_METERS = 1000;  // target height for pctl feature
+const HEIGHT_PCTL = 99;          // use p99 (not 100=max)
+
 /* ---------------- UI elements ---------------- */
 const fileInput = document.getElementById('file') as HTMLInputElement;
 const fieldSelect = document.getElementById('field') as HTMLSelectElement;
@@ -296,20 +300,38 @@ function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; nu
   geomColEl.textContent = opts.geometryCol || '(unknown)';
   fieldListEl.replaceChildren();
 
-  if (opts.numericFields.length === 0) {
+  const all = opts.numericFields;
+
+  // Split into your two display buckets
+  const key = all.filter(isKeyField);
+  const other = all.filter(n => !isKeyField(n));
+
+  // Within KEY fields, find the single best building/land size candidates
+  const bCandidatesKey = key.filter(n => containsKeyword(n, 'building') && containsUnit(n));
+  const lCandidatesKey = key.filter(n => containsKeyword(n, 'land') && containsUnit(n));
+  const bBest = autoPickOne('building', bCandidatesKey).field;
+  const lBest = autoPickOne('land', lCandidatesKey).field;
+
+  // Helper: should a KEY field be prechecked?
+  const shouldPrecheckKey = (name: string) => {
+    const isB = bCandidatesKey.includes(name);
+    const isL = lCandidatesKey.includes(name);
+    if (isB) return name === bBest;      // only the best building-size field
+    if (isL) return name === lBest;      // only the best land-size field
+    return true;                         // all other key fields stay selected
+  };
+
+  if (all.length === 0) {
     const p = document.createElement('div');
     p.textContent = 'No obvious numeric fields were found in the schema.';
     p.className = 'muted';
     fieldListEl.appendChild(p);
   } else {
-    const key = opts.numericFields.filter(isKeyField);
-    const other = opts.numericFields.filter(n => !isKeyField(n));
-
     if (key.length) {
       const t = document.createElement('div'); t.className = 'section-title'; t.textContent = 'Suggested key fields';
       fieldListEl.appendChild(t);
       const g = document.createElement('div'); g.className = 'fieldlist';
-      for (const name of key) g.appendChild(makeFieldCheckbox(name, true));
+      for (const name of key) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name)));
       fieldListEl.appendChild(g);
       fieldListEl.appendChild(divider());
     }
@@ -317,23 +339,29 @@ function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; nu
     const t2 = document.createElement('div'); t2.className = 'section-title'; t2.textContent = 'Other numeric fields';
     fieldListEl.appendChild(t2);
     const g2 = document.createElement('div'); g2.className = 'fieldlist';
+    // ALL "other" fields start unchecked
     for (const name of other) g2.appendChild(makeFieldCheckbox(name, false));
     fieldListEl.appendChild(g2);
   }
 
-  btnAll.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(c => (c.checked = true));
-  btnNone.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]').forEach(c => (c.checked = false));
+  // Buttons
+  btnAll.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+    .forEach(c => (c.checked = true));
+  btnNone.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+    .forEach(c => (c.checked = false));
   btnCancelModal.onclick = () => { modalOverlay.classList.remove('show'); clearData(); };
   btnConfirmModal.onclick = () => {
     chosenNumericFields = Array.from(fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]'))
       .filter(c => c.checked).map(c => c.name);
     if (chosenNumericFields.length === 0) { alert('Select at least one numeric field.'); return; }
     modalOverlay.classList.remove('show');
-    openSizeModal(); // NEW: step 2
+    openSizeModal();
   };
 
   modalOverlay.classList.add('show');
 }
+
+
 function makeFieldCheckbox(name: string, checked: boolean) {
   const label = document.createElement('label');
   label.style.display = 'flex'; label.style.gap = '8px'; label.style.alignItems = 'center';
@@ -760,7 +788,7 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
     _updTimer = null;
     if (_pendingMode === 'recomputeAndAutoScale') {
       // recompute stats on normalized metric + pick best unit + apply
-      computeAndApplyAutoMultiplier('auto', 1000, 100);
+      computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
       if (_pendingRefreshLegend) updateLegend();
     } else {
       applyExtrusion();
@@ -844,17 +872,16 @@ function percentile(vals: number[], p: number): number {
 /** Auto-multiplier so p-th percentile reaches capMeters, in given units */
 function computeAndApplyAutoMultiplier(
   unitsKeyOrAuto: 'auto' | keyof typeof UNIT_TO_METERS = 'auto',
-  capMeters = 1000,
-  p = 99
+  capMeters = HEIGHT_CAP_METERS,
+  p = HEIGHT_PCTL
 ) {
   if (!currentGeoJSON || !currentField) return;
 
-  // pXX over the CURRENT normalized metric
   const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
   const pVal = percentile(vals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
-  // ---- robust color domain: p1 → p99 ----
+  // robust color domain (keep if you added it earlier)
   const pLow = percentile(vals, 1);
   const pHigh = percentile(vals, 99);
   let lo = Number.isFinite(pLow) ? pLow : (currentStats?.min ?? 0);
@@ -862,10 +889,8 @@ function computeAndApplyAutoMultiplier(
   if (!(hi > lo)) { lo = 0; hi = 1; }
   colorDomain = { lo, hi, label: 'p1–p99' };
 
-  // ---- choose units/multiplier for height so p99 hits cap ----
   let unitKey: keyof typeof UNIT_TO_METERS;
   let multiplier: number;
-
   if (unitsKeyOrAuto === 'auto') {
     const best = chooseBestMetricUnitForMultiplier(pVal, capMeters);
     unitKey = best.unit;
@@ -876,16 +901,23 @@ function computeAndApplyAutoMultiplier(
     multiplier = capMeters / (unitFactor * pVal);
   }
 
-  // apply chosen unit + multiplier
   unitsSelect.value = unitKey;
   multInput.value = String(multiplier);
 
-  // recompute min/max for legend text (we’ll prefer colorDomain below)
   currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
 
-  // optional debug
-  console.debug('autoScale', { mode: normalizationMode, field: currentField, min: currentStats?.min, max: currentStats?.max });
-  console.debug('colorDomain', colorDomain);
+  // richer debug so you can see the exact anchor
+  console.debug('autoScale', {
+    mode: normalizationMode,
+    field: currentField,
+    pctl: p,
+    pVal,
+    capMeters,
+    unit: unitKey,
+    multiplier,
+    stats: currentStats,
+    colorDomain
+  });
 
   applyExtrusion();
 }

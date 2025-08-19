@@ -142,7 +142,14 @@ let currentField: string | null = null;
 let currentStats: { min: number; max: number } | null = null;
 
 let normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
+type ColorMode = 'continuous' | 'quantiles';
+let colorMode: ColorMode = 'quantiles';   // ← default to quantiles
+
+// For continuous mode we may still show a domain label; optional
 let colorDomain: { lo: number; hi: number; label: string } | null = null;
+
+// For quantiles: thresholds between classes
+let colorBreaks: number[] | null = null;
 
 // staged loading
 let lastFile: File | null = null;
@@ -646,13 +653,20 @@ function buildValueExpression(): Expression {
 function applyExtrusion() {
   if (!currentGeoJSON || !currentField || !currentStats) return;
 
-  const { min, max } = currentStats;
   const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
   const valueExpr = buildValueExpression();
-
-  const cmin = colorDomain?.lo ?? min;
-  const cmax = colorDomain?.hi ?? max;
-  const colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
+  
+  let colorExpr: Expression;
+  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+    colorExpr = makeStepColorExpression(valueExpr, ramp, colorBreaks);
+  } else {
+    // continuous (keep your existing function or clamped version)
+    const nmin = currentStats.min;
+    const nmax = currentStats.max;
+    const cmin = colorDomain?.lo ?? nmin;
+    const cmax = colorDomain?.hi ?? nmax;
+    colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
+  }
 
   const rawMult = Number(multInput.value);
   const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
@@ -869,26 +883,64 @@ function percentile(vals: number[], p: number): number {
   return a[lo] + (a[hi] - a[lo]) * t;
 }
 
+/** Compute (k-1) break values at equal quantiles between lowPct..highPct. */
+function quantileBreaks(values: number[], k: number, lowPct = 1, highPct = 99): number[] {
+  const ks = Math.max(2, Math.min(k, 12)); // sane class count cap
+  const out: number[] = [];
+  for (let i = 1; i < ks; i++) {
+    const p = lowPct + (highPct - lowPct) * (i / ks);
+    const q = percentile(values, p);
+    if (Number.isFinite(q)) out.push(q);
+  }
+  // ensure strictly ascending unique thresholds
+  out.sort((a,b)=>a-b);
+  return out.filter((v, i) => i === 0 || v > out[i-1]);
+}
+
+/** Build a step expression: first color is < break1, then each break raises the color. */
+function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks: number[]): Expression {
+  const c = colors.slice();                 // copy
+  const b = breaks.slice();                 // copy
+  if (b.length === 0) return ['step', valueExpr, c[0]] as any;
+
+  const out: (string | number | Expression)[] = ['step', valueExpr, c[0]];
+  // pair up thresholds with subsequent colors
+  for (let i = 0; i < b.length && i + 1 < c.length; i++) {
+    out.push(b[i], c[i + 1]);
+  }
+  return out as any;
+}
+
 /** Auto-multiplier so p-th percentile reaches capMeters, in given units */
 function computeAndApplyAutoMultiplier(
   unitsKeyOrAuto: 'auto' | keyof typeof UNIT_TO_METERS = 'auto',
-  capMeters = HEIGHT_CAP_METERS,
-  p = HEIGHT_PCTL
+  capMeters = 1000,
+  p = 99
 ) {
   if (!currentGeoJSON || !currentField) return;
 
+  // values for the CURRENT normalization mode
   const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
   const pVal = percentile(vals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
-  // robust color domain (keep if you added it earlier)
-  const pLow = percentile(vals, 1);
-  const pHigh = percentile(vals, 99);
-  let lo = Number.isFinite(pLow) ? pLow : (currentStats?.min ?? 0);
-  let hi = Number.isFinite(pHigh) ? pHigh : (currentStats?.max ?? 1);
-  if (!(hi > lo)) { lo = 0; hi = 1; }
-  colorDomain = { lo, hi, label: 'p1–p99' };
+  // ---- Color domain / breaks ----
+  if (colorMode === 'quantiles') {
+    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+    colorBreaks = quantileBreaks(vals, ramp.length, 1, 99); // p1..p99 equal-frequency bins
+    colorDomain = null;
+  } else {
+    // continuous fallback: clamp to p1..p99
+    const pLow = percentile(vals, 1);
+    const pHigh = percentile(vals, 99);
+    let lo = Number.isFinite(pLow) ? pLow : 0;
+    let hi = Number.isFinite(pHigh) ? pHigh : 1;
+    if (!(hi > lo)) { lo = 0; hi = 1; }
+    colorDomain = { lo, hi, label: 'p1–p99' };
+    colorBreaks = null;
+  }
 
+  // ---- Height autoscale: anchor p-th percentile to capMeters ----
   let unitKey: keyof typeof UNIT_TO_METERS;
   let multiplier: number;
   if (unitsKeyOrAuto === 'auto') {
@@ -904,23 +956,25 @@ function computeAndApplyAutoMultiplier(
   unitsSelect.value = unitKey;
   multInput.value = String(multiplier);
 
+  // stats for legend fallback
   currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
 
-  // richer debug so you can see the exact anchor
   console.debug('autoScale', {
     mode: normalizationMode,
     field: currentField,
     pctl: p,
     pVal,
-    capMeters,
     unit: unitKey,
     multiplier,
-    stats: currentStats,
-    colorDomain
+    colorMode,
+    colorBreaks,
+    colorDomain,
+    stats: currentStats
   });
 
   applyExtrusion();
 }
+
 
 function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], min: number, max: number): Expression {
   const n = colors.length - 1;
@@ -956,24 +1010,38 @@ function bbox(fc: GeoJSON.FeatureCollection): [number, number, number, number] |
 }
 
 function updateLegend() {
-  const ramp = COLOR_RAMPS[rampSelect.value] || []; legendEl.replaceChildren();
-  if (ramp.length && (currentStats || colorDomain)) {
-    const row = document.createElement('div');
-    row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.flexWrap = 'wrap';
-    const label = document.createElement('div'); label.textContent = 'Legend:'; label.style.fontSize = '12px';
-    row.appendChild(label);
-    ramp.forEach(c => { const s = document.createElement('div'); s.className = 'swatch'; (s as any).style = `background:${c}`; row.appendChild(s); });
+  const ramp = COLOR_RAMPS[rampSelect.value] || [];
+  legendEl.replaceChildren();
+  if (!ramp.length) { legendEl.style.display = 'none'; return; }
 
-    const lo = colorDomain?.lo ?? currentStats!.min;
-    const hi = colorDomain?.hi ?? currentStats!.max;
-    const range = document.createElement('div'); range.className = 'muted';
-    range.textContent = `${colorDomain?.label ? colorDomain.label + ' ' : ''}${lo.toLocaleString()} → ${hi.toLocaleString()}`;
-    row.appendChild(range);
+  const row = document.createElement('div');
+  row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.flexWrap = 'wrap';
 
-    legendEl.appendChild(row);
-    legendEl.style.display = 'grid';
-  } else legendEl.style.display = 'none';
+  const label = document.createElement('div'); label.textContent = 'Legend:'; label.style.fontSize = '12px';
+  row.appendChild(label);
+  ramp.forEach(c => { const s = document.createElement('div'); s.className = 'swatch'; (s as any).style = `background:${c}`; row.appendChild(s); });
+
+  const meta = document.createElement('div'); meta.className = 'muted';
+
+  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+    // Show something like: Q bins across p1–p99
+    const lo = (colorDomain?.lo ?? currentStats?.min) ?? '…';
+    const hi = (colorDomain?.hi ?? currentStats?.max) ?? '…';
+    // edges for display (we don’t guarantee exact p1/p99 computed here unless you also set colorDomain in quantiles)
+    const edges = [lo, ...colorBreaks, hi]
+      .map(v => typeof v === 'number' ? v.toLocaleString() : String(v));
+    meta.textContent = `Quantiles (p1–p99): ${edges.join(' | ')}`;
+  } else if (colorDomain) {
+    meta.textContent = `${colorDomain.label} ${colorDomain.lo.toLocaleString()} → ${colorDomain.hi.toLocaleString()}`;
+  } else if (currentStats) {
+    meta.textContent = `${currentStats.min.toLocaleString()} → ${currentStats.max.toLocaleString()}`;
+  }
+
+  row.appendChild(meta);
+  legendEl.appendChild(row);
+  legendEl.style.display = 'grid';
 }
+
 
 function currentModeErrorMessage(props: Record<string, any>): string | null {
   if (normalizationMode === 'perLand' && landSizeField) {
@@ -1055,7 +1123,12 @@ function buildPopupHTML(props: Record<string, any>): string {
 }
 
 /* ---------------- Events ---------------- */
-rampSelect.addEventListener('change', () => scheduleUpdate('applyOnly', /*refreshLegend*/ true));
+rampSelect.addEventListener('change', () => {
+  // if quantiles, new color count ⇒ recompute breaks
+  const needsRecompute = (colorMode === 'quantiles');
+  scheduleUpdate(needsRecompute ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
+});
+
 
 function onMultInput() {
   const v = Number(multInput.value);

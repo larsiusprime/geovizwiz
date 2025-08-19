@@ -84,6 +84,7 @@ const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
+const controlsEl = document.getElementById('controls') as HTMLDivElement;
 
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
@@ -162,6 +163,90 @@ let landSizeField: string | null = null;
 let landSizeUnitLabel: string | null = null;
 let bldgSizeField: string | null = null;
 let bldgSizeUnitLabel: string | null = null;
+
+// ---------- Welcome overlay (hide UI until a file is chosen) ----------
+let welcomeEl: HTMLDivElement | null = null;
+function installWelcome() {
+  // hide controls initially
+  if (controlsEl) controlsEl.style.display = 'none';
+
+  welcomeEl = document.createElement('div');
+  welcomeEl.id = 'welcomeOverlay';
+  welcomeEl.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,#f9fafb,transparent 55%);z-index:20;';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.12);padding:18px 20px;max-width:560px;width:min(92vw,560px);display:grid;gap:12px;text-align:center;';
+  card.innerHTML = `
+    <div style="font-size:16px;font-weight:600;">Load a GeoParquet file</div>
+    <div style="color:#666;font-size:13px;">Choose a <code>.parquet</code> to visualize.</div>
+  `;
+  const row = document.createElement('div');
+  row.style.cssText='display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
+
+  const btnBrowse = document.createElement('button');
+  btnBrowse.textContent='Browse GeoParquet…';
+  btnBrowse.style.cssText='border:1px solid #ddd;background:#f8f8f8;padding:8px 12px;border-radius:10px;cursor:pointer;';
+  btnBrowse.onclick = () => fileInput.click();
+
+  row.append(btnBrowse);
+  card.append(row);
+  welcomeEl.append(card);
+  document.body.append(welcomeEl);
+}
+function revealUI() {
+  if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+  if (controlsEl) controlsEl.style.display = 'grid';
+}
+
+
+// ---------- Non-blocking "Geometry is rendering…" toast ----------
+let renderToastEl: HTMLDivElement | null = null;
+let dotsTimer: number | null = null;
+
+function ensureRenderToast() {
+  if (renderToastEl) return;
+  renderToastEl = document.createElement('div');
+  renderToastEl.style.cssText = `
+    position:absolute; top:12px; left:50%; transform:translateX(-50%);
+    background:#111; color:#fff; padding:6px 10px; border-radius:999px;
+    font-size:12px; opacity:0; transition:opacity .2s; z-index:25; pointer-events:none;
+  `;
+  renderToastEl.textContent = 'Geometry is rendering…';
+  document.body.append(renderToastEl);
+}
+function showRenderingToast(msg = 'Geometry is rendering') {
+  ensureRenderToast();
+  let i = 0;
+  if (dotsTimer) { clearInterval(dotsTimer); dotsTimer = null; }
+  renderToastEl!.style.opacity = '0.92';
+  renderToastEl!.textContent = `${msg}`;
+  dotsTimer = window.setInterval(() => {
+    i = (i + 1) % 4;
+    renderToastEl!.textContent = `${msg}${'.'.repeat(i)}`;
+  }, 400);
+}
+function hideRenderingToast() {
+  if (dotsTimer) { clearInterval(dotsTimer); dotsTimer = null; }
+  if (renderToastEl) renderToastEl.style.opacity = '0';
+}
+function awaitFirstRenderedFeature() {
+  // poll one frame at a time; hide toast when the first extrusion is visible
+  let tries = 0;
+  const maxTries = 600; // ~10s at 60fps
+  const tick = () => {
+    tries++;
+    if (!map.getLayer(LAYER_ID)) { if (tries < maxTries) return requestAnimationFrame(tick); else return hideRenderingToast(); }
+    const feats = map.queryRenderedFeatures({ layers: [LAYER_ID], limit: 1 });
+    if (feats && feats.length > 0) {
+      hideRenderingToast();
+    } else if (tries < maxTries) {
+      requestAnimationFrame(tick);
+    } else {
+      hideRenderingToast();
+    }
+  };
+  requestAnimationFrame(tick);
+}
+
 
 /* ---------------- Preview helpers (rounding only; no sampling) ---------------- */
 const COORD_DECIMALS = 6;
@@ -576,12 +661,20 @@ function clearData() {
   currentGeoJSON = null; currentField = null; currentStats = null;
   fieldSelect.replaceChildren(new Option('— load a file first —', ''));
   updateLegend();
+  hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
+  showRenderingToast('Geometry is rendering');
   const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
-  if (existing) existing.setData(fc);
-  else { map.addSource(SOURCE_ID, { type: 'geojson', data: fc }); addExtrusionLayer(); }
+  if (existing) {
+    existing.setData(fc);
+  } else {
+    map.addSource(SOURCE_ID, { type: 'geojson', data: fc });
+    addExtrusionLayer();
+  }
+  awaitFirstRenderedFeature();
 }
+
 function addExtrusionLayer() {
   if (map.getLayer(LAYER_ID)) return;
   map.addLayer({
@@ -764,6 +857,7 @@ let _pendingRefreshLegend = false;
 
 /** Queue an update; newer calls replace older ones. */
 function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
+  revealUI();
   _pendingMode = mode;                    // last request wins
   _pendingRefreshLegend = refreshLegend;
   if (_updTimer) clearTimeout(_updTimer);
@@ -1091,6 +1185,9 @@ function buildPopupHTML(props: Record<string, any>): string {
     </div>`;
 }
 
+
+
+
 /* ---------------- Events ---------------- */
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks
@@ -1129,5 +1226,6 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 
 // default height units
 unitsSelect.value = 'centimeters';
+installWelcome();
 
 

@@ -90,10 +90,8 @@ const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[da
 (document.getElementById('btn-ortho') as HTMLButtonElement)?.addEventListener('click', () => setOrtho());
 viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 
-/* sample & zoom buttons */
-const btnSample = document.getElementById('btn-sample') as HTMLButtonElement;
+/* zoom button */
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
-btnSample.onclick = () => loadSampleHouston();
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 
 /* --- Modal 1 (chooser) + Modal 2 (size) + Loading --- */
@@ -713,35 +711,6 @@ const UNIT_TO_METERS = {
   miles: 1609.344,
   stories: 3.3
 };
-
-/* ---------------- Sample (Houston) ---------------- */
-function loadSampleHouston() {
-  const rect = (lon: number, lat: number, dx: number, dy: number) => ([
-    [lon - dx, lat - dy], [lon + dx, lat - dy], [lon + dx, lat + dy], [lon - dx, lat + dy], [lon - dx, lat - dy]
-  ]);
-  const fc: GeoJSON.FeatureCollection = {
-    type: 'FeatureCollection',
-    features: [
-      { type: 'Feature', properties: { name: 'Downtown', value: 80, assessed: 320, density: 60, bldg_area_sqft: 500000, land_area_sqft: 200000 }, geometry: { type: 'Polygon', coordinates: [rect(-95.3698, 29.7604, 0.020, 0.015)] } },
-      { type: 'Feature', properties: { name: 'Midtown', value: 30, assessed: 120, density: 35, bldg_area_sqft: 200000, land_area_sqft: 150000 }, geometry: { type: 'Polygon', coordinates: [rect(-95.3750, 29.7350, 0.018, 0.014)] } },
-      { type: 'Feature', properties: { name: 'Uptown/Galleria', value: 120, assessed: 480, density: 50, bldg_area_sqft: 800000, land_area_sqft: 300000 }, geometry: { type: 'Polygon', coordinates: [rect(-95.4620, 29.7400, 0.025, 0.018)] } }
-    ]
-  };
-  currentGeoJSON = fc;
-
-  // pretend user selected these
-  chosenNumericFields = ['value','assessed','density','bldg_area_sqft','land_area_sqft'];
-  populateFieldDropdownFromList(['value','assessed','density']);
-  // also set size mapping
-  setSizeState('bldg_area_sqft', 'square feet (ft²)', 'land_area_sqft', 'square feet (ft²)');
-
-  currentField = 'value';
-  fieldSelect.value = 'value';
-  currentStats = computeStatsNormalized(fc, 'value', normalizationMode);
-
-  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
-  addOrUpdateSource(fc); applyExtrusion(); updateLegend(); fitToData(fc);
-}
 
 /* ---------------- Helpers ---------------- */
 

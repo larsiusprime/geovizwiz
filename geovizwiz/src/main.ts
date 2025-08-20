@@ -1,5 +1,6 @@
 import 'maplibre-gl/dist/maplibre-gl.css';
-import maplibregl, { Expression } from 'maplibre-gl';
+import maplibregl from 'maplibre-gl';
+import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
@@ -65,10 +66,6 @@ const map = new maplibregl.Map({
   bearing: -20,
   hash: true,
 
-  // quality toggles
-  antialias: true,
-  preserveDrawingBuffer: true,
-
   // supersample: render at higher internal resolution
   pixelRatio: HQ_PR
 });
@@ -93,7 +90,6 @@ const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement;
 
-const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
 const normLand = document.getElementById('norm-land') as HTMLInputElement;
 const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
@@ -201,7 +197,6 @@ let colorBreaks: number[] | null = null;
 // staged loading
 let lastFile: File | null = null;
 let lastAsyncBuffer: AsyncBuffer | null = null;
-let lastGeometryColumn: string | null = null;
 let lastNumericFieldsFromSchema: string[] = [];
 let chosenNumericFields: string[] = [];
 let cancelRequested = false;
@@ -283,7 +278,7 @@ function awaitFirstRenderedFeature() {
   const tick = () => {
     tries++;
     if (!map.getLayer(LAYER_ID)) { if (tries < maxTries) return requestAnimationFrame(tick); else return hideRenderingToast(); }
-    const feats = map.queryRenderedFeatures({ layers: [LAYER_ID], limit: 1 });
+    const feats = map.queryRenderedFeatures({ layers: [LAYER_ID] });
     if (feats && feats.length > 0) {
       hideRenderingToast();
     } else if (tries < maxTries) {
@@ -337,8 +332,7 @@ fileInput.addEventListener('change', async () => {
         if (parsed?.primary_column) primaryGeom = parsed.primary_column;
       }
     } catch {}
-    lastGeometryColumn = primaryGeom;
-
+    
     // numeric top-level columns (not geometry)
     const schemaTree: any = parquetSchema(md);
     const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
@@ -371,10 +365,6 @@ function isKeyField(name: string) {
   const sizeHits = sizeTokens.test(s);
   return valueHits || sizeHits;
 }
-
-const SIZE_UNIT_RE = /(sq_?ft|sqft|ft2|ft\^2|sq_?m|sqm|m2|m\^2|acres?|acre|hectares?|ha|km2|sqkm|mi2|sqmi)\b/i;
-const BLDG_KEY_RE = /\b(bldg|build|impr)\b/i;
-const LAND_KEY_RE = /\bland\b/i;
 
 function tokenizeName(name: string): string[] {
   return name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
@@ -1137,12 +1127,6 @@ function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], mi
   return ['interpolate', ['linear'], clamped, ...stops] as any;
 }
 
-function makeColorExpression(field: string, colors: string[], min: number, max: number): Expression {
-  // (kept for reference; not used now)
-  const n = colors.length - 1; const stops: (number | string)[] = [];
-  for (let i = 0; i < colors.length; i++) { const t = i / n; stops.push(min + t * (max - min), colors[i]); }
-  return ['interpolate', ['linear'], ['coalesce', ['to-number', ['get', field]], min], ...stops] as any;
-}
 
 function bbox(fc: GeoJSON.FeatureCollection): [number, number, number, number] | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

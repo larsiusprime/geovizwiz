@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Put It On A Map</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { --bg:#0b1020; --fg:#eaf0ff; --muted:#a8b3d1; --btn:#8ab4ff; --btn2:#2dd4bf; --card:#121a33; }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#182244 0,#0b1020 55%,#0b1020 100%);color:var(--fg)}
+    .wrap{min-height:100%;display:flex;flex-direction:column}
+    header{padding:20px 16px;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;width:100%}
+    header a.logo{font-weight:700;letter-spacing:.2px;text-decoration:none;color:var(--fg)}
+    main{flex:1;display:grid;place-items:center;padding:30px 16px}
+    .hero{max-width:1100px;width:100%;display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center}
+    .hero h1{margin:0 0 10px;font-size:clamp(28px,4.4vw,46px);line-height:1.1}
+    .hero p{margin:0;color:var(--muted);font-size:clamp(14px,1.6vw,18px)}
+    .cta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+    .cta a{display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:600}
+    .cta a.primary{background:var(--btn);color:#081428}
+    .cta a.secondary{background:var(--btn2);color:#051c17}
+    .card{background:var(--card);border:1px solid #223055aa;border-radius:14px;padding:14px}
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
+    .feat h3{margin:0 0 6px;font-size:16px}
+    .feat p{margin:0;color:var(--muted);font-size:14px}
+    footer{padding:18px 16px;color:var(--muted);font-size:12px;text-align:center}
+    @media (max-width:900px){ .hero{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <a class="logo" href="/">putitonamap</a>
+      <nav><a href="/viz" class="logo" style="opacity:.8">Launch viz ↗</a></nav>
+    </header>
+    <main>
+      <section class="hero">
+        <div>
+          <h1>Turn raw parcel data into 3D insight</h1>
+          <p>Load GeoParquet, GeoPackage, or zipped Shapefiles. Filter fields, pick ramps, extrude by value, and explore — all locally in your browser.</p>
+          <div class="cta">
+            <a class="primary" href="/viz">Open the viz</a>
+            <a class="secondary" href="https://github.com/larsiusprime/geovizwiz" target="_blank" rel="noopener">View source</a>
+          </div>
+          <div class="grid">
+            <div class="feat card"><h3>Local-first</h3><p>No upload: files stay on your machine.</p></div>
+            <div class="feat card"><h3>Flexible formats</h3><p>GeoParquet, GPKG, or SHP (.zip).</p></div>
+            <div class="feat card"><h3>Smart scaling</h3><p>Quantiles / Equal-interval ramps. Auto height clamping.</p></div>
+          </div>
+        </div>
+        <div class="card">
+          <img src="data:image/svg+xml;utf8,<?xml version='1.0' encoding='UTF-8'?><svg xmlns='http://www.w3.org/2000/svg' width='640' height='420'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%238ab4ff'/><stop offset='1' stop-color='%232dd4bf'/></linearGradient></defs><rect width='100%%' height='100%%' fill='%23121a33'/><g transform='translate(40,320)'><rect x='0' y='-50' width='60' height='50' fill='url(%23g)'/><rect x='80' y='-120' width='60' height='120' fill='url(%23g)'/><rect x='160' y='-80' width='60' height='80' fill='url(%23g)'/><rect x='240' y='-180' width='60' height='180' fill='url(%23g)'/><rect x='320' y='-100' width='60' height='100' fill='url(%23g)'/></g><text x='40' y='50' fill='%23eaf0ff' font-family='system-ui' font-size='18'>/viz — local 3D parcel viz</text></svg>" alt="preview" style="max-width:100%;border-radius:10px;border:1px solid #223055aa;">
+        </div>
+      </section>
+    </main>
+    <footer>© <span id="y"></span> Put It On A Map • All local, all client-side</footer>
+  </div>
+  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+</body>
+</html>

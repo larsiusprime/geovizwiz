@@ -1,3 +1,4 @@
+// Imports
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
 import type { Expression } from 'maplibre-gl';
@@ -5,56 +6,19 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 
-/* ---------------- BigInt → JSON-safe ---------------- */
-function coerceScalar(v: any): any {
-  if (typeof v === 'bigint') {
-    const big = v as bigint;
-    const max = BigInt(Number.MAX_SAFE_INTEGER);
-    const min = BigInt(Number.MIN_SAFE_INTEGER);
-    return (big <= max && big >= min) ? Number(big) : big.toString();
-  }
-  if (typeof v === 'string') {
-    const s = v.trim();
-    if (!s) return v;
 
-    // Handle (123) as -123, strip $ and thousands separators
-    const negMatch = s.match(/^\(([^)]+)\)$/);
-    const core = (negMatch ? negMatch[1] : s)
-      .replace(/[$,\s]/g, ''); // "$12,345.67" -> "12345.67"
+// Local imports
+import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
+import { type AsyncBuffer } from './utils.sanitize';
+import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
+import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
+import { makeFieldCheckbox, divider } from './utils.dom';
 
-    const n = Number(core);
-    if (Number.isFinite(n)) return negMatch ? -n : n;
 
-    return v; // leave other strings as-is
-  }
-  return v;
-}
-function sanitizeFeatureInPlace(f: GeoJSON.Feature) {
-  if (typeof (f as any).id === 'bigint') (f as any).id = (f as any).id.toString();
-  const p = (f.properties || {}) as Record<string, any>;
-  for (const k in p) p[k] = coerceScalar(p[k]);
-}
-function sanitizeFeaturesInPlace(features: GeoJSON.Feature[]) {
-  for (const f of features) sanitizeFeatureInPlace(f);
-}
+/* ---------------- Map Bootstrap ----------------- */
 
-/* ---------------- AsyncBuffer from File ---------------- */
-type AsyncBuffer = { byteLength: number; slice(start: number, end?: number): Promise<ArrayBuffer> };
-function fileToAsyncBuffer(file: File): AsyncBuffer {
-  return {
-    byteLength: file.size,
-    async slice(start, end) { return await file.slice(start, end ?? file.size).arrayBuffer(); }
-  };
-}
 
-/* ---------------- Basemap: OSM raster ---------------- */
-const OSM_STYLE: any = {
-  version: 8,
-  sources: { 'osm-tiles': { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } },
-  layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm-tiles', minzoom: 0, maxzoom: 19 }]
-};
-
-/* ---------------- Map bootstrap ---------------- */
 const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ” target
 
 const map = new maplibregl.Map({
@@ -66,64 +30,49 @@ const map = new maplibregl.Map({
   bearing: -20,
   hash: true,
 
-  // supersample: render at higher internal resolution
+  // supersample: render at higher internal resolution (smooth lines)
   pixelRatio: HQ_PR
 });
-
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-const SOURCE_ID = 'gp-source';
-const LAYER_ID = 'gp-extrusions';
-const ERROR_LAYER_ID = 'gp-error';
-
-// Robust autoscale defaults
-const HEIGHT_CAP_METERS = 1000;  // target height for pctl feature
-const HEIGHT_PCTL = 99;          // use p99 (not 100=max)
 
 /* ---------------- UI elements ---------------- */
+
+
 const fileInput = document.getElementById('file') as HTMLInputElement;
 const fieldSelect = document.getElementById('field') as HTMLSelectElement;
 const rampSelect = document.getElementById('ramp') as HTMLSelectElement;
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
-const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement;
-
+const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
 const normLand = document.getElementById('norm-land') as HTMLInputElement;
 const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
-
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 
-// ---- Quality toggle button ----
+// Quality button
 const btnQuality = document.createElement('button');
 btnQuality.id = 'btn-quality';
 btnQuality.textContent = 'Quality: Fast';
 btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;';
-
-// put it at the top of the controls (or anywhere you like)
-controlsEl.prepend(btnQuality);
-
-// click to toggle
 btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
+controlsEl.prepend(btnQuality); // position at top
 
-// (Optional) expose for devtools: window.quality('high'|'fast')
-(window as any).quality = setQuality;
-
-
+// Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
 (document.getElementById('btn-ortho') as HTMLButtonElement)?.addEventListener('click', () => setOrtho());
 viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 
-/* zoom button */
+// Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 
-/* --- Modal 1 (chooser) + Modal 2 (size) + Loading --- */
+// Modal overlays
 const modalOverlay = document.getElementById('modalOverlay')!;
 const sizeOverlay = document.getElementById('sizeOverlay')!;
 const loadingOverlay = document.getElementById('loadingOverlay')!;
@@ -149,44 +98,49 @@ const progressEl = document.getElementById('progress')!;
 const progressBar = document.getElementById('progressBar') as HTMLDivElement;
 const progressMsg = document.getElementById('progressMsg') as HTMLDivElement;
 
-// ---- Color scaling radios (section 6) ----
+// Color scaling radios
 const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
 const colorQuant = document.getElementById('color-quant') as HTMLInputElement | null;
 
-// Only recompute after data is loaded
-[colorCont, colorQuant].forEach(el =>
-  el?.addEventListener('change', () => {
-    if (!currentGeoJSON) return;
-    const val = (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value;
-    if (val === 'continuous' || val === 'quantiles') {
-      colorMode = val;
-      scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
-    }
-  })
-);
-
-/* ---------------- Color ramps ---------------- */
-const COLOR_RAMPS: Record<string, string[]> = {
-  Viridis: ['#440154','#46327E','#365C8D','#277F8E','#1FA187','#4AC16D','#A0DA39','#FDE725'],
-  Magma: ['#000004','#1B0C41','#4F0A6D','#7A1E6C','#A52C60','#CF4446','#ED6925','#FB9F06','#F7D13D','#FCFDBF'],
-  Plasma: ['#0D0887','#5B02A3','#9A179B','#CB4679','#ED7953','#FB9F3A','#F0F921'],
-  Turbo: ['#30123B','#4145AB','#2CC0F0','#6AE4B4','#C6F86D','#F9DD32','#F28C21','#CB3E1F','#8A0D2C'],
-  YlOrRd: ['#FFFFB2','#FECC5C','#FD8D3C','#F03B20','#BD0026'],
-  Blues: ['#DEEBF7','#9ECAE1','#6BAED6','#3182BD','#08519C']
-};
+// Color ramp choices
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
 }
 rampSelect.value = 'Viridis';
 
+
+/* ---------------- Constants ---------------- */
+
+
+// Token sets we match against
+const UNIT_TOKENS = new Set([
+  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares','acreage'
+]);
+
+const AREA_UNIT_CHOICES: { key: string, label: string }[] = [
+  { key: 'sqm', label: 'square meters (m²)' },
+  { key: 'sqft', label: 'square feet (ft²)' },
+  { key: 'acres', label: 'acres' },
+  { key: 'hectares', label: 'hectares' },
+  { key: 'sqkm', label: 'square kilometers (km²)' },
+  { key: 'sqmi', label: 'square miles (mi²)' },
+  { key: 'other', label: 'other / unknown' }
+];
+
+const FAST_PR = window.devicePixelRatio;                  // normal speed
+const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ target
+
+
 /* ---------------- State ---------------- */
+
+
 let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
 let currentField: string | null = null;
 let currentStats: { min: number; max: number } | null = null;
 
 let normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 type ColorMode = 'continuous' | 'quantiles';
-let colorMode: ColorMode = 'quantiles';   // ← default to quantiles
+let colorMode: ColorMode = 'quantiles';   // <-- default to quantiles
 
 // For continuous mode we may still show a domain label; optional
 let colorDomain: { lo: number; hi: number; label: string } | null = null;
@@ -207,8 +161,32 @@ let landSizeUnitLabel: string | null = null;
 let bldgSizeField: string | null = null;
 let bldgSizeUnitLabel: string | null = null;
 
-// ---------- Welcome overlay (hide UI until a file is chosen) ----------
+// Welcome overlay (hide UI until a file is chosen)
 let welcomeEl: HTMLDivElement | null = null;
+
+// Non-blocking "Geometry is rendering..." toast
+let renderToastEl: HTMLDivElement | null = null;
+let dotsTimer: number | null = null;
+
+type QualityMode = 'fast' | 'high';
+let qualityMode: QualityMode = 'fast';
+
+
+// --- popup state ---
+let activePopup: maplibregl.Popup | null = null;
+let lastPicked: { props: Record<string, any>, lngLat: maplibregl.LngLatLike } | null = null;
+
+type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
+
+let _updTimer: number | null = null;
+let _pendingMode: UpdateMode = 'applyOnly';
+let _pendingRefreshLegend = false;
+
+type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
+
+/* ---------------- FUNCTIONS ----------------- */
+
+
 function installWelcome() {
   // hide controls initially
   if (controlsEl) controlsEl.style.display = 'none';
@@ -221,6 +199,7 @@ function installWelcome() {
   card.innerHTML = `
     <div style="font-size:16px;font-weight:600;">Load a GeoParquet file</div>
     <div style="color:#666;font-size:13px;">Choose a <code>.parquet</code> to visualize.</div>
+	<div style="color:#666;font-size:13px;">TIP: make sure it has polygon geometry; lines/points won't work.</div>
   `;
   const row = document.createElement('div');
   row.style.cssText='display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
@@ -235,15 +214,11 @@ function installWelcome() {
   welcomeEl.append(card);
   document.body.append(welcomeEl);
 }
+
 function revealUI() {
   if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
   if (controlsEl) controlsEl.style.display = 'grid';
 }
-
-
-// ---------- Non-blocking "Geometry is rendering…" toast ----------
-let renderToastEl: HTMLDivElement | null = null;
-let dotsTimer: number | null = null;
 
 function ensureRenderToast() {
   if (renderToastEl) return;
@@ -253,9 +228,10 @@ function ensureRenderToast() {
     background:#111; color:#fff; padding:6px 10px; border-radius:999px;
     font-size:12px; opacity:0; transition:opacity .2s; z-index:25; pointer-events:none;
   `;
-  renderToastEl.textContent = 'Geometry is rendering…';
+  renderToastEl.textContent = 'Geometry is rendering...';
   document.body.append(renderToastEl);
 }
+
 function showRenderingToast(msg = 'Geometry is rendering') {
   ensureRenderToast();
   let i = 0;
@@ -267,10 +243,12 @@ function showRenderingToast(msg = 'Geometry is rendering') {
     renderToastEl!.textContent = `${msg}${'.'.repeat(i)}`;
   }, 400);
 }
+
 function hideRenderingToast() {
   if (dotsTimer) { clearInterval(dotsTimer); dotsTimer = null; }
   if (renderToastEl) renderToastEl.style.opacity = '0';
 }
+
 function awaitFirstRenderedFeature() {
   // poll one frame at a time; hide toast when the first extrusion is visible
   let tries = 0;
@@ -291,73 +269,8 @@ function awaitFirstRenderedFeature() {
 }
 
 
-/* ---------------- Preview helpers (rounding only; no sampling) ---------------- */
-const COORD_DECIMALS = 6;
-function roundGeometryInPlace(f: GeoJSON.Feature, decimals = COORD_DECIMALS) {
-  const factor = Math.pow(10, decimals);
-  const round = (n: number) => Math.round(n * factor) / factor;
-  const walk = (coords: any) => {
-    if (!Array.isArray(coords)) return;
-    if (typeof coords[0] === 'number') { coords[0] = round(coords[0]); coords[1] = round(coords[1]); }
-    else for (const c of coords) walk(c);
-  };
-  if (f.geometry) walk((f.geometry as any).coordinates);
-}
-function trimPropertiesInPlace(features: GeoJSON.Feature[], keep: Set<string>) {
-  for (const feat of features) {
-    const p = (feat.properties ||= {});
-    for (const k of Object.keys(p as any)) { if (!keep.has(k)) delete (p as any)[k]; }
-  }
-}
 
-/* ---------------- File load: METADATA ONLY ---------------- */
-fileInput.addEventListener('change', async () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
-
-  revealUI();
-  try {
-    lastFile = file;
-    lastAsyncBuffer = fileToAsyncBuffer(file);
-
-    const md = await parquetMetadataAsync(lastAsyncBuffer);
-    const numRows = Number(md.num_rows ?? 0);
-
-    const kv = (md as any).key_value_metadata || (md as any).keyValueMetadata || [];
-    const geoKV = kv.find((e: any) => String(e.key).toLowerCase() === 'geo');
-    let primaryGeom = 'geometry';
-    try {
-      if (geoKV?.value) {
-        const parsed = JSON.parse(geoKV.value);
-        if (parsed?.primary_column) primaryGeom = parsed.primary_column;
-      }
-    } catch {}
-    
-    // numeric top-level columns (not geometry)
-    const schemaTree: any = parquetSchema(md);
-    const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
-    const numeric: string[] = [];
-    for (const node of top) {
-      const name = node?.element?.name ?? node?.name;
-      if (!name || name === primaryGeom) continue;
-      const el = node.element ?? {};
-      const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
-      const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
-      const isNumeric =
-        ['DOUBLE','FLOAT','INT32','INT64','INT16','INT8'].includes(typeStr.toUpperCase()) ||
-        logical.toUpperCase() === 'DECIMAL';
-      if (isNumeric) numeric.push(name);
-    }
-    lastNumericFieldsFromSchema = numeric.sort();
-
-    openFieldChooserModal({ rowCount: numRows, geometryCol: primaryGeom, numericFields: lastNumericFieldsFromSchema });
-  } catch (err: any) {
-    console.error('Metadata read failed:', err);
-    alert(`Could not read Parquet metadata: ${err?.message ?? err}`);
-  }
-});
-
-/* ---------------- Heuristics for "key fields" ---------------- */
+// Heuristics for "key fields"
 function isKeyField(name: string) {
   const s = name.toLowerCase();
   const valueHits = /(value)\b/.test(s);
@@ -370,11 +283,6 @@ function tokenizeName(name: string): string[] {
   return name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 }
 
-// Token sets we match against
-const UNIT_TOKENS = new Set([
-  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares','acreage'
-]);
-
 function containsUnit(name: string): boolean {
   const tokens = tokenizeName(name);
   return tokens.some(t => UNIT_TOKENS.has(t));
@@ -384,6 +292,42 @@ function containsKeyword(name: string, kind: 'building'|'land'): boolean {
   const tokens = tokenizeName(name);
   if (kind === 'building') return tokens.some(t => /^(bldg|build|building|impr|improv)/.test(t));
   return tokens.some(t => /^land/.test(t));
+}
+
+function containsValueField(name: string): number {
+	const tokens = tokenizeName(name);
+	
+}
+
+// score lower = better
+export function scoreValueField(name: string): number {
+  const tokens = tokenizeName(name);
+
+  // Category ranking (lower is better)
+  const has = (re: RegExp) => tokens.some(t => re.test(t));
+
+  const isLand     = has(/^land$/);
+  const isPropLike = has(/^property$/) || has(/^market$/) || has(/^total$/);
+  const isBldgLike = has(/^building$/) || has(/^bldg$/) || has(/^impr/) || has(/^improve/);
+
+  let catRank = 3;                // default "other"
+  if (isLand)        catRank = 0; // best
+  else if (isPropLike) catRank = 1;
+  else if (isBldgLike) catRank = 2;
+
+  // Start with category weight
+  let score = catRank * 100;
+
+  // Bonus for containing "valu" (as in "value" or "valuation")
+  const hasValue = tokens.includes('valu') || /valu/i.test(name);
+  if (hasValue) score -= 20;
+
+  // Gentle tie-breakers (keep small so they don't swamp category/bonus)
+  // Fewer tokens and shorter total name are better.
+  score += tokens.length * 0.5;
+  score += Math.min(20, name.length / 50); // tiny nudge for very long names
+
+  return score;
 }
 
 // score lower = better
@@ -407,7 +351,7 @@ function scoreSizeField(name: string, kind: 'building'|'land'): number {
 
 function guessAreaUnitKey(name: string | null): string | undefined {
   const g = guessAreaUnitFromFieldName(name || '');
-  return g || undefined; // reuse your existing unit-guess function
+  return g || undefined; // reuse existing unit-guess function
 }
 
 function autoPickOne(kind: 'building'|'land', fields: string[]): { field?: string, unitKey?: string } {
@@ -490,27 +434,8 @@ function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; nu
   modalOverlay.classList.add('show');
 }
 
-
-function makeFieldCheckbox(name: string, checked: boolean) {
-  const label = document.createElement('label');
-  label.style.display = 'flex'; label.style.gap = '8px'; label.style.alignItems = 'center';
-  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.name = name; cb.checked = checked;
-  const span = document.createElement('span'); span.textContent = name;
-  label.appendChild(cb); label.appendChild(span);
-  return label;
-}
-function divider() { const d = document.createElement('div'); d.className = 'divider'; return d; }
-
 /* ---------------- Modal 2: size identification ---------------- */
-const AREA_UNIT_CHOICES: { key: string, label: string }[] = [
-  { key: 'sqm', label: 'square meters (m²)' },
-  { key: 'sqft', label: 'square feet (ft²)' },
-  { key: 'acres', label: 'acres' },
-  { key: 'hectares', label: 'hectares' },
-  { key: 'sqkm', label: 'square kilometers (km²)' },
-  { key: 'sqmi', label: 'square miles (mi²)' },
-  { key: 'other', label: 'other / unknown' }
-];
+
 function fillUnitSelect(sel: HTMLSelectElement, preselectKey?: string) {
   sel.replaceChildren(new Option('— select unit —', ''));
   for (const u of AREA_UNIT_CHOICES) sel.appendChild(new Option(u.label, u.key));
@@ -822,12 +747,6 @@ function fitToData(fc: GeoJSON.FeatureCollection) {
 }
 
 // ---- Quality toggle (runtime supersampling) ----
-const FAST_PR = window.devicePixelRatio;                  // normal speed
-const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ target
-
-type QualityMode = 'fast' | 'high';
-let qualityMode: QualityMode = 'fast';
-
 function setQuality(mode: QualityMode) {
   qualityMode = mode;
   const pr = (mode === 'high') ? HIGH_PR : FAST_PR;
@@ -862,36 +781,7 @@ function setView(which: string) {
   map.easeTo({ duration: 700, ...(views[which] || views.iso) });
 }
 
-/* ---------------- Units ---------------- */
-const UNIT_TO_METERS = {
-  centimeters: 0.01,
-  meters: 1,
-  inches: 0.0254,
-  feet: 0.3048,
-  kilometers: 1000,
-  miles: 1609.344,
-  stories: 3.3
-};
-
 /* ---------------- Helpers ---------------- */
-
-// --- popup state ---
-let activePopup: maplibregl.Popup | null = null;
-let lastPicked: { props: Record<string, any>, lngLat: maplibregl.LngLatLike } | null = null;
-
-// --- small number helpers ---
-function numOrNull(v: any): number | null {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : null;
-}
-function fmt(n: any, digits = 2): string {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return String(n ?? '—');
-  if (Math.abs(x) >= 1) return x.toLocaleString(undefined, { maximumFractionDigits: digits });
-  if (x === 0) return '0';
-  return x.toLocaleString(undefined, { maximumSignificantDigits: 3 });
-}
-
 function computeDisplayedMetricFromProps(props: Record<string, any>): number | null {
   if (!currentField) return null;
   let base = numOrNull(props[currentField]);
@@ -916,12 +806,6 @@ function computeExtrusionHeightMeters(metricValue: number): number {
   return metricValue * multiplier * unitFactor;
 }
 
-// ---- Coalesced updates: only the last request runs ----
-type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
-
-let _updTimer: number | null = null;
-let _pendingMode: UpdateMode = 'applyOnly';
-let _pendingRefreshLegend = false;
 
 /** Queue an update; newer calls replace older ones. */
 function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
@@ -942,8 +826,6 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
   }, debounceMs);
 }
 
-
-type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
 function chooseBestMetricUnitForMultiplier(p99: number, capMeters = 1000): { unit: MetricUnitKey; multiplier: number } {
   const candidates: MetricUnitKey[] = ['centimeters', 'meters', 'kilometers'];
@@ -1003,30 +885,6 @@ function computeStatsNormalized(fc: GeoJSON.FeatureCollection, field: string, mo
   for (const v of vals) { if (v < min) min = v; if (v > max) max = v; }
   if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) { min = 0; max = min + 1; }
   return { min, max };
-}
-
-function percentile(vals: number[], p: number): number {
-  if (!vals.length) return NaN;
-  const a = vals.slice().sort((x, y) => x - y);
-  const idx = (p / 100) * (a.length - 1);
-  const lo = Math.floor(idx), hi = Math.ceil(idx);
-  if (lo === hi) return a[lo];
-  const t = idx - lo;
-  return a[lo] + (a[hi] - a[lo]) * t;
-}
-
-/** Compute (k-1) break values at equal quantiles between lowPct..highPct. */
-function quantileBreaks(values: number[], k: number, lowPct = 1, highPct = 99): number[] {
-  const ks = Math.max(2, Math.min(k, 12)); // sane class count cap
-  const out: number[] = [];
-  for (let i = 1; i < ks; i++) {
-    const p = lowPct + (highPct - lowPct) * (i / ks);
-    const q = percentile(values, p);
-    if (Number.isFinite(q)) out.push(q);
-  }
-  // ensure strictly ascending unique thresholds
-  out.sort((a,b)=>a-b);
-  return out.filter((v, i) => i === 0 || v > out[i-1]);
 }
 
 /** Build a step expression: first color is < break1, then each break raises the color. */
@@ -1125,21 +983,6 @@ function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], mi
   // Clamp value into [min,max] to avoid outliers crushing the ramp
   const clamped: Expression = ['max', min, ['min', max, valueExpr]] as any;
   return ['interpolate', ['linear'], clamped, ...stops] as any;
-}
-
-
-function bbox(fc: GeoJSON.FeatureCollection): [number, number, number, number] | null {
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  const add = (x: number, y: number) => { if (x < minX) minX = x; if (y < minY) minY = y; if (x > maxX) maxX = x; if (y > maxY) maxY = y; };
-  const walk = (coords: any) => Array.isArray(coords[0]) ? coords.forEach(walk) : add(coords[0], coords[1]);
-  for (const f of fc.features) {
-    if (!f.geometry) continue;
-    const g = f.geometry;
-    if (g.type === 'Polygon' || g.type === 'MultiPolygon' || g.type === 'LineString' || g.type === 'MultiLineString') walk(g.coordinates);
-    if (g.type === 'Point') add(g.coordinates[0], g.coordinates[1]);
-    if (g.type === 'MultiPoint') (g.coordinates as any[]).forEach((c: number[]) => add(c[0], c[1]));
-  }
-  return (Number.isFinite(minX) && Number.isFinite(minY) && Number.isFinite(maxX) && Number.isFinite(maxY)) ? [minX, minY, maxX, maxY] : null;
 }
 
 function updateLegend() {
@@ -1255,28 +1098,85 @@ function buildPopupHTML(props: Record<string, any>): string {
     </div>`;
 }
 
-
-
-
-
+function onMultInput() {
+  const v = Number(multInput.value);
+  if (!Number.isFinite(v)) return; // ignore interim typing states
+  scheduleUpdate('applyOnly');
+}
 
 /* ---------------- Events ---------------- */
+
+// File load: read METADATA ONLY
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files?.[0];
+  if (!file) return;
+
+  revealUI();
+  try {
+    lastFile = file;
+    lastAsyncBuffer = fileToAsyncBuffer(file);
+
+    const md = await parquetMetadataAsync(lastAsyncBuffer);
+    const numRows = Number(md.num_rows ?? 0);
+
+    const kv = (md as any).key_value_metadata || (md as any).keyValueMetadata || [];
+    const geoKV = kv.find((e: any) => String(e.key).toLowerCase() === 'geo');
+    let primaryGeom = 'geometry';
+    try {
+      if (geoKV?.value) {
+        const parsed = JSON.parse(geoKV.value);
+        if (parsed?.primary_column) primaryGeom = parsed.primary_column;
+      }
+    } catch {}
+    
+    // numeric top-level columns (not geometry)
+    const schemaTree: any = parquetSchema(md);
+    const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
+    const numeric: string[] = [];
+    for (const node of top) {
+      const name = node?.element?.name ?? node?.name;
+      if (!name || name === primaryGeom) continue;
+      const el = node.element ?? {};
+      const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
+      const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
+      const isNumeric =
+        ['DOUBLE','FLOAT','INT32','INT64','INT16','INT8'].includes(typeStr.toUpperCase()) ||
+        logical.toUpperCase() === 'DECIMAL';
+      if (isNumeric) numeric.push(name);
+    }
+    lastNumericFieldsFromSchema = numeric.sort();
+
+    openFieldChooserModal({ rowCount: numRows, geometryCol: primaryGeom, numericFields: lastNumericFieldsFromSchema });
+  } catch (err: any) {
+    console.error('Metadata read failed:', err);
+    alert(`Could not read Parquet metadata: ${err?.message ?? err}`);
+  }
+});
+
+// Only recompute after data is loaded
+[colorCont, colorQuant].forEach(el =>
+  el?.addEventListener('change', () => {
+    if (!currentGeoJSON) return;
+    const val = (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value;
+    if (val === 'continuous' || val === 'quantiles') {
+      colorMode = val;
+      scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    }
+  })
+);
+
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks
   const needsRecompute = (colorMode === 'quantiles');
   scheduleUpdate(needsRecompute ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
 });
 
-
-function onMultInput() {
-  const v = Number(multInput.value);
-  if (!Number.isFinite(v)) return; // ignore interim typing states
-  scheduleUpdate('applyOnly');
-}
 multInput.addEventListener('input', onMultInput);
+
 multInput.addEventListener('change', onMultInput);
 
 unitsSelect.addEventListener('change', () => scheduleUpdate('applyOnly'));
+
 opacityInput.addEventListener('input', () => {
   if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
   scheduleUpdate('applyOnly');
@@ -1287,6 +1187,8 @@ fieldSelect.addEventListener('change', () => {
   if (!currentGeoJSON || !currentField) return;
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true)
 });
+
+/* ---------------- Main ---------------- */
 
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
   r.addEventListener('change', () => {

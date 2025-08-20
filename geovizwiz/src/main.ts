@@ -367,6 +367,19 @@ function autoPickOne(kind: 'building'|'land', fields: string[]): { field?: strin
   return best;
 }
 
+function autoPickMainField(fields: string[]): { field?: string, unitKey?: string } {
+  let best: string = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const f of fields) {
+    const s = scoreValueField(f);
+    if (s < bestScore) {
+      bestScore = s;
+      best = f;
+    }
+  }
+  return best;
+}
+
 /* ---------------- Modal 1: chooser ---------------- */
 function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; numericFields: string[] }) {
   rowCountEl.textContent = opts.rowCount.toLocaleString();
@@ -563,8 +576,8 @@ async function loadSelectedColumns() {
     const available = chosenNumericFields.filter(k => features[0]?.properties?.hasOwnProperty(k));
     populateFieldDropdownFromList(available);
 
-    // auto-select the first
-    currentField = available[0] ?? null;
+    // auto-select the best
+	currentField = autoPickMainField(available)
     if (currentField) {
       fieldSelect.value = currentField;
       currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);

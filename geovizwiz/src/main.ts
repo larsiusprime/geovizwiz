@@ -54,9 +54,25 @@ const OSM_STYLE: any = {
 };
 
 /* ---------------- Map bootstrap ---------------- */
+const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ” target
+
 const map = new maplibregl.Map({
-  container: 'map', style: OSM_STYLE, center: [-95.3698, 29.7604], zoom: 10, pitch: 45, bearing: -20, hash: true
+  container: 'map',
+  style: OSM_STYLE,
+  center: [-95.3698, 29.7604],
+  zoom: 10,
+  pitch: 45,
+  bearing: -20,
+  hash: true,
+
+  // quality toggles
+  antialias: true,
+  preserveDrawingBuffer: true,
+
+  // supersample: render at higher internal resolution
+  pixelRatio: HQ_PR
 });
+
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
@@ -85,6 +101,22 @@ const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
+
+// ---- Quality toggle button ----
+const btnQuality = document.createElement('button');
+btnQuality.id = 'btn-quality';
+btnQuality.textContent = 'Quality: Fast';
+btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;';
+
+// put it at the top of the controls (or anywhere you like)
+controlsEl.prepend(btnQuality);
+
+// click to toggle
+btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
+
+// (Optional) expose for devtools: window.quality('high'|'fast')
+(window as any).quality = setQuality;
+
 
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
@@ -120,6 +152,22 @@ const btnSizeOk = document.getElementById('btnSizeOk') as HTMLButtonElement;
 const progressEl = document.getElementById('progress')!;
 const progressBar = document.getElementById('progressBar') as HTMLDivElement;
 const progressMsg = document.getElementById('progressMsg') as HTMLDivElement;
+
+// ---- Color scaling radios (section 6) ----
+const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
+const colorQuant = document.getElementById('color-quant') as HTMLInputElement | null;
+
+// Only recompute after data is loaded
+[colorCont, colorQuant].forEach(el =>
+  el?.addEventListener('change', () => {
+    if (!currentGeoJSON) return;
+    const val = (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value;
+    if (val === 'continuous' || val === 'quantiles') {
+      colorMode = val;
+      scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    }
+  })
+);
 
 /* ---------------- Color ramps ---------------- */
 const COLOR_RAMPS: Record<string, string[]> = {
@@ -272,6 +320,7 @@ fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
 
+  revealUI();
   try {
     lastFile = file;
     lastAsyncBuffer = fileToAsyncBuffer(file);
@@ -317,9 +366,9 @@ fileInput.addEventListener('change', async () => {
 /* ---------------- Heuristics for "key fields" ---------------- */
 function isKeyField(name: string) {
   const s = name.toLowerCase();
-  const valueHits = /(_market_value|_impr_value|_land_value)\b/.test(s);
-  const sizeTokens = /(sq_?ft|sqft|ft2|ft\^2|sq_?m|sqm|m2|m\^2|acres?|acre|hectares?|ha|km2|sqkm|mi2|sqmi)/;
-  const sizeHits = s.includes('_area') && sizeTokens.test(s);
+  const valueHits = /(value)\b/.test(s);
+  const sizeTokens = /(sq_?ft|sqft|ft2|ft\^2|sq_?m|sqm|m2|m\^2|acres?|acre|hectares?|ha|km2|sqkm|mi2|sqmi|area)/;
+  const sizeHits = sizeTokens.test(s);
   return valueHits || sizeHits;
 }
 
@@ -333,7 +382,7 @@ function tokenizeName(name: string): string[] {
 
 // Token sets we match against
 const UNIT_TOKENS = new Set([
-  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares'
+  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares','acreage'
 ]);
 
 function containsUnit(name: string): boolean {
@@ -782,6 +831,35 @@ function fitToData(fc: GeoJSON.FeatureCollection) {
   map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 800 });
 }
 
+// ---- Quality toggle (runtime supersampling) ----
+const FAST_PR = window.devicePixelRatio;                  // normal speed
+const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ target
+
+type QualityMode = 'fast' | 'high';
+let qualityMode: QualityMode = 'fast';
+
+function setQuality(mode: QualityMode) {
+  qualityMode = mode;
+  const pr = (mode === 'high') ? HIGH_PR : FAST_PR;
+
+  // setPixelRatio is available on MapLibre >= 2; fall back with a warn otherwise
+  const anyMap = map as any;
+  if (typeof anyMap.setPixelRatio === 'function') {
+    anyMap.setPixelRatio(pr);
+    map.resize(); // apply immediately
+    // optional debug of effective value (after clamping)
+    if (typeof anyMap.getPixelRatio === 'function') {
+      console.debug('pixelRatio applied:', anyMap.getPixelRatio());
+    }
+  } else {
+    console.warn('setPixelRatio() not available in this MapLibre build; toggle requires recreating the map.');
+  }
+
+  // reflect in UI button, if present
+  const btn = document.getElementById('btn-quality') as HTMLButtonElement | null;
+  if (btn) btn.textContent = (mode === 'high') ? 'Quality: High' : 'Quality: Fast';
+}
+
 /* ---------------- Camera presets ---------------- */
 function setPerspective() { map.easeTo({ pitch: 60, duration: 600 }); }
 function setOrtho() { map.easeTo({ pitch: 0, duration: 600 }); }
@@ -857,14 +935,14 @@ let _pendingRefreshLegend = false;
 
 /** Queue an update; newer calls replace older ones. */
 function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
-  revealUI();
-  _pendingMode = mode;                    // last request wins
+  if (!currentGeoJSON) return;   // <- hard stop until data exists
+
+  _pendingMode = mode;
   _pendingRefreshLegend = refreshLegend;
   if (_updTimer) clearTimeout(_updTimer);
   _updTimer = window.setTimeout(() => {
     _updTimer = null;
     if (_pendingMode === 'recomputeAndAutoScale') {
-      // recompute stats on normalized metric + pick best unit + apply
       computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
       if (_pendingRefreshLegend) updateLegend();
     } else {
@@ -873,6 +951,7 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
     }
   }, debounceMs);
 }
+
 
 type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
@@ -993,14 +1072,21 @@ function computeAndApplyAutoMultiplier(
     colorBreaks = quantileBreaks(vals, ramp.length, 1, 99); // p1..p99 equal-frequency bins
     colorDomain = null;
   } else {
-    // continuous fallback: clamp to p1..p99
+    // continuous = EQUAL INTERVAL classes across p1..p99
+    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
     const pLow = percentile(vals, 1);
     const pHigh = percentile(vals, 99);
     let lo = Number.isFinite(pLow) ? pLow : 0;
     let hi = Number.isFinite(pHigh) ? pHigh : 1;
     if (!(hi > lo)) { lo = 0; hi = 1; }
     colorDomain = { lo, hi, label: 'p1–p99' };
-    colorBreaks = null;
+   
+    // build equal-interval thresholds: colors => k classes => k-1 breaks
+    const classes = Math.max(2, ramp.length);
+    const step = (hi - lo) / classes;
+    const breaks: number[] = [];
+    for (let i = 1; i < classes; i++) breaks.push(lo + step * i);
+    colorBreaks = breaks;
   }
 
   // ---- Height autoscale: anchor p-th percentile to capMeters ----
@@ -1188,6 +1274,8 @@ function buildPopupHTML(props: Record<string, any>): string {
 
 
 
+
+
 /* ---------------- Events ---------------- */
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks
@@ -1227,5 +1315,6 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 // default height units
 unitsSelect.value = 'centimeters';
 installWelcome();
+setQuality('high');
 
 

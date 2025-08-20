@@ -114,7 +114,8 @@ rampSelect.value = 'Viridis';
 
 // Token sets we match against
 const UNIT_TOKENS = new Set([
-  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares','acreage'
+  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi',
+  'ac','acre','acres','ha','hectare','hectares','acreage'
 ]);
 
 const AREA_UNIT_CHOICES: { key: string, label: string }[] = [
@@ -272,10 +273,17 @@ function awaitFirstRenderedFeature() {
 
 // Heuristics for "key fields"
 function isKeyField(name: string) {
-  const s = name.toLowerCase();
-  const valueHits = /(value)\b/.test(s);
-  const sizeTokens = /(sq_?ft|sqft|ft2|ft\^2|sq_?m|sqm|m2|m\^2|acres?|acre|hectares?|ha|km2|sqkm|mi2|sqmi|area)/;
-  const sizeHits = sizeTokens.test(s);
+  const tokens = tokenizeName(name);
+
+  // EXCLUDE length/perimeter from "key" suggestions
+  if (tokens.some(t => t === 'length' || t === 'perimeter' || t === 'perim')) return false;
+
+  // "value" or "valuation" → key
+  const valueHits = tokens.includes('value') || tokens.includes('valuation');
+
+  // Size-ish → key: 'area' or any unit token (incl. 'acreage', 'ha', etc.)
+  const sizeHits = tokens.some(t => t === 'area' || UNIT_TOKENS.has(t));
+
   return valueHits || sizeHits;
 }
 
@@ -290,8 +298,10 @@ function containsUnit(name: string): boolean {
 
 function containsKeyword(name: string, kind: 'building'|'land'): boolean {
   const tokens = tokenizeName(name);
+  // building: treat stems/spellings of 'building' and 'improvement' as buildingy
   if (kind === 'building') return tokens.some(t => /^(bldg|build|building|impr|improv)/.test(t));
-  return tokens.some(t => /^land/.test(t));
+  // land: treat 'land', 'acre', and 'acreage' as landy
+  return tokens.some(t => /^(land|acre|acreage)/.test(t));
 }
 
 function containsValueField(name: string): number {
@@ -333,21 +343,27 @@ export function scoreValueField(name: string): number {
 // score lower = better
 function scoreSizeField(name: string, kind: 'building'|'land'): number {
   const tokens = tokenizeName(name);
+
+  // broaden land keywords to include 'acre' / 'acreage'
   const kwIdx = tokens.findIndex(t =>
-    kind === 'building' ? /^(bldg|build|building|impr|improv)/.test(t) : /^land/.test(t)
+    kind === 'building'
+      ? /^(bldg|build|building|impr|improv)/.test(t)
+      : /^(land|acre|acreage)/.test(t)    // ← was just /^land/
   );
+
   const unitIdx = tokens.findIndex(t => UNIT_TOKENS.has(t));
   if (kwIdx === -1 || unitIdx === -1) return Number.POSITIVE_INFINITY;
 
   const extras = tokens.filter((t, i) => i !== kwIdx && i !== unitIdx && t !== 'area' && t !== 'total');
 
   let score = 0;
-  score += extras.length * 10;              // simpler name preferred
-  score += tokens.length * 0.5;             // shorter preferred
-  if (unitIdx !== tokens.length - 1) score += 2;  // prefer unit suffix at end
-  if (kwIdx > 0) score += 0.5;              // slight bonus if keyword is at start
+  score += extras.length * 10;
+  score += tokens.length * 0.5;
+  if (unitIdx !== tokens.length - 1) score += 2;
+  if (kwIdx > 0) score += 0.5;
   return score;
 }
+
 
 function guessAreaUnitKey(name: string | null): string | undefined {
   const g = guessAreaUnitFromFieldName(name || '');
@@ -381,6 +397,8 @@ function autoPickMainField(fields: string[]): { field?: string, unitKey?: string
 }
 
 /* ---------------- Modal 1: chooser ---------------- */
+
+
 function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; numericFields: string[] }) {
   rowCountEl.textContent = opts.rowCount.toLocaleString();
   geomColEl.textContent = opts.geometryCol || '(unknown)';
@@ -397,14 +415,19 @@ function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; nu
   const lCandidatesKey = key.filter(n => containsKeyword(n, 'land') && containsUnit(n));
   const bBest = autoPickOne('building', bCandidatesKey).field;
   const lBest = autoPickOne('land', lCandidatesKey).field;
-
+  
+  // Normalize for robust comparisons
+  const bSet = new Set(bCandidatesKey.map(s => s.toLowerCase()));
+  const lSet = new Set(lCandidatesKey.map(s => s.toLowerCase()));
+  const bBestLC = bBest?.toLowerCase() ?? '';
+  const lBestLC = lBest?.toLowerCase() ?? '';
+  
   // Helper: should a KEY field be prechecked?
   const shouldPrecheckKey = (name: string) => {
-    const isB = bCandidatesKey.includes(name);
-    const isL = lCandidatesKey.includes(name);
-    if (isB) return name === bBest;      // only the best building-size field
-    if (isL) return name === lBest;      // only the best land-size field
-    return true;                         // all other key fields stay selected
+    const n = name.toLowerCase();
+    if (bSet.has(n)) return n === bBestLC;   // only the best building-size field
+    if (lSet.has(n)) return n === lBestLC;   // only the best land-size field
+    return true;                             // all other key fields stay selected
   };
 
   if (all.length === 0) {
@@ -819,8 +842,7 @@ function computeExtrusionHeightMeters(metricValue: number): number {
   return metricValue * multiplier * unitFactor;
 }
 
-
-/** Queue an update; newer calls replace older ones. */
+// Queue an update; newer calls replace older ones.
 function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
   if (!currentGeoJSON) return;   // <- hard stop until data exists
 
@@ -838,7 +860,6 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
     }
   }, debounceMs);
 }
-
 
 function chooseBestMetricUnitForMultiplier(p99: number, capMeters = 1000): { unit: MetricUnitKey; multiplier: number } {
   const candidates: MetricUnitKey[] = ['centimeters', 'meters', 'kilometers'];
@@ -871,6 +892,30 @@ function populateFieldDropdownFromList(list: string[]) {
   }
 }
 
+function detectNumericFieldsFromFeatures(features: GeoJSON.Feature[]): string[] {
+  const counts: Record<string, number> = {}, nums: Record<string, number> = {};
+  const isNumLike = (v: any) =>
+    (typeof v === 'number' && Number.isFinite(v)) ||
+    (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
+
+  for (const f of features) {
+    const p = (f.properties || {}) as Record<string, unknown>;
+    for (const [k, v] of Object.entries(p)) {
+      counts[k] = (counts[k] ?? 0) + 1;
+      if (isNumLike(v)) nums[k] = (nums[k] ?? 0) + 1;
+    }
+  }
+  return Object.keys(counts)
+    .filter(k => (nums[k] ?? 0) >= Math.max(1, Math.ceil(0.6 * (counts[k] || 0))))
+    .sort();
+}
+
+function polygonsOnly(fc: GeoJSON.FeatureCollection) {
+  return fc.features.filter(
+    f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+  );
+}
+
 function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding'): number[] {
   const vals: number[] = [];
   for (const f of fc.features) {
@@ -900,7 +945,7 @@ function computeStatsNormalized(fc: GeoJSON.FeatureCollection, field: string, mo
   return { min, max };
 }
 
-/** Build a step expression: first color is < break1, then each break raises the color. */
+// Build a step expression: first color is < break1, then each break raises the color.
 function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks: number[]): Expression {
   const c = colors.slice();                 // copy
   const b = breaks.slice();                 // copy
@@ -914,7 +959,7 @@ function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks
   return out as any;
 }
 
-/** Auto-multiplier so p-th percentile reaches capMeters, in given units */
+// Auto-multiplier so p-th percentile reaches capMeters, in given units
 function computeAndApplyAutoMultiplier(
   unitsKeyOrAuto: 'auto' | keyof typeof UNIT_TO_METERS = 'auto',
   capMeters = 1000,
@@ -985,7 +1030,6 @@ function computeAndApplyAutoMultiplier(
   applyExtrusion();
 }
 
-
 function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], min: number, max: number): Expression {
   const n = colors.length - 1;
   const stops: (number | string)[] = [];
@@ -1030,7 +1074,6 @@ function updateLegend() {
   legendEl.appendChild(row);
   legendEl.style.display = 'grid';
 }
-
 
 function currentModeErrorMessage(props: Record<string, any>): string | null {
   if (normalizationMode === 'perLand' && landSizeField) {

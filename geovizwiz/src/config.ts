@@ -36,18 +36,3 @@ export const UNIT_TO_METERS = {
   miles: 1609.344,
   stories: 3.3
 };
-
-// Token sets we match against
-const UNIT_TOKENS = new Set([
-  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi','ac','acre','acres','ha','hectare','hectares','acreage'
-]);
-
-const AREA_UNIT_CHOICES: { key: string, label: string }[] = [
-  { key: 'sqm', label: 'square meters (m²)' },
-  { key: 'sqft', label: 'square feet (ft²)' },
-  { key: 'acres', label: 'acres' },
-  { key: 'hectares', label: 'hectares' },
-  { key: 'sqkm', label: 'square kilometers (km²)' },
-  { key: 'sqmi', label: 'square miles (mi²)' },
-  { key: 'other', label: 'other / unknown' }
-];

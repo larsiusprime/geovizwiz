@@ -304,9 +304,22 @@ function containsKeyword(name: string, kind: 'building'|'land'): boolean {
   return tokens.some(t => /^(land|acre|acreage)/.test(t));
 }
 
-function containsValueField(name: string): number {
-	const tokens = tokenizeName(name);
-	
+// Quick heuristic used when we only need to know if a field name looks
+// "value-like".  Returns a numeric score where higher numbers indicate a
+// stronger match.  Always returns a number to satisfy strict TypeScript
+// settings.
+export function containsValueField(name: string): number {
+  const tokens = tokenizeName(name);
+
+  let score = 0;
+
+  // Direct mentions of value/valuation get the biggest bump
+  if (tokens.some(t => /^valu/.test(t))) score += 2;
+
+  // Other hints such as market, total or property add a smaller bump
+  if (tokens.some(t => /^(market|total|property|apprais|assess)/.test(t))) score += 1;
+
+  return score;
 }
 
 // score lower = better

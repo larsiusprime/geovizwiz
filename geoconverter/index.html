@@ -3,56 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPKG to GeoParquet Converter</title>
+    <title>GeoConverter - GPKG & Shapefile to GeoParquet</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>GPKG to GeoParquet Converter</h1>
-            <p>Select the fields you want to convert from your GPKG file</p>
+            <h1>GeoConverter</h1>
+            <p>Convert GPKG files or zipped Shapefiles to GeoParquet format</p>
         </header>
 
         <main>
             <div class="drop-zone" id="dropZone">
                 <div class="drop-zone-content">
                     <div class="upload-icon">📁</div>
-                    <h3>Drop your .GPKG file here</h3>
+                    <h3>Drop your .GPKG or .ZIP shapefile here</h3>
                     <p>or click to browse</p>
-                    <input type="file" id="fileInput" accept=".gpkg" style="display: none;">
+                    <input type="file" id="fileInput" accept=".gpkg,.zip" style="display: none;">
                 </div>
             </div>
 
-            <div class="results" id="results" style="display: none;">
-                <div class="file-summary" id="fileSummary"></div>
+            <div id="error" class="error" style="display: none;">
+                <div class="error-content">
+                    <span class="error-icon">❌</span>
+                    <span id="errorMessage"></span>
+                </div>
+            </div>
+
+            <div id="results" class="results" style="display: none;">
+                <div id="fileSummary" class="file-summary"></div>
                 
-                <div class="field-selection-container">
-                    <div class="selection-header">
-                        <h3>Select Fields to Convert</h3>
-                        <div class="selection-controls">
-                            <button class="btn-secondary" id="selectAllBtn">Select All</button>
-                            <button class="btn-secondary" id="selectNoneBtn">Select None</button>
-                        </div>
-                    </div>
-                    
-                    <div class="fields-grid" id="fieldsGrid"></div>
-                    
-                    <div class="action-buttons">
-                        <button class="btn-primary" id="convertBtn" disabled>
-                            Convert Selected Fields to GeoParquet
-                        </button>
-                    </div>
+                <div class="selection-controls">
+                    <button id="selectAllBtn" class="btn btn-secondary">Select All</button>
+                    <button id="selectNoneBtn" class="btn btn-secondary">Select None</button>
                 </div>
-            </div>
-
-            <div class="error" id="error" style="display: none;">
-                <h3>Error</h3>
-                <p id="errorMessage"></p>
+                
+                <div id="fieldsGrid" class="fields-grid"></div>
+                
+                <div class="convert-section">
+                    <button id="convertBtn" class="btn btn-primary" disabled>
+                        Convert Selected Fields to GeoParquet
+                    </button>
+                </div>
             </div>
         </main>
     </div>
 
     <script src="sql-wasm.js"></script>
+    <script src="arrow.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

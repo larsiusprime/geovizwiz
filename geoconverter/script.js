@@ -132,8 +132,10 @@ class GPKGMetadataReader {
                 for (let i = 0; i < tables.length; i++) {
                     const tableName = tables[i][0];
                     
-                    // Skip system tables
-                    if (tableName.startsWith('sqlite_') || tableName.startsWith('gpkg_')) {
+                    // Skip system tables and R-tree spatial index tables
+                    if (tableName.startsWith('sqlite_') || 
+                        tableName.startsWith('gpkg_') || 
+                        tableName.startsWith('rtree_')) {
                         continue;
                     }
 
@@ -232,46 +234,86 @@ class GPKGMetadataReader {
             <p><strong>User Fields:</strong> ${userFieldCount} | <strong>Hidden System Fields:</strong> ${hiddenFieldCount}</p>
         `;
 
-        // Display selectable fields
+        // Group fields by table
+        const fieldsByTable = this.groupFieldsByTable();
+        
+        // Display grouped fields
         this.fieldsGrid.innerHTML = '';
         
         if (this.userFields.length === 0) {
-            this.fieldsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #666; padding: 2rem;">No user fields found in this GPKG file.</p>';
+            this.fieldsGrid.innerHTML = '<p style="text-align: center; color: #666; padding: 2rem;">No user fields found in this GPKG file.</p>';
         } else {
-            this.userFields.forEach((field, index) => {
-                const fieldElement = document.createElement('div');
-                fieldElement.className = 'field-item';
-                fieldElement.innerHTML = `
-                    <input type="checkbox" class="field-checkbox" id="field_${index}" data-field-id="${index}">
-                    <div class="field-info">
-                        <div class="field-name">${field.name}</div>
-                        <div class="field-type">${field.type}</div>
-                        <div class="field-table">Table: ${field.tableName}</div>
+            Object.entries(fieldsByTable).forEach(([tableName, fields]) => {
+                const tableGroup = document.createElement('div');
+                tableGroup.className = 'table-group';
+                
+                tableGroup.innerHTML = `
+                    <div class="table-header">
+                        <h4>
+                            <span class="table-icon">📋</span>
+                            ${tableName}
+                        </h4>
+                        <span class="field-count">${fields.length} field${fields.length === 1 ? '' : 's'}</span>
                     </div>
+                    <div class="table-fields"></div>
                 `;
                 
-                // Add click handler for the entire field item
-                fieldElement.addEventListener('click', (e) => {
-                    if (e.target.type !== 'checkbox') {
-                        const checkbox = fieldElement.querySelector('.field-checkbox');
-                        checkbox.checked = !checkbox.checked;
-                        checkbox.dispatchEvent(new Event('change'));
-                    }
+                const tableFieldsContainer = tableGroup.querySelector('.table-fields');
+                
+                fields.forEach((field, index) => {
+                    const fieldElement = document.createElement('div');
+                    fieldElement.className = 'field-item';
+                    fieldElement.innerHTML = `
+                        <input type="checkbox" class="field-checkbox" id="field_${field.globalIndex}" data-field-id="${field.globalIndex}">
+                        <div class="field-info">
+                            <div class="field-name">${field.name}</div>
+                            <div class="field-type">${field.type}</div>
+                        </div>
+                    `;
+                    
+                    // Add click handler for the entire field item
+                    fieldElement.addEventListener('click', (e) => {
+                        if (e.target.type !== 'checkbox') {
+                            const checkbox = fieldElement.querySelector('.field-checkbox');
+                            checkbox.checked = !checkbox.checked;
+                            checkbox.dispatchEvent(new Event('change'));
+                        }
+                    });
+                    
+                    // Add change handler for checkbox
+                    const checkbox = fieldElement.querySelector('.field-checkbox');
+                    checkbox.addEventListener('change', (e) => {
+                        this.handleFieldSelection(field.globalIndex, e.target.checked);
+                        fieldElement.classList.toggle('selected', e.target.checked);
+                    });
+                    
+                    tableFieldsContainer.appendChild(fieldElement);
                 });
                 
-                // Add change handler for checkbox
-                const checkbox = fieldElement.querySelector('.field-checkbox');
-                checkbox.addEventListener('change', (e) => {
-                    this.handleFieldSelection(index, e.target.checked);
-                    fieldElement.classList.toggle('selected', e.target.checked);
-                });
-                
-                this.fieldsGrid.appendChild(fieldElement);
+                this.fieldsGrid.appendChild(tableGroup);
             });
         }
 
         this.updateConvertButton();
         this.showResults();
+    }
+
+    groupFieldsByTable() {
+        const grouped = {};
+        
+        this.userFields.forEach((field, globalIndex) => {
+            if (!grouped[field.tableName]) {
+                grouped[field.tableName] = [];
+            }
+            
+            // Add global index for tracking selections
+            grouped[field.tableName].push({
+                ...field,
+                globalIndex
+            });
+        });
+        
+        return grouped;
     }
 
     handleFieldSelection(fieldIndex, isSelected) {

@@ -26,8 +26,8 @@ A simple, standalone web application that reads and displays metadata from GeoPa
 ## Technical Details
 
 ### Dependencies
-- **geopackage.js**: A JavaScript library for reading GeoPackage files in the browser
-- **No other dependencies**: The application is completely self-contained
+- **sql.js**: A JavaScript SQLite implementation for reading database files in the browser
+- **All dependencies are local**: The application is completely self-contained and works offline
 
 ### Browser Compatibility
 - Modern browsers with ES6+ support
@@ -38,6 +38,7 @@ A simple, standalone web application that reads and displays metadata from GeoPa
 - Files are read as ArrayBuffer for efficient processing
 - Only metadata is extracted - no actual data is loaded into memory
 - Processing happens entirely in the browser
+- All dependencies are local - no internet connection required
 
 ## File Structure
 
@@ -46,6 +47,8 @@ geoconverter/
 ├── index.html          # Main HTML file
 ├── styles.css          # CSS styles
 ├── script.js           # JavaScript application logic
+├── sql-wasm.js         # SQL.js library (local copy)
+├── sql-wasm.wasm       # SQL.js WebAssembly binary (local copy)
 └── README.md           # This file
 ```
 

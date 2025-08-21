@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPKG Metadata Reader</title>
+    <title>GPKG to GeoParquet Converter</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>GPKG Metadata Reader</h1>
-            <p>Drag and drop a .GPKG file to view its field metadata</p>
+            <h1>GPKG to GeoParquet Converter</h1>
+            <p>Select the fields you want to convert from your GPKG file</p>
         </header>
 
         <main>
@@ -24,11 +24,24 @@
             </div>
 
             <div class="results" id="results" style="display: none;">
-                <h2>File Metadata</h2>
-                <div class="file-info" id="fileInfo"></div>
-                <div class="fields-container">
-                    <h3>Fields</h3>
-                    <div class="fields-list" id="fieldsList"></div>
+                <div class="file-summary" id="fileSummary"></div>
+                
+                <div class="field-selection-container">
+                    <div class="selection-header">
+                        <h3>Select Fields to Convert</h3>
+                        <div class="selection-controls">
+                            <button class="btn-secondary" id="selectAllBtn">Select All</button>
+                            <button class="btn-secondary" id="selectNoneBtn">Select None</button>
+                        </div>
+                    </div>
+                    
+                    <div class="fields-grid" id="fieldsGrid"></div>
+                    
+                    <div class="action-buttons">
+                        <button class="btn-primary" id="convertBtn" disabled>
+                            Convert Selected Fields to GeoParquet
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -39,7 +52,7 @@
         </main>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/sql-wasm.js"></script>
+    <script src="sql-wasm.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

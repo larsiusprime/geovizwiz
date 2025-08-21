@@ -12,7 +12,7 @@ body {
 }
 
 .container {
-    max-width: 800px;
+    max-width: 1000px;
     margin: 0 auto;
     padding: 2rem;
 }
@@ -85,13 +85,7 @@ header p {
     margin-bottom: 2rem;
 }
 
-.results h2 {
-    color: #333;
-    margin-bottom: 1.5rem;
-    font-size: 1.8rem;
-}
-
-.file-info {
+.file-summary {
     background: #f8f9fa;
     padding: 1rem;
     border-radius: 8px;
@@ -99,50 +93,151 @@ header p {
     border-left: 4px solid #667eea;
 }
 
-.file-info h4 {
+.file-summary h4 {
     color: #333;
     margin-bottom: 0.5rem;
 }
 
-.file-info p {
+.file-summary p {
     color: #666;
     margin-bottom: 0.25rem;
 }
 
-.fields-container h3 {
+.field-selection-container {
+    margin-top: 2rem;
+}
+
+.selection-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.selection-header h3 {
     color: #333;
-    margin-bottom: 1rem;
     font-size: 1.4rem;
+    margin: 0;
 }
 
-.fields-list {
-    display: grid;
-    gap: 0.75rem;
+.selection-controls {
+    display: flex;
+    gap: 0.5rem;
 }
 
-.field-item {
+.btn-secondary {
     background: #f8f9fa;
-    padding: 1rem;
-    border-radius: 8px;
-    border: 1px solid #e9ecef;
+    border: 1px solid #dee2e6;
+    color: #495057;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.875rem;
     transition: all 0.2s ease;
 }
 
-.field-item:hover {
+.btn-secondary:hover {
     background: #e9ecef;
-    transform: translateX(4px);
+    border-color: #adb5bd;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+.btn-primary:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.fields-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 2rem;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 0.5rem;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    background: #fafafa;
+}
+
+.field-item {
+    background: white;
+    padding: 0.75rem;
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    cursor: pointer;
+}
+
+.field-item:hover {
+    background: #f8f9ff;
+    border-color: #667eea;
+    transform: translateY(-1px);
+}
+
+.field-item.selected {
+    background: #e3f2fd;
+    border-color: #2196f3;
+}
+
+.field-checkbox {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #667eea;
+}
+
+.field-info {
+    flex: 1;
 }
 
 .field-name {
     font-weight: 600;
     color: #333;
     margin-bottom: 0.25rem;
+    font-size: 0.9rem;
 }
 
 .field-type {
     color: #666;
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-family: 'Courier New', monospace;
+}
+
+.field-table {
+    color: #888;
+    font-size: 0.75rem;
+    margin-top: 0.25rem;
+}
+
+.action-buttons {
+    text-align: center;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e9ecef;
 }
 
 .error {
@@ -194,5 +289,19 @@ header p {
     
     .results {
         padding: 1.5rem;
+    }
+    
+    .fields-grid {
+        grid-template-columns: 1fr;
+        max-height: 300px;
+    }
+    
+    .selection-header {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .selection-controls {
+        justify-content: center;
     }
 }

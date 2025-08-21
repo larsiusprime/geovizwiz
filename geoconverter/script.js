@@ -4,9 +4,15 @@ class GPKGMetadataReader {
         this.fileInput = document.getElementById('fileInput');
         this.results = document.getElementById('results');
         this.error = document.getElementById('error');
-        this.fileInfo = document.getElementById('fileInfo');
-        this.fieldsList = document.getElementById('fieldsList');
+        this.fileSummary = document.getElementById('fileSummary');
+        this.fieldsGrid = document.getElementById('fieldsGrid');
         this.errorMessage = document.getElementById('errorMessage');
+        this.selectAllBtn = document.getElementById('selectAllBtn');
+        this.selectNoneBtn = document.getElementById('selectNoneBtn');
+        this.convertBtn = document.getElementById('convertBtn');
+        
+        this.selectedFields = new Set();
+        this.userFields = [];
         
         this.initializeEventListeners();
     }
@@ -20,6 +26,13 @@ class GPKGMetadataReader {
         // Click to browse
         this.dropZone.addEventListener('click', () => this.fileInput.click());
         this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+        
+        // Selection controls
+        this.selectAllBtn.addEventListener('click', this.selectAllFields.bind(this));
+        this.selectNoneBtn.addEventListener('click', this.selectNoneFields.bind(this));
+        
+        // Convert button (placeholder for now)
+        this.convertBtn.addEventListener('click', this.handleConvert.bind(this));
     }
 
     handleDragOver(e) {
@@ -67,6 +80,9 @@ class GPKGMetadataReader {
             // Parse GPKG metadata
             const metadata = await this.parseGPKGMetadata(arrayBuffer);
             
+            // Filter user fields
+            this.userFields = this.filterUserFields(metadata);
+            
             // Display results
             this.displayResults(file, metadata);
             
@@ -92,7 +108,7 @@ class GPKGMetadataReader {
             try {
                 // Initialize SQL.js
                 const SQL = await initSqlJs({
-                    locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.8.0/dist/${file}`
+                    locateFile: file => file
                 });
 
                 // Create a database from the array buffer
@@ -146,7 +162,8 @@ class GPKGMetadataReader {
                                     name: fieldName,
                                     type: fieldType,
                                     nullable: notNull === 0,
-                                    primaryKey: primaryKey === 1
+                                    primaryKey: primaryKey === 1,
+                                    tableName: tableName
                                 });
                             }
 
@@ -168,46 +185,138 @@ class GPKGMetadataReader {
         });
     }
 
+    filterUserFields(metadata) {
+        // Common geometry and metadata field names to exclude
+        const systemFields = new Set([
+            'geom', 'geometry', 'the_geom', 'wkb_geometry', 'shape',
+            'fid', 'id', 'objectid', 'oid', 'gid',
+            'created_at', 'updated_at', 'created_by', 'updated_by',
+            'version', 'revision', 'uuid', 'guid'
+        ]);
+
+        // Common geometry type patterns
+        const geometryTypePattern = /^(point|line|polygon|multipoint|multiline|multipolygon|geometry)/i;
+        const spatialIndexPattern = /^rtree_.*_(geom|geometry|shape)/i;
+
+        return metadata.fields.filter(field => {
+            const lowerName = field.name.toLowerCase();
+            
+            // Skip primary keys (usually system-generated)
+            if (field.primaryKey) return false;
+            
+            // Skip known system fields
+            if (systemFields.has(lowerName)) return false;
+            
+            // Skip geometry columns by type
+            if (field.type && geometryTypePattern.test(field.type)) return false;
+            
+            // Skip spatial index fields
+            if (spatialIndexPattern.test(lowerName)) return false;
+            
+            // Skip fields that look like internal IDs
+            if (lowerName.endsWith('_id') && lowerName.length < 10) return false;
+            
+            return true;
+        });
+    }
+
     displayResults(file, metadata) {
-        // Display file info
-        this.fileInfo.innerHTML = `
-            <h4>File Information</h4>
-            <p><strong>Name:</strong> ${file.name}</p>
-            <p><strong>Size:</strong> ${this.formatFileSize(file.size)}</p>
-            <p><strong>Tables:</strong> ${metadata.tables.length}</p>
-            <p><strong>Total Fields:</strong> ${metadata.fields.length}</p>
+        // Display file summary
+        const userFieldCount = this.userFields.length;
+        const totalFieldCount = metadata.fields.length;
+        const hiddenFieldCount = totalFieldCount - userFieldCount;
+        
+        this.fileSummary.innerHTML = `
+            <h4>📄 ${file.name}</h4>
+            <p><strong>Size:</strong> ${this.formatFileSize(file.size)} | <strong>Tables:</strong> ${metadata.tables.length}</p>
+            <p><strong>User Fields:</strong> ${userFieldCount} | <strong>Hidden System Fields:</strong> ${hiddenFieldCount}</p>
         `;
 
-        // Display fields
-        this.fieldsList.innerHTML = '';
+        // Display selectable fields
+        this.fieldsGrid.innerHTML = '';
         
-        if (metadata.tables.length === 0) {
-            this.fieldsList.innerHTML = '<p style="color: #666; text-align: center;">No feature tables found in this GPKG file.</p>';
+        if (this.userFields.length === 0) {
+            this.fieldsGrid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center; color: #666; padding: 2rem;">No user fields found in this GPKG file.</p>';
         } else {
-            metadata.tables.forEach(table => {
-                const tableHeader = document.createElement('div');
-                tableHeader.className = 'field-item';
-                tableHeader.style.background = '#e3f2fd';
-                tableHeader.style.borderLeft = '4px solid #2196f3';
-                tableHeader.innerHTML = `
-                    <div class="field-name">📋 Table: ${table.name}</div>
-                    <div class="field-type">${table.fields.length} fields</div>
-                `;
-                this.fieldsList.appendChild(tableHeader);
-
-                table.fields.forEach(field => {
-                    const fieldElement = document.createElement('div');
-                    fieldElement.className = 'field-item';
-                    fieldElement.innerHTML = `
+            this.userFields.forEach((field, index) => {
+                const fieldElement = document.createElement('div');
+                fieldElement.className = 'field-item';
+                fieldElement.innerHTML = `
+                    <input type="checkbox" class="field-checkbox" id="field_${index}" data-field-id="${index}">
+                    <div class="field-info">
                         <div class="field-name">${field.name}</div>
-                        <div class="field-type">Type: ${field.type}${field.primaryKey ? ' (Primary Key)' : ''}${field.nullable ? ' (Nullable)' : ''}</div>
-                    `;
-                    this.fieldsList.appendChild(fieldElement);
+                        <div class="field-type">${field.type}</div>
+                        <div class="field-table">Table: ${field.tableName}</div>
+                    </div>
+                `;
+                
+                // Add click handler for the entire field item
+                fieldElement.addEventListener('click', (e) => {
+                    if (e.target.type !== 'checkbox') {
+                        const checkbox = fieldElement.querySelector('.field-checkbox');
+                        checkbox.checked = !checkbox.checked;
+                        checkbox.dispatchEvent(new Event('change'));
+                    }
                 });
+                
+                // Add change handler for checkbox
+                const checkbox = fieldElement.querySelector('.field-checkbox');
+                checkbox.addEventListener('change', (e) => {
+                    this.handleFieldSelection(index, e.target.checked);
+                    fieldElement.classList.toggle('selected', e.target.checked);
+                });
+                
+                this.fieldsGrid.appendChild(fieldElement);
             });
         }
 
+        this.updateConvertButton();
         this.showResults();
+    }
+
+    handleFieldSelection(fieldIndex, isSelected) {
+        if (isSelected) {
+            this.selectedFields.add(fieldIndex);
+        } else {
+            this.selectedFields.delete(fieldIndex);
+        }
+        this.updateConvertButton();
+    }
+
+    selectAllFields() {
+        this.selectedFields.clear();
+        const checkboxes = this.fieldsGrid.querySelectorAll('.field-checkbox');
+        checkboxes.forEach((checkbox, index) => {
+            checkbox.checked = true;
+            checkbox.closest('.field-item').classList.add('selected');
+            this.selectedFields.add(index);
+        });
+        this.updateConvertButton();
+    }
+
+    selectNoneFields() {
+        this.selectedFields.clear();
+        const checkboxes = this.fieldsGrid.querySelectorAll('.field-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = false;
+            checkbox.closest('.field-item').classList.remove('selected');
+        });
+        this.updateConvertButton();
+    }
+
+    updateConvertButton() {
+        const hasSelection = this.selectedFields.size > 0;
+        this.convertBtn.disabled = !hasSelection;
+        this.convertBtn.textContent = hasSelection 
+            ? `Convert ${this.selectedFields.size} Selected Field${this.selectedFields.size === 1 ? '' : 's'} to GeoParquet`
+            : 'Convert Selected Fields to GeoParquet';
+    }
+
+    handleConvert() {
+        // Placeholder for conversion logic
+        const selectedFieldNames = Array.from(this.selectedFields).map(index => this.userFields[index].name);
+        console.log('Converting fields:', selectedFieldNames);
+        alert(`Ready to convert ${selectedFieldNames.length} fields:\n${selectedFieldNames.join(', ')}`);
     }
 
     formatFileSize(bytes) {
@@ -223,7 +332,7 @@ class GPKGMetadataReader {
             <div class="drop-zone-content">
                 <div class="loading"></div>
                 <h3>Processing GPKG file...</h3>
-                <p>Please wait while we extract metadata</p>
+                <p>Analyzing fields and metadata</p>
             </div>
         `;
     }
@@ -249,6 +358,7 @@ class GPKGMetadataReader {
 
     hideResults() {
         this.results.style.display = 'none';
+        this.selectedFields.clear();
     }
 
     showError(message) {

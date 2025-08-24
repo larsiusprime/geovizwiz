@@ -6,21 +6,24 @@
   <title>South Bend Civil Map</title>
   <link rel="icon" href="data:,">
   <style>
-    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
+    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; --tabH:48px; }
     *, *::before, *::after { box-sizing: border-box; }
 
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
-    #map { position: absolute; inset: 0; }
+    #tabs { position:absolute; top:0; left:0; right:0; height:var(--tabH); display:flex; gap:6px; align-items:center; padding:6px 10px; background:var(--panel); box-shadow:var(--shadow); z-index:30; }
+    #tabs button { border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; }
+    #tabs button.active { background:#e0e0e0; }
+    #map { position:absolute; top:var(--tabH); bottom:0; left:0; right:0; }
 
     #title {
-      position: absolute; top: 10px; left: 50%;
+      position: absolute; top: calc(var(--tabH) + 10px); left: 50%;
       transform: translateX(-50%);
       background: var(--panel); padding: 6px 12px; border-radius: 8px;
       box-shadow: var(--shadow); font-weight: 600; z-index: 20;
     }
 
     #controls {
-      position: absolute; top: 10px; left: 10px;
+      position: absolute; top: calc(var(--tabH) + 10px); left: 10px;
       width: min(92vw, 420px);
       background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
       display: grid; gap: var(--gap); z-index: 10;
@@ -54,6 +57,8 @@
     input[type="range"] { width: 100%; margin: 0; }
     output { font-size: 12px; color:#333; min-width: 2.8ch; text-align: right; }
 
+    #statusFieldset { display:none; }
+
     /* overlays */
     .overlay {
       position: absolute; inset: 0; display: none; place-items: center;
@@ -82,6 +87,10 @@
 </head>
 <body>
   <div id="app">
+    <div id="tabs">
+      <button data-tab="main" class="active">Land value per sqft</button>
+      <button data-tab="under">Vacant/Parking/Underdeveloped</button>
+    </div>
     <div id="map"></div>
     <div id="title">South Bend Civil Map</div>
 
@@ -175,6 +184,14 @@
       </div>
     </fieldset>
 
+    <fieldset id="statusFieldset">
+      <label for="statusFilter">Status filter</label>
+      <select id="statusFilter" multiple size="3"></select>
+      <label style="display:flex; gap:8px; align-items:center;">
+        <input type="checkbox" id="scaleFiltered" />
+        <span>Scale heights using filtered data</span>
+      </label>
+    </fieldset>
 
       <fieldset id="legend"></fieldset>
     </div>

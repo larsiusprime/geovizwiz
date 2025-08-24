@@ -6,27 +6,33 @@
   <title>South Bend Civil Map</title>
   <link rel="icon" href="data:,">
   <style>
-    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; --tabH:48px; }
+    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; --tabH:48px; --titleH:40px; }
     *, *::before, *::after { box-sizing: border-box; }
 
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
-    #tabs { position:absolute; top:0; left:0; right:0; height:var(--tabH); display:flex; gap:6px; align-items:center; padding:6px 10px; background:var(--panel); box-shadow:var(--shadow); z-index:30; }
+    #title {
+      position:absolute; top:0; left:0; right:0; height:var(--titleH);
+      display:flex; align-items:center; justify-content:center;
+      background:var(--panel); box-shadow:var(--shadow); font-weight:600; z-index:40;
+    }
+    #tabs { position:absolute; top:var(--titleH); left:0; right:0; height:var(--tabH); display:flex; gap:6px; align-items:center; padding:6px 10px; background:var(--panel); box-shadow:var(--shadow); z-index:30; }
     #tabs button { border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; }
     #tabs button.active { background:#e0e0e0; }
-    #map { position:absolute; top:var(--tabH); bottom:0; left:0; right:0; }
-
-    #title {
-      position: absolute; top: calc(var(--tabH) + 10px); left: 50%;
-      transform: translateX(-50%);
-      background: var(--panel); padding: 6px 12px; border-radius: 8px;
-      box-shadow: var(--shadow); font-weight: 600; z-index: 20;
-    }
+    #map { position:absolute; top:calc(var(--titleH) + var(--tabH)); bottom:0; left:0; right:0; }
 
     #controls {
-      position: absolute; top: calc(var(--tabH) + 10px); left: 10px;
+      position: absolute; top: calc(var(--titleH) + var(--tabH) + 10px); right: 10px;
       width: min(92vw, 420px);
       background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
-      display: grid; gap: var(--gap); z-index: 10;
+      display: none; gap: var(--gap); z-index: 10;
+    }
+    #settingsBtn {
+      position:absolute; top: calc(var(--titleH) + var(--tabH) + 10px); right:10px;
+      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; z-index:20;
+    }
+    #closeControls {
+      position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8;
+      padding:2px 6px; border-radius:6px; cursor:pointer;
     }
 
     #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
@@ -86,27 +92,27 @@
   </style>
 </head>
 <body>
-  <div id="app">
+    <div id="app">
+    <div id="title">South Bend Civil Map</div>
     <div id="tabs">
       <button data-tab="main" class="active">Land value per sqft</button>
       <button data-tab="under">Vacant/Parking/Underdeveloped</button>
     </div>
     <div id="map"></div>
-    <div id="title">South Bend Civil Map</div>
+    <button id="settingsBtn">Settings</button>
 
     <div id="controls">
+    <button id="closeControls">×</button>
     <div id="googleSignIn"></div>
     <fieldset>
-      <label for="file">1) Load a GeoParquet file (.parquet)</label>
-      <input id="file" type="file" accept=".parquet,.parq" />
       <div class="buttons">
           <button id="btn-zoomto">Zoom to data</button>
         </div>
       </fieldset>
 
       <fieldset>
-        <label for="field">2) Numeric field to visualize</label>
-        <select id="field"><option value="" disabled selected>— load a file first —</option></select>
+        <label for="field">Numeric field to visualize</label>
+        <select id="field"></select>
 
         <!-- NEW: normalization choices -->
         <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
@@ -127,7 +133,7 @@
 
       <fieldset class="row">
         <div>
-          <label for="ramp">3) Color ramp</label>
+          <label for="ramp">Color ramp</label>
           <select id="ramp"></select>
         </div>
         <div>
@@ -141,7 +147,7 @@
 
       <fieldset class="row">
         <div>
-          <label for="mult">4) Extrusion multiplier</label>
+          <label for="mult">Extrusion multiplier</label>
           <input id="mult" type="number" step=".1" value="1" />
         </div>
         <div>
@@ -159,7 +165,7 @@
       </fieldset>
 
       <fieldset>
-        <label>5) View presets</label>
+        <label>View presets</label>
         <div class="buttons">
           <button data-view="top">Top</button>
           <button data-view="iso">Isometric</button>
@@ -171,7 +177,7 @@
       </fieldset>
     
     <fieldset>
-      <label>6) Color scaling</label>
+      <label>Color scaling</label>
       <div style="display:grid; gap:6px;">
       <label style="display:flex; gap:8px; align-items:center;">
         <input type="radio" name="colorMode" id="color-cont" value="continuous">

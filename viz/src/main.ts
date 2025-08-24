@@ -4,16 +4,12 @@ import maplibregl from 'maplibre-gl';
 import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
-import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
-
 
 // Local imports
 import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_STATUS_FIELD } from './config';
-import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
-import { type AsyncBuffer } from './utils.sanitize';
+import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
-import { makeFieldCheckbox, divider } from './utils.dom';
 
 
 /* ---------------- Map Bootstrap ----------------- */
@@ -40,19 +36,16 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 /* ---------------- UI elements ---------------- */
 
 
-const fileInput = document.getElementById('file') as HTMLInputElement;
 const fieldSelect = document.getElementById('field') as HTMLSelectElement;
 const rampSelect = document.getElementById('ramp') as HTMLSelectElement;
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
-const normLand = document.getElementById('norm-land') as HTMLInputElement;
-const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
-const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
-const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
+const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
+const closeControls = document.getElementById('closeControls') as HTMLButtonElement;
 
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
 const statusFieldset = document.getElementById('statusFieldset') as HTMLFieldSetElement;
@@ -81,28 +74,11 @@ tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'
 statusSelect.addEventListener('change', () => applyFilterAndScaling());
 scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
 
-// Modal overlays
-const modalOverlay = document.getElementById('modalOverlay')!;
-const sizeOverlay = document.getElementById('sizeOverlay')!;
+settingsBtn.onclick = () => { controlsEl.style.display = 'grid'; settingsBtn.style.display = 'none'; };
+closeControls.onclick = () => { controlsEl.style.display = 'none'; settingsBtn.style.display = 'block'; };
+
+// Loading overlay
 const loadingOverlay = document.getElementById('loadingOverlay')!;
-
-const rowCountEl = document.getElementById('rowCount')!;
-const geomColEl = document.getElementById('geomCol')!;
-const fieldListEl = document.getElementById('fieldList')!;
-
-const btnAll = document.getElementById('btnAll') as HTMLButtonElement;
-const btnNone = document.getElementById('btnNone') as HTMLButtonElement;
-const btnCancelModal = document.getElementById('btnCancelModal') as HTMLButtonElement;
-const btnConfirmModal = document.getElementById('btnConfirmModal') as HTMLButtonElement;
-
-const bldgFieldSel = document.getElementById('bldgField') as HTMLSelectElement;
-const bldgUnitSel = document.getElementById('bldgUnit') as HTMLSelectElement;
-const landFieldSel = document.getElementById('landField') as HTMLSelectElement;
-const landUnitSel = document.getElementById('landUnit') as HTMLSelectElement;
-const btnSizeBack = document.getElementById('btnSizeBack') as HTMLButtonElement;
-const btnSizeSkip = document.getElementById('btnSizeSkip') as HTMLButtonElement;
-const btnSizeOk = document.getElementById('btnSizeOk') as HTMLButtonElement;
-
 const progressEl = document.getElementById('progress')!;
 const progressBar = document.getElementById('progressBar') as HTMLDivElement;
 const progressMsg = document.getElementById('progressMsg') as HTMLDivElement;
@@ -121,21 +97,24 @@ rampSelect.value = 'Viridis';
 /* ---------------- Constants ---------------- */
 
 
-// Token sets we match against
-const UNIT_TOKENS = new Set([
-  'sqft','ft2','sf','sqm','m2','km2','sqkm','mi2','sqmi',
-  'ac','acre','acres','ha','hectare','hectares','acreage'
-]);
-
-const AREA_UNIT_CHOICES: { key: string, label: string }[] = [
-  { key: 'sqm', label: 'square meters (m²)' },
-  { key: 'sqft', label: 'square feet (ft²)' },
-  { key: 'acres', label: 'acres' },
-  { key: 'hectares', label: 'hectares' },
-  { key: 'sqkm', label: 'square kilometers (km²)' },
-  { key: 'sqmi', label: 'square miles (mi²)' },
-  { key: 'other', label: 'other / unknown' }
-];
+const FIELD_LABELS: Record<string, string> = {
+  exemption_flag: 'Exemption Flag',
+  property_category: 'Property Category',
+  new_tax: 'New Tax',
+  new_tax_per_sqft: 'New Tax per Sqft',
+  tax_change: 'Tax Change',
+  tax_change_per_sqft: 'Tax Change per Sqft',
+  current_tax: 'Current Tax',
+  current_tax_per_sqft: 'Current Tax per Sqft',
+  REALIMPROV: 'Improvements Assessed Value',
+  REALIMPROV_per_sqft: 'Improvements Value per Sqft',
+  REALLANDVA: 'Land Assessed Value',
+  REALLANDVA_per_sqft: 'Land Value per Sqft',
+  TLLDIMPROV: 'Total Land & Improvements',
+  TLLDIMPROV_per_sqft: 'Total Land & Improvements per Sqft'
+};
+const ALL_FIELDS = Object.keys(FIELD_LABELS);
+const NUMERIC_FIELDS = ALL_FIELDS.filter(k => k !== 'property_category');
 
 const FAST_PR = window.devicePixelRatio;                  // normal speed
 const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ target
@@ -159,20 +138,12 @@ let colorDomain: { lo: number; hi: number; label: string } | null = null;
 let colorBreaks: number[] | null = null;
 
 // staged loading
-let lastFile: File | null = null;
 let lastAsyncBuffer: AsyncBuffer | null = null;
-let lastNumericFieldsFromSchema: string[] = [];
-let chosenNumericFields: string[] = [];
 let cancelRequested = false;
 
 // size identification
 let landSizeField: string | null = null;
-let landSizeUnitLabel: string | null = null;
 let bldgSizeField: string | null = null;
-let bldgSizeUnitLabel: string | null = null;
-
-// Welcome overlay (hide UI until a file is chosen)
-let welcomeEl: HTMLDivElement | null = null;
 
 // Non-blocking "Geometry is rendering..." toast
 let renderToastEl: HTMLDivElement | null = null;
@@ -197,40 +168,6 @@ type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 let currentTab: 'main' | 'under' = 'main';
 
 /* ---------------- FUNCTIONS ----------------- */
-
-
-function installWelcome() {
-  // hide controls initially
-  if (controlsEl) controlsEl.style.display = 'none';
-
-  welcomeEl = document.createElement('div');
-  welcomeEl.id = 'welcomeOverlay';
-  welcomeEl.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,#f9fafb,transparent 55%);z-index:20;';
-  const card = document.createElement('div');
-  card.style.cssText = 'background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.12);padding:18px 20px;max-width:560px;width:min(92vw,560px);display:grid;gap:12px;text-align:center;';
-  card.innerHTML = `
-    <div style="font-size:16px;font-weight:600;">Load a GeoParquet file</div>
-    <div style="color:#666;font-size:13px;">Choose a <code>.parquet</code> to visualize.</div>
-	<div style="color:#666;font-size:13px;">TIP: make sure it has polygon geometry; lines/points won't work.</div>
-  `;
-  const row = document.createElement('div');
-  row.style.cssText='display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
-
-  const btnBrowse = document.createElement('button');
-  btnBrowse.textContent='Browse GeoParquet…';
-  btnBrowse.style.cssText='border:1px solid #ddd;background:#f8f8f8;padding:8px 12px;border-radius:10px;cursor:pointer;';
-  btnBrowse.onclick = () => fileInput.click();
-
-  row.append(btnBrowse);
-  card.append(row);
-  welcomeEl.append(card);
-  document.body.append(welcomeEl);
-}
-
-function revealUI() {
-  if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
-  if (controlsEl) controlsEl.style.display = '';
-}
 
 
 function ensureRenderToast() {
@@ -283,37 +220,8 @@ function awaitFirstRenderedFeature() {
 
 
 
-// Heuristics for "key fields"
-function isKeyField(name: string) {
-  const tokens = tokenizeName(name);
-
-  // EXCLUDE length/perimeter from "key" suggestions
-  if (tokens.some(t => t === 'length' || t === 'perimeter' || t === 'perim')) return false;
-
-  // "value" or "valuation" → key
-  const valueHits = tokens.includes('value') || tokens.includes('valuation');
-
-  // Size-ish → key: 'area' or any unit token (incl. 'acreage', 'ha', etc.)
-  const sizeHits = tokens.some(t => t === 'area' || UNIT_TOKENS.has(t));
-
-  return valueHits || sizeHits;
-}
-
 function tokenizeName(name: string): string[] {
   return name.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-}
-
-function containsUnit(name: string): boolean {
-  const tokens = tokenizeName(name);
-  return tokens.some(t => UNIT_TOKENS.has(t));
-}
-
-function containsKeyword(name: string, kind: 'building'|'land'): boolean {
-  const tokens = tokenizeName(name);
-  // building: treat stems/spellings of 'building' and 'improvement' as buildingy
-  if (kind === 'building') return tokens.some(t => /^(bldg|build|building|impr|improv)/.test(t));
-  // land: treat 'land', 'acre', and 'acreage' as landy
-  return tokens.some(t => /^(land|acre|acreage)/.test(t));
 }
 
 // score lower = better
@@ -347,49 +255,6 @@ export function scoreValueField(name: string): number {
   return score;
 }
 
-// score lower = better
-function scoreSizeField(name: string, kind: 'building'|'land'): number {
-  const tokens = tokenizeName(name);
-
-  // broaden land keywords to include 'acre' / 'acreage'
-  const kwIdx = tokens.findIndex(t =>
-    kind === 'building'
-      ? /^(bldg|build|building|impr|improv)/.test(t)
-      : /^(land|acre|acreage)/.test(t)    // ← was just /^land/
-  );
-
-  const unitIdx = tokens.findIndex(t => UNIT_TOKENS.has(t));
-  if (kwIdx === -1 || unitIdx === -1) return Number.POSITIVE_INFINITY;
-
-  const extras = tokens.filter((t, i) => i !== kwIdx && i !== unitIdx && t !== 'area' && t !== 'total');
-
-  let score = 0;
-  score += extras.length * 10;
-  score += tokens.length * 0.5;
-  if (unitIdx !== tokens.length - 1) score += 2;
-  if (kwIdx > 0) score += 0.5;
-  return score;
-}
-
-
-function guessAreaUnitKey(name: string | null): string | undefined {
-  const g = guessAreaUnitFromFieldName(name || '');
-  return g || undefined; // reuse existing unit-guess function
-}
-
-function autoPickOne(kind: 'building'|'land', fields: string[]): { field?: string, unitKey?: string } {
-  let best: { field?: string, unitKey?: string } = {};
-  let bestScore = Number.POSITIVE_INFINITY;
-  for (const f of fields) {
-    const s = scoreSizeField(f, kind);
-    if (s < bestScore) {
-      bestScore = s;
-      best = { field: f, unitKey: guessAreaUnitKey(f) };
-    }
-  }
-  return best;
-}
-
 function autoPickMainField(fields: string[]): string | undefined {
   let best: string | undefined = undefined;
   let bestScore = Number.POSITIVE_INFINITY;
@@ -401,164 +266,6 @@ function autoPickMainField(fields: string[]): string | undefined {
     }
   }
   return best;
-}
-
-/* ---------------- Modal 1: chooser ---------------- */
-
-
-function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; numericFields: string[] }) {
-  rowCountEl.textContent = opts.rowCount.toLocaleString();
-  geomColEl.textContent = opts.geometryCol || '(unknown)';
-  fieldListEl.replaceChildren();
-
-  const all = opts.numericFields;
-
-  // Split into your two display buckets
-  const key = all.filter(isKeyField);
-  const other = all.filter(n => !isKeyField(n));
-
-  // Within KEY fields, find the single best building/land size candidates
-  const bCandidatesKey = key.filter(n => containsKeyword(n, 'building') && containsUnit(n));
-  const lCandidatesKey = key.filter(n => containsKeyword(n, 'land') && containsUnit(n));
-  const bBest = autoPickOne('building', bCandidatesKey).field;
-  const lBest = autoPickOne('land', lCandidatesKey).field;
-  
-  // Normalize for robust comparisons
-  const bSet = new Set(bCandidatesKey.map(s => s.toLowerCase()));
-  const lSet = new Set(lCandidatesKey.map(s => s.toLowerCase()));
-  const bBestLC = bBest?.toLowerCase() ?? '';
-  const lBestLC = lBest?.toLowerCase() ?? '';
-  
-  // Helper: should a KEY field be prechecked?
-  const shouldPrecheckKey = (name: string) => {
-    const n = name.toLowerCase();
-    if (bSet.has(n)) return n === bBestLC;   // only the best building-size field
-    if (lSet.has(n)) return n === lBestLC;   // only the best land-size field
-    return true;                             // all other key fields stay selected
-  };
-
-  if (all.length === 0) {
-    const p = document.createElement('div');
-    p.textContent = 'No obvious numeric fields were found in the schema.';
-    p.className = 'muted';
-    fieldListEl.appendChild(p);
-  } else {
-    if (key.length) {
-      const t = document.createElement('div'); t.className = 'section-title'; t.textContent = 'Suggested key fields';
-      fieldListEl.appendChild(t);
-      const g = document.createElement('div'); g.className = 'fieldlist';
-      for (const name of key) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name)));
-      fieldListEl.appendChild(g);
-      fieldListEl.appendChild(divider());
-    }
-
-    const t2 = document.createElement('div'); t2.className = 'section-title'; t2.textContent = 'Other numeric fields';
-    fieldListEl.appendChild(t2);
-    const g2 = document.createElement('div'); g2.className = 'fieldlist';
-    // ALL "other" fields start unchecked
-    for (const name of other) g2.appendChild(makeFieldCheckbox(name, false));
-    fieldListEl.appendChild(g2);
-  }
-
-  // Buttons
-  btnAll.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
-    .forEach(c => (c.checked = true));
-  btnNone.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
-    .forEach(c => (c.checked = false));
-  btnCancelModal.onclick = () => { modalOverlay.classList.remove('show'); clearData(); };
-  btnConfirmModal.onclick = () => {
-    chosenNumericFields = Array.from(fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]'))
-      .filter(c => c.checked).map(c => c.name);
-    if (chosenNumericFields.length === 0) { alert('Select at least one numeric field.'); return; }
-    modalOverlay.classList.remove('show');
-    openSizeModal();
-  };
-
-  modalOverlay.classList.add('show');
-}
-
-/* ---------------- Modal 2: size identification ---------------- */
-
-function fillUnitSelect(sel: HTMLSelectElement, preselectKey?: string) {
-  sel.replaceChildren(new Option('— select unit —', ''));
-  for (const u of AREA_UNIT_CHOICES) sel.appendChild(new Option(u.label, u.key));
-  if (preselectKey) sel.value = preselectKey;
-}
-function fillFieldSelect(sel: HTMLSelectElement, fields: string[]) {
-  sel.replaceChildren(new Option('— no selection —', ''));
-  for (const f of fields) sel.appendChild(new Option(f, f));
-}
-function guessAreaUnitFromFieldName(name: string | null): string | null {
-  if (!name) return null;
-  const s = name.toLowerCase();
-  if (/(sq_?ft|sqft|ft2|ft\^2|_sf\b)/.test(s)) return 'sqft';
-  if (/(sq_?m|sqm|m2|m\^2|_m2\b)/.test(s)) return 'sqm';
-  if (/(acres?|_acres?\b|_ac\b)/.test(s)) return 'acres';
-  if (/(hectares?|_ha\b)/.test(s)) return 'hectares';
-  if (/(km2|sqkm|_km2\b)/.test(s)) return 'sqkm';
-  if (/(mi2|sqmi|_mi2\b)/.test(s)) return 'sqmi';
-  return null;
-}
-function openSizeModal() {
-  // options: only among the fields the user kept
-  fillFieldSelect(bldgFieldSel, chosenNumericFields);
-  fillFieldSelect(landFieldSel, chosenNumericFields);
-  fillUnitSelect(bldgUnitSel);
-  fillUnitSelect(landUnitSel);
-  
-  // --- AUTO-PICK using heuristic ---
-  const bGuess = autoPickOne('building', chosenNumericFields);
-  const lGuess = autoPickOne('land', chosenNumericFields);
-
-  if (bGuess.field) {
-    bldgFieldSel.value = bGuess.field;
-    const u = bGuess.unitKey || guessAreaUnitFromFieldName(bGuess.field);
-    if (u) bldgUnitSel.value = u;
-  }
-  if (lGuess.field) {
-    landFieldSel.value = lGuess.field;
-    const u = lGuess.unitKey || guessAreaUnitFromFieldName(lGuess.field);
-    if (u) landUnitSel.value = u;
-  }
-
-  bldgFieldSel.onchange = () => {
-    const g = guessAreaUnitFromFieldName(bldgFieldSel.value);
-    if (g) bldgUnitSel.value = g;
-  };
-  landFieldSel.onchange = () => {
-    const g = guessAreaUnitFromFieldName(landFieldSel.value);
-    if (g) landUnitSel.value = g;
-  };
-
-  btnSizeBack.onclick = () => { sizeOverlay.classList.remove('show'); modalOverlay.classList.add('show'); };
-  btnSizeSkip.onclick = () => { setSizeState(null, null, null, null); sizeOverlay.classList.remove('show'); loadSelectedColumns(); };
-  btnSizeOk.onclick = () => {
-    setSizeState(
-      bldgFieldSel.value || null,
-      valueToUnitLabel(bldgUnitSel.value || ''),
-      landFieldSel.value || null,
-      valueToUnitLabel(landUnitSel.value || '')
-    );
-    sizeOverlay.classList.remove('show');
-    loadSelectedColumns();
-  };
-
-  sizeOverlay.classList.add('show');
-}
-function valueToUnitLabel(key: string): string | null {
-  const item = AREA_UNIT_CHOICES.find(u => u.key === key);
-  return item ? item.label : null;
-}
-function setSizeState(bField: string | null, bUnit: string | null, lField: string | null, lUnit: string | null) {
-  bldgSizeField = bField || null;
-  bldgSizeUnitLabel = bUnit || null;
-  landSizeField = lField || null;
-  landSizeUnitLabel = lUnit || null;
-  // enable/disable normalization radios
-  normLand.disabled = !landSizeField;
-  normBldg.disabled = !bldgSizeField;
-  normLandUnitEl.textContent = landSizeField ? (landSizeUnitLabel ?? '(unit)') : '(unit)';
-  normBldgUnitEl.textContent = bldgSizeField ? (bldgSizeUnitLabel ?? '(unit)') : '(unit)';
 }
 
 /* ---------------- Loading overlay helpers ---------------- */
@@ -578,8 +285,8 @@ function hideLoading() { loadingOverlay.classList.remove('show'); }
 
 /* ---------------- Load selected columns (+ geometry) ---------------- */
 async function loadSelectedColumns() {
-  if (!lastAsyncBuffer || !lastFile) return;
-  showLoading('Reading geometry + selected fields…');
+  if (!lastAsyncBuffer) return;
+  showLoading('Reading geometry + fields…');
 
   try {
     const result: any = await toGeoJson({ file: lastAsyncBuffer, compressors });
@@ -594,7 +301,7 @@ async function loadSelectedColumns() {
 
     sanitizeFeaturesInPlace(features);
 
-    const keep = new Set<string>(['id','ID','fid','FID','name','NAME', ...chosenNumericFields, bldgSizeField || '', landSizeField || '']);
+    const keep = new Set<string>(['id','ID','fid','FID','name','NAME', ...ALL_FIELDS, bldgSizeField || '', landSizeField || '']);
     trimPropertiesInPlace(features, keep);
 
     for (const f of features) roundGeometryInPlace(f);
@@ -603,12 +310,12 @@ async function loadSelectedColumns() {
     currentGeoJSON = { type: 'FeatureCollection', features };
     populateStatusOptions(currentGeoJSON);
 
-    // dropdown = chosen numeric fields (ensure they exist)
-    const available = chosenNumericFields.filter(k => features[0]?.properties?.hasOwnProperty(k));
+    // dropdown = predetermined numeric fields (ensure they exist)
+    const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
     populateFieldDropdownFromList(available);
 
-    // auto-select the best
-	currentField = autoPickMainField(available) ?? null
+    // auto-select the best (prefer new_tax_per_sqft if present)
+    currentField = available.includes('new_tax_per_sqft') ? 'new_tax_per_sqft' : (autoPickMainField(available) ?? null);
     if (currentField) {
       fieldSelect.value = currentField;
       currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
@@ -668,7 +375,7 @@ function clearData() {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   currentGeoJSON = null; currentField = null; currentStats = null;
-  fieldSelect.replaceChildren(new Option('— load a file first —', ''));
+  fieldSelect.replaceChildren(new Option('— no data —', ''));
   updateLegend();
   hideRenderingToast();
 }
@@ -944,29 +651,11 @@ function chooseBestMetricUnitForMultiplier(p99: number, capMeters = 1000): { uni
 
 function populateFieldDropdownFromList(list: string[]) {
   fieldSelect.replaceChildren();
-  if (!list.length) fieldSelect.append(new Option('No numeric fields selected', ''));
+  if (!list.length) fieldSelect.append(new Option('No numeric fields available', ''));
   else {
     fieldSelect.append(new Option('— choose —', ''));
-    for (const n of list) fieldSelect.append(new Option(n, n));
+    for (const n of list) fieldSelect.append(new Option(FIELD_LABELS[n] ?? n, n));
   }
-}
-
-function detectNumericFieldsFromFeatures(features: GeoJSON.Feature[]): string[] {
-  const counts: Record<string, number> = {}, nums: Record<string, number> = {};
-  const isNumLike = (v: any) =>
-    (typeof v === 'number' && Number.isFinite(v)) ||
-    (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
-
-  for (const f of features) {
-    const p = (f.properties || {}) as Record<string, unknown>;
-    for (const [k, v] of Object.entries(p)) {
-      counts[k] = (counts[k] ?? 0) + 1;
-      if (isNumLike(v)) nums[k] = (nums[k] ?? 0) + 1;
-    }
-  }
-  return Object.keys(counts)
-    .filter(k => (nums[k] ?? 0) >= Math.max(1, Math.ceil(0.6 * (counts[k] || 0))))
-    .sort();
 }
 
 function polygonsOnly(fc: GeoJSON.FeatureCollection) {
@@ -1156,19 +845,16 @@ function buildPopupHTML(props: Record<string, any>): string {
   const unitKey = unitsSelect.value as keyof typeof UNIT_TO_METERS;
   const unitText = (unitsSelect.options[unitsSelect.selectedIndex]?.text || unitKey);
 
-  const fieldsToShow = Array.from(new Set([
-    ...chosenNumericFields,
-    ...(landSizeField ? [landSizeField] : []),
-    ...(bldgSizeField ? [bldgSizeField] : []),
-  ]));
+  const fieldsToShow = ALL_FIELDS;
 
   const rows = fieldsToShow.map(k => {
     const v = (props as any)[k];
     const printable = (typeof v === 'number') ? fmt(v) : (v ?? '—');
+    const label = FIELD_LABELS[k] || k;
     return `
       <tr>
         <td style="padding:2px 6px; overflow-wrap:anywhere;">
-          <code style="white-space:normal;">${k}</code>
+          <code style="white-space:normal;">${label}</code>
         </td>
         <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
           ${printable}
@@ -1223,53 +909,6 @@ function onMultInput() {
 
 /* ---------------- Events ---------------- */
 
-// File load: read METADATA ONLY
-fileInput.addEventListener('change', async () => {
-  const file = fileInput.files?.[0];
-  if (!file) return;
-
-  revealUI();
-  try {
-    lastFile = file;
-    lastAsyncBuffer = fileToAsyncBuffer(file);
-
-    const md = await parquetMetadataAsync(lastAsyncBuffer);
-    const numRows = Number(md.num_rows ?? 0);
-
-    const kv = (md as any).key_value_metadata || (md as any).keyValueMetadata || [];
-    const geoKV = kv.find((e: any) => String(e.key).toLowerCase() === 'geo');
-    let primaryGeom = 'geometry';
-    try {
-      if (geoKV?.value) {
-        const parsed = JSON.parse(geoKV.value);
-        if (parsed?.primary_column) primaryGeom = parsed.primary_column;
-      }
-    } catch {}
-    
-    // numeric top-level columns (not geometry)
-    const schemaTree: any = parquetSchema(md);
-    const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
-    const numeric: string[] = [];
-    for (const node of top) {
-      const name = node?.element?.name ?? node?.name;
-      if (!name || name === primaryGeom) continue;
-      const el = node.element ?? {};
-      const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
-      const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
-      const isNumeric =
-        ['DOUBLE','FLOAT','INT32','INT64','INT16','INT8'].includes(typeStr.toUpperCase()) ||
-        logical.toUpperCase() === 'DECIMAL';
-      if (isNumeric) numeric.push(name);
-    }
-    lastNumericFieldsFromSchema = numeric.sort();
-
-    openFieldChooserModal({ rowCount: numRows, geometryCol: primaryGeom, numericFields: lastNumericFieldsFromSchema });
-  } catch (err: any) {
-    console.error('Metadata read failed:', err);
-    alert(`Could not read Parquet metadata: ${err?.message ?? err}`);
-  }
-});
-
 // Only recompute after data is loaded
 [colorCont, colorQuant].forEach(el =>
   el?.addEventListener('change', () => {
@@ -1307,14 +946,8 @@ fieldSelect.addEventListener('change', () => {
 
 async function loadDefaultDataset() {
   try {
-    const resp = await fetch('southbend.parquet');
-    if (!resp.ok) return;
-    const blob = await resp.blob();
-    const file = new File([blob], 'southbend.parquet');
-    const dt = new DataTransfer();
-    dt.items.add(file);
-    fileInput.files = dt.files;
-    fileInput.dispatchEvent(new Event('change'));
+    lastAsyncBuffer = await urlToAsyncBuffer('southbend.parquet');
+    await loadSelectedColumns();
   } catch (err) {
     console.warn('Default dataset load failed', err);
   }
@@ -1332,7 +965,6 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 
 // default height units
 unitsSelect.value = 'centimeters';
-installWelcome();
 setQuality('high');
 loadDefaultDataset();
 

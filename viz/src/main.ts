@@ -8,7 +8,7 @@ import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 
 
 // Local imports
-import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_STATUS_FIELD } from './config';
 import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
 import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -57,6 +57,11 @@ const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 
+const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
+const statusFieldset = document.getElementById('statusFieldset') as HTMLFieldSetElement;
+const statusSelect = document.getElementById('statusFilter') as HTMLSelectElement;
+const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
+
 // Quality button
 const btnQuality = document.createElement('button');
 btnQuality.id = 'btn-quality';
@@ -74,6 +79,10 @@ viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 // Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
+
+tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'under'));
+statusSelect.addEventListener('change', () => applyFilterAndScaling());
+scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
 
 // Modal overlays
 const modalOverlay = document.getElementById('modalOverlay')!;
@@ -187,6 +196,8 @@ let _pendingMode: UpdateMode = 'applyOnly';
 let _pendingRefreshLegend = false;
 
 type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
+
+let currentTab: 'main' | 'under' = 'main';
 
 /* ---------------- FUNCTIONS ----------------- */
 
@@ -597,6 +608,7 @@ async function loadSelectedColumns() {
 
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
+    populateStatusOptions(currentGeoJSON);
 
     // dropdown = chosen numeric fields (ensure they exist)
     const available = chosenNumericFields.filter(k => features[0]?.properties?.hasOwnProperty(k));
@@ -613,6 +625,7 @@ async function loadSelectedColumns() {
 
     // auto-multiplier for current normalization mode → p99 = 2km (centimeters)
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    if (currentTab === 'under') setTimeout(() => applyFilterAndScaling(), 0);
 
     updateLegend();
     fitToData(currentGeoJSON);
@@ -777,6 +790,56 @@ function applyExtrusion() {
   if (activePopup && lastPicked) {
     activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
   }
+}
+function setTab(tab: 'main' | 'under') {
+  currentTab = tab;
+  tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  if (tab === 'main') {
+    statusFieldset.style.display = 'none';
+    map.setFilter(LAYER_ID, null);
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+    applyExtrusion();
+  } else {
+    statusFieldset.style.display = 'block';
+    if (statusSelect.options.length && !statusSelect.selectedOptions.length) {
+      Array.from(statusSelect.options).forEach(o => (o.selected = true));
+    }
+    applyFilterAndScaling();
+  }
+}
+
+function populateStatusOptions(fc: GeoJSON.FeatureCollection) {
+  const vals = new Set<string>();
+  for (const f of fc.features) {
+    const v = String((f.properties as any)?.[DEV_STATUS_FIELD] ?? '').trim();
+    if (v) vals.add(v);
+  }
+  statusSelect.innerHTML = '';
+  const list = Array.from(vals).sort();
+  for (const v of list) {
+    const opt = document.createElement('option');
+    opt.value = v; opt.textContent = v; opt.selected = true;
+    statusSelect.appendChild(opt);
+  }
+}
+
+function applyFilterAndScaling() {
+  if (!currentGeoJSON) return;
+  const selected = Array.from(statusSelect.selectedOptions).map(o => o.value);
+  let filter: Expression | null = null;
+  if (selected.length) {
+    filter = ['in', ['get', DEV_STATUS_FIELD], ['literal', selected]] as any;
+  }
+  map.setFilter(LAYER_ID, filter as any);
+
+  if (scaleFiltered.checked && selected.length) {
+    const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => selected.includes(String((f.properties as any)?.[DEV_STATUS_FIELD] ?? '')));
+    const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: filtered };
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL, fc);
+  } else {
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+  }
+  applyExtrusion();
 }
 
 
@@ -966,12 +1029,14 @@ function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks
 function computeAndApplyAutoMultiplier(
   unitsKeyOrAuto: 'auto' | keyof typeof UNIT_TO_METERS = 'auto',
   capMeters = 1000,
-  p = 99
+  p = 99,
+  fcOverride?: GeoJSON.FeatureCollection
 ) {
-  if (!currentGeoJSON || !currentField) return;
+  const src = fcOverride || currentGeoJSON;
+  if (!src || !currentField) return;
 
   // values for the CURRENT normalization mode
-  const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
+  const vals = getNumericValuesNormalized(src, currentField, normalizationMode);
   const pVal = percentile(vals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
@@ -1015,7 +1080,7 @@ function computeAndApplyAutoMultiplier(
   multInput.value = String(multiplier);
 
   // stats for legend fallback
-  currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
+  currentStats = computeStatsNormalized(src, currentField, normalizationMode);
 
   console.debug('autoScale', {
     mode: normalizationMode,
@@ -1247,6 +1312,21 @@ fieldSelect.addEventListener('change', () => {
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true)
 });
 
+async function loadDefaultDataset() {
+  try {
+    const resp = await fetch('southbend.parquet');
+    if (!resp.ok) return;
+    const blob = await resp.blob();
+    const file = new File([blob], 'southbend.parquet');
+    const dt = new DataTransfer();
+    dt.items.add(file);
+    fileInput.files = dt.files;
+    fileInput.dispatchEvent(new Event('change'));
+  } catch (err) {
+    console.warn('Default dataset load failed', err);
+  }
+}
+
 /* ---------------- Main ---------------- */
 
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
@@ -1261,5 +1341,6 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 unitsSelect.value = 'centimeters';
 installWelcome();
 setQuality('high');
+loadDefaultDataset();
 
 

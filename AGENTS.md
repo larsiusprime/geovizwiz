@@ -8,6 +8,15 @@ This file provides instructions for coding agents and new contributors.
 - `site/` – Static landing page.
 - `viz/` – Main 3D parcel visualizer built with TypeScript and Vite.
 
+## South Bend Edition
+
+- The `viz` app is configured for South Bend with a default dataset at
+  `viz/public/southbend.parquet`.
+- Parcel filtering is based on a `status` field whose values may include
+  `Vacant`, `Parking Lot`, or `Underdeveloped`.
+- Tabs switch between the full land-value view and an under‑utilized land
+  view using this status filter.
+
 ## General Guidelines
 
 - Use the existing technology stack in each directory; avoid adding heavy frameworks.

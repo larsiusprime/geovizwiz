@@ -36,3 +36,6 @@ export const UNIT_TO_METERS = {
   miles: 1609.344,
   stories: 3.3
 };
+
+// Data field used for vacancy filtering
+export const DEV_STATUS_FIELD = 'status';

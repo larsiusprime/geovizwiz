@@ -14,7 +14,6 @@ import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 import { makeFieldCheckbox, divider } from './utils.dom';
-import { urlToAsyncBuffer } from './utils.sanitize';
 
 
 /* ---------------- Map Bootstrap ----------------- */
@@ -231,58 +230,6 @@ function installWelcome() {
 function revealUI() {
   if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
   if (controlsEl) controlsEl.style.display = '';
-}
-
-async function autoloadIfConfigured() {
-  if (!AUTOLOAD.enabled || !AUTOLOAD.url) return;
-  try {
-    revealUI();
-    showLoading('Loading South Bend dataset…');
-    if (AUTOLOAD.camera) {
-      map.jumpTo(AUTOLOAD.camera);
-    }
-    lastFile = new File([], AUTOLOAD.url.split('/').pop() || 'dataset.parquet');
-    lastAsyncBuffer = await urlToAsyncBuffer(AUTOLOAD.url);
-
-    const md = await parquetMetadataAsync(lastAsyncBuffer);
-    const numRows = Number(md.num_rows ?? 0);
-
-    const kv = (md as any).key_value_metadata || (md as any).keyValueMetadata || [];
-    const geoKV = kv.find((e: any) => String(e.key).toLowerCase() === 'geo');
-    let primaryGeom = 'geometry';
-    try {
-      if (geoKV?.value) {
-        const parsed = JSON.parse(geoKV.value);
-        if (parsed?.primary_column) primaryGeom = parsed.primary_column;
-      }
-    } catch {}
-
-    const schemaTree: any = parquetSchema(md);
-    const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
-    const numeric: string[] = [];
-    for (const node of top) {
-      const name = node?.element?.name ?? node?.name;
-      if (!name || name === primaryGeom) continue;
-      const el = node.element ?? {};
-      const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
-      const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
-      const isNumeric =
-        ['DOUBLE','FLOAT','INT32','INT64','INT16','INT8'].includes(typeStr.toUpperCase()) ||
-        logical.toUpperCase() === 'DECIMAL';
-      if (isNumeric) numeric.push(name);
-    }
-    lastNumericFieldsFromSchema = numeric.sort();
-
-    // Auto-select: keep the default modal logic but bypass UI by selecting all "key" fields and continue
-    chosenNumericFields = lastNumericFieldsFromSchema.slice(0, Math.min(12, lastNumericFieldsFromSchema.length));
-    setSizeState(null, null, null, null);
-    await loadSelectedColumns();
-  } catch (err: any) {
-    console.error('Autoload failed:', err);
-    alert(`Autoload failed: ${err?.message ?? err}`);
-  } finally {
-    hideLoading();
-  }
 }
 
 
@@ -1388,7 +1335,5 @@ unitsSelect.value = 'centimeters';
 installWelcome();
 setQuality('high');
 loadDefaultDataset();
-
-autoloadIfConfigured();
 
 

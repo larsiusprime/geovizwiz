@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>geovizwiz</title>
+  <title>South Bend Civil Map</title>
   <link rel="icon" href="data:,">
   <style>
     :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
@@ -11,6 +11,13 @@
 
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
     #map { position: absolute; inset: 0; }
+
+    #title {
+      position: absolute; top: 10px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--panel); padding: 6px 12px; border-radius: 8px;
+      box-shadow: var(--shadow); font-weight: 600; z-index: 20;
+    }
 
     #controls {
       position: absolute; top: 10px; left: 10px;
@@ -76,8 +83,9 @@
 <body>
   <div id="app">
     <div id="map"></div>
+    <div id="title">South Bend Civil Map</div>
 
-  <div id="controls">
+    <div id="controls">
     <div id="googleSignIn"></div>
     <fieldset>
       <label for="file">1) Load a GeoParquet file (.parquet)</label>

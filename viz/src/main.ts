@@ -14,7 +14,10 @@ import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 import { makeFieldCheckbox, divider } from './utils.dom';
+import { initGoogleAuth } from './auth';
 
+// optional Google login
+initGoogleAuth();
 
 /* ---------------- Map Bootstrap ----------------- */
 

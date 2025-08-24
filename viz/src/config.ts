@@ -1,4 +1,4 @@
-import { Expression } from 'maplibre-gl';
+import type { Expression } from 'maplibre-gl';
 
 // Map style (unchanged)
 export const OSM_STYLE: any = {

@@ -32,3 +32,10 @@ export type AsyncBuffer = { byteLength: number; slice(start: number, end?: numbe
 export function fileToAsyncBuffer(file: File): AsyncBuffer {
   return { byteLength: file.size, async slice(start, end) { return await file.slice(start, end ?? file.size).arrayBuffer(); } };
 }
+
+export async function urlToAsyncBuffer(url: string): Promise<AsyncBuffer> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status} ${resp.statusText}`);
+  const buf = await resp.arrayBuffer();
+  return { byteLength: buf.byteLength, async slice(start, end) { return buf.slice(start, end ?? buf.byteLength); } };
+}

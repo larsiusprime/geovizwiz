@@ -17,7 +17,7 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
-export async function initGoogleAuth() {
+export async function initGoogleAuth(onSignIn?: (cred: any) => void) {
   if (!ENABLE_GOOGLE_AUTH) return; // skip in dev
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   if (!clientId) {
@@ -51,6 +51,7 @@ export async function initGoogleAuth() {
     client_id: clientId,
     callback: (resp: any) => {
       recordSignin(resp);
+      onSignIn?.(resp);
       console.log('Google credential', resp);
     }
   });

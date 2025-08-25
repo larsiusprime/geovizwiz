@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_STATUS_FIELD } from './config';
+import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD } from './config';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
@@ -48,8 +48,8 @@ const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const closeControls = document.getElementById('closeControls') as HTMLButtonElement;
 
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
-const statusFieldset = document.getElementById('statusFieldset') as HTMLFieldSetElement;
-const statusSelect = document.getElementById('statusFilter') as HTMLSelectElement;
+const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
+const categorySelect = document.getElementById('categoryFilter') as HTMLSelectElement;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
 
 // Quality button
@@ -71,7 +71,7 @@ const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 
 tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'under'));
-statusSelect.addEventListener('change', () => applyFilterAndScaling());
+categorySelect.addEventListener('change', () => applyFilterAndScaling());
 scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
 
 settingsBtn.onclick = () => { controlsEl.style.display = 'grid'; settingsBtn.style.display = 'none'; };
@@ -308,7 +308,7 @@ async function loadSelectedColumns() {
 
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
-    populateStatusOptions(currentGeoJSON);
+    populateCategoryOptions(currentGeoJSON);
 
     // dropdown = predetermined numeric fields (ensure they exist)
     const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
@@ -495,45 +495,45 @@ function setTab(tab: 'main' | 'under') {
   currentTab = tab;
   tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'main') {
-    statusFieldset.style.display = 'none';
+    categoryFieldset.style.display = 'none';
     map.setFilter(LAYER_ID, null);
     computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
     applyExtrusion();
   } else {
-    statusFieldset.style.display = 'block';
-    if (statusSelect.options.length && !statusSelect.selectedOptions.length) {
-      Array.from(statusSelect.options).forEach(o => (o.selected = true));
+    categoryFieldset.style.display = 'block';
+    if (categorySelect.options.length && !categorySelect.selectedOptions.length) {
+      Array.from(categorySelect.options).forEach(o => (o.selected = true));
     }
     applyFilterAndScaling();
   }
 }
 
-function populateStatusOptions(fc: GeoJSON.FeatureCollection) {
+function populateCategoryOptions(fc: GeoJSON.FeatureCollection) {
   const vals = new Set<string>();
   for (const f of fc.features) {
-    const v = String((f.properties as any)?.[DEV_STATUS_FIELD] ?? '').trim();
+    const v = String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '').trim();
     if (v) vals.add(v);
   }
-  statusSelect.innerHTML = '';
+  categorySelect.innerHTML = '';
   const list = Array.from(vals).sort();
   for (const v of list) {
     const opt = document.createElement('option');
     opt.value = v; opt.textContent = v; opt.selected = true;
-    statusSelect.appendChild(opt);
+    categorySelect.appendChild(opt);
   }
 }
 
 function applyFilterAndScaling() {
   if (!currentGeoJSON) return;
-  const selected = Array.from(statusSelect.selectedOptions).map(o => o.value);
+  const selected = Array.from(categorySelect.selectedOptions).map(o => o.value);
   let filter: Expression | null = null;
   if (selected.length) {
-    filter = ['in', ['get', DEV_STATUS_FIELD], ['literal', selected]] as any;
+    filter = ['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any;
   }
   map.setFilter(LAYER_ID, filter as any);
 
   if (scaleFiltered.checked && selected.length) {
-    const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => selected.includes(String((f.properties as any)?.[DEV_STATUS_FIELD] ?? '')));
+    const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => selected.includes(String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '')));
     const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: filtered };
     computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL, fc);
   } else {

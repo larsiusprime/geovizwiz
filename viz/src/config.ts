@@ -38,4 +38,4 @@ export const UNIT_TO_METERS = {
 };
 
 // Data field used for vacancy filtering
-export const DEV_STATUS_FIELD = 'status';
+export const DEV_CATEGORY_FIELD = 'property_category_refined';

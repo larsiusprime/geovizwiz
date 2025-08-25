@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>South Bend Civil Map</title>
+  <script>
+    if (!localStorage.getItem('gvw_signins')) {
+      window.location.href = 'login.html';
+    }
+  </script>
   <link rel="icon" href="data:,">
   <style>
     :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; --tabH:48px; --titleH:40px; }
@@ -104,7 +109,6 @@
 
     <div id="controls">
     <button id="closeControls">×</button>
-    <div id="googleSignIn"></div>
     <fieldset>
       <div class="buttons">
           <button id="btn-zoomto">Zoom to data</button>

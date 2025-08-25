@@ -7,7 +7,6 @@ import { compressors } from 'hyparquet-compressors';
 
 // Local imports
 import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS } from './config';
-import { initGoogleAuth } from './auth';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
@@ -990,6 +989,5 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 unitsSelect.value = 'centimeters';
 setQuality('high');
 loadDefaultDataset();
-initGoogleAuth();
 
 

@@ -51,6 +51,8 @@ const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tab
 const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
 const categorySelect = document.getElementById('categoryFilter') as HTMLSelectElement;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
+const UNDERUTILIZED_CATEGORIES = ['Vacant', 'Parking Lot', 'Underdeveloped'];
+let userCategoryModified = false;
 
 // Quality button
 const btnQuality = document.createElement('button');
@@ -71,7 +73,10 @@ const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 
 tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'under'));
-categorySelect.addEventListener('change', () => applyFilterAndScaling());
+categorySelect.addEventListener('change', () => {
+  userCategoryModified = true;
+  applyFilterAndScaling();
+});
 scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
 
 settingsBtn.onclick = () => { controlsEl.style.display = 'grid'; settingsBtn.style.display = 'none'; };
@@ -314,8 +319,10 @@ async function loadSelectedColumns() {
     const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
     populateFieldDropdownFromList(available);
 
-    // auto-select the best (prefer new_tax_per_sqft if present)
-    currentField = available.includes('new_tax_per_sqft') ? 'new_tax_per_sqft' : (autoPickMainField(available) ?? null);
+    // auto-select the best (prefer REALLANDVA_per_sqft if present)
+    currentField = available.includes('REALLANDVA_per_sqft')
+      ? 'REALLANDVA_per_sqft'
+      : (available.includes('new_tax_per_sqft') ? 'new_tax_per_sqft' : (autoPickMainField(available) ?? null));
     if (currentField) {
       fieldSelect.value = currentField;
       currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
@@ -501,7 +508,10 @@ function setTab(tab: 'main' | 'under') {
     applyExtrusion();
   } else {
     categoryFieldset.style.display = 'block';
-    if (categorySelect.options.length && !categorySelect.selectedOptions.length) {
+    if (!userCategoryModified) {
+      const defaults = new Set(UNDERUTILIZED_CATEGORIES);
+      Array.from(categorySelect.options).forEach(o => (o.selected = defaults.has(o.value)));
+    } else if (categorySelect.options.length && !categorySelect.selectedOptions.length) {
       Array.from(categorySelect.options).forEach(o => (o.selected = true));
     }
     applyFilterAndScaling();

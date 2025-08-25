@@ -49,10 +49,11 @@ const closeControls = document.getElementById('closeControls') as HTMLButtonElem
 
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
 const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
-const categorySelect = document.getElementById('categoryFilter') as HTMLSelectElement;
+const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
-const UNDERUTILIZED_CATEGORIES = ['Vacant', 'Parking Lot', 'Underdeveloped'];
-let userCategoryModified = false;
+function categoryInputs() {
+  return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+}
 
 // Quality button
 const btnQuality = document.createElement('button');
@@ -73,8 +74,7 @@ const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 
 tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'under'));
-categorySelect.addEventListener('change', () => {
-  userCategoryModified = true;
+categoryContainer.addEventListener('change', () => {
   applyFilterAndScaling();
 });
 scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
@@ -514,11 +514,9 @@ function setTab(tab: 'main' | 'under') {
     applyExtrusion();
   } else {
     categoryFieldset.style.display = 'block';
-    if (!userCategoryModified) {
-      const defaults = new Set(UNDERUTILIZED_CATEGORIES);
-      Array.from(categorySelect.options).forEach(o => (o.selected = defaults.has(o.value)));
-    } else if (categorySelect.options.length && !categorySelect.selectedOptions.length) {
-      Array.from(categorySelect.options).forEach(o => (o.selected = true));
+    const inputs = categoryInputs();
+    if (inputs.length && !inputs.some(i => i.checked)) {
+      inputs.forEach(i => (i.checked = true));
     }
     applyFilterAndScaling();
   }
@@ -530,18 +528,26 @@ function populateCategoryOptions(fc: GeoJSON.FeatureCollection) {
     const v = String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '').trim();
     if (v) vals.add(v);
   }
-  categorySelect.innerHTML = '';
+  categoryContainer.innerHTML = '';
   const list = Array.from(vals).sort();
   for (const v of list) {
-    const opt = document.createElement('option');
-    opt.value = v; opt.textContent = v; opt.selected = true;
-    categorySelect.appendChild(opt);
+    const label = document.createElement('label');
+    label.style.display = 'flex';
+    label.style.gap = '8px';
+    label.style.alignItems = 'center';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.value = v;
+    input.checked = true;
+    label.appendChild(input);
+    label.appendChild(document.createTextNode(v));
+    categoryContainer.appendChild(label);
   }
 }
 
 function applyFilterAndScaling() {
   if (!currentGeoJSON) return;
-  const selected = Array.from(categorySelect.selectedOptions).map(o => o.value);
+  const selected = categoryInputs().filter(i => i.checked).map(i => i.value);
   let filter: Expression | null = null;
   if (selected.length) {
     filter = ['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any;

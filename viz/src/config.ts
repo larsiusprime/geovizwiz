@@ -39,3 +39,4 @@ export const UNIT_TO_METERS = {
 
 // Data field used for vacancy filtering
 export const DEV_CATEGORY_FIELD = 'property_category_refined';
+export const UNDERUTILIZED_DEFAULTS = ['Vacant', 'Parking Lot', 'Underdeveloped'];

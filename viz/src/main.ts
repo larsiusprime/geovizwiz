@@ -306,7 +306,13 @@ async function loadSelectedColumns() {
 
     sanitizeFeaturesInPlace(features);
 
-    const keep = new Set<string>(['id','ID','fid','FID','name','NAME', ...ALL_FIELDS, bldgSizeField || '', landSizeField || '']);
+    const keep = new Set<string>([
+      'id','ID','fid','FID','name','NAME',
+      DEV_CATEGORY_FIELD,
+      ...ALL_FIELDS,
+      bldgSizeField || '',
+      landSizeField || ''
+    ]);
     trimPropertiesInPlace(features, keep);
 
     for (const f of features) roundGeometryInPlace(f);

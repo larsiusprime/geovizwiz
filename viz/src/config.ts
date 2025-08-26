@@ -1,10 +1,35 @@
 import type { Expression } from 'maplibre-gl';
 
-// Map style (unchanged)
+// Base map styles
 export const OSM_STYLE: any = {
   version: 8,
   sources: { 'osm-tiles': { type: 'raster', tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors' } },
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm-tiles', minzoom: 0, maxzoom: 19 }]
+};
+
+const TONER_STYLE: any = {
+  version: 8,
+  sources: { 'toner-tiles': { type: 'raster', tiles: ['https://stamen-tiles.a.ssl.fastly.net/toner-lite/{z}/{x}/{y}.png'], tileSize: 256, attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors' } },
+  layers: [{ id: 'toner-tiles', type: 'raster', source: 'toner-tiles', minzoom: 0, maxzoom: 20 }]
+};
+
+const WATERCOLOR_STYLE: any = {
+  version: 8,
+  sources: { 'water-tiles': { type: 'raster', tiles: ['https://stamen-tiles.a.ssl.fastly.net/watercolor/{z}/{x}/{y}.jpg'], tileSize: 256, attribution: 'Map tiles by Stamen Design, CC BY 3.0 — Map data © OpenStreetMap contributors' } },
+  layers: [{ id: 'water-tiles', type: 'raster', source: 'water-tiles', minzoom: 0, maxzoom: 18 }]
+};
+
+const TOPO_STYLE: any = {
+  version: 8,
+  sources: { 'topo-tiles': { type: 'raster', tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors, SRTM | Map style © OpenTopoMap (CC-BY-SA)' } },
+  layers: [{ id: 'topo-tiles', type: 'raster', source: 'topo-tiles', minzoom: 0, maxzoom: 17 }]
+};
+
+export const BASEMAP_STYLES: Record<string, any> = {
+  'OpenStreetMap': OSM_STYLE,
+  'Toner Lite': TONER_STYLE,
+  'Watercolor': WATERCOLOR_STYLE,
+  'Topographic': TOPO_STYLE
 };
 
 // Source / layer IDs

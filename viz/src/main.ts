@@ -57,24 +57,6 @@ function categoryInputs() {
   return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
 
-// Quality button
-const btnQuality = document.createElement('button');
-btnQuality.id = 'btn-quality';
-btnQuality.textContent = 'Quality: Fast';
-btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;';
-btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
-controlsEl.prepend(btnQuality); // position at top
-
-// Camera view buttons
-const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
-(document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
-(document.getElementById('btn-ortho') as HTMLButtonElement)?.addEventListener('click', () => setOrtho());
-viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
-
-// Zoom to data button
-const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
-btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
-
 tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'under'));
 categoryContainer.addEventListener('change', () => {
   applyFilterAndScaling();
@@ -102,7 +84,7 @@ const colorQuant = document.getElementById('color-quant') as HTMLInputElement | 
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
 }
-rampSelect.value = 'Viridis';
+rampSelect.value = 'Magma';
 
 for (const key of Object.keys(BASEMAP_STYLES)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
@@ -176,7 +158,7 @@ let renderToastEl: HTMLDivElement | null = null;
 let dotsTimer: number | null = null;
 
 type QualityMode = 'fast' | 'high';
-let qualityMode: QualityMode = 'fast';
+let qualityMode: QualityMode = 'high';
 
 
 // --- popup state ---
@@ -326,6 +308,15 @@ async function loadSelectedColumns() {
     if (features.length === 0) throw new Error('No Polygon/MultiPolygon features found.');
 
     sanitizeFeaturesInPlace(features);
+    for (const f of features) {
+      const p = (f.properties || {}) as Record<string, any>;
+      const land = Number(p.REALLANDVA);
+      const impr = Number(p.REALIMPROV);
+      if (Number.isFinite(land) && Number.isFinite(impr)) {
+        p.TLLDIMPROV = land + impr;
+        if (land > 0) p.IMPR_LAND_RATIO = impr / land;
+      }
+    }
 
     const keep = new Set<string>([
       'id','ID','fid','FID','name','NAME',
@@ -630,22 +621,17 @@ function setQuality(mode: QualityMode) {
   if (btn) btn.textContent = (mode === 'high') ? 'Quality: High' : 'Quality: Fast';
 }
 
-/* ---------------- Camera presets ---------------- */
-function setPerspective() { map.easeTo({ pitch: 60, duration: 600 }); }
-function setOrtho() { map.easeTo({ pitch: 0, duration: 600 }); }
-function setView(which: string) {
-  const views: Record<string, Partial<maplibregl.CameraOptions>> = {
-    top: { pitch: 0, bearing: 0 }, iso: { pitch: 60, bearing: -30 },
-    north: { pitch: 60, bearing: 0 }, east: { pitch: 60, bearing: 90 },
-    south: { pitch: 60, bearing: 180 }, west: { pitch: 60, bearing: 270 }
-  };
-  map.easeTo({ duration: 700, ...(views[which] || views.iso) });
-}
-
 /* ---------------- Helpers ---------------- */
 function computeDisplayedMetricFromProps(props: Record<string, any>): number | null {
   if (!currentField) return null;
-  let base = numOrNull(props[currentField]);
+  let base: number | null;
+  if (currentField === 'IMPR_LAND_RATIO') {
+    const num = numOrNull(props.REALIMPROV);
+    const den = numOrNull(props.REALLANDVA);
+    base = (num != null && den != null && den > 0) ? num / den : null;
+  } else {
+    base = numOrNull(props[currentField]);
+  }
   if (base == null) return null;
 
   if (normalizationMode === 'perLand' && landSizeField) {
@@ -875,7 +861,6 @@ function updateLegend() {
 
   const label = document.createElement('div'); label.textContent = 'Legend:'; label.style.fontSize = '12px';
   row.appendChild(label);
-  ramp.forEach(c => { const s = document.createElement('div'); s.className = 'swatch'; (s as any).style = `background:${c}`; row.appendChild(s); });
 
   const meta = document.createElement('div'); meta.className = 'muted';
 

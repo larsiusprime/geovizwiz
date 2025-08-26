@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS } from './config';
+import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS } from './config';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
@@ -19,7 +19,7 @@ const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: OSM_STYLE,
+  style: BASEMAP_STYLES['OpenStreetMap'],
   center: [-95.3698, 29.7604],
   zoom: 10,
   pitch: 45,
@@ -46,6 +46,7 @@ const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const closeControls = document.getElementById('closeControls') as HTMLButtonElement;
+const basemapSelect = document.getElementById('basemap') as HTMLSelectElement;
 
 const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
 const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
@@ -97,6 +98,20 @@ for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
 }
 rampSelect.value = 'Viridis';
+
+for (const key of Object.keys(BASEMAP_STYLES)) {
+  const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
+}
+basemapSelect.value = 'OpenStreetMap';
+basemapSelect.onchange = () => {
+  map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
+  map.once('styledata', () => {
+    if (currentGeoJSON) {
+      addOrUpdateSource(currentGeoJSON);
+      applyFilterAndScaling();
+    }
+  });
+};
 
 
 /* ---------------- Constants ---------------- */

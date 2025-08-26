@@ -52,6 +52,7 @@ const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tab
 const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
 const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
+const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
 function categoryInputs() {
   return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
@@ -79,6 +80,10 @@ categoryContainer.addEventListener('change', () => {
   applyFilterAndScaling();
 });
 scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
+invertHeights.addEventListener('change', () => {
+  if (currentTab === 'under') applyFilterAndScaling();
+  else computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+});
 
 settingsBtn.onclick = () => { controlsEl.style.display = 'grid'; settingsBtn.style.display = 'none'; };
 closeControls.onclick = () => { controlsEl.style.display = 'none'; settingsBtn.style.display = 'block'; };
@@ -131,7 +136,8 @@ const FIELD_LABELS: Record<string, string> = {
   REALLANDVA: 'Land Assessed Value',
   REALLANDVA_per_sqft: 'Land Value per Sqft',
   TLLDIMPROV: 'Total Land & Improvements',
-  TLLDIMPROV_per_sqft: 'Total Land & Improvements per Sqft'
+  TLLDIMPROV_per_sqft: 'Total Land & Improvements per Sqft',
+  IMPR_LAND_RATIO: 'Improvement to Land Ratio'
 };
 const ALL_FIELDS = Object.keys(FIELD_LABELS);
 const NUMERIC_FIELDS = ALL_FIELDS.filter(k => k !== 'property_category');
@@ -338,6 +344,9 @@ async function loadSelectedColumns() {
 
     // dropdown = predetermined numeric fields (ensure they exist)
     const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
+    if (features[0]?.properties?.hasOwnProperty('REALIMPROV') && features[0]?.properties?.hasOwnProperty('REALLANDVA')) {
+      available.push('IMPR_LAND_RATIO');
+    }
     populateFieldDropdownFromList(available);
 
     // auto-select the best (prefer REALLANDVA_per_sqft if present)
@@ -389,7 +398,9 @@ function updateErrorLayer() {
 
   let filter: any = ['==', ['literal', 1], 2]; // matches nothing by default
 
-  if (normalizationMode === 'perLand' && landSizeField) {
+  if (currentField === 'IMPR_LAND_RATIO') {
+    filter = ['<=', ['to-number', ['get', 'REALLANDVA']], 0];
+  } else if (normalizationMode === 'perLand' && landSizeField) {
     // land invalid when ≤ 0  (zero not allowed)
     filter = ['<=', ['to-number', ['get', landSizeField]], 0];
   } else if (normalizationMode === 'perBuilding' && bldgSizeField) {
@@ -459,7 +470,14 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
 /* --- value expression builder (handles normalization) --- */
 function buildValueExpression(): Expression {
   if (!currentField) return ['literal', 0] as any;
-  const base: Expression = ['to-number', ['get', currentField]] as any;
+  let base: Expression;
+  if (currentField === 'IMPR_LAND_RATIO') {
+    const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
+    const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
+    base = ['case', ['<=', den, 0], 0, ['/', num, den]] as any;
+  } else {
+    base = ['to-number', ['get', currentField]] as any;
+  }
 
   if (normalizationMode === 'perLand' && landSizeField) {
     const den: Expression = ['to-number', ['get', landSizeField]] as any;
@@ -506,7 +524,11 @@ function applyExtrusion() {
   const rawMult = Number(multInput.value);
   const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-  const heightExpr: Expression = ['*', valueExpr, multiplier * unitFactor] as any;
+  let heightBase: Expression = valueExpr;
+  if (invertHeights.checked && currentStats) {
+    heightBase = ['-', currentStats.max, valueExpr] as any;
+  }
+  const heightExpr: Expression = ['*', heightBase, multiplier * unitFactor] as any;
 
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
@@ -705,8 +727,16 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
   const vals: number[] = [];
   for (const f of fc.features) {
     const p = (f.properties as any) || {};
-    let base = Number(p?.[field]);
-    if (!Number.isFinite(base)) continue;
+    let base: number;
+    if (field === 'IMPR_LAND_RATIO') {
+      const num = Number(p?.REALIMPROV);
+      const den = Number(p?.REALLANDVA);
+      if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) continue;
+      base = num / den;
+    } else {
+      base = Number(p?.[field]);
+      if (!Number.isFinite(base)) continue;
+    }
 
     if (mode === 'perLand' && landSizeField) {
       const d = Number(p?.[landSizeField]);
@@ -756,7 +786,13 @@ function computeAndApplyAutoMultiplier(
 
   // values for the CURRENT normalization mode
   const vals = getNumericValuesNormalized(src, currentField, normalizationMode);
-  const pVal = percentile(vals, p);
+  let scaleVals = vals;
+  if (invertHeights.checked) {
+    let maxV = -Infinity;
+    for (const v of vals) if (v > maxV) maxV = v;
+    scaleVals = vals.map(v => maxV - v);
+  }
+  const pVal = percentile(scaleVals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
   // ---- Color domain / breaks ----

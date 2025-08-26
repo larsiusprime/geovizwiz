@@ -26,7 +26,6 @@ export async function initGoogleAuth(onSignIn?: (cred: any) => void) {
   }
   await loadScript('https://accounts.google.com/gsi/client');
   const webhook = import.meta.env.VITE_SIGNIN_WEBHOOK_URL as string | undefined;
-  const slackWebhook = import.meta.env.VITE_SLACK_WEBHOOK_URL as string | undefined;
   function decodeJwt(token: string): any {
     try {
       const payload = token.split('.')[1];
@@ -46,8 +45,8 @@ export async function initGoogleAuth(onSignIn?: (cred: any) => void) {
       if (webhook) {
         fetch(webhook, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
       }
-      if (slackWebhook && entry.payload?.email) {
-        fetch(slackWebhook, {
+      if (entry.payload?.email) {
+        fetch('/api/slack', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ text: `Google sign-in: ${entry.payload.email}` })

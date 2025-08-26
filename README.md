@@ -16,3 +16,7 @@ variables in `viz/` to enable it:
 
 When the variables are not set or `VITE_ENABLE_GOOGLE_AUTH` is `false`, the
 application runs without contacting Google, which is useful for development.
+
+The Slack webhook is never contacted directly from the browser. During
+development, the Vite dev server proxies requests from `/api/slack` to the URL
+set in `VITE_SLACK_WEBHOOK_URL`, avoiding CORS restrictions.

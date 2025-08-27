@@ -1358,12 +1358,115 @@ function applyExtrusionWithVisibility() {
   updateMarkupLayer();
 }
 
+
+// Minimal bounding polygon (convex hull) for Polygon/MultiPolygon features.
+// Uses Andrew's monotone chain (O(n log n) for sort, linear after).
+function minimalBoundingPolygon(
+  features: ReadonlyArray<GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>>
+): GeoJSON.Feature<GeoJSON.Polygon> {
+  type LngLat = [number, number];
+
+  // 1) Collect all [lng, lat] vertices from the input features
+  const pts: LngLat[] = [];
+  for (const f of features) {
+    if (!f?.geometry) continue;
+    if (f.geometry.type === 'Polygon') {
+      for (const ring of f.geometry.coordinates) {
+        for (const c of ring) pts.push([c[0], c[1]]);
+      }
+    } else if (f.geometry.type === 'MultiPolygon') {
+      for (const poly of f.geometry.coordinates) {
+        for (const ring of poly) {
+          for (const c of ring) pts.push([c[0], c[1]]);
+        }
+      }
+    }
+  }
+
+  // No points → empty polygon
+  if (pts.length === 0) {
+    return {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [[]] },
+      properties: { empty: true }
+    };
+  }
+
+  // 2) Sort by lng, then lat and de-dup
+  pts.sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] - b[0]));
+  const unique: LngLat[] = [];
+  for (const p of pts) {
+    const last = unique[unique.length - 1];
+    if (!last || last[0] !== p[0] || last[1] !== p[1]) unique.push(p);
+  }
+
+  // If fewer than 3 unique points, fall back to axis-aligned bbox polygon
+  if (unique.length < 3) {
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    for (const [lng, lat] of unique) {
+      if (lng < minLng) minLng = lng;
+      if (lat < minLat) minLat = lat;
+      if (lng > maxLng) maxLng = lng;
+      if (lat > maxLat) maxLat = lat;
+    }
+    // If still degenerate (e.g., a single point), this yields a zero-area ring
+    const ring: LngLat[] = [
+      [minLng, minLat],
+      [maxLng, minLat],
+      [maxLng, maxLat],
+      [minLng, maxLat],
+      [minLng, minLat]
+    ];
+    return {
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [ring] },
+      properties: { algorithm: 'bbox_fallback' }
+    };
+  }
+
+  // 3) Monotone chain hull
+  const cross = (o: LngLat, a: LngLat, b: LngLat) =>
+    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+
+  const lower: LngLat[] = [];
+  for (const p of unique) {
+    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
+      lower.pop();
+    }
+    lower.push(p);
+  }
+
+  const upper: LngLat[] = [];
+  for (let i = unique.length - 1; i >= 0; i--) {
+    const p = unique[i];
+    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
+      upper.pop();
+    }
+    upper.push(p);
+  }
+
+  // 4) Combine and close ring
+  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
+  const ring = hull.concat([hull[0]]);
+
+  return {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [ring] },
+    properties: { algorithm: 'monotone_chain' }
+  };
+}
+
+
+
 function updateMarkupLayer() {
   if (!currentGeoJSON) return;
   
-  // Remove existing markup layer if it exists
+  // Remove existing markup layers if they exist
   if (map.getLayer('markup-layer')) {
     map.removeLayer('markup-layer');
+  }
+  if (map.getLayer('markup-layer-outline')) {
+    map.removeLayer('markup-layer-outline');
   }
   if (map.getSource('markup-source')) {
     map.removeSource('markup-source');
@@ -1429,8 +1532,10 @@ function updateMarkupLayer() {
   // If no features are selected, don't show bounding box
   if (selectedFeatures.length === 0) return;
   
+  const boundingBox: GeoJSON.Feature = minimalBoundingPolygon(selectedFeatures);
+  
   // Calculate bounding box of all selected features
-  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  /* let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
   
   for (const feature of selectedFeatures) {
     if (feature.geometry.type === 'Polygon') {
@@ -1470,7 +1575,7 @@ function updateMarkupLayer() {
       ]]
     },
     properties: {}
-  };
+  }; */
   
   // Add markup source and layer
   map.addSource('markup-source', {
@@ -1481,14 +1586,27 @@ function updateMarkupLayer() {
     }
   });
   
+  // Add black outline layer first (so it appears behind the yellow line)
+  map.addLayer({
+    id: 'markup-layer-outline',
+    type: 'line',
+    source: 'markup-source',
+    paint: {
+      'line-color': '#000000', // Black outline
+      'line-width': 5, // Slightly wider than the yellow line
+      'line-opacity': 1.0
+    }
+  });
+  
+  // Add yellow line layer on top
   map.addLayer({
     id: 'markup-layer',
     type: 'line',
     source: 'markup-source',
     paint: {
-      'line-color': '#FFD700', // Yellow color
+      'line-color': '#FFED00', // Yellow color
       'line-width': 3,
-      'line-opacity': 0.8
+      'line-opacity': 1.0
     }
   });
 }
@@ -2108,6 +2226,7 @@ function clearData() {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
+  if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
   if (map.getSource('markup-source')) map.removeSource('markup-source');
   currentGeoJSON = null; currentField = null; currentStats = null;
   fieldSelect.replaceChildren(new Option('— load a file first —', ''));
@@ -3059,6 +3178,7 @@ fieldSelect.addEventListener('change', () => {
     updateFloatingLegend();
     // Clear markup layer when no field is selected
     if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
+    if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
     if (map.getSource('markup-source')) map.removeSource('markup-source');
     return;
   }
@@ -3092,6 +3212,7 @@ fieldSelect.addEventListener('change', () => {
   legendSortDirection = 'desc';
   
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
+  if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
   if (map.getSource('markup-source')) map.removeSource('markup-source');
   
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);

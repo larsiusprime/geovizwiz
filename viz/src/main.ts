@@ -43,6 +43,8 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 const fileInput = document.getElementById('file') as HTMLInputElement;
 const fieldSelect = document.getElementById('field') as HTMLSelectElement;
 const rampSelect = document.getElementById('ramp') as HTMLSelectElement;
+const enable3DCheckbox = document.getElementById('enable3D') as HTMLInputElement;
+const extrusionOptions = document.getElementById('extrusionOptions') as HTMLFieldSetElement;
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
@@ -186,6 +188,10 @@ let colorDomain: { lo: number; hi: number; label: string } | null = null;
 
 // For quantiles: thresholds between classes
 let colorBreaks: number[] | null = null;
+
+// 3D extrusion settings
+let is3DMode = false; // Default to 2D mode
+let cachedExtrusionSettings: { multiplier: number; unit: string } | null = null;
 
 // staged loading
 let lastFile: File | null = null;
@@ -373,16 +379,19 @@ function clearLegendVisibility() {
   hiddenLegendItems.clear();
   selectedLegendItems.clear();
   customColors.clear();
-  
+
   // Reset to default sorting state
   if (currentFieldType == 'categorical'){
     legendSortField = 'count';
-	legendSortDirection = 'desc';
+    legendSortDirection = 'desc';
   } else {
     legendSortField = 'name';
-	legendSortDirection = 'asc';
+    legendSortDirection = 'asc';
   }
-  
+
+  // Clear cached extrusion settings when legend visibility is cleared
+  cachedExtrusionSettings = null;
+
   // Reapply the current visualization to show all items
   if (currentGeoJSON && currentField) {
     applyExtrusion();
@@ -1164,7 +1173,7 @@ function applyExtrusionWithCustomColors() {
       const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
       const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
       const valueExpr = buildValueExpression();
-      const heightExpr: any = ['*', valueExpr, multiplier * unitFactor];
+      const heightExpr: any = is3DMode ? ['*', valueExpr, multiplier * unitFactor] : 0;
       
       map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
     } else {
@@ -2234,6 +2243,8 @@ function clearData() {
   if (map.getSource('markup-source')) map.removeSource('markup-source');
   currentGeoJSON = null; currentField = null; currentStats = null;
   fieldSelect.replaceChildren(new Option('— load a file first —', ''));
+  // Clear cached extrusion settings when data is cleared
+  cachedExtrusionSettings = null;
   hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
@@ -2371,7 +2382,7 @@ function applyExtrusion() {
     const rawMult = Number(multInput.value);
     const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
     const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-    const heightExpr: Expression = ['*', valueExpr, multiplier * unitFactor] as any;
+    const heightExpr: Expression = is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
 
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
@@ -2830,9 +2841,11 @@ function buildPopupHTML(props: Record<string, any>): string {
 
   const heightRow = currentFieldType === 'categorical'
     ? `<div><strong>Extrusion height</strong>: Flat (no extrusion for categorical fields)</div>`
-    : (heightM != null)
-      ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
-      : `<div><strong>Extrusion height</strong>: —</div>`;
+    : !is3DMode
+      ? `<div><strong>Extrusion height</strong>: Flat (3D mode disabled)</div>`
+      : (heightM != null)
+        ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
+        : `<div><strong>Extrusion height</strong>: —</div>`;
 
   const errMsg = currentModeErrorMessage(props);
   const errRow = errMsg ? `<div style="margin-top:4px;color:#b00020;">${errMsg}</div>` : '';
@@ -2843,9 +2856,10 @@ function buildPopupHTML(props: Record<string, any>): string {
       ${metricRow}
       ${heightRow}
 	  ${errRow}
-      <div style="margin-top:6px; font-size:12px; color:#666">
-        Multiplier × unit: ${fmt(Number(multInput.value))} × ${unitKey}
-      </div>
+      ${is3DMode && currentFieldType === 'numeric' ? 
+        `<div style="margin-top:6px; font-size:12px; color:#666">
+          Multiplier × unit: ${fmt(Number(multInput.value))} × ${unitKey}
+        </div>` : ''}
       <div style="height:1px;background:#eee;margin:6px 0"></div>
       <div style="font-weight:600;margin-bottom:2px">Loaded fields</div>
       <div style="overflow:auto;">
@@ -3045,9 +3059,27 @@ rampSelect.addEventListener('change', () => {
 
 multInput.addEventListener('input', onMultInput);
 
-multInput.addEventListener('change', onMultInput);
+multInput.addEventListener('change', () => {
+  onMultInput();
+  // Cache the current extrusion settings
+  if (is3DMode && currentFieldType === 'numeric') {
+    cachedExtrusionSettings = {
+      multiplier: Number(multInput.value),
+      unit: unitsSelect.value
+    };
+  }
+});
 
-unitsSelect.addEventListener('change', () => scheduleUpdate('applyOnly'));
+unitsSelect.addEventListener('change', () => {
+  scheduleUpdate('applyOnly');
+  // Cache the current extrusion settings
+  if (is3DMode && currentFieldType === 'numeric') {
+    cachedExtrusionSettings = {
+      multiplier: Number(multInput.value),
+      unit: unitsSelect.value
+    };
+  }
+});
 
 opacityInput.addEventListener('input', () => {
   if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
@@ -3096,6 +3128,9 @@ fieldSelect.addEventListener('change', () => {
   // Clear selections when field changes
   selectedLegendItems.clear();
   
+  // Clear cached extrusion settings when field changes
+  cachedExtrusionSettings = null;
+  
   // Reset to default sorting state when field changes
   if (currentFieldType === 'categorical') {
     legendSortField = 'name';
@@ -3111,6 +3146,35 @@ fieldSelect.addEventListener('change', () => {
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
 });
 
+function update3DUI() {
+  if (currentFieldType === 'numeric') {
+    extrusionOptions.style.display = is3DMode ? 'grid' : 'none';
+  } else {
+    extrusionOptions.style.display = 'none';
+  }
+}
+
+function computeAndSetGoodExtrusionDefaults() {
+  if (!currentGeoJSON || !currentField || currentFieldType !== 'numeric') return;
+  
+  const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
+  if (vals.length === 0) return;
+  
+  // Sort values and get p99
+  vals.sort((a, b) => a - b);
+  const p99 = vals[Math.floor(vals.length * 0.99)];
+  
+  // Use existing function to choose best unit and multiplier
+  const { unit, multiplier } = chooseBestMetricUnitForMultiplier(p99);
+  
+  // Set the values
+  multInput.value = String(multiplier);
+  unitsSelect.value = unit;
+  
+  // Cache the settings
+  cachedExtrusionSettings = { multiplier, unit };
+}
+
 function updateFieldTypeUI() {
   const numericOptions = document.getElementById('numericOptions');
   const categoricalOptions = document.getElementById('categoricalOptions');
@@ -3120,13 +3184,17 @@ function updateFieldTypeUI() {
     if (numericOptions) numericOptions.style.display = 'none';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
     if (colorOptions) colorOptions.style.display = 'none';
+    extrusionOptions.style.display = 'none';
   } else if (currentFieldType === 'numeric') {
     if (numericOptions) numericOptions.style.display = 'grid';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
     if (colorOptions) colorOptions.style.display = 'none';
+    update3DUI(); // This will show/hide extrusion options based on 3D mode
   } else if (currentFieldType === 'categorical') {
     if (numericOptions) numericOptions.style.display = 'none';
     if (categoricalOptions) categoricalOptions.style.display = 'grid';
+    if (colorOptions) colorOptions.style.display = 'none';
+    extrusionOptions.style.display = 'none';
     
     // Show/hide color options based on selected mode
     if (colorOptions) {
@@ -3140,9 +3208,31 @@ function updateFieldTypeUI() {
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
   r.addEventListener('change', () => {
     normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
+    // Clear cached extrusion settings when normalization mode changes
+    cachedExtrusionSettings = null;
     if (!currentGeoJSON || !currentField) return;
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
   });
+});
+
+// 3D checkbox event listener
+enable3DCheckbox.addEventListener('change', () => {
+  is3DMode = enable3DCheckbox.checked;
+  update3DUI();
+  
+  if (is3DMode && !cachedExtrusionSettings) {
+    // First time enabling 3D - compute good defaults
+    computeAndSetGoodExtrusionDefaults();
+  } else if (is3DMode && cachedExtrusionSettings) {
+    // Restore cached settings
+    multInput.value = String(cachedExtrusionSettings.multiplier);
+    unitsSelect.value = cachedExtrusionSettings.unit;
+  }
+  
+  // Apply the current visualization
+  if (currentGeoJSON && currentField) {
+    applyExtrusion();
+  }
 });
 
 // default height units

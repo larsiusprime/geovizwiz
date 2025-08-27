@@ -152,8 +152,30 @@
             </div>
           </div>
         </fieldset>
-
+		
+        <fieldset>
+          <label>Color scaling</label>
+          <div style="display:grid; gap:6px;">
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="radio" name="colorMode" id="color-cont" value="continuous">
+              <span>Linear (min→max, clamped p1–p99)</span>
+            </label>
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
+              <span>Quantiles (equal-frequency, p1–p99)</span>
+            </label>
+          </div>
+        </fieldset>
+		
         <fieldset class="row">
+          <div>
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="checkbox" id="enable3D" />
+              <span>3D</span>
+            </label>
+          </div>
+        </fieldset>
+        <fieldset class="row" id="extrusionOptions" style="display: none;">
           <div>
             <label for="mult">Extrusion multiplier</label>
             <input id="mult" type="number" step=".1" value="1" />
@@ -169,20 +191,6 @@
               <option value="miles">miles</option>
               <option value="stories">stories (~3.3m)</option>
             </select>
-          </div>
-        </fieldset>
-
-        <fieldset>
-          <label>Color scaling</label>
-          <div style="display:grid; gap:6px;">
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input type="radio" name="colorMode" id="color-cont" value="continuous">
-              <span>Linear (min→max, clamped p1–p99)</span>
-            </label>
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
-              <span>Quantiles (equal-frequency, p1–p99)</span>
-            </label>
           </div>
         </fieldset>
       </fieldset>

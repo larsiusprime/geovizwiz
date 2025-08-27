@@ -376,8 +376,13 @@ function clearLegendVisibility() {
   customColors.clear();
   
   // Reset to default sorting state
-  legendSortField = 'count';
-  legendSortDirection = 'desc';
+  if (currentFieldType == 'categorical'){
+    legendSortField = 'count';
+	legendSortDirection = 'desc';
+  } else {
+    legendSortField = 'name';
+	legendSortDirection = 'asc';
+  }
   
   // Reapply the current visualization to show all items
   if (currentGeoJSON && currentField) {
@@ -974,7 +979,8 @@ function updateNumericFloatingLegend() {
   // Apply sorting if specified
   if (legendSortField === 'name') {
     rangeData.sort((a, b) => {
-      const comparison = a.range.label.localeCompare(b.range.label);
+      // For numeric fields, sort by the actual numeric values (min value of each range)
+      const comparison = a.range.min - b.range.min;
       return legendSortDirection === 'asc' ? comparison : -comparison;
     });
   } else if (legendSortField === 'count') {
@@ -3208,7 +3214,11 @@ fieldSelect.addEventListener('change', () => {
   selectedLegendItems.clear();
   
   // Reset to default sorting state when field changes
-  legendSortField = 'count';
+  if (currentFieldType === 'categorical') {
+    legendSortField = 'name';
+  } else {
+    legendSortField = 'count';
+  }
   legendSortDirection = 'desc';
   
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');

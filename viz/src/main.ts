@@ -245,11 +245,10 @@ function minimizeSettings() {
   settingsContent.style.display = 'none';
   controlsEl.style.display = 'none';
   
-  // Move settings button to toolbar at the same horizontal position
-  const controlsRect = controlsEl.getBoundingClientRect();
-  btnShowSettings.style.position = 'absolute';
-  btnShowSettings.style.left = `${controlsRect.left}px`;
-  btnShowSettings.style.top = '8px'; // Small margin from top of toolbar
+  // Move settings button to toolbar (flow from left to right)
+  btnShowSettings.style.position = '';
+  btnShowSettings.style.left = '';
+  btnShowSettings.style.top = '';
   
   topToolbar.appendChild(btnShowSettings);
   updateToolbarVisibility();
@@ -276,11 +275,10 @@ function minimizeLegend() {
   floatingLegend.style.display = 'none';
   isLegendVisible = false;
   
-  // Move legend button to toolbar at the same horizontal position
-  const legendRect = floatingLegend.getBoundingClientRect();
-  btnShowLegend.style.position = 'absolute';
-  btnShowLegend.style.left = `${legendRect.left}px`;
-  btnShowLegend.style.top = '8px'; // Small margin from top of toolbar
+  // Move legend button to toolbar (flow from left to right)
+  btnShowLegend.style.position = '';
+  btnShowLegend.style.left = '';
+  btnShowLegend.style.top = '';
   
   topToolbar.appendChild(btnShowLegend);
   updateToolbarVisibility();

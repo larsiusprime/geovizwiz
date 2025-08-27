@@ -236,8 +236,8 @@ let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are 
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
 
 // Sorting state
-let legendSortField: 'name' | 'count' | null = null;
-let legendSortDirection: 'asc' | 'desc' = 'asc';
+let legendSortField: 'name' | 'count' | null = 'count';
+let legendSortDirection: 'asc' | 'desc' = 'desc';
 
 // Drag state
 let isDragging = false;
@@ -375,9 +375,9 @@ function clearLegendVisibility() {
   selectedLegendItems.clear();
   customColors.clear();
   
-  // Clear sorting state
-  legendSortField = null;
-  legendSortDirection = 'asc';
+  // Reset to default sorting state
+  legendSortField = 'count';
+  legendSortDirection = 'desc';
   
   // Reapply the current visualization to show all items
   if (currentGeoJSON && currentField) {
@@ -3087,9 +3087,9 @@ fieldSelect.addEventListener('change', () => {
   // Clear selections when field changes
   selectedLegendItems.clear();
   
-  // Clear sorting state when field changes
-  legendSortField = null;
-  legendSortDirection = 'asc';
+  // Reset to default sorting state when field changes
+  legendSortField = 'count';
+  legendSortDirection = 'desc';
   
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
   if (map.getSource('markup-source')) map.removeSource('markup-source');

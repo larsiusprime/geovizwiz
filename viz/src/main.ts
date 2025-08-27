@@ -33,7 +33,7 @@ const map = new maplibregl.Map({
   // supersample: render at higher internal resolution (smooth lines)
   pixelRatio: HQ_PR
 });
-map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
+map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
 

@@ -235,6 +235,10 @@ let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
 
+// Sorting state
+let legendSortField: 'name' | 'count' | null = null;
+let legendSortDirection: 'asc' | 'desc' = 'asc';
+
 // Drag state
 let isDragging = false;
 let dragTarget: HTMLElement | null = null;
@@ -370,6 +374,11 @@ function clearLegendVisibility() {
   hiddenLegendItems.clear();
   selectedLegendItems.clear();
   customColors.clear();
+  
+  // Clear sorting state
+  legendSortField = null;
+  legendSortDirection = 'asc';
+  
   // Reapply the current visualization to show all items
   if (currentGeoJSON && currentField) {
     applyExtrusion();
@@ -606,17 +615,30 @@ function updateFloatingLegend() {
     updateFloatingLegend(); // Refresh to update checkbox states
   };
   
-  // Add column headers
-  const nameHeader = document.createElement('div');
+  // Add blank space for swatch column
+  const swatchSpacer = document.createElement('div');
+  swatchSpacer.style.cssText = `
+    width: 20px;
+    flex-shrink: 0;
+  `;
+  
+  // Add column headers as buttons
+  const nameHeader = document.createElement('button');
   nameHeader.textContent = 'Name';
   nameHeader.style.cssText = `
     font-size: 12px;
     font-weight: 600;
     flex-grow: 1;
     margin-left: 8px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    text-align: left;
+    padding: 2px 4px;
+    border-radius: 3px;
   `;
   
-  const countHeader = document.createElement('div');
+  const countHeader = document.createElement('button');
   countHeader.textContent = '#';
   countHeader.style.cssText = `
     font-size: 12px;
@@ -624,13 +646,59 @@ function updateFloatingLegend() {
     width: 30px;
     text-align: center;
     flex-shrink: 0;
+    border: none;
+    background: none;
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 3px;
   `;
+  
+  // Add sorting functionality
+  nameHeader.onclick = () => {
+    if (legendSortField === 'name') {
+      legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      legendSortField = 'name';
+      legendSortDirection = 'asc';
+    }
+    updateFloatingLegend();
+  };
+  
+  countHeader.onclick = () => {
+    if (legendSortField === 'count') {
+      legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      legendSortField = 'count';
+      legendSortDirection = 'asc';
+    }
+    updateFloatingLegend();
+  };
+  
+  // Update button text to show sort indicators
+  const updateSortIndicators = () => {
+    nameHeader.textContent = 'Name';
+    countHeader.textContent = '#';
+    
+    if (legendSortField === 'name') {
+      nameHeader.textContent += legendSortDirection === 'asc' ? ' ↑' : ' ↓';
+    } else if (legendSortField === 'count') {
+      countHeader.textContent += legendSortDirection === 'asc' ? ' ↑' : ' ↓';
+    }
+  };
+  
+  updateSortIndicators();
   
   headerBar.appendChild(eyeAllBtn);
   headerBar.appendChild(checkboxAll);
+  headerBar.appendChild(swatchSpacer);
   headerBar.appendChild(nameHeader);
   headerBar.appendChild(countHeader);
   legendContent.appendChild(headerBar);
+  
+  // Store references to update sort indicators later
+  (legendContent as any)._nameHeader = nameHeader;
+  (legendContent as any)._countHeader = countHeader;
+  (legendContent as any)._updateSortIndicators = updateSortIndicators;
   
   if (currentFieldType === 'categorical') {
     updateCategoricalFloatingLegend();
@@ -652,7 +720,25 @@ function updateCategoricalFloatingLegend() {
     }
   }
   
-  const sortedCategories = Array.from(categoryCounts.keys()).sort();
+  let sortedCategories = Array.from(categoryCounts.keys());
+  
+  // Apply sorting if specified
+  if (legendSortField === 'name') {
+    sortedCategories.sort((a, b) => {
+      const comparison = a.localeCompare(b);
+      return legendSortDirection === 'asc' ? comparison : -comparison;
+    });
+  } else if (legendSortField === 'count') {
+    sortedCategories.sort((a, b) => {
+      const countA = categoryCounts.get(a) || 0;
+      const countB = categoryCounts.get(b) || 0;
+      const comparison = countA - countB;
+      return legendSortDirection === 'asc' ? comparison : -comparison;
+    });
+  } else {
+    // Default alphabetical sort
+    sortedCategories.sort();
+  }
   
   // Get the color for each category based on current mode
   const getColorForCategory = (category: string): string => {
@@ -783,6 +869,11 @@ function updateCategoricalFloatingLegend() {
      item.appendChild(countDisplay);
      legendContent.appendChild(item);
   });
+  
+  // Update sort indicators
+  if ((legendContent as any)._updateSortIndicators) {
+    (legendContent as any)._updateSortIndicators();
+  }
 }
 
 function updateNumericFloatingLegend() {
@@ -844,11 +935,29 @@ function updateNumericFloatingLegend() {
     }
   }
   
-  // Create legend items
-  ranges.forEach((range, index) => {
+  // Create array of range data with counts for sorting
+  const rangeData = ranges.map((range, index) => {
     const rangeKey = `range_${index}`;
-    const isHidden = hiddenLegendItems.has(rangeKey);
     const count = rangeCounts.get(rangeKey) || 0;
+    return { range, index, rangeKey, count };
+  });
+  
+  // Apply sorting if specified
+  if (legendSortField === 'name') {
+    rangeData.sort((a, b) => {
+      const comparison = a.range.label.localeCompare(b.range.label);
+      return legendSortDirection === 'asc' ? comparison : -comparison;
+    });
+  } else if (legendSortField === 'count') {
+    rangeData.sort((a, b) => {
+      const comparison = a.count - b.count;
+      return legendSortDirection === 'asc' ? comparison : -comparison;
+    });
+  }
+  
+  // Create legend items
+  rangeData.forEach(({ range, index, rangeKey, count }) => {
+    const isHidden = hiddenLegendItems.has(rangeKey);
     
     // Check for custom color
     const color = customColors.get(rangeKey) || range.color;
@@ -947,6 +1056,11 @@ function updateNumericFloatingLegend() {
      item.appendChild(countDisplay);
      legendContent.appendChild(item);
   });
+  
+  // Update sort indicators
+  if ((legendContent as any)._updateSortIndicators) {
+    (legendContent as any)._updateSortIndicators();
+  }
 }
 
 // Custom color overrides for individual legend items
@@ -2943,6 +3057,11 @@ fieldSelect.addEventListener('change', () => {
   
   // Clear selections when field changes
   selectedLegendItems.clear();
+  
+  // Clear sorting state when field changes
+  legendSortField = null;
+  legendSortDirection = 'asc';
+  
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
   if (map.getSource('markup-source')) map.removeSource('markup-source');
   

@@ -87,10 +87,15 @@
       </fieldset>
 
       <fieldset>
-        <label for="field">2) Numeric field to visualize</label>
+        <label for="field">2) Field to visualize</label>
         <select id="field"><option value="" disabled selected>— load a file first —</option></select>
+      </fieldset>
 
-        <!-- NEW: normalization choices -->
+      <!-- Numeric field options -->
+      <fieldset id="numericOptions">
+        <label>Field type: numeric</label>
+        
+        <!-- Normalization choices -->
         <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
           <label style="display:flex; gap:8px; align-items:center;">
             <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
@@ -105,43 +110,75 @@
             <span>…per building size <em id="normBldgUnit">(unit)</em></span>
           </label>
         </div>
+
+        <fieldset class="row">
+          <div>
+            <label for="ramp">Color ramp</label>
+            <select id="ramp"></select>
+          </div>
+          <div>
+            <label for="opacity">Opacity</label>
+            <div class="inline">
+              <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+              <output id="opacityVal">0.9</output>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset class="row">
+          <div>
+            <label for="mult">Extrusion multiplier</label>
+            <input id="mult" type="number" step=".1" value="1" />
+          </div>
+          <div>
+            <label for="units">Units</label>
+            <select id="units">
+              <option value="centimeters" selected>centimeters</option>
+              <option value="meters">meters</option>
+              <option value="inches">inches</option>
+              <option value="feet">feet</option>
+              <option value="kilometers">kilometers</option>
+              <option value="miles">miles</option>
+              <option value="stories">stories (~3.3m)</option>
+            </select>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <label>Color scaling</label>
+          <div style="display:grid; gap:6px;">
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="radio" name="colorMode" id="color-cont" value="continuous">
+              <span>Linear (min→max, clamped p1–p99)</span>
+            </label>
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
+              <span>Quantiles (equal-frequency, p1–p99)</span>
+            </label>
+          </div>
+        </fieldset>
       </fieldset>
 
-      <fieldset class="row">
-        <div>
-          <label for="ramp">3) Color ramp</label>
-          <select id="ramp"></select>
-        </div>
-        <div>
-          <label for="opacity">Opacity</label>
-          <div class="inline">
-            <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-            <output id="opacityVal">0.9</output>
+      <!-- Categorical field options -->
+      <fieldset id="categoricalOptions" style="display: none;">
+        <label>Field type: categorical</label>
+        <div style="display:grid; gap:6px;">
+          <label>Color method</label>
+          <div style="display:grid; gap:6px;">
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="radio" name="categoricalColorMode" id="cat-random" value="random" checked>
+              <span>Random color</span>
+            </label>
+            <label style="display:flex; gap:8px; align-items:center;">
+              <input type="radio" name="categoricalColorMode" id="cat-single" value="single">
+              <span>Single color</span>
+            </label>
           </div>
         </div>
       </fieldset>
 
-      <fieldset class="row">
-        <div>
-          <label for="mult">4) Extrusion multiplier</label>
-          <input id="mult" type="number" step=".1" value="1" />
-        </div>
-        <div>
-          <label for="units">Units</label>
-          <select id="units">
-            <option value="centimeters" selected>centimeters</option>
-            <option value="meters">meters</option>
-            <option value="inches">inches</option>
-            <option value="feet">feet</option>
-            <option value="kilometers">kilometers</option>
-            <option value="miles">miles</option>
-            <option value="stories">stories (~3.3m)</option>
-          </select>
-        </div>
-      </fieldset>
-
       <fieldset>
-        <label>5) View presets</label>
+        <label>3) View presets</label>
         <div class="buttons">
           <button data-view="top">Top</button>
           <button data-view="iso">Isometric</button>
@@ -151,20 +188,6 @@
           <button data-view="west">West</button>
         </div>
       </fieldset>
-    
-    <fieldset>
-      <label>6) Color scaling</label>
-      <div style="display:grid; gap:6px;">
-      <label style="display:flex; gap:8px; align-items:center;">
-        <input type="radio" name="colorMode" id="color-cont" value="continuous">
-        <span>Linear (min→max, clamped p1–p99)</span>
-      </label>
-      <label style="display:flex; gap:8px; align-items:center;">
-        <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
-        <span>Quantiles (equal-frequency, p1–p99)</span>
-      </label>
-      </div>
-    </fieldset>
 
 
       <fieldset id="legend"></fieldset>

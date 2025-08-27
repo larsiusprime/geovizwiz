@@ -137,11 +137,16 @@ const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ
 
 let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
 let currentField: string | null = null;
+let currentFieldType: 'numeric' | 'categorical' | null = null;
 let currentStats: { min: number; max: number } | null = null;
 
 let normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 type ColorMode = 'continuous' | 'quantiles';
-let colorMode: ColorMode = 'quantiles';   // <-- default to quantiles
+let colorMode: ColorMode = 'quantiles';
+
+// For categorical fields
+type CategoricalColorMode = 'random' | 'single';
+let categoricalColorMode: CategoricalColorMode = 'random';
 
 // For continuous mode we may still show a domain label; optional
 let colorDomain: { lo: number; hi: number; label: string } | null = null;
@@ -153,7 +158,9 @@ let colorBreaks: number[] | null = null;
 let lastFile: File | null = null;
 let lastAsyncBuffer: AsyncBuffer | null = null;
 let lastNumericFieldsFromSchema: string[] = [];
+let lastCategoricalFieldsFromSchema: string[] = [];
 let chosenNumericFields: string[] = [];
+let chosenCategoricalFields: string[] = [];
 let cancelRequested = false;
 
 // size identification
@@ -395,20 +402,26 @@ function autoPickMainField(fields: string[]): string {
 /* ---------------- Modal 1: chooser ---------------- */
 
 
-function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; numericFields: string[] }) {
+function openFieldChooserModal(opts: { 
+  rowCount: number; 
+  geometryCol: string; 
+  numericFields: string[];
+  categoricalFields: string[];
+}) {
   rowCountEl.textContent = opts.rowCount.toLocaleString();
   geomColEl.textContent = opts.geometryCol || '(unknown)';
   fieldListEl.replaceChildren();
 
-  const all = opts.numericFields;
+  const allNumeric = opts.numericFields;
+  const allCategorical = opts.categoricalFields;
 
-  // Split into your two display buckets
-  const key = all.filter(isKeyField);
-  const other = all.filter(n => !isKeyField(n));
+  // Split numeric into key and other
+  const keyNumeric = allNumeric.filter(isKeyField);
+  const otherNumeric = allNumeric.filter(n => !isKeyField(n));
 
-  // Within KEY fields, find the single best building/land size candidates
-  const bCandidatesKey = key.filter(n => containsKeyword(n, 'building') && containsUnit(n));
-  const lCandidatesKey = key.filter(n => containsKeyword(n, 'land') && containsUnit(n));
+  // Within KEY numeric fields, find the single best building/land size candidates
+  const bCandidatesKey = keyNumeric.filter(n => containsKeyword(n, 'building') && containsUnit(n));
+  const lCandidatesKey = keyNumeric.filter(n => containsKeyword(n, 'land') && containsUnit(n));
   const bBest = autoPickOne('building', bCandidatesKey).field;
   const lBest = autoPickOne('land', lCandidatesKey).field;
   
@@ -418,47 +431,93 @@ function openFieldChooserModal(opts: { rowCount: number; geometryCol: string; nu
   const bBestLC = bBest?.toLowerCase() ?? '';
   const lBestLC = lBest?.toLowerCase() ?? '';
   
-  // Helper: should a KEY field be prechecked?
+  // Helper: should a KEY numeric field be prechecked?
   const shouldPrecheckKey = (name: string) => {
     const n = name.toLowerCase();
-    if (bSet.has(n)) return n === bBestLC;   // only the best building-size field
-    if (lSet.has(n)) return n === lBestLC;   // only the best land-size field
-    return true;                             // all other key fields stay selected
+    if (bSet.has(n)) return n === bBestLC;
+    if (lSet.has(n)) return n === lBestLC;
+    return true;
   };
 
-  if (all.length === 0) {
+  if (allNumeric.length === 0 && allCategorical.length === 0) {
     const p = document.createElement('div');
-    p.textContent = 'No obvious numeric fields were found in the schema.';
+    p.textContent = 'No obvious numeric or categorical fields were found in the schema.';
     p.className = 'muted';
     fieldListEl.appendChild(p);
   } else {
-    if (key.length) {
-      const t = document.createElement('div'); t.className = 'section-title'; t.textContent = 'Suggested key fields';
+    // Numeric fields section
+    if (allNumeric.length > 0) {
+      const t = document.createElement('div'); 
+      t.className = 'section-title'; 
+      t.textContent = 'Numeric fields';
       fieldListEl.appendChild(t);
-      const g = document.createElement('div'); g.className = 'fieldlist';
-      for (const name of key) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name)));
-      fieldListEl.appendChild(g);
-      fieldListEl.appendChild(divider());
+      
+      if (keyNumeric.length) {
+        const t2 = document.createElement('div'); 
+        t2.className = 'section-subtitle'; 
+        t2.textContent = 'Suggested key fields';
+        fieldListEl.appendChild(t2);
+        const g = document.createElement('div'); 
+        g.className = 'fieldlist';
+        for (const name of keyNumeric) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name), 'numeric'));
+        fieldListEl.appendChild(g);
+        fieldListEl.appendChild(divider());
+      }
+
+      if (otherNumeric.length) {
+        const t2 = document.createElement('div'); 
+        t2.className = 'section-subtitle'; 
+        t2.textContent = 'Other numeric fields';
+        fieldListEl.appendChild(t2);
+        const g = document.createElement('div'); 
+        g.className = 'fieldlist';
+        for (const name of otherNumeric) g.appendChild(makeFieldCheckbox(name, false, 'numeric'));
+        fieldListEl.appendChild(g);
+        fieldListEl.appendChild(divider());
+      }
     }
 
-    const t2 = document.createElement('div'); t2.className = 'section-title'; t2.textContent = 'Other numeric fields';
-    fieldListEl.appendChild(t2);
-    const g2 = document.createElement('div'); g2.className = 'fieldlist';
-    // ALL "other" fields start unchecked
-    for (const name of other) g2.appendChild(makeFieldCheckbox(name, false));
-    fieldListEl.appendChild(g2);
+    // Categorical fields section
+    if (allCategorical.length > 0) {
+      const t = document.createElement('div'); 
+      t.className = 'section-title'; 
+      t.textContent = 'Categorical fields';
+      fieldListEl.appendChild(t);
+      const g = document.createElement('div'); 
+      g.className = 'fieldlist';
+      for (const name of allCategorical) g.appendChild(makeFieldCheckbox(name, false, 'categorical'));
+      fieldListEl.appendChild(g);
+    }
   }
 
   // Buttons
-  btnAll.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
-    .forEach(c => (c.checked = true));
+  btnAll.onclick = () => {
+    fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+      .forEach(c => (c.checked = true));
+  };
   btnNone.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
     .forEach(c => (c.checked = false));
   btnCancelModal.onclick = () => { modalOverlay.classList.remove('show'); clearData(); };
   btnConfirmModal.onclick = () => {
-    chosenNumericFields = Array.from(fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]'))
-      .filter(c => c.checked).map(c => c.name);
-    if (chosenNumericFields.length === 0) { alert('Select at least one numeric field.'); return; }
+    const allCheckboxes = fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
+    chosenNumericFields = [];
+    chosenCategoricalFields = [];
+    
+    allCheckboxes.forEach(c => {
+      if (c.checked) {
+        const fieldType = c.dataset.fieldType;
+        if (fieldType === 'numeric') {
+          chosenNumericFields.push(c.name);
+        } else if (fieldType === 'categorical') {
+          chosenCategoricalFields.push(c.name);
+        }
+      }
+    });
+    
+    if (chosenNumericFields.length === 0 && chosenCategoricalFields.length === 0) { 
+      alert('Select at least one field.'); 
+      return; 
+    }
     modalOverlay.classList.remove('show');
     openSizeModal();
   };
@@ -583,7 +642,13 @@ async function loadSelectedColumns() {
 
     sanitizeFeaturesInPlace(features);
 
-    const keep = new Set<string>(['id','ID','fid','FID','name','NAME', ...chosenNumericFields, bldgSizeField || '', landSizeField || '']);
+    const keep = new Set<string>([
+      'id','ID','fid','FID','name','NAME', 
+      ...chosenNumericFields, 
+      ...chosenCategoricalFields,
+      bldgSizeField || '', 
+      landSizeField || ''
+    ]);
     trimPropertiesInPlace(features, keep);
 
     for (const f of features) roundGeometryInPlace(f);
@@ -591,19 +656,41 @@ async function loadSelectedColumns() {
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
 
-    // dropdown = chosen numeric fields (ensure they exist)
-    // Check ALL features to find fields that actually exist in the data
-    const available = chosenNumericFields.filter(k => {
+    // Check which fields actually exist in the data
+    const availableNumeric = chosenNumericFields.filter(k => {
+      return features.some(f => f?.properties?.hasOwnProperty(k));
+    });
+    
+    const availableCategorical = chosenCategoricalFields.filter(k => {
       return features.some(f => f?.properties?.hasOwnProperty(k));
     });
 
-    populateFieldDropdownFromList(available);
+    console.log('Field filtering:', {
+      selectedNumeric: chosenNumericFields.length,
+      availableNumeric: availableNumeric.length,
+      selectedCategorical: chosenCategoricalFields.length,
+      availableCategorical: availableCategorical.length,
+      totalFeatures: features.length
+    });
 
-    // auto-select the best
-	currentField = autoPickMainField(available)
+    // Combine all available fields for the dropdown
+    const allAvailableFields = [...availableNumeric, ...availableCategorical];
+    populateFieldDropdownFromList(allAvailableFields);
+
+    // auto-select the best numeric field if available, otherwise first categorical
+    if (availableNumeric.length > 0) {
+      currentField = autoPickMainField(availableNumeric);
+      currentFieldType = 'numeric';
+    } else if (availableCategorical.length > 0) {
+      currentField = availableCategorical[0];
+      currentFieldType = 'categorical';
+    }
+    
     if (currentField) {
       fieldSelect.value = currentField;
-      currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
+      if (currentFieldType === 'numeric') {
+        currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
+      }
     }
 
     addOrUpdateSource(currentGeoJSON);
@@ -742,31 +829,40 @@ function buildValueExpression(): Expression {
 
 
 function applyExtrusion() {
-  if (!currentGeoJSON || !currentField || !currentStats) return;
+  if (!currentGeoJSON || !currentField) return;
 
-  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-  const valueExpr = buildValueExpression();
-  
-  let colorExpr: Expression;
-  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-    colorExpr = makeStepColorExpression(valueExpr, ramp, colorBreaks);
-  } else {
-    // continuous (keep your existing function or clamped version)
-    const nmin = currentStats.min;
-    const nmax = currentStats.max;
-    const cmin = colorDomain?.lo ?? nmin;
-    const cmax = colorDomain?.hi ?? nmax;
-    colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
+  if (currentFieldType === 'categorical') {
+    // For categorical fields, no extrusion - just color
+    const colorExpr = buildCategoricalColorExpression();
+    
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+      } else {
+      // Existing numeric field logic
+      const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+      const valueExpr = buildValueExpression();
+      
+      let colorExpr: Expression;
+      if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+        colorExpr = makeStepColorExpression(valueExpr, ramp, colorBreaks);
+      } else {
+        const nmin = currentStats?.min ?? 0;
+        const nmax = currentStats?.max ?? 1;
+        const cmin = colorDomain?.lo ?? nmin;
+        const cmax = colorDomain?.hi ?? nmax;
+        colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
+      }
+
+    const rawMult = Number(multInput.value);
+    const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
+    const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
+    const heightExpr: Expression = ['*', valueExpr, multiplier * unitFactor] as any;
+
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   }
-
-  const rawMult = Number(multInput.value);
-  const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
-  const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-  const heightExpr: Expression = ['*', valueExpr, multiplier * unitFactor] as any;
-
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
 
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
@@ -776,6 +872,25 @@ function applyExtrusion() {
   }
 }
 
+function buildCategoricalColorExpression(): Expression {
+  if (!currentField) return ['literal', '#888'] as any;
+  
+  if (categoricalColorMode === 'single') {
+    return ['literal', '#3b82f6'] as any; // Single blue color
+  } else {
+    // Random color based on field value
+    return ['case',
+      ['==', ['get', currentField], ''], ['literal', '#888'],
+      ['==', ['get', currentField], null], ['literal', '#888'],
+      ['==', ['get', currentField], undefined], ['literal', '#888'],
+      ['rgb', 
+        ['%', ['get', currentField], 256],
+        ['%', ['+', ['get', currentField], 85], 256],
+        ['%', ['+', ['get', currentField], 170], 256]
+      ]
+    ] as any;
+  }
+}
 
 function fitToData(fc: GeoJSON.FeatureCollection) {
   const b = bbox(fc); if (!b) return;
@@ -1043,8 +1158,45 @@ function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], mi
 }
 
 function updateLegend() {
-  const ramp = COLOR_RAMPS[rampSelect.value] || [];
   legendEl.replaceChildren();
+  
+  if (currentFieldType === 'categorical') {
+    // For categorical fields, show a simple legend
+    const row = document.createElement('div');
+    row.style.display = 'flex'; 
+    row.style.gap = '6px'; 
+    row.style.alignItems = 'center'; 
+    row.style.flexWrap = 'wrap';
+
+    const label = document.createElement('div'); 
+    label.textContent = 'Legend:'; 
+    label.style.fontSize = '12px';
+    row.appendChild(label);
+    
+    if (categoricalColorMode === 'single') {
+      const swatch = document.createElement('div'); 
+      swatch.className = 'swatch'; 
+      (swatch as any).style = 'background:#3b82f6'; 
+      row.appendChild(swatch);
+      
+      const meta = document.createElement('div'); 
+      meta.className = 'muted';
+      meta.textContent = 'Single color (all categories)';
+      row.appendChild(meta);
+    } else {
+      const meta = document.createElement('div'); 
+      meta.className = 'muted';
+      meta.textContent = 'Random colors (unique per category)';
+      row.appendChild(meta);
+    }
+    
+    legendEl.appendChild(row);
+    legendEl.style.display = 'grid';
+    return;
+  }
+
+  // Numeric field legend (existing logic)
+  const ramp = COLOR_RAMPS[rampSelect.value] || [];
   if (!ramp.length) { legendEl.style.display = 'none'; return; }
 
   const row = document.createElement('div');
@@ -1097,6 +1249,7 @@ function buildPopupHTML(props: Record<string, any>): string {
 
   const fieldsToShow = Array.from(new Set([
     ...chosenNumericFields,
+    ...chosenCategoricalFields,
     ...(landSizeField ? [landSizeField] : []),
     ...(bldgSizeField ? [bldgSizeField] : []),
   ]));
@@ -1120,13 +1273,17 @@ function buildPopupHTML(props: Record<string, any>): string {
     normalizationMode === 'perBuilding' ? `per ${bldgSizeField || 'building size'}` :
     'as-is';
 
-  const metricRow = (metric != null)
-    ? `<div><strong>Display metric (${modeLabel})</strong>: ${fmt(metric)}</div>`
-    : `<div><strong>Display metric</strong>: —</div>`;
+  const metricRow = currentFieldType === 'categorical' 
+    ? `<div><strong>Category</strong>: ${currentField ? (props[currentField] ?? '—') : '—'}</div>`
+    : (metric != null)
+      ? `<div><strong>Display metric (${modeLabel})</strong>: ${fmt(metric)}</div>`
+      : `<div><strong>Display metric</strong>: —</div>`;
 
-  const heightRow = (heightM != null)
-    ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
-    : `<div><strong>Extrusion height</strong>: —</div>`;
+  const heightRow = currentFieldType === 'categorical'
+    ? `<div><strong>Extrusion height</strong>: Flat (no extrusion for categorical fields)</div>`
+    : (heightM != null)
+      ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
+      : `<div><strong>Extrusion height</strong>: —</div>`;
 
   const errMsg = currentModeErrorMessage(props);
   const errRow = errMsg ? `<div style="margin-top:4px;color:#b00020;">${errMsg}</div>` : '';
@@ -1185,24 +1342,57 @@ fileInput.addEventListener('change', async () => {
       }
     } catch {}
     
-    // numeric top-level columns (not geometry)
+    // numeric and categorical top-level columns (not geometry)
     const schemaTree: any = parquetSchema(md);
     const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
     const numeric: string[] = [];
+    const categorical: string[] = [];
+
     for (const node of top) {
       const name = node?.element?.name ?? node?.name;
       if (!name || name === primaryGeom) continue;
+      
       const el = node.element ?? {};
       const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
       const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
+      
       const isNumeric =
         ['DOUBLE','FLOAT','INT32','INT64','INT16','INT8'].includes(typeStr.toUpperCase()) ||
         logical.toUpperCase() === 'DECIMAL';
+      
+      // Everything that's not numeric is categorical (including strings, booleans, etc.)
+      const isCategorical = !isNumeric;
+      
       if (isNumeric) numeric.push(name);
+      else if (isCategorical) categorical.push(name);
     }
-    lastNumericFieldsFromSchema = numeric.sort();
 
-    openFieldChooserModal({ rowCount: numRows, geometryCol: primaryGeom, numericFields: lastNumericFieldsFromSchema });
+    console.log('numeric', numeric);
+    console.log('categorical', categorical);
+
+    lastNumericFieldsFromSchema = numeric.sort();
+    lastCategoricalFieldsFromSchema = categorical.sort();
+
+    console.log('Schema detection:', {
+      totalColumns: top.length,
+      numericFields: lastNumericFieldsFromSchema,
+      categoricalFields: lastCategoricalFieldsFromSchema,
+      geometryColumn: primaryGeom,
+      allFields: top.map((node: any) => {
+        const name = node?.element?.name ?? node?.name;
+        const el = node.element ?? {};
+        const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
+        const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
+        return { name, typeStr, logical };
+      })
+    });
+
+    openFieldChooserModal({ 
+      rowCount: numRows, 
+      geometryCol: primaryGeom, 
+      numericFields: lastNumericFieldsFromSchema,
+      categoricalFields: lastCategoricalFieldsFromSchema 
+    });
   } catch (err: any) {
     console.error('Metadata read failed:', err);
     alert(`Could not read Parquet metadata: ${err?.message ?? err}`);
@@ -1217,6 +1407,18 @@ fileInput.addEventListener('change', async () => {
     if (val === 'continuous' || val === 'quantiles') {
       colorMode = val;
       scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    }
+  })
+);
+
+// Categorical color mode event listeners
+document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(el =>
+  el.addEventListener('change', () => {
+    if (!currentGeoJSON || currentFieldType !== 'categorical') return;
+    const val = (document.querySelector('input[name="categoricalColorMode"]:checked') as HTMLInputElement)?.value;
+    if (val === 'random' || val === 'single') {
+      categoricalColorMode = val;
+      scheduleUpdate('applyOnly', /*refreshLegend*/ true);
     }
   })
 );
@@ -1241,8 +1443,32 @@ opacityInput.addEventListener('input', () => {
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;
   if (!currentGeoJSON || !currentField) return;
-  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true)
+  
+  // Determine field type
+  if (chosenNumericFields.includes(currentField)) {
+    currentFieldType = 'numeric';
+  } else if (chosenCategoricalFields.includes(currentField)) {
+    currentFieldType = 'categorical';
+  }
+  
+  // Update UI based on field type
+  updateFieldTypeUI();
+  
+  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
 });
+
+function updateFieldTypeUI() {
+  const numericOptions = document.getElementById('numericOptions');
+  const categoricalOptions = document.getElementById('categoricalOptions');
+  
+  if (currentFieldType === 'numeric') {
+    if (numericOptions) numericOptions.style.display = 'block';
+    if (categoricalOptions) categoricalOptions.style.display = 'none';
+  } else if (currentFieldType === 'categorical') {
+    if (numericOptions) numericOptions.style.display = 'none';
+    if (categoricalOptions) categoricalOptions.style.display = 'block';
+  }
+}
 
 /* ---------------- Main ---------------- */
 
@@ -1256,6 +1482,10 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 
 // default height units
 unitsSelect.value = 'centimeters';
+
+// Initialize UI - show numeric options by default, hide categorical
+updateFieldTypeUI();
+
 installWelcome();
 setQuality('high');
 

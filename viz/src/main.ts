@@ -592,7 +592,11 @@ async function loadSelectedColumns() {
     currentGeoJSON = { type: 'FeatureCollection', features };
 
     // dropdown = chosen numeric fields (ensure they exist)
-    const available = chosenNumericFields.filter(k => features[0]?.properties?.hasOwnProperty(k));
+    // Check ALL features to find fields that actually exist in the data
+    const available = chosenNumericFields.filter(k => {
+      return features.some(f => f?.properties?.hasOwnProperty(k));
+    });
+
     populateFieldDropdownFromList(available);
 
     // auto-select the best

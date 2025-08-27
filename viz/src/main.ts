@@ -163,7 +163,7 @@ type ColorMode = 'continuous' | 'quantiles';
 let colorMode: ColorMode = 'quantiles';
 
 // For categorical fields
-type CategoricalColorMode = 'random' | 'single';
+type CategoricalColorMode = 'random' | 'single' | 'colorRamp';
 let categoricalColorMode: CategoricalColorMode = 'random';
 let singleColorValue: string = '#3b82f6'; // Default blue color
 
@@ -927,24 +927,27 @@ function applyExtrusion() {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
     
+    console.log('Applying categorical color expression:', colorExpr);
+    console.log('Map layer exists:', !!map.getLayer(LAYER_ID));
+    
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-      } else {
-      // Existing numeric field logic
-      const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-      const valueExpr = buildValueExpression();
-      
-      let colorExpr: Expression;
-      if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-        colorExpr = makeStepColorExpression(valueExpr, ramp, colorBreaks);
-      } else {
-        const nmin = currentStats?.min ?? 0;
-        const nmax = currentStats?.max ?? 1;
-        const cmin = colorDomain?.lo ?? nmin;
-        const cmax = colorDomain?.hi ?? nmax;
-        colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
-      }
+  } else {
+    // Existing numeric field logic
+    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+    const valueExpr = buildValueExpression();
+    
+    let colorExpr: Expression;
+    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+      colorExpr = makeStepColorExpression(valueExpr, ramp, colorBreaks);
+    } else {
+      const nmin = currentStats?.min ?? 0;
+      const nmax = currentStats?.max ?? 1;
+      const cmin = colorDomain?.lo ?? nmin;
+      const cmax = colorDomain?.hi ?? nmax;
+      colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
+    }
 
     const rawMult = Number(multInput.value);
     const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
@@ -965,22 +968,117 @@ function applyExtrusion() {
 }
 
 function buildCategoricalColorExpression(): Expression {
-  if (!currentField) return ['literal', '#888'] as any;
+  console.log('Building categorical color expression:', { 
+    currentField, 
+    categoricalColorMode, 
+    hasGeoJSON: !!currentGeoJSON 
+  });
+  
+  if (!currentField || !currentGeoJSON) return ['literal', '#888'] as any;
   
   if (categoricalColorMode === 'single') {
     return ['literal', singleColorValue] as any; // Use selected color
-  } else {
-    // Random color based on field value
-    return ['case',
-      ['==', ['get', currentField], ''], ['literal', '#888'],
-      ['==', ['get', currentField], null], ['literal', '#888'],
-      ['==', ['get', currentField], undefined], ['literal', '#888'],
-      ['rgb', 
-        ['%', ['get', currentField], 256],
-        ['%', ['+', ['get', currentField], 85], 256],
-        ['%', ['+', ['get', currentField], 170], 256]
-      ]
+  } else if (categoricalColorMode === 'colorRamp') {
+    // Color ramp: sort categories alphabetically and assign colors linearly
+    const categories = new Set<string>();
+    for (const feature of currentGeoJSON.features) {
+      const value = feature.properties?.[currentField];
+      if (value != null && value !== '' && value !== undefined) {
+        categories.add(String(value));
+      }
+    }
+    
+    const sortedCategories = Array.from(categories).sort();
+    console.log('Categorical field values:', {
+      field: currentField,
+      uniqueValues: sortedCategories,
+      totalFeatures: currentGeoJSON.features.length
+    });
+    
+    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+    
+    if (sortedCategories.length === 0) {
+      return ['literal', '#888'] as any;
+    }
+    
+    // Build the input value once, coerced to string
+    const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
+    
+    const denom = Math.max(1, sortedCategories.length - 1);
+    const pairs: any[] = [];
+    for (let i = 0; i < sortedCategories.length; i++) {
+      const colorIndex = Math.round((i / denom) * (ramp.length - 1));
+      const color = ramp[colorIndex];
+      pairs.push(sortedCategories[i], color);
+    }
+    
+    // If you want empties to be gray, short-circuit those first; otherwise omit this case line.
+    const result = ['case',
+      ['==', val, ''], '#888',
+      ['match', val, ...pairs, '#888']
     ] as any;
+    
+    console.log('Generated categorical color ramp expression:', JSON.stringify(result));
+    return result;
+  } else {
+    // Random colors mode - pre-compute a specific color for each category
+    const categories = new Set<string>();
+    for (const feature of currentGeoJSON.features) {
+      const value = feature.properties?.[currentField];
+      if (value != null && value !== '' && value !== undefined) {
+        categories.add(String(value));
+      }
+    }
+    
+    const sortedCategories = Array.from(categories).sort();
+    console.log('Categorical field values for random colors:', {
+      field: currentField,
+      uniqueValues: sortedCategories,
+      totalFeatures: currentGeoJSON.features.length
+    });
+    
+    if (sortedCategories.length === 0) {
+      return ['literal', '#888'] as any;
+    }
+    
+    // Generate a consistent random color for each category using a simple hash
+    function hashStringToColor(str: string): string {
+      let hash = 0;
+      for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash + str.charCodeAt(i)) & 0xffffffff;
+      }
+      
+      // Convert hash to RGB values with good color distribution
+      const r = (hash & 0xFF0000) >> 16;
+      const g = (hash & 0x00FF00) >> 8;
+      const b = hash & 0x0000FF;
+      
+      // Ensure colors are vibrant by boosting low values
+      const minBrightness = 80;
+      const adjustedR = Math.max(minBrightness, r);
+      const adjustedG = Math.max(minBrightness, g);
+      const adjustedB = Math.max(minBrightness, b);
+      
+      return `rgb(${adjustedR}, ${adjustedG}, ${adjustedB})`;
+    }
+    
+    // Build the input value once, coerced to string
+    const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
+    
+    // Create pairs of [category, color] for the match expression
+    const pairs: any[] = [];
+    for (const category of sortedCategories) {
+      const color = hashStringToColor(category);
+      pairs.push(category, color);
+    }
+    
+    const result = ['case',
+      ['==', val, ''], '#888',
+      ['match', val, ...pairs, '#888']
+    ] as any;
+    
+    console.log('Generated categorical random color expression:', JSON.stringify(result));
+    return result;
   }
 }
 
@@ -1265,15 +1363,29 @@ function updateLegend() {
     label.style.fontSize = '12px';
     row.appendChild(label);
     
-    if (categoricalColorMode === 'single') {
-      const swatch = document.createElement('div'); 
-      swatch.className = 'swatch'; 
+         if (categoricalColorMode === 'single') {
+       const swatch = document.createElement('div'); 
+       swatch.className = 'swatch'; 
        (swatch as any).style = `background:${singleColorValue}`; 
-      row.appendChild(swatch);
+       row.appendChild(swatch);
+       
+       const meta = document.createElement('div'); 
+       meta.className = 'muted';
+       meta.textContent = 'Single color (all categories)';
+       row.appendChild(meta);
+     } else if (categoricalColorMode === 'colorRamp') {
+      // Show color ramp swatches for categorical color ramp
+      const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+      ramp.forEach(c => { 
+        const s = document.createElement('div'); 
+        s.className = 'swatch'; 
+        (s as any).style = `background:${c}`; 
+        row.appendChild(s); 
+      });
       
       const meta = document.createElement('div'); 
       meta.className = 'muted';
-      meta.textContent = 'Single color (all categories)';
+      meta.textContent = 'Color ramp (alphabetical categories)';
       row.appendChild(meta);
     } else {
       const meta = document.createElement('div'); 
@@ -1516,9 +1628,15 @@ fileInput.addEventListener('change', async () => {
 // Categorical color mode event listeners
 document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(el =>
   el.addEventListener('change', () => {
+    console.log('Categorical color mode changed:', { 
+      currentGeoJSON: !!currentGeoJSON, 
+      currentFieldType, 
+      value: el.value 
+    });
+    
     if (!currentGeoJSON || currentFieldType !== 'categorical') return;
     const val = (document.querySelector('input[name="categoricalColorMode"]:checked') as HTMLInputElement)?.value;
-    if (val === 'random' || val === 'single') {
+    if (val === 'random' || val === 'single' || val === 'colorRamp') {
       categoricalColorMode = val;
       console.log('Updating categorical color mode to:', val);
       
@@ -1585,6 +1703,8 @@ fieldSelect.addEventListener('change', () => {
   } else if (chosenCategoricalFields.includes(currentField)) {
     currentFieldType = 'categorical';
   }
+  
+  console.log('Field changed:', { currentField, currentFieldType, categoricalColorMode });
   
   // Update UI based on field type
   updateFieldTypeUI();

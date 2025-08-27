@@ -114,6 +114,12 @@ const progressMsg = document.getElementById('progressMsg') as HTMLDivElement;
 const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
 const colorQuant = document.getElementById('color-quant') as HTMLInputElement | null;
 
+// Color picker elements
+const colorOptions = document.getElementById('colorOptions') as HTMLDivElement;
+const colorPicker = document.getElementById('colorPicker') as HTMLInputElement;
+const btnCancelColorPicker = document.getElementById('btnCancelColorPicker') as HTMLButtonElement;
+const btnConfirmColorPicker = document.getElementById('btnConfirmColorPicker') as HTMLButtonElement;
+
 // Color ramp choices
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
@@ -159,6 +165,7 @@ let colorMode: ColorMode = 'quantiles';
 // For categorical fields
 type CategoricalColorMode = 'random' | 'single';
 let categoricalColorMode: CategoricalColorMode = 'random';
+let singleColorValue: string = '#3b82f6'; // Default blue color
 
 // For continuous mode we may still show a domain label; optional
 let colorDomain: { lo: number; hi: number; label: string } | null = null;
@@ -961,7 +968,7 @@ function buildCategoricalColorExpression(): Expression {
   if (!currentField) return ['literal', '#888'] as any;
   
   if (categoricalColorMode === 'single') {
-    return ['literal', '#3b82f6'] as any; // Single blue color
+    return ['literal', singleColorValue] as any; // Use selected color
   } else {
     // Random color based on field value
     return ['case',
@@ -1261,7 +1268,7 @@ function updateLegend() {
     if (categoricalColorMode === 'single') {
       const swatch = document.createElement('div'); 
       swatch.className = 'swatch'; 
-      (swatch as any).style = 'background:#3b82f6'; 
+       (swatch as any).style = `background:${singleColorValue}`; 
       row.appendChild(swatch);
       
       const meta = document.createElement('div'); 
@@ -1513,15 +1520,48 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
     const val = (document.querySelector('input[name="categoricalColorMode"]:checked') as HTMLInputElement)?.value;
     if (val === 'random' || val === 'single') {
       categoricalColorMode = val;
+      console.log('Updating categorical color mode to:', val);
+      
+      // Show/hide color options
+      if (colorOptions) {
+        colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+      }
+      
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);
     }
   })
 );
 
+// Color picker event listeners
+btnCancelColorPicker.addEventListener('click', () => {
+  // Reset color picker to current value
+  colorPicker.value = singleColorValue;
+});
+
+btnConfirmColorPicker.addEventListener('click', () => {
+  singleColorValue = colorPicker.value;
+  
+  // Update the map if we're currently using single color mode
+  if (currentFieldType === 'categorical' && categoricalColorMode === 'single') {
+    scheduleUpdate('applyOnly', /*refreshLegend*/ true);
+  }
+});
+
+// Update color picker when single color mode is selected
+colorPicker.addEventListener('input', () => {
+  // Update the map in real-time as user changes color
+  if (currentFieldType === 'categorical' && categoricalColorMode === 'single') {
+    singleColorValue = colorPicker.value;
+    scheduleUpdate('applyOnly', /*refreshLegend*/ true);
+  }
+});
+
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks
   const needsRecompute = (colorMode === 'quantiles');
-  scheduleUpdate(needsRecompute ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
+  // Also update if using categorical color ramp
+  const needsCategoricalUpdate = (currentFieldType === 'categorical' && categoricalColorMode === 'colorRamp');
+  scheduleUpdate(needsRecompute || needsCategoricalUpdate ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
 });
 
 multInput.addEventListener('input', onMultInput);
@@ -1549,6 +1589,15 @@ fieldSelect.addEventListener('change', () => {
   // Update UI based on field type
   updateFieldTypeUI();
   
+  // Ensure categorical color mode is properly set if switching to categorical
+  if (currentFieldType === 'categorical') {
+    // Make sure the radio button is checked
+    const radioButton = document.querySelector(`input[name="categoricalColorMode"][value="${categoricalColorMode}"]`) as HTMLInputElement;
+    if (radioButton) {
+      radioButton.checked = true;
+    }
+  }
+  
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
 });
 
@@ -1557,11 +1606,16 @@ function updateFieldTypeUI() {
   const categoricalOptions = document.getElementById('categoricalOptions');
   
   if (currentFieldType === 'numeric') {
-    if (numericOptions) numericOptions.style.display = 'block';
+    if (numericOptions) numericOptions.style.display = 'grid';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
   } else if (currentFieldType === 'categorical') {
     if (numericOptions) numericOptions.style.display = 'none';
-    if (categoricalOptions) categoricalOptions.style.display = 'block';
+    if (categoricalOptions) categoricalOptions.style.display = 'grid';
+    
+    // Show/hide color options based on selected mode
+    if (colorOptions) {
+      colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+    }
   }
 }
 

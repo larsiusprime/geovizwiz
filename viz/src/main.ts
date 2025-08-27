@@ -245,7 +245,12 @@ function minimizeSettings() {
   settingsContent.style.display = 'none';
   controlsEl.style.display = 'none';
   
-  // Move settings button to toolbar
+  // Move settings button to toolbar at the same horizontal position
+  const controlsRect = controlsEl.getBoundingClientRect();
+  btnShowSettings.style.position = 'absolute';
+  btnShowSettings.style.left = `${controlsRect.left}px`;
+  btnShowSettings.style.top = '8px'; // Small margin from top of toolbar
+  
   topToolbar.appendChild(btnShowSettings);
   updateToolbarVisibility();
 }
@@ -255,9 +260,12 @@ function showSettings() {
   settingsContent.style.display = 'block';
   controlsEl.style.display = 'grid';
   
-  // Remove settings button from toolbar
+  // Remove settings button from toolbar and reset positioning
   if (btnShowSettings.parentNode === topToolbar) {
     topToolbar.removeChild(btnShowSettings);
+    btnShowSettings.style.position = '';
+    btnShowSettings.style.left = '';
+    btnShowSettings.style.top = '';
   }
   updateToolbarVisibility();
 }
@@ -268,7 +276,12 @@ function minimizeLegend() {
   floatingLegend.style.display = 'none';
   isLegendVisible = false;
   
-  // Move legend button to toolbar
+  // Move legend button to toolbar at the same horizontal position
+  const legendRect = floatingLegend.getBoundingClientRect();
+  btnShowLegend.style.position = 'absolute';
+  btnShowLegend.style.left = `${legendRect.left}px`;
+  btnShowLegend.style.top = '8px'; // Small margin from top of toolbar
+  
   topToolbar.appendChild(btnShowLegend);
   updateToolbarVisibility();
 }
@@ -279,9 +292,12 @@ function showLegend() {
   legendContent.style.display = 'block';
   floatingLegend.style.display = 'block';
   
-  // Remove legend button from toolbar
+  // Remove legend button from toolbar and reset positioning
   if (btnShowLegend.parentNode === topToolbar) {
     topToolbar.removeChild(btnShowLegend);
+    btnShowLegend.style.position = '';
+    btnShowLegend.style.left = '';
+    btnShowLegend.style.top = '';
   }
   updateToolbarVisibility();
   updateFloatingLegend();
@@ -364,8 +380,23 @@ function updateFloatingLegend() {
   // Clear previous content
   legendContent.replaceChildren();
   
-  // Update title
-  legendTitle.textContent = `${currentField} (${currentFieldType})`;
+  // Update title to just "Legend"
+  legendTitle.textContent = 'Legend';
+  
+  // Add field name and type at the top of the legend content
+  const fieldInfo = document.createElement('div');
+  fieldInfo.style.cssText = `
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid #eee;
+  `;
+  fieldInfo.innerHTML = `
+    <div style="font-weight: 600; color: #333;">${currentField}</div>
+    <div>Type: ${currentFieldType}</div>
+  `;
+  legendContent.appendChild(fieldInfo);
   
   if (currentFieldType === 'categorical') {
     updateCategoricalFloatingLegend();
@@ -477,7 +508,7 @@ function updateCategoricalFloatingLegend() {
     
     // Make swatch clickable for color picker
     swatch.style.cursor = 'pointer';
-    swatch.onclick = () => openSwatchColorPicker(category, color);
+    swatch.onclick = () => openSwatchColorPicker(category, color, swatch);
     
     item.appendChild(eyeBtn);
     item.appendChild(swatch);
@@ -588,7 +619,7 @@ function updateNumericFloatingLegend() {
     
     // Make swatch clickable for color picker
     swatch.style.cursor = 'pointer';
-    swatch.onclick = () => openSwatchColorPicker(rangeKey, color);
+    swatch.onclick = () => openSwatchColorPicker(rangeKey, color, swatch);
     
     item.appendChild(eyeBtn);
     item.appendChild(swatch);
@@ -600,13 +631,22 @@ function updateNumericFloatingLegend() {
 // Custom color overrides for individual legend items
 let customColors = new Map<string, string>();
 
-function openSwatchColorPicker(itemKey: string, currentColor: string) {
+function openSwatchColorPicker(itemKey: string, currentColor: string, swatchElement: HTMLElement) {
   // Create a temporary color input
   const colorInput = document.createElement('input');
   colorInput.type = 'color';
   colorInput.value = currentColor;
   colorInput.style.position = 'absolute';
-  colorInput.style.left = '-9999px';
+  
+  // Position the color picker over the swatch
+  const rect = swatchElement.getBoundingClientRect();
+  colorInput.style.left = `${rect.left}px`;
+  colorInput.style.top = `${rect.top}px`;
+  colorInput.style.width = `${rect.width}px`;
+  colorInput.style.height = `${rect.height}px`;
+  colorInput.style.opacity = '0';
+  colorInput.style.pointerEvents = 'auto';
+  
   document.body.appendChild(colorInput);
   
   colorInput.addEventListener('change', () => {

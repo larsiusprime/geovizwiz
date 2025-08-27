@@ -12,11 +12,8 @@
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
     #map { position: absolute; inset: 0; }
 
-    #controls {
-      position: absolute; top: 10px; left: 10px;
-      width: min(92vw, 420px);
-      background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
-      display: grid; gap: var(--gap); z-index: 10;
+    .window-header:hover {
+      background: rgba(240, 240, 240, 0.9);
     }
 
     #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
@@ -76,8 +73,37 @@
 <body>
   <div id="app">
     <div id="map"></div>
+    
+    <!-- Top Toolbar for minimized windows -->
+    <div id="topToolbar" style="
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 40px;
+      background: rgba(255, 255, 255, 0.9);
+      border-bottom: 1px solid #ddd;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      z-index: 20;
+      backdrop-filter: blur(4px);
+      display: none;
+    ">
+      <!-- Minimized window buttons will appear here -->
+    </div>
 
-    <div id="controls">
+    <div id="controls" style="position: absolute; top: 10px; left: 10px; width: min(92vw, 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+      <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+        <div style="font-weight: 600; font-size: 13px;">Settings</div>
+        <button id="btnMinimizeSettings" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M7 10l5 5 5-5z"/>
+			</svg>
+		</button>
+      </div>
+      <div id="settingsContent" style="padding: 12px;">
       <fieldset>
         <label for="file">1) Load a GeoParquet file (.parquet)</label>
         <input id="file" type="file" accept=".parquet,.parq" />
@@ -206,7 +232,8 @@
       </fieldset>
 
 
-      <fieldset id="legend"></fieldset>
+      <fieldset id="legend">      </fieldset>
+      </div>
     </div>
   </div>
 
@@ -284,7 +311,85 @@
     </div>
   </div>
 
+  <!-- Floating Legend -->
+  <div id="floatingLegend" style="
+    position: absolute;
+    top: 50%;
+    right: 20px;
+    transform: translateY(-50%);
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    max-width: 280px;
+    max-height: 70vh;
+    overflow: hidden;
+    z-index: 15;
+    display: block;
+    backdrop-filter: blur(4px);
+    cursor: move;
+  ">
+    <div class="window-header" style="
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      background: rgba(248, 248, 248, 0.8);
+      border-radius: 8px 8px 0 0;
+      cursor: move;
+    ">
+      <div style="font-weight: 600; font-size: 13px;" id="legendTitle">Legend</div>
+      <button id="btnMinimizeLegend" style="
+        border: none;
+        background: none;
+        cursor: pointer;
+        font-size: 14px;
+        color: #666;
+        padding: 2px;
+        width: 20px;
+        height: 20px;
+        border-radius: 3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      " title="Minimize">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				<path d="M7 10l5 5 5-5z"/>
+			</svg>
+	  </button>
+    </div>
+    <div id="legendContent" style="
+      padding: 8px;
+      max-height: calc(70vh - 40px);
+      overflow-y: auto;
+    "></div>
+  </div>
 
+  <!-- Hidden buttons for toolbar (will be moved to toolbar when minimized) -->
+  <div style="display: none;">
+    <button id="btnShowSettings" style="
+      border: none;
+      background: rgba(248, 248, 248, 0.8);
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+    " title="Show Settings">⚙️ Settings</button>
+    
+    <button id="btnShowLegend" style="
+      border: none;
+      background: rgba(248, 248, 248, 0.8);
+      cursor: pointer;
+      font-size: 14px;
+      color: #333;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+    " title="Show Legend">🎨 Legend</button>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

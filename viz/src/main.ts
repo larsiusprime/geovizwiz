@@ -52,15 +52,6 @@ const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
-const controlsEl = document.getElementById('controls') as HTMLDivElement;
-
-// Quality button
-const btnQuality = document.createElement('button');
-btnQuality.id = 'btn-quality';
-btnQuality.textContent = 'Quality: Fast';
-btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;';
-btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
-controlsEl.prepend(btnQuality); // position at top
 
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
@@ -71,6 +62,30 @@ viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 // Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
+
+// Window elements
+const controlsEl = document.getElementById('controls') as HTMLDivElement;
+const settingsContent = document.getElementById('settingsContent') as HTMLDivElement;
+
+// Quality button (create after elements are declared)
+const btnQuality = document.createElement('button');
+btnQuality.id = 'btn-quality';
+btnQuality.textContent = 'Quality: Fast';
+btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;margin-bottom:8px;';
+btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
+settingsContent.prepend(btnQuality); // position at top of settings content
+const btnMinimizeSettings = document.getElementById('btnMinimizeSettings') as HTMLButtonElement;
+const btnShowSettings = document.getElementById('btnShowSettings') as HTMLButtonElement;
+
+// Top toolbar
+const topToolbar = document.getElementById('topToolbar') as HTMLDivElement;
+
+// Floating legend elements
+const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
+const btnMinimizeLegend = document.getElementById('btnMinimizeLegend') as HTMLButtonElement;
+const btnShowLegend = document.getElementById('btnShowLegend') as HTMLButtonElement;
+const legendTitle = document.getElementById('legendTitle') as HTMLDivElement;
+const legendContent = document.getElementById('legendContent') as HTMLDivElement;
 
 // Modal overlays
 const numericModalOverlay = document.getElementById('numericModalOverlay')!;
@@ -211,8 +226,629 @@ let _pendingRefreshLegend = false;
 
 type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
+// Window state
+let isSettingsMinimized = false;
+let isLegendVisible = true;  // Start with legend visible
+let isLegendMinimized = false;
+let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
+
+// Drag state
+let isDragging = false;
+let dragTarget: HTMLElement | null = null;
+let dragOffset = { x: 0, y: 0 };
+
 /* ---------------- FUNCTIONS ----------------- */
 
+// Window management functions
+function minimizeSettings() {
+  isSettingsMinimized = true;
+  settingsContent.style.display = 'none';
+  controlsEl.style.display = 'none';
+  
+  // Move settings button to toolbar
+  topToolbar.appendChild(btnShowSettings);
+  updateToolbarVisibility();
+}
+
+function showSettings() {
+  isSettingsMinimized = false;
+  settingsContent.style.display = 'block';
+  controlsEl.style.display = 'grid';
+  
+  // Remove settings button from toolbar
+  if (btnShowSettings.parentNode === topToolbar) {
+    topToolbar.removeChild(btnShowSettings);
+  }
+  updateToolbarVisibility();
+}
+
+function minimizeLegend() {
+  isLegendMinimized = true;
+  legendContent.style.display = 'none';
+  floatingLegend.style.display = 'none';
+  isLegendVisible = false;
+  
+  // Move legend button to toolbar
+  topToolbar.appendChild(btnShowLegend);
+  updateToolbarVisibility();
+}
+
+function showLegend() {
+  isLegendMinimized = false;
+  isLegendVisible = true;
+  legendContent.style.display = 'block';
+  floatingLegend.style.display = 'block';
+  
+  // Remove legend button from toolbar
+  if (btnShowLegend.parentNode === topToolbar) {
+    topToolbar.removeChild(btnShowLegend);
+  }
+  updateToolbarVisibility();
+  updateFloatingLegend();
+}
+
+function updateToolbarVisibility() {
+  // Show toolbar only if there are minimized windows
+  const hasMinimizedWindows = topToolbar.children.length > 0;
+  topToolbar.style.display = hasMinimizedWindows ? 'flex' : 'none';
+  
+  // Adjust controls position if toolbar is visible and settings are not minimized
+  if (hasMinimizedWindows && !isSettingsMinimized) {
+    controlsEl.style.top = '50px'; // Account for toolbar height
+  } else if (!isSettingsMinimized) {
+    controlsEl.style.top = '10px'; // Default position
+  }
+}
+
+// Dragging functions
+function makeDraggable(element: HTMLElement) {
+  const header = element.querySelector('.window-header') as HTMLElement;
+  if (!header) return;
+
+  header.addEventListener('mousedown', (e) => {
+    isDragging = true;
+    dragTarget = element;
+    const rect = element.getBoundingClientRect();
+    dragOffset.x = e.clientX - rect.left;
+    dragOffset.y = e.clientY - rect.top;
+    
+    // Prevent text selection during drag
+    e.preventDefault();
+    document.body.style.userSelect = 'none';
+  });
+}
+
+function handleMouseMove(e: MouseEvent) {
+  if (!isDragging || !dragTarget) return;
+  
+  const x = e.clientX - dragOffset.x;
+  const y = e.clientY - dragOffset.y;
+  
+  // Keep window within viewport bounds
+  const rect = dragTarget.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width;
+  const maxY = window.innerHeight - rect.height;
+  
+  const clampedX = Math.max(0, Math.min(x, maxX));
+  const clampedY = Math.max(0, Math.min(y, maxY));
+  
+  dragTarget.style.left = `${clampedX}px`;
+  dragTarget.style.top = `${clampedY}px`;
+  dragTarget.style.transform = 'none'; // Remove any transform when dragging
+}
+
+function handleMouseUp() {
+  isDragging = false;
+  dragTarget = null;
+  document.body.style.userSelect = '';
+}
+
+// Floating legend functions
+function hideFloatingLegend() {
+  isLegendVisible = false;
+  floatingLegend.style.display = 'none';
+}
+
+function clearLegendVisibility() {
+  hiddenLegendItems.clear();
+  customColors.clear();
+  // Reapply the current visualization to show all items
+  if (currentGeoJSON && currentField) {
+    applyExtrusion();
+  }
+}
+
+function updateFloatingLegend() {
+  if (!isLegendVisible || !currentField || !currentGeoJSON) return;
+  
+  // Clear previous content
+  legendContent.replaceChildren();
+  
+  // Update title
+  legendTitle.textContent = `${currentField} (${currentFieldType})`;
+  
+  if (currentFieldType === 'categorical') {
+    updateCategoricalFloatingLegend();
+  } else {
+    updateNumericFloatingLegend();
+  }
+}
+
+function updateCategoricalFloatingLegend() {
+  if (!currentField || !currentGeoJSON) return;
+  
+  // Collect unique categories
+  const categories = new Set<string>();
+  for (const feature of currentGeoJSON.features) {
+    const value = feature.properties?.[currentField];
+    if (value != null && value !== '' && value !== undefined) {
+      categories.add(String(value));
+    }
+  }
+  
+  const sortedCategories = Array.from(categories).sort();
+  
+  // Get the color for each category based on current mode
+  const getColorForCategory = (category: string): string => {
+    // Check for custom color first
+    if (customColors.has(category)) {
+      return customColors.get(category)!;
+    }
+    
+    if (categoricalColorMode === 'single') {
+      return singleColorValue;
+    } else if (categoricalColorMode === 'colorRamp') {
+      const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+      const index = sortedCategories.indexOf(category);
+      const denom = Math.max(1, sortedCategories.length - 1);
+      const colorIndex = Math.round((index / denom) * (ramp.length - 1));
+      return ramp[colorIndex];
+    } else {
+      // Random colors - use same hash function as in buildCategoricalColorExpression
+      let hash = 0;
+      for (let i = 0; i < category.length; i++) {
+        hash = ((hash << 5) - hash + category.charCodeAt(i)) & 0xffffffff;
+      }
+      const r = Math.max(80, (hash & 0xFF0000) >> 16);
+      const g = Math.max(80, (hash & 0x00FF00) >> 8);
+      const b = Math.max(80, hash & 0x0000FF);
+      return `rgb(${r}, ${g}, ${b})`;
+    }
+  };
+  
+  // Create legend items
+  sortedCategories.forEach(category => {
+    const color = getColorForCategory(category);
+    const isHidden = hiddenLegendItems.has(category);
+    
+    const item = document.createElement('div');
+    item.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+      ${isHidden ? 'opacity: 0.5;' : ''}
+    `;
+    
+    // Color swatch
+    const swatch = document.createElement('div');
+    swatch.style.cssText = `
+      width: 20px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid #ddd;
+      background: ${color};
+      flex-shrink: 0;
+    `;
+    
+    // Category label
+    const label = document.createElement('div');
+    label.style.cssText = `
+      font-size: 12px;
+      flex-grow: 1;
+      word-break: break-word;
+    `;
+    label.textContent = category;
+    
+    // Eye toggle button
+    const eyeBtn = document.createElement('button');
+    eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
+    eyeBtn.title = isHidden ? 'Show this category' : 'Hide this category';
+    eyeBtn.style.cssText = `
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+      flex-shrink: 0;
+    `;
+    
+    eyeBtn.onclick = () => {
+      if (hiddenLegendItems.has(category)) {
+        hiddenLegendItems.delete(category);
+      } else {
+        hiddenLegendItems.add(category);
+      }
+      updateFloatingLegend();
+      applyExtrusionWithVisibility();
+    };
+    
+    // Make swatch clickable for color picker
+    swatch.style.cursor = 'pointer';
+    swatch.onclick = () => openSwatchColorPicker(category, color);
+    
+    item.appendChild(eyeBtn);
+    item.appendChild(swatch);
+    item.appendChild(label);
+    legendContent.appendChild(item);
+  });
+}
+
+function updateNumericFloatingLegend() {
+  if (!currentField || !currentGeoJSON || !currentStats) return;
+  
+  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+  let ranges: { min: number; max: number; color: string; label: string }[] = [];
+  
+  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+    // Use quantile breaks for ranges
+    const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const min = breaks[i];
+      const max = breaks[i + 1];
+      const colorIndex = Math.min(i, ramp.length - 1);
+      ranges.push({
+        min,
+        max,
+        color: ramp[colorIndex],
+        label: `${fmt(min)} - ${fmt(max)}`
+      });
+    }
+  } else {
+    // Linear intervals - create 10 ranges
+    const min = currentStats.min;
+    const max = currentStats.max;
+    const step = (max - min) / 10;
+    
+    for (let i = 0; i < 10; i++) {
+      const rangeMin = min + (step * i);
+      const rangeMax = i === 9 ? max : min + (step * (i + 1));
+      const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
+      ranges.push({
+        min: rangeMin,
+        max: rangeMax,
+        color: ramp[colorIndex],
+        label: `${fmt(rangeMin)} - ${fmt(rangeMax)}`
+      });
+    }
+  }
+  
+  // Create legend items
+  ranges.forEach((range, index) => {
+    const rangeKey = `range_${index}`;
+    const isHidden = hiddenLegendItems.has(rangeKey);
+    
+    // Check for custom color
+    const color = customColors.get(rangeKey) || range.color;
+    
+    const item = document.createElement('div');
+    item.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+      ${isHidden ? 'opacity: 0.5;' : ''}
+    `;
+    
+    // Color swatch
+    const swatch = document.createElement('div');
+    swatch.style.cssText = `
+      width: 20px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid #ddd;
+      background: ${color};
+      flex-shrink: 0;
+    `;
+    
+    // Range label
+    const label = document.createElement('div');
+    label.style.cssText = `
+      font-size: 12px;
+      flex-grow: 1;
+    `;
+    label.textContent = range.label;
+    
+    // Eye toggle button
+    const eyeBtn = document.createElement('button');
+    eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
+    eyeBtn.title = isHidden ? 'Show this range' : 'Hide this range';
+    eyeBtn.style.cssText = `
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+      flex-shrink: 0;
+    `;
+    
+    eyeBtn.onclick = () => {
+      if (hiddenLegendItems.has(rangeKey)) {
+        hiddenLegendItems.delete(rangeKey);
+      } else {
+        hiddenLegendItems.add(rangeKey);
+      }
+      updateFloatingLegend();
+      applyExtrusionWithVisibility();
+    };
+    
+    // Make swatch clickable for color picker
+    swatch.style.cursor = 'pointer';
+    swatch.onclick = () => openSwatchColorPicker(rangeKey, color);
+    
+    item.appendChild(eyeBtn);
+    item.appendChild(swatch);
+    item.appendChild(label);
+    legendContent.appendChild(item);
+  });
+}
+
+// Custom color overrides for individual legend items
+let customColors = new Map<string, string>();
+
+function openSwatchColorPicker(itemKey: string, currentColor: string) {
+  // Create a temporary color input
+  const colorInput = document.createElement('input');
+  colorInput.type = 'color';
+  colorInput.value = currentColor;
+  colorInput.style.position = 'absolute';
+  colorInput.style.left = '-9999px';
+  document.body.appendChild(colorInput);
+  
+  colorInput.addEventListener('change', () => {
+    const newColor = colorInput.value;
+    customColors.set(itemKey, newColor);
+    
+    // Update the visualization
+    applyExtrusionWithCustomColors();
+    updateFloatingLegend();
+    
+    document.body.removeChild(colorInput);
+  });
+  
+  colorInput.addEventListener('blur', () => {
+    // If user cancels, remove the input
+    if (document.body.contains(colorInput)) {
+      document.body.removeChild(colorInput);
+    }
+  });
+  
+  // Trigger the color picker
+  colorInput.click();
+}
+
+function applyExtrusionWithCustomColors() {
+  if (!currentGeoJSON || !currentField) return;
+  
+  // If we have custom colors, we need to rebuild the color expression
+  if (customColors.size > 0) {
+    let colorExpr: any;
+    
+    if (currentFieldType === 'categorical') {
+      colorExpr = buildCategoricalColorExpressionWithCustomColors();
+    } else {
+      colorExpr = buildNumericColorExpressionWithCustomColors();
+    }
+    
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
+    
+    // Apply height and opacity for numeric fields
+    if (currentFieldType === 'numeric') {
+      const rawMult = Number(multInput.value);
+      const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
+      const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
+      const valueExpr = buildValueExpression();
+      const heightExpr: any = ['*', valueExpr, multiplier * unitFactor];
+      
+      map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
+    } else {
+      map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
+    }
+    
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+  } else {
+    // No custom colors, use normal extrusion
+    applyExtrusion();
+  }
+  
+  // Apply visibility filters
+  applyVisibilityFilters();
+}
+
+function buildCategoricalColorExpressionWithCustomColors(): any {
+  if (!currentField || !currentGeoJSON) return ['literal', '#888'];
+  
+  // Collect unique categories
+  const categories = new Set<string>();
+  for (const feature of currentGeoJSON.features) {
+    const value = feature.properties?.[currentField];
+    if (value != null && value !== '' && value !== undefined) {
+      categories.add(String(value));
+    }
+  }
+  
+  const sortedCategories = Array.from(categories).sort();
+  const val = ['to-string', ['coalesce', ['get', currentField], '']];
+  const pairs: any[] = [];
+  
+  for (const category of sortedCategories) {
+    let color: string;
+    
+    if (customColors.has(category)) {
+      color = customColors.get(category)!;
+    } else {
+      // Use original color logic
+      if (categoricalColorMode === 'single') {
+        color = singleColorValue;
+      } else if (categoricalColorMode === 'colorRamp') {
+        const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+        const index = sortedCategories.indexOf(category);
+        const denom = Math.max(1, sortedCategories.length - 1);
+        const colorIndex = Math.round((index / denom) * (ramp.length - 1));
+        color = ramp[colorIndex];
+      } else {
+        // Random colors
+        let hash = 0;
+        for (let i = 0; i < category.length; i++) {
+          hash = ((hash << 5) - hash + category.charCodeAt(i)) & 0xffffffff;
+        }
+        const r = Math.max(80, (hash & 0xFF0000) >> 16);
+        const g = Math.max(80, (hash & 0x00FF00) >> 8);
+        const b = Math.max(80, hash & 0x0000FF);
+        color = `rgb(${r}, ${g}, ${b})`;
+      }
+    }
+    
+    pairs.push(category, color);
+  }
+  
+  return ['case',
+    ['==', val, ''], '#888',
+    ['match', val, ...pairs, '#888']
+  ];
+}
+
+function buildNumericColorExpressionWithCustomColors(): any {
+  if (!currentField || !currentGeoJSON || !currentStats) return ['literal', '#888'];
+  
+  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+  const valueExpr = buildValueExpression();
+  
+  // Build ranges similar to updateNumericFloatingLegend
+  let ranges: { min: number; max: number; color: string }[] = [];
+  
+  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+    const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const min = breaks[i];
+      const max = breaks[i + 1];
+      const rangeKey = `range_${i}`;
+      const defaultColor = ramp[Math.min(i, ramp.length - 1)];
+      const color = customColors.get(rangeKey) || defaultColor;
+      ranges.push({ min, max, color });
+    }
+  } else {
+    const min = currentStats.min;
+    const max = currentStats.max;
+    const step = (max - min) / 10;
+    
+    for (let i = 0; i < 10; i++) {
+      const rangeMin = min + (step * i);
+      const rangeMax = i === 9 ? max : min + (step * (i + 1));
+      const rangeKey = `range_${i}`;
+      const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
+      const defaultColor = ramp[colorIndex];
+      const color = customColors.get(rangeKey) || defaultColor;
+      ranges.push({ min: rangeMin, max: rangeMax, color });
+    }
+  }
+  
+  // Build a step expression with custom colors
+  const cases: any[] = ['case'];
+  
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i];
+    if (i === ranges.length - 1) {
+      // Last range includes the max value
+      cases.push(['all',
+        ['>=', valueExpr, range.min],
+        ['<=', valueExpr, range.max]
+      ], ['literal', range.color]);
+    } else {
+      cases.push(['all',
+        ['>=', valueExpr, range.min],
+        ['<', valueExpr, range.max]
+      ], ['literal', range.color]);
+    }
+  }
+  
+  // Default color
+  cases.push(['literal', '#888']);
+  
+  return cases;
+}
+
+function applyVisibilityFilters() {
+  // Apply visibility filters if any items are hidden
+  if (hiddenLegendItems.size > 0) {
+    let filter: any[] = ['all'];
+    
+    if (currentFieldType === 'categorical') {
+      // Hide specific categories
+      const hiddenCategories = Array.from(hiddenLegendItems);
+      if (hiddenCategories.length > 0) {
+        filter.push(['!', ['in', ['get', currentField], ['literal', hiddenCategories]]]);
+      }
+    } else {
+      // For numeric fields, hide specific ranges
+      if (!currentStats) return;
+      
+      const ranges: { min: number; max: number }[] = [];
+      if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+        const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+        for (let i = 0; i < breaks.length - 1; i++) {
+          ranges.push({ min: breaks[i], max: breaks[i + 1] });
+        }
+      } else {
+        const min = currentStats.min;
+        const max = currentStats.max;
+        const step = (max - min) / 10;
+        for (let i = 0; i < 10; i++) {
+          ranges.push({
+            min: min + (step * i),
+            max: i === 9 ? max : min + (step * (i + 1))
+          });
+        }
+      }
+      
+      // Create conditions to hide ranges
+      hiddenLegendItems.forEach(rangeKey => {
+        const index = parseInt(rangeKey.split('_')[1]);
+        if (ranges[index]) {
+          const range = ranges[index];
+          filter.push(['!', ['all',
+            ['>=', ['get', currentField], range.min],
+            ['<=', ['get', currentField], range.max]
+          ]]);
+        }
+      });
+    }
+    
+    // Apply the filter to the layer
+    if (filter.length > 1) {
+      map.setFilter(LAYER_ID, filter as any);
+    }
+  } else {
+    // Clear any filters
+    map.setFilter(LAYER_ID, null);
+  }
+}
+
+function applyExtrusionWithVisibility() {
+  if (!currentGeoJSON || !currentField) return;
+  
+  // Use custom colors if available, otherwise normal extrusion
+  if (customColors.size > 0) {
+    applyExtrusionWithCustomColors();
+  } else {
+    applyExtrusion();
+    applyVisibilityFilters();
+  }
+}
 
 function installWelcome() {
   // hide controls initially
@@ -1156,12 +1792,23 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
   if (_updTimer) clearTimeout(_updTimer);
   _updTimer = window.setTimeout(() => {
     _updTimer = null;
+    // Clear legend visibility when refreshing colorization
+    if (_pendingRefreshLegend) {
+      clearLegendVisibility();
+    }
+    
     if (_pendingMode === 'recomputeAndAutoScale') {
       computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
-      if (_pendingRefreshLegend) updateLegend();
+      if (_pendingRefreshLegend) {
+        updateLegend();
+        updateFloatingLegend();
+      }
     } else {
-      applyExtrusion();
-      if (_pendingRefreshLegend) updateLegend();
+      applyExtrusionWithVisibility();
+      if (_pendingRefreshLegend) {
+        updateLegend();
+        updateFloatingLegend();
+      }
     }
   }, debounceMs);
 }
@@ -1332,7 +1979,7 @@ function computeAndApplyAutoMultiplier(
     stats: currentStats
   });
 
-  applyExtrusion();
+  applyExtrusionWithVisibility();
 }
 
 function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], min: number, max: number): Expression {
@@ -1673,6 +2320,22 @@ colorPicker.addEventListener('input', () => {
     scheduleUpdate('applyOnly', /*refreshLegend*/ true);
   }
 });
+
+// Window management event listeners
+btnMinimizeSettings.addEventListener('click', minimizeSettings);
+btnShowSettings.addEventListener('click', showSettings);
+btnMinimizeLegend.addEventListener('click', minimizeLegend);
+btnShowLegend.addEventListener('click', showLegend);
+
+// No longer needed - legend toggle removed from settings
+
+// Global mouse event listeners for dragging
+document.addEventListener('mousemove', handleMouseMove);
+document.addEventListener('mouseup', handleMouseUp);
+
+// Make windows draggable
+makeDraggable(controlsEl);
+makeDraggable(floatingLegend);
 
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks

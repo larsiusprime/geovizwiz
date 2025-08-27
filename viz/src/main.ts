@@ -375,13 +375,31 @@ function clearLegendVisibility() {
 }
 
 function updateFloatingLegend() {
-  if (!isLegendVisible || !currentField || !currentGeoJSON) return;
+  if (!isLegendVisible || !currentGeoJSON) return;
   
   // Clear previous content
   legendContent.replaceChildren();
   
   // Update title to just "Legend"
   legendTitle.textContent = 'Legend';
+  
+  if (!currentField) {
+    // Show "No field selected" message
+    const noFieldInfo = document.createElement('div');
+    noFieldInfo.style.cssText = `
+      font-size: 12px;
+      color: #666;
+      margin-bottom: 8px;
+      padding: 4px 0;
+      border-bottom: 1px solid #eee;
+    `;
+    noFieldInfo.innerHTML = `
+      <div style="font-weight: 600; color: #333;">No field selected</div>
+      <div>All parcels shown in gray</div>
+    `;
+    legendContent.appendChild(noFieldInfo);
+    return;
+  }
   
   // Add field name and type at the top of the legend content
   const fieldInfo = document.createElement('div');
@@ -636,16 +654,19 @@ function openSwatchColorPicker(itemKey: string, currentColor: string, swatchElem
   const colorInput = document.createElement('input');
   colorInput.type = 'color';
   colorInput.value = currentColor;
-  colorInput.style.position = 'absolute';
+  colorInput.style.cssText = `
+    position: fixed;
+    z-index: 10000;
+    opacity: 0;
+    pointer-events: none;
+  `;
   
-  // Position the color picker over the swatch
+  // Position the color picker over the swatch using fixed positioning
   const rect = swatchElement.getBoundingClientRect();
   colorInput.style.left = `${rect.left}px`;
   colorInput.style.top = `${rect.top}px`;
   colorInput.style.width = `${rect.width}px`;
   colorInput.style.height = `${rect.height}px`;
-  colorInput.style.opacity = '0';
-  colorInput.style.pointerEvents = 'auto';
   
   document.body.appendChild(colorInput);
   
@@ -1445,26 +1466,17 @@ async function loadSelectedColumns() {
     const allAvailableFields = [...availableNumeric, ...availableCategorical];
     populateFieldDropdownFromList(allAvailableFields);
 
-    // auto-select the best numeric field if available, otherwise first categorical
-    if (availableNumeric.length > 0) {
-      currentField = autoPickMainField(availableNumeric);
-      currentFieldType = 'numeric';
-    } else if (availableCategorical.length > 0) {
-      currentField = availableCategorical[0];
-      currentFieldType = 'categorical';
-    }
+    // Don't auto-select a field - let user choose
+    currentField = null;
+    currentFieldType = null;
     
-    if (currentField) {
-      fieldSelect.value = currentField;
-      if (currentFieldType === 'numeric') {
-        currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
-      }
-    }
+    // Set field select to "-- choose --" (empty value)
+    fieldSelect.value = '';
 
     addOrUpdateSource(currentGeoJSON);
 
-    // auto-multiplier for current normalization mode → p99 = 2km (centimeters)
-    scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    // Apply gray rendering when no field is selected
+    applyGrayRendering();
 
     updateLegend();
     fitToData(currentGeoJSON);
@@ -1596,8 +1608,33 @@ function buildValueExpression(): Expression {
 }
 
 
+function applyGrayRendering() {
+  if (!currentGeoJSON) return;
+  
+  // Apply gray color and no extrusion when no field is selected
+  map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', '#888');
+  map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
+  map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+  
+  // Clear any filters
+  map.setFilter(LAYER_ID, null);
+  
+  // refresh which features are flagged as erroneous for current mode
+  updateErrorLayer();
+
+  if (activePopup && lastPicked) {
+    activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
+  }
+}
+
 function applyExtrusion() {
-  if (!currentGeoJSON || !currentField) return;
+  if (!currentGeoJSON) return;
+  
+  // If no field is selected, apply gray rendering
+  if (!currentField) {
+    applyGrayRendering();
+    return;
+  }
 
   if (currentFieldType === 'categorical') {
     // For categorical fields, no extrusion - just color
@@ -1877,7 +1914,7 @@ function chooseBestMetricUnitForMultiplier(p99: number, capMeters = 1000): { uni
 
 function populateFieldDropdownFromList(list: string[]) {
   fieldSelect.replaceChildren();
-  if (!list.length) fieldSelect.append(new Option('No numeric fields selected', ''));
+  if (!list.length) fieldSelect.append(new Option('No fields selected', ''));
   else {
     fieldSelect.append(new Option('— choose —', ''));
     for (const n of list) fieldSelect.append(new Option(n, n));
@@ -2036,6 +2073,34 @@ function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], mi
 
 function updateLegend() {
   legendEl.replaceChildren();
+  
+  if (!currentField) {
+    // Show gray legend when no field is selected
+    const row = document.createElement('div');
+    row.style.display = 'flex'; 
+    row.style.gap = '6px'; 
+    row.style.alignItems = 'center'; 
+    row.style.flexWrap = 'wrap';
+
+    const label = document.createElement('div'); 
+    label.textContent = 'Legend:'; 
+    label.style.fontSize = '12px';
+    row.appendChild(label);
+    
+    const swatch = document.createElement('div'); 
+    swatch.className = 'swatch'; 
+    (swatch as any).style = `background:#888`; 
+    row.appendChild(swatch);
+    
+    const meta = document.createElement('div'); 
+    meta.className = 'muted';
+    meta.textContent = 'No field selected (gray)';
+    row.appendChild(meta);
+    
+    legendEl.appendChild(row);
+    legendEl.style.display = 'grid';
+    return;
+  }
   
   if (currentFieldType === 'categorical') {
     // For categorical fields, show a simple legend
@@ -2398,7 +2463,18 @@ opacityInput.addEventListener('input', () => {
 
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;
-  if (!currentGeoJSON || !currentField) return;
+  if (!currentGeoJSON) return;
+  
+  if (!currentField) {
+    // No field selected - apply gray rendering
+    currentFieldType = null;
+    currentStats = null;
+    updateFieldTypeUI();
+    applyGrayRendering();
+    updateLegend();
+    updateFloatingLegend();
+    return;
+  }
   
   // Determine field type
   if (chosenNumericFields.includes(currentField)) {
@@ -2428,9 +2504,15 @@ function updateFieldTypeUI() {
   const numericOptions = document.getElementById('numericOptions');
   const categoricalOptions = document.getElementById('categoricalOptions');
   
-  if (currentFieldType === 'numeric') {
+  if (!currentField) {
+    // Hide all options when no field is selected
+    if (numericOptions) numericOptions.style.display = 'none';
+    if (categoricalOptions) categoricalOptions.style.display = 'none';
+    if (colorOptions) colorOptions.style.display = 'none';
+  } else if (currentFieldType === 'numeric') {
     if (numericOptions) numericOptions.style.display = 'grid';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
+    if (colorOptions) colorOptions.style.display = 'none';
   } else if (currentFieldType === 'categorical') {
     if (numericOptions) numericOptions.style.display = 'none';
     if (categoricalOptions) categoricalOptions.style.display = 'grid';

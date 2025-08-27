@@ -232,6 +232,9 @@ let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
 
+// Selection state
+let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
+
 // Drag state
 let isDragging = false;
 let dragTarget: HTMLElement | null = null;
@@ -365,11 +368,13 @@ function hideFloatingLegend() {
 
 function clearLegendVisibility() {
   hiddenLegendItems.clear();
+  selectedLegendItems.clear();
   customColors.clear();
   // Reapply the current visualization to show all items
   if (currentGeoJSON && currentField) {
     applyExtrusion();
   }
+  updateMarkupLayer();
 }
 
 function updateFloatingLegend() {
@@ -414,6 +419,219 @@ function updateFloatingLegend() {
   `;
   legendContent.appendChild(fieldInfo);
   
+  // Add zoom to selected button on its own row
+  const zoomRow = document.createElement('div');
+  zoomRow.style.cssText = `
+    display: flex;
+    justify-content: flex-end;
+    padding: 4px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #eee;
+  `;
+  
+  const zoomBtn = document.createElement('button');
+  zoomBtn.textContent = 'Zoom to selected';
+  zoomBtn.title = 'Zoom to bounding box of selected items';
+  zoomBtn.style.cssText = `
+    border: 1px solid #ccc;
+    background: #f8f9fa;
+    cursor: pointer;
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+  `;
+  
+  zoomBtn.onclick = () => {
+    if (selectedLegendItems.size === 0) {
+      // Show a toast or alert that no items are selected
+      return;
+    }
+    
+    // Get the bounding box from the markup layer source
+    const markupSource = map.getSource('markup-source') as maplibregl.GeoJSONSource;
+    if (markupSource) {
+      const data = markupSource.serialize();
+      if (data.data && typeof data.data === 'object' && 'features' in data.data && Array.isArray(data.data.features) && data.data.features.length > 0) {
+        const feature = data.data.features[0];
+        if (feature.geometry.type === 'Polygon' && Array.isArray(feature.geometry.coordinates) && feature.geometry.coordinates.length > 0) {
+          const bbox = feature.geometry.coordinates[0];
+          const bounds: [number, number, number, number] = [
+            Math.min(...bbox.map((coord: number[]) => coord[0])),
+            Math.min(...bbox.map((coord: number[]) => coord[1])),
+            Math.max(...bbox.map((coord: number[]) => coord[0])),
+            Math.max(...bbox.map((coord: number[]) => coord[1]))
+          ];
+          
+          map.fitBounds(bounds, { padding: 50 });
+        }
+      }
+    }
+  };
+  
+  zoomRow.appendChild(zoomBtn);
+  legendContent.appendChild(zoomRow);
+  
+  // Add header bar with column headers
+  const headerBar = document.createElement('div');
+  headerBar.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px;
+    margin-bottom: 4px;
+    border-bottom: 1px solid #eee;
+    font-size: 12px;
+    font-weight: 600;
+  `;
+  
+  // Eye toggle all button
+  const eyeAllBtn = document.createElement('button');
+  eyeAllBtn.textContent = '👁️';
+  eyeAllBtn.title = 'Toggle all visibility';
+  eyeAllBtn.style.cssText = `
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px;
+    flex-shrink: 0;
+  `;
+  
+  eyeAllBtn.onclick = () => {
+    if (currentFieldType === 'categorical') {
+      // Toggle all categorical items
+      const categories = new Set<string>();
+      for (const feature of currentGeoJSON!.features) {
+        const value = feature.properties?.[currentField!];
+        if (value != null && value !== '' && value !== undefined) {
+          categories.add(String(value));
+        }
+      }
+      
+      const allHidden = Array.from(categories).every(cat => hiddenLegendItems.has(cat));
+      if (allHidden) {
+        // Show all
+        categories.forEach(cat => hiddenLegendItems.delete(cat));
+      } else {
+        // Hide all
+        categories.forEach(cat => hiddenLegendItems.add(cat));
+      }
+    } else {
+      // Toggle all numeric ranges
+      const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length 
+        ? colorBreaks.length + 1 
+        : 10;
+      
+      const allHidden = Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => hiddenLegendItems.has(rangeKey));
+      if (allHidden) {
+        // Show all
+        for (let i = 0; i < ranges; i++) {
+          hiddenLegendItems.delete(`range_${i}`);
+        }
+      } else {
+        // Hide all
+        for (let i = 0; i < ranges; i++) {
+          hiddenLegendItems.add(`range_${i}`);
+        }
+      }
+    }
+    
+    updateFloatingLegend();
+    applyExtrusionWithVisibility();
+  };
+  
+  // Checkbox toggle all
+  const checkboxAll = document.createElement('input');
+  checkboxAll.type = 'checkbox';
+  checkboxAll.style.cssText = `
+    margin: 0;
+    flex-shrink: 0;
+  `;
+  
+  // Set initial state based on current selections
+  if (currentFieldType === 'categorical') {
+    const categories = new Set<string>();
+    for (const feature of currentGeoJSON!.features) {
+      const value = feature.properties?.[currentField!];
+      if (value != null && value !== '' && value !== undefined) {
+        categories.add(String(value));
+      }
+    }
+    checkboxAll.checked = categories.size > 0 && Array.from(categories).every(cat => selectedLegendItems.has(cat));
+  } else {
+    const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length 
+      ? colorBreaks.length + 1 
+      : 10;
+    checkboxAll.checked = ranges > 0 && Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => selectedLegendItems.has(rangeKey));
+  }
+  
+  checkboxAll.onchange = () => {
+    if (currentFieldType === 'categorical') {
+      // Toggle all categorical items
+      const categories = new Set<string>();
+      for (const feature of currentGeoJSON!.features) {
+        const value = feature.properties?.[currentField!];
+        if (value != null && value !== '' && value !== undefined) {
+          categories.add(String(value));
+        }
+      }
+      
+      if (checkboxAll.checked) {
+        // Select all
+        categories.forEach(cat => selectedLegendItems.add(cat));
+      } else {
+        // Deselect all
+        categories.forEach(cat => selectedLegendItems.delete(cat));
+      }
+    } else {
+      // Toggle all numeric ranges
+      const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length 
+        ? colorBreaks.length + 1 
+        : 10;
+      
+      if (checkboxAll.checked) {
+        // Select all
+        for (let i = 0; i < ranges; i++) {
+          selectedLegendItems.add(`range_${i}`);
+        }
+      } else {
+        // Deselect all
+        for (let i = 0; i < ranges; i++) {
+          selectedLegendItems.delete(`range_${i}`);
+        }
+      }
+    }
+    
+    updateMarkupLayer();
+    updateFloatingLegend(); // Refresh to update checkbox states
+  };
+  
+  // Add column headers
+  const nameHeader = document.createElement('div');
+  nameHeader.textContent = 'Name';
+  nameHeader.style.cssText = `
+    font-size: 12px;
+    font-weight: 600;
+    flex-grow: 1;
+    margin-left: 8px;
+  `;
+  
+  const countHeader = document.createElement('div');
+  countHeader.textContent = '#';
+  countHeader.style.cssText = `
+    font-size: 12px;
+    font-weight: 600;
+    width: 30px;
+    text-align: center;
+    flex-shrink: 0;
+  `;
+  
+  headerBar.appendChild(eyeAllBtn);
+  headerBar.appendChild(checkboxAll);
+  headerBar.appendChild(nameHeader);
+  headerBar.appendChild(countHeader);
+  legendContent.appendChild(headerBar);
+  
   if (currentFieldType === 'categorical') {
     updateCategoricalFloatingLegend();
   } else {
@@ -424,16 +642,17 @@ function updateFloatingLegend() {
 function updateCategoricalFloatingLegend() {
   if (!currentField || !currentGeoJSON) return;
   
-  // Collect unique categories
-  const categories = new Set<string>();
+  // Pre-calculate counts for all categories in a single pass
+  const categoryCounts = new Map<string, number>();
   for (const feature of currentGeoJSON.features) {
     const value = feature.properties?.[currentField];
     if (value != null && value !== '' && value !== undefined) {
-      categories.add(String(value));
+      const category = String(value);
+      categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
     }
   }
   
-  const sortedCategories = Array.from(categories).sort();
+  const sortedCategories = Array.from(categoryCounts.keys()).sort();
   
   // Get the color for each category based on current mode
   const getColorForCategory = (category: string): string => {
@@ -467,6 +686,7 @@ function updateCategoricalFloatingLegend() {
   sortedCategories.forEach(category => {
     const color = getColorForCategory(category);
     const isHidden = hiddenLegendItems.has(category);
+    const count = categoryCounts.get(category) || 0;
     
     const item = document.createElement('div');
     item.style.cssText = `
@@ -499,37 +719,69 @@ function updateCategoricalFloatingLegend() {
     `;
     label.textContent = category;
     
-    // Eye toggle button
-    const eyeBtn = document.createElement('button');
-    eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
-    eyeBtn.title = isHidden ? 'Show this category' : 'Hide this category';
-    eyeBtn.style.cssText = `
-      border: none;
-      background: none;
-      cursor: pointer;
-      font-size: 14px;
-      padding: 2px;
+    // Count display
+    const countDisplay = document.createElement('div');
+    countDisplay.style.cssText = `
+      font-size: 12px;
+      width: 30px;
+      text-align: center;
       flex-shrink: 0;
+      color: #666;
     `;
+    countDisplay.textContent = count.toString();
     
-    eyeBtn.onclick = () => {
-      if (hiddenLegendItems.has(category)) {
-        hiddenLegendItems.delete(category);
-      } else {
-        hiddenLegendItems.add(category);
-      }
-      updateFloatingLegend();
-      applyExtrusionWithVisibility();
-    };
-    
-    // Make swatch clickable for color picker
-    swatch.style.cursor = 'pointer';
-    swatch.onclick = () => openSwatchColorPicker(category, color, swatch);
-    
-    item.appendChild(eyeBtn);
-    item.appendChild(swatch);
-    item.appendChild(label);
-    legendContent.appendChild(item);
+         // Eye toggle button
+     const eyeBtn = document.createElement('button');
+     eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
+     eyeBtn.title = isHidden ? 'Show this category' : 'Hide this category';
+     eyeBtn.style.cssText = `
+       border: none;
+       background: none;
+       cursor: pointer;
+       font-size: 14px;
+       padding: 2px;
+       flex-shrink: 0;
+     `;
+     
+     eyeBtn.onclick = () => {
+       if (hiddenLegendItems.has(category)) {
+         hiddenLegendItems.delete(category);
+       } else {
+         hiddenLegendItems.add(category);
+       }
+       updateFloatingLegend();
+       applyExtrusionWithVisibility();
+     };
+     
+     // Selection checkbox
+     const checkbox = document.createElement('input');
+     checkbox.type = 'checkbox';
+     checkbox.checked = selectedLegendItems.has(category);
+     checkbox.style.cssText = `
+       margin: 0;
+       flex-shrink: 0;
+     `;
+     
+     checkbox.onchange = () => {
+       if (checkbox.checked) {
+         selectedLegendItems.add(category);
+       } else {
+         selectedLegendItems.delete(category);
+       }
+       updateMarkupLayer();
+       updateFloatingLegend(); // Refresh to update header checkbox state
+     };
+     
+     // Make swatch clickable for color picker
+     swatch.style.cursor = 'pointer';
+     swatch.onclick = () => openSwatchColorPicker(category, color, swatch);
+     
+     item.appendChild(eyeBtn);
+     item.appendChild(checkbox);
+     item.appendChild(swatch);
+     item.appendChild(label);
+     item.appendChild(countDisplay);
+     legendContent.appendChild(item);
   });
 }
 
@@ -572,10 +824,31 @@ function updateNumericFloatingLegend() {
     }
   }
   
+  // Pre-calculate counts for all ranges in a single pass
+  const rangeCounts = new Map<string, number>();
+  for (const feature of currentGeoJSON!.features) {
+    const value = feature.properties?.[currentField!];
+    if (value != null && value !== '' && value !== undefined) {
+      const numValue = Number(value);
+      if (!isNaN(numValue)) {
+        // Find which range this value belongs to
+        for (let i = 0; i < ranges.length; i++) {
+          const range = ranges[i];
+          if (numValue >= range.min && numValue <= range.max) {
+            const rangeKey = `range_${i}`;
+            rangeCounts.set(rangeKey, (rangeCounts.get(rangeKey) || 0) + 1);
+            break;
+          }
+        }
+      }
+    }
+  }
+  
   // Create legend items
   ranges.forEach((range, index) => {
     const rangeKey = `range_${index}`;
     const isHidden = hiddenLegendItems.has(rangeKey);
+    const count = rangeCounts.get(rangeKey) || 0;
     
     // Check for custom color
     const color = customColors.get(rangeKey) || range.color;
@@ -610,37 +883,69 @@ function updateNumericFloatingLegend() {
     `;
     label.textContent = range.label;
     
-    // Eye toggle button
-    const eyeBtn = document.createElement('button');
-    eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
-    eyeBtn.title = isHidden ? 'Show this range' : 'Hide this range';
-    eyeBtn.style.cssText = `
-      border: none;
-      background: none;
-      cursor: pointer;
-      font-size: 14px;
-      padding: 2px;
+    // Count display
+    const countDisplay = document.createElement('div');
+    countDisplay.style.cssText = `
+      font-size: 12px;
+      width: 30px;
+      text-align: center;
       flex-shrink: 0;
+      color: #666;
     `;
+    countDisplay.textContent = count.toString();
     
-    eyeBtn.onclick = () => {
-      if (hiddenLegendItems.has(rangeKey)) {
-        hiddenLegendItems.delete(rangeKey);
-      } else {
-        hiddenLegendItems.add(rangeKey);
-      }
-      updateFloatingLegend();
-      applyExtrusionWithVisibility();
-    };
-    
-    // Make swatch clickable for color picker
-    swatch.style.cursor = 'pointer';
-    swatch.onclick = () => openSwatchColorPicker(rangeKey, color, swatch);
-    
-    item.appendChild(eyeBtn);
-    item.appendChild(swatch);
-    item.appendChild(label);
-    legendContent.appendChild(item);
+         // Eye toggle button
+     const eyeBtn = document.createElement('button');
+     eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
+     eyeBtn.title = isHidden ? 'Show this range' : 'Hide this range';
+     eyeBtn.style.cssText = `
+       border: none;
+       background: none;
+       cursor: pointer;
+       font-size: 14px;
+       padding: 2px;
+       flex-shrink: 0;
+     `;
+     
+     eyeBtn.onclick = () => {
+       if (hiddenLegendItems.has(rangeKey)) {
+         hiddenLegendItems.delete(rangeKey);
+       } else {
+         hiddenLegendItems.add(rangeKey);
+       }
+       updateFloatingLegend();
+       applyExtrusionWithVisibility();
+     };
+     
+     // Selection checkbox
+     const checkbox = document.createElement('input');
+     checkbox.type = 'checkbox';
+     checkbox.checked = selectedLegendItems.has(rangeKey);
+     checkbox.style.cssText = `
+       margin: 0;
+       flex-shrink: 0;
+     `;
+     
+     checkbox.onchange = () => {
+       if (checkbox.checked) {
+         selectedLegendItems.add(rangeKey);
+       } else {
+         selectedLegendItems.delete(rangeKey);
+       }
+       updateMarkupLayer();
+       updateFloatingLegend(); // Refresh to update header checkbox state
+     };
+     
+     // Make swatch clickable for color picker
+     swatch.style.cursor = 'pointer';
+     swatch.onclick = () => openSwatchColorPicker(rangeKey, color, swatch);
+     
+     item.appendChild(eyeBtn);
+     item.appendChild(checkbox);
+     item.appendChild(swatch);
+     item.appendChild(label);
+     item.appendChild(countDisplay);
+     legendContent.appendChild(item);
   });
 }
 
@@ -907,6 +1212,142 @@ function applyExtrusionWithVisibility() {
     applyExtrusion();
     applyVisibilityFilters();
   }
+  updateMarkupLayer();
+}
+
+function updateMarkupLayer() {
+  if (!currentGeoJSON) return;
+  
+  // Remove existing markup layer if it exists
+  if (map.getLayer('markup-layer')) {
+    map.removeLayer('markup-layer');
+  }
+  if (map.getSource('markup-source')) {
+    map.removeSource('markup-source');
+  }
+  
+  // If no items are selected, don't show anything
+  if (selectedLegendItems.size === 0) return;
+  
+  // Collect all features that are selected
+  const selectedFeatures: GeoJSON.Feature[] = [];
+  
+  if (currentFieldType === 'categorical') {
+    // For categorical fields, collect features with selected categories
+    for (const feature of currentGeoJSON.features) {
+      const value = feature.properties?.[currentField!];
+      if (value != null && value !== '' && value !== undefined) {
+        const category = String(value);
+        if (selectedLegendItems.has(category)) {
+          selectedFeatures.push(feature);
+        }
+      }
+    }
+  } else {
+    // For numeric fields, collect features in selected ranges
+    if (!currentStats) return;
+    
+    const ranges: { min: number; max: number }[] = [];
+    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+      const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+      for (let i = 0; i < breaks.length - 1; i++) {
+        ranges.push({ min: breaks[i], max: breaks[i + 1] });
+      }
+    } else {
+      const min = currentStats.min;
+      const max = currentStats.max;
+      const step = (max - min) / 10;
+      for (let i = 0; i < 10; i++) {
+        ranges.push({
+          min: min + (step * i),
+          max: i === 9 ? max : min + (step * (i + 1))
+        });
+      }
+    }
+    
+    // Check each feature against selected ranges
+    for (const feature of currentGeoJSON.features) {
+      const value = Number(feature.properties?.[currentField!]);
+      if (Number.isFinite(value)) {
+        for (let i = 0; i < ranges.length; i++) {
+          const rangeKey = `range_${i}`;
+          if (selectedLegendItems.has(rangeKey)) {
+            const range = ranges[i];
+            if (value >= range.min && value <= range.max) {
+              selectedFeatures.push(feature);
+              break; // Only add once per feature
+            }
+          }
+        }
+      }
+    }
+  }
+  
+  // If no features are selected, don't show bounding box
+  if (selectedFeatures.length === 0) return;
+  
+  // Calculate bounding box of all selected features
+  let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+  
+  for (const feature of selectedFeatures) {
+    if (feature.geometry.type === 'Polygon') {
+      for (const ring of feature.geometry.coordinates) {
+        for (const coord of ring) {
+          minLng = Math.min(minLng, coord[0]);
+          minLat = Math.min(minLat, coord[1]);
+          maxLng = Math.max(maxLng, coord[0]);
+          maxLat = Math.max(maxLat, coord[1]);
+        }
+      }
+    } else if (feature.geometry.type === 'MultiPolygon') {
+      for (const polygon of feature.geometry.coordinates) {
+        for (const ring of polygon) {
+          for (const coord of ring) {
+            minLng = Math.min(minLng, coord[0]);
+            minLat = Math.min(minLat, coord[1]);
+            maxLng = Math.max(maxLng, coord[0]);
+            maxLat = Math.max(maxLat, coord[1]);
+          }
+        }
+      }
+    }
+  }
+  
+  // Create bounding box geometry
+  const boundingBox: GeoJSON.Feature = {
+    type: 'Feature',
+    geometry: {
+      type: 'Polygon',
+      coordinates: [[
+        [minLng, minLat],
+        [maxLng, minLat],
+        [maxLng, maxLat],
+        [minLng, maxLat],
+        [minLng, minLat] // Close the polygon
+      ]]
+    },
+    properties: {}
+  };
+  
+  // Add markup source and layer
+  map.addSource('markup-source', {
+    type: 'geojson',
+    data: {
+      type: 'FeatureCollection',
+      features: [boundingBox]
+    }
+  });
+  
+  map.addLayer({
+    id: 'markup-layer',
+    type: 'line',
+    source: 'markup-source',
+    paint: {
+      'line-color': '#FFD700', // Yellow color
+      'line-width': 3,
+      'line-opacity': 0.8
+    }
+  });
 }
 
 function installWelcome() {
@@ -1523,6 +1964,8 @@ function updateErrorLayer() {
 function clearData() {
   if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
   if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
+  if (map.getSource('markup-source')) map.removeSource('markup-source');
   currentGeoJSON = null; currentField = null; currentStats = null;
   fieldSelect.replaceChildren(new Option('— load a file first —', ''));
   updateLegend();
@@ -2471,6 +2914,9 @@ fieldSelect.addEventListener('change', () => {
     applyGrayRendering();
     updateLegend();
     updateFloatingLegend();
+    // Clear markup layer when no field is selected
+    if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
+    if (map.getSource('markup-source')) map.removeSource('markup-source');
     return;
   }
   
@@ -2494,6 +2940,11 @@ fieldSelect.addEventListener('change', () => {
       radioButton.checked = true;
     }
   }
+  
+  // Clear selections when field changes
+  selectedLegendItems.clear();
+  if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
+  if (map.getSource('markup-source')) map.removeSource('markup-source');
   
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
 });

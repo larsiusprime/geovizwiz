@@ -622,57 +622,86 @@ function updateFloatingLegend() {
     flex-shrink: 0;
   `;
   
-  // Add column headers as buttons
-  const nameHeader = document.createElement('button');
-  nameHeader.textContent = 'Name';
-  nameHeader.style.cssText = `
-    font-size: 12px;
-    font-weight: 600;
-    flex-grow: 1;
-    margin-left: 8px;
-    border: none;
-    background: none;
-    cursor: pointer;
-    text-align: left;
-    padding: 2px 4px;
-    border-radius: 3px;
-  `;
+            // Add column headers as buttons
+          const nameHeader = document.createElement('button');
+          nameHeader.textContent = 'Name';
+          nameHeader.style.cssText = `
+            font-size: 12px;
+            font-weight: 600;
+            flex-grow: 1;
+            margin-left: 8px;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            cursor: pointer;
+            text-align: left;
+            padding: 4px 6px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            color: #333;
+          `;
+          
+          const countHeader = document.createElement('button');
+          countHeader.textContent = '#';
+          countHeader.style.cssText = `
+            font-size: 12px;
+            font-weight: 600;
+            width: 30px;
+            text-align: center;
+            flex-shrink: 0;
+            border: 1px solid #ccc;
+            background: #f8f9fa;
+            cursor: pointer;
+            padding: 4px 6px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            color: #333;
+          `;
   
-  const countHeader = document.createElement('button');
-  countHeader.textContent = '#';
-  countHeader.style.cssText = `
-    font-size: 12px;
-    font-weight: 600;
-    width: 30px;
-    text-align: center;
-    flex-shrink: 0;
-    border: none;
-    background: none;
-    cursor: pointer;
-    padding: 2px 4px;
-    border-radius: 3px;
-  `;
-  
-  // Add sorting functionality
-  nameHeader.onclick = () => {
-    if (legendSortField === 'name') {
-      legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      legendSortField = 'name';
-      legendSortDirection = 'asc';
-    }
-    updateFloatingLegend();
-  };
-  
-  countHeader.onclick = () => {
-    if (legendSortField === 'count') {
-      legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      legendSortField = 'count';
-      legendSortDirection = 'asc';
-    }
-    updateFloatingLegend();
-  };
+            // Add sorting functionality
+          nameHeader.onclick = () => {
+            if (legendSortField === 'name') {
+              legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+              legendSortField = 'name';
+              legendSortDirection = 'asc';
+            }
+            updateFloatingLegend();
+          };
+
+          countHeader.onclick = () => {
+            if (legendSortField === 'count') {
+              legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+              legendSortField = 'count';
+              legendSortDirection = 'asc';
+            }
+            updateFloatingLegend();
+          };
+
+          // Add hover effects
+          nameHeader.onmouseenter = () => {
+            nameHeader.style.background = '#e9ecef';
+            nameHeader.style.borderColor = '#adb5bd';
+            nameHeader.style.transform = 'translateY(-1px)';
+          };
+
+          nameHeader.onmouseleave = () => {
+            nameHeader.style.background = '#f8f9fa';
+            nameHeader.style.borderColor = '#ccc';
+            nameHeader.style.transform = 'translateY(0)';
+          };
+
+          countHeader.onmouseenter = () => {
+            countHeader.style.background = '#e9ecef';
+            countHeader.style.borderColor = '#adb5bd';
+            countHeader.style.transform = 'translateY(-1px)';
+          };
+
+          countHeader.onmouseleave = () => {
+            countHeader.style.background = '#f8f9fa';
+            countHeader.style.borderColor = '#ccc';
+            countHeader.style.transform = 'translateY(0)';
+          };
   
   // Update button text to show sort indicators
   const updateSortIndicators = () => {

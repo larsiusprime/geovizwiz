@@ -51,7 +51,6 @@ const normLand = document.getElementById('norm-land') as HTMLInputElement;
 const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
-const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
@@ -2184,7 +2183,6 @@ async function loadSelectedColumns() {
     // Apply gray rendering when no field is selected
     applyGrayRendering();
 
-    updateLegend();
     fitToData(currentGeoJSON);
   } catch (err: any) {
     console.error('GeoParquet load failed:', err);
@@ -2236,7 +2234,6 @@ function clearData() {
   if (map.getSource('markup-source')) map.removeSource('markup-source');
   currentGeoJSON = null; currentField = null; currentStats = null;
   fieldSelect.replaceChildren(new Option('— load a file first —', ''));
-  updateLegend();
   hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
@@ -2586,13 +2583,11 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
     if (_pendingMode === 'recomputeAndAutoScale') {
       computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
       if (_pendingRefreshLegend) {
-        updateLegend();
         updateFloatingLegend();
       }
     } else {
       applyExtrusionWithVisibility();
       if (_pendingRefreshLegend) {
-        updateLegend();
         updateFloatingLegend();
       }
     }
@@ -2780,117 +2775,6 @@ function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], mi
   return ['interpolate', ['linear'], clamped, ...stops] as any;
 }
 
-function updateLegend() {
-  legendEl.replaceChildren();
-  
-  if (!currentField) {
-    // Show gray legend when no field is selected
-    const row = document.createElement('div');
-    row.style.display = 'flex'; 
-    row.style.gap = '6px'; 
-    row.style.alignItems = 'center'; 
-    row.style.flexWrap = 'wrap';
-
-    const label = document.createElement('div'); 
-    label.textContent = 'Legend:'; 
-    label.style.fontSize = '12px';
-    row.appendChild(label);
-    
-    const swatch = document.createElement('div'); 
-    swatch.className = 'swatch'; 
-    (swatch as any).style = `background:#888`; 
-    row.appendChild(swatch);
-    
-    const meta = document.createElement('div'); 
-    meta.className = 'muted';
-    meta.textContent = 'No field selected (gray)';
-    row.appendChild(meta);
-    
-    legendEl.appendChild(row);
-    legendEl.style.display = 'grid';
-    return;
-  }
-  
-  if (currentFieldType === 'categorical') {
-    // For categorical fields, show a simple legend
-    const row = document.createElement('div');
-    row.style.display = 'flex'; 
-    row.style.gap = '6px'; 
-    row.style.alignItems = 'center'; 
-    row.style.flexWrap = 'wrap';
-
-    const label = document.createElement('div'); 
-    label.textContent = 'Legend:'; 
-    label.style.fontSize = '12px';
-    row.appendChild(label);
-    
-         if (categoricalColorMode === 'single') {
-       const swatch = document.createElement('div'); 
-       swatch.className = 'swatch'; 
-       (swatch as any).style = `background:${singleColorValue}`; 
-       row.appendChild(swatch);
-       
-       const meta = document.createElement('div'); 
-       meta.className = 'muted';
-       meta.textContent = 'Single color (all categories)';
-       row.appendChild(meta);
-     } else if (categoricalColorMode === 'colorRamp') {
-      // Show color ramp swatches for categorical color ramp
-      const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-      ramp.forEach(c => { 
-        const s = document.createElement('div'); 
-        s.className = 'swatch'; 
-        (s as any).style = `background:${c}`; 
-        row.appendChild(s); 
-      });
-      
-      const meta = document.createElement('div'); 
-      meta.className = 'muted';
-      meta.textContent = 'Color ramp (alphabetical categories)';
-      row.appendChild(meta);
-    } else {
-      const meta = document.createElement('div'); 
-      meta.className = 'muted';
-      meta.textContent = 'Random colors (unique per category)';
-      row.appendChild(meta);
-    }
-    
-    legendEl.appendChild(row);
-    legendEl.style.display = 'grid';
-    return;
-  }
-
-  // Numeric field legend (existing logic)
-  const ramp = COLOR_RAMPS[rampSelect.value] || [];
-  if (!ramp.length) { legendEl.style.display = 'none'; return; }
-
-  const row = document.createElement('div');
-  row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.flexWrap = 'wrap';
-
-  const label = document.createElement('div'); label.textContent = 'Legend:'; label.style.fontSize = '12px';
-  row.appendChild(label);
-  ramp.forEach(c => { const s = document.createElement('div'); s.className = 'swatch'; (s as any).style = `background:${c}`; row.appendChild(s); });
-
-  const meta = document.createElement('div'); meta.className = 'muted';
-
-  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-    // Show something like: Q bins across p1–p99
-    const lo = (colorDomain?.lo ?? currentStats?.min) ?? '…';
-    const hi = (colorDomain?.hi ?? currentStats?.max) ?? '…';
-    // edges for display (we don’t guarantee exact p1/p99 computed here unless you also set colorDomain in quantiles)
-    const edges = [lo, ...colorBreaks, hi]
-      .map(v => typeof v === 'number' ? v.toLocaleString() : String(v));
-    meta.textContent = `Quantiles (p1–p99): ${edges.join(' | ')}`;
-  } else if (colorDomain) {
-    meta.textContent = `${colorDomain.label} ${colorDomain.lo.toLocaleString()} → ${colorDomain.hi.toLocaleString()}`;
-  } else if (currentStats) {
-    meta.textContent = `${currentStats.min.toLocaleString()} → ${currentStats.max.toLocaleString()}`;
-  }
-
-  row.appendChild(meta);
-  legendEl.appendChild(row);
-  legendEl.style.display = 'grid';
-}
 
 function currentModeErrorMessage(props: Record<string, any>): string | null {
   if (normalizationMode === 'perLand' && landSizeField) {
@@ -3180,7 +3064,6 @@ fieldSelect.addEventListener('change', () => {
     currentStats = null;
     updateFieldTypeUI();
     applyGrayRendering();
-    updateLegend();
     updateFloatingLegend();
     // Clear markup layer when no field is selected
     if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');

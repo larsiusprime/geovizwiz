@@ -73,18 +73,30 @@ const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 
 // Modal overlays
-const modalOverlay = document.getElementById('modalOverlay')!;
+const numericModalOverlay = document.getElementById('numericModalOverlay')!;
+const categoricalModalOverlay = document.getElementById('categoricalModalOverlay')!;
 const sizeOverlay = document.getElementById('sizeOverlay')!;
 const loadingOverlay = document.getElementById('loadingOverlay')!;
 
+// Numeric modal elements
 const rowCountEl = document.getElementById('rowCount')!;
 const geomColEl = document.getElementById('geomCol')!;
-const fieldListEl = document.getElementById('fieldList')!;
+const numericFieldListEl = document.getElementById('numericFieldList')!;
 
-const btnAll = document.getElementById('btnAll') as HTMLButtonElement;
-const btnNone = document.getElementById('btnNone') as HTMLButtonElement;
-const btnCancelModal = document.getElementById('btnCancelModal') as HTMLButtonElement;
-const btnConfirmModal = document.getElementById('btnConfirmModal') as HTMLButtonElement;
+const btnAllNumeric = document.getElementById('btnAllNumeric') as HTMLButtonElement;
+const btnNoneNumeric = document.getElementById('btnNoneNumeric') as HTMLButtonElement;
+const btnCancelNumericModal = document.getElementById('btnCancelNumericModal') as HTMLButtonElement;
+const btnConfirmNumericModal = document.getElementById('btnConfirmNumericModal') as HTMLButtonElement;
+
+// Categorical modal elements
+const categoricalRowCountEl = document.getElementById('categoricalRowCount')!;
+const categoricalGeomColEl = document.getElementById('categoricalGeomCol')!;
+const categoricalFieldListEl = document.getElementById('categoricalFieldList')!;
+
+const btnAllCategorical = document.getElementById('btnAllCategorical') as HTMLButtonElement;
+const btnNoneCategorical = document.getElementById('btnNoneCategorical') as HTMLButtonElement;
+const btnCancelCategoricalModal = document.getElementById('btnCancelCategoricalModal') as HTMLButtonElement;
+const btnConfirmCategoricalModal = document.getElementById('btnConfirmCategoricalModal') as HTMLButtonElement;
 
 const bldgFieldSel = document.getElementById('bldgField') as HTMLSelectElement;
 const bldgUnitSel = document.getElementById('bldgUnit') as HTMLSelectElement;
@@ -399,21 +411,18 @@ function autoPickMainField(fields: string[]): string {
   return best;
 }
 
-/* ---------------- Modal 1: chooser ---------------- */
+/* ---------------- Modal 1: Numeric field chooser ---------------- */
 
-
-function openFieldChooserModal(opts: { 
+function openNumericFieldChooserModal(opts: { 
   rowCount: number; 
   geometryCol: string; 
   numericFields: string[];
-  categoricalFields: string[];
 }) {
   rowCountEl.textContent = opts.rowCount.toLocaleString();
   geomColEl.textContent = opts.geometryCol || '(unknown)';
-  fieldListEl.replaceChildren();
+  numericFieldListEl.replaceChildren();
 
   const allNumeric = opts.numericFields;
-  const allCategorical = opts.categoricalFields;
 
   // Split numeric into key and other
   const keyNumeric = allNumeric.filter(isKeyField);
@@ -424,13 +433,13 @@ function openFieldChooserModal(opts: {
   const lCandidatesKey = keyNumeric.filter(n => containsKeyword(n, 'land') && containsUnit(n));
   const bBest = autoPickOne('building', bCandidatesKey).field;
   const lBest = autoPickOne('land', lCandidatesKey).field;
-  
+   
   // Normalize for robust comparisons
   const bSet = new Set(bCandidatesKey.map(s => s.toLowerCase()));
   const lSet = new Set(lCandidatesKey.map(s => s.toLowerCase()));
   const bBestLC = bBest?.toLowerCase() ?? '';
   const lBestLC = lBest?.toLowerCase() ?? '';
-  
+   
   // Helper: should a KEY numeric field be prechecked?
   const shouldPrecheckKey = (name: string) => {
     const n = name.toLowerCase();
@@ -439,90 +448,150 @@ function openFieldChooserModal(opts: {
     return true;
   };
 
-  if (allNumeric.length === 0 && allCategorical.length === 0) {
+  if (allNumeric.length === 0) {
     const p = document.createElement('div');
-    p.textContent = 'No obvious numeric or categorical fields were found in the schema.';
+    p.textContent = 'No numeric fields were found in the schema.';
     p.className = 'muted';
-    fieldListEl.appendChild(p);
+    numericFieldListEl.appendChild(p);
   } else {
-    // Numeric fields section
-    if (allNumeric.length > 0) {
-      const t = document.createElement('div'); 
-      t.className = 'section-title'; 
-      t.textContent = 'Numeric fields';
-      fieldListEl.appendChild(t);
-      
-      if (keyNumeric.length) {
-        const t2 = document.createElement('div'); 
-        t2.className = 'section-subtitle'; 
-        t2.textContent = 'Suggested key fields';
-        fieldListEl.appendChild(t2);
-        const g = document.createElement('div'); 
-        g.className = 'fieldlist';
-        for (const name of keyNumeric) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name), 'numeric'));
-        fieldListEl.appendChild(g);
-        fieldListEl.appendChild(divider());
-      }
-
-      if (otherNumeric.length) {
-        const t2 = document.createElement('div'); 
-        t2.className = 'section-subtitle'; 
-        t2.textContent = 'Other numeric fields';
-        fieldListEl.appendChild(t2);
-        const g = document.createElement('div'); 
-        g.className = 'fieldlist';
-        for (const name of otherNumeric) g.appendChild(makeFieldCheckbox(name, false, 'numeric'));
-        fieldListEl.appendChild(g);
-        fieldListEl.appendChild(divider());
-      }
-    }
-
-    // Categorical fields section
-    if (allCategorical.length > 0) {
-      const t = document.createElement('div'); 
-      t.className = 'section-title'; 
-      t.textContent = 'Categorical fields';
-      fieldListEl.appendChild(t);
+    if (keyNumeric.length) {
+      const t2 = document.createElement('div'); 
+      t2.className = 'section-subtitle'; 
+      t2.textContent = 'Suggested key fields';
+      numericFieldListEl.appendChild(t2);
       const g = document.createElement('div'); 
       g.className = 'fieldlist';
-      for (const name of allCategorical) g.appendChild(makeFieldCheckbox(name, false, 'categorical'));
-      fieldListEl.appendChild(g);
+      for (const name of keyNumeric) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name), 'numeric'));
+      numericFieldListEl.appendChild(g);
+      numericFieldListEl.appendChild(divider());
+    }
+
+    if (otherNumeric.length) {
+      const t2 = document.createElement('div'); 
+      t2.className = 'section-subtitle'; 
+      t2.textContent = 'Other numeric fields';
+      numericFieldListEl.appendChild(t2);
+      const g = document.createElement('div'); 
+      g.className = 'fieldlist';
+      for (const name of otherNumeric) g.appendChild(makeFieldCheckbox(name, false, 'numeric'));
+      numericFieldListEl.appendChild(g);
     }
   }
 
   // Buttons
-  btnAll.onclick = () => {
-    fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+  btnAllNumeric.onclick = () => {
+    numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
       .forEach(c => (c.checked = true));
   };
-  btnNone.onclick = () => fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+  btnNoneNumeric.onclick = () => numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
     .forEach(c => (c.checked = false));
-  btnCancelModal.onclick = () => { modalOverlay.classList.remove('show'); clearData(); };
-  btnConfirmModal.onclick = () => {
-    const allCheckboxes = fieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
+  btnCancelNumericModal.onclick = () => { numericModalOverlay.classList.remove('show'); clearData(); };
+  btnConfirmNumericModal.onclick = () => {
+    const allCheckboxes = numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
     chosenNumericFields = [];
+    
+    allCheckboxes.forEach(c => {
+      if (c.checked) {
+        chosenNumericFields.push(c.name);
+      }
+    });
+    
+    numericModalOverlay.classList.remove('show');
+    
+    // If there are categorical fields available, show that modal next
+    if (lastCategoricalFieldsFromSchema.length > 0) {
+      openCategoricalFieldChooserModal({ 
+        rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'), 
+        geometryCol: geomColEl.textContent || 'geometry', 
+        categoricalFields: lastCategoricalFieldsFromSchema
+      });
+    } else {
+      // No categorical fields, proceed to size modal
+      if (chosenNumericFields.length === 0) {
+        alert('Please select at least one numeric field.');
+        numericModalOverlay.classList.add('show');
+        return;
+      }
+      openSizeModal();
+    }
+  };
+
+  numericModalOverlay.classList.add('show');
+}
+
+/* ---------------- Modal 2: Categorical field chooser ---------------- */
+
+function openCategoricalFieldChooserModal(opts: { 
+  rowCount: number; 
+  geometryCol: string; 
+  categoricalFields: string[];
+}) {
+  categoricalRowCountEl.textContent = opts.rowCount.toLocaleString();
+  categoricalGeomColEl.textContent = opts.geometryCol || '(unknown)';
+  categoricalFieldListEl.replaceChildren();
+
+  const allCategorical = opts.categoricalFields;
+
+  if (allCategorical.length === 0) {
+    const p = document.createElement('div');
+    p.textContent = 'No categorical fields were found in the schema.';
+    p.className = 'muted';
+    categoricalFieldListEl.appendChild(p);
+  } else {
+    const g = document.createElement('div'); 
+    g.className = 'fieldlist';
+    for (const name of allCategorical) g.appendChild(makeFieldCheckbox(name, false, 'categorical'));
+    categoricalFieldListEl.appendChild(g);
+  }
+
+  // Buttons
+  btnAllCategorical.onclick = () => {
+    categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+      .forEach(c => (c.checked = true));
+  };
+  btnNoneCategorical.onclick = () => categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+    .forEach(c => (c.checked = false));
+  btnCancelCategoricalModal.onclick = () => { categoricalModalOverlay.classList.remove('show'); clearData(); };
+  btnConfirmCategoricalModal.onclick = () => {
+    const allCheckboxes = categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
     chosenCategoricalFields = [];
     
     allCheckboxes.forEach(c => {
       if (c.checked) {
-        const fieldType = c.dataset.fieldType;
-        if (fieldType === 'numeric') {
-          chosenNumericFields.push(c.name);
-        } else if (fieldType === 'categorical') {
-          chosenCategoricalFields.push(c.name);
-        }
+        chosenCategoricalFields.push(c.name);
       }
     });
     
-    if (chosenNumericFields.length === 0 && chosenCategoricalFields.length === 0) { 
-      alert('Select at least one field.'); 
-      return; 
+    // Check if at least one field is selected (either numeric or categorical)
+    if (chosenNumericFields.length === 0 && chosenCategoricalFields.length === 0) {
+      alert('Please select at least one field (numeric or categorical).');
+      categoricalModalOverlay.classList.add('show');
+      return;
     }
-    modalOverlay.classList.remove('show');
+    
+    categoricalModalOverlay.classList.remove('show');
     openSizeModal();
   };
+  
+  // Add a "Back" button to return to numeric modal
+  const backButton = document.createElement('button');
+  backButton.textContent = 'Back to Numeric Fields';
+  backButton.onclick = () => {
+    categoricalModalOverlay.classList.remove('show');
+    openNumericFieldChooserModal({ 
+      rowCount: Number(categoricalRowCountEl.textContent?.replace(/,/g, '') || '0'), 
+      geometryCol: categoricalGeomColEl.textContent || 'geometry', 
+      numericFields: lastNumericFieldsFromSchema
+    });
+  };
+  
+  // Insert back button before the footer
+  const footer = categoricalModalOverlay.querySelector('.footer');
+  if (footer) {
+    footer.insertBefore(backButton, footer.firstChild);
+  }
 
-  modalOverlay.classList.add('show');
+  categoricalModalOverlay.classList.add('show');
 }
 
 /* ---------------- Modal 2: size identification ---------------- */
@@ -578,7 +647,23 @@ function openSizeModal() {
     if (g) landUnitSel.value = g;
   };
 
-  btnSizeBack.onclick = () => { sizeOverlay.classList.remove('show'); modalOverlay.classList.add('show'); };
+  btnSizeBack.onclick = () => { 
+    sizeOverlay.classList.remove('show'); 
+    // Go back to the appropriate modal based on what was shown
+    if (lastCategoricalFieldsFromSchema.length > 0) {
+      openCategoricalFieldChooserModal({ 
+        rowCount: Number(categoricalRowCountEl.textContent?.replace(/,/g, '') || '0'), 
+        geometryCol: categoricalGeomColEl.textContent || 'geometry', 
+        categoricalFields: lastCategoricalFieldsFromSchema
+      });
+    } else {
+      openNumericFieldChooserModal({ 
+        rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'), 
+        geometryCol: geomColEl.textContent || 'geometry', 
+        numericFields: lastNumericFieldsFromSchema
+      });
+    }
+  };
   btnSizeSkip.onclick = () => { setSizeState(null, null, null, null); sizeOverlay.classList.remove('show'); loadSelectedColumns(); };
   btnSizeOk.onclick = () => {
     setSizeState(
@@ -1387,12 +1472,22 @@ fileInput.addEventListener('change', async () => {
       })
     });
 
-    openFieldChooserModal({ 
-      rowCount: numRows, 
-      geometryCol: primaryGeom, 
-      numericFields: lastNumericFieldsFromSchema,
-      categoricalFields: lastCategoricalFieldsFromSchema 
-    });
+    // Show numeric fields modal first, then categorical if needed
+    if (lastNumericFieldsFromSchema.length > 0) {
+      openNumericFieldChooserModal({ 
+        rowCount: numRows, 
+        geometryCol: primaryGeom, 
+        numericFields: lastNumericFieldsFromSchema
+      });
+    } else if (lastCategoricalFieldsFromSchema.length > 0) {
+      openCategoricalFieldChooserModal({ 
+        rowCount: numRows, 
+        geometryCol: primaryGeom, 
+        categoricalFields: lastCategoricalFieldsFromSchema
+      });
+    } else {
+      alert('No numeric or categorical fields found in the file.');
+    }
   } catch (err: any) {
     console.error('Metadata read failed:', err);
     alert(`Could not read Parquet metadata: ${err?.message ?? err}`);

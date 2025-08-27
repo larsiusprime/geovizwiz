@@ -63,9 +63,9 @@
     .section-title { font-weight: 600; margin-top: 4px; }
     .divider { height: 1px; background: #e6e6e6; margin: 6px 0; }
 
-    /* field lists */
-    .fieldlist { display: grid; grid-template-columns: 1fr; gap: 8px; }
-    #fieldList { max-height: 60vh; overflow: auto; padding-right: 4px; }
+         /* field lists */
+     .fieldlist { display: grid; grid-template-columns: 1fr; gap: 8px; }
+     #fieldList, #numericFieldList, #categoricalFieldList { max-height: 60vh; overflow: auto; padding-right: 4px; }
 
     .progress { height: 8px; background: #eee; border-radius: 999px; overflow: hidden; }
     .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width .2s linear; }
@@ -194,19 +194,36 @@
     </div>
   </div>
 
-  <!-- Modal 1: Field chooser -->
-  <div id="modalOverlay" class="overlay">
+  <!-- Modal 1: Numeric field chooser -->
+  <div id="numericModalOverlay" class="overlay">
     <div class="modal">
       <h3>Select numeric fields to load</h3>
       <div class="muted">Rows: <span id="rowCount">–</span>. Geometry column: <code id="geomCol">–</code></div>
       <div class="buttons">
-        <button id="btnAll">Select all</button>
-        <button id="btnNone">Select none</button>
+        <button id="btnAllNumeric">Select all</button>
+        <button id="btnNoneNumeric">Select none</button>
       </div>
-      <div id="fieldList" class="fieldlist"></div>
+      <div id="numericFieldList" class="fieldlist"></div>
       <div class="footer">
-        <button id="btnCancelModal">Cancel</button>
-        <button id="btnConfirmModal">Next</button>
+        <button id="btnCancelNumericModal">Cancel</button>
+        <button id="btnConfirmNumericModal">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal 2: Categorical field chooser -->
+  <div id="categoricalModalOverlay" class="overlay">
+    <div class="modal">
+      <h3>Select categorical fields to load</h3>
+      <div class="muted">Rows: <span id="categoricalRowCount">–</span>. Geometry column: <code id="categoricalGeomCol">–</code></div>
+      <div class="buttons">
+        <button id="btnAllCategorical">Select all</button>
+        <button id="btnNoneCategorical">Select none</button>
+      </div>
+      <div id="categoricalFieldList" class="fieldlist"></div>
+      <div class="footer">
+        <button id="btnCancelCategoricalModal">Cancel</button>
+        <button id="btnConfirmCategoricalModal">Next</button>
       </div>
     </div>
   </div>

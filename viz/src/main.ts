@@ -304,10 +304,6 @@ function containsKeyword(name: string, kind: 'building'|'land'): boolean {
   return tokens.some(t => /^(land|acre|acreage)/.test(t));
 }
 
-function containsValueField(name: string): number {
-	const tokens = tokenizeName(name);
-	
-}
 
 // score lower = better
 export function scoreValueField(name: string): number {
@@ -383,8 +379,8 @@ function autoPickOne(kind: 'building'|'land', fields: string[]): { field?: strin
   return best;
 }
 
-function autoPickMainField(fields: string[]): { field?: string, unitKey?: string } {
-  let best: string = null;
+function autoPickMainField(fields: string[]): string {
+  let best: string = "";
   let bestScore = Number.POSITIVE_INFINITY;
   for (const f of fields) {
     const s = scoreValueField(f);

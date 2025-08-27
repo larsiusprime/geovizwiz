@@ -2,3 +2,6 @@ viz/dist/
 site/viz
 site/geoconverter
 *.code-workspace
+geoconverter/browser/
+
+geoconverter/lib/

@@ -2367,6 +2367,97 @@ function applyExtrusion() {
   }
 }
 
+
+/**
+ * Pseudo-random, bright, saturated color for item `n` out of `max_n`, seeded by `seed`.
+ * - Successive n are far apart via a coprime "golden step" permutation mod max_n
+ * - High saturation & mid/high lightness for vivid, easy-to-tell-apart colors
+ * - Deterministic across runs for the same (n, max_n, seed)
+ */
+function generatePseudoRandomColor(n: number, max_n: number, seed: string): string {
+  if (max_n <= 0) throw new Error("max_n must be > 0");
+
+  // --- small helpers ---
+  const frac = (x: number) => x - Math.floor(x);
+  const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
+  const gcd = (a: number, b: number): number => {
+    a = Math.abs(a) | 0;
+    b = Math.abs(b) | 0;
+    while (b !== 0) {
+      const t = a % b;
+      a = b; b = t;
+    }
+    return a || 1;
+  };
+
+  // FNV-1a 32-bit string hash → uint32
+  const fnv1a = (str: string): number => {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < str.length; i++) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 0x01000193);
+    }
+    return h >>> 0;
+  };
+
+  // One-shot 32-bit mix -> [0,1)
+  const rand01 = (seedHash: number, i: number, salt: number): number => {
+    // Murmur-ish finalizer chain
+    let x = (seedHash ^ Math.imul(i + 0x9e3779b1, 0x85ebca6b) ^ salt) >>> 0;
+    x ^= x >>> 16; x = Math.imul(x, 0x7feb352d);
+    x ^= x >>> 15; x = Math.imul(x, 0x846ca68b);
+    x ^= x >>> 16;
+    return (x >>> 0) / 0x100000000;
+  };
+
+  // HSL → RGB [0..255] integers
+  const hslToRgb = (h: number, s: number, l: number): [number, number, number] => {
+    h = frac(h); s = clamp01(s); l = clamp01(l);
+    if (s === 0) {
+      const v = Math.round(l * 255);
+      return [v, v, v];
+    }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const hue2rgb = (t: number) => {
+      t = frac(t);
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+    const r = Math.round(hue2rgb(h + 1/3) * 255);
+    const g = Math.round(hue2rgb(h) * 255);
+    const b = Math.round(hue2rgb(h - 1/3) * 255);
+    return [r, g, b];
+  };
+
+  // --- core logic ---
+  const hash = fnv1a(seed);
+
+  // Permute index with a "golden step" that is coprime to max_n
+  // This spreads nearby n far apart around the hue wheel.
+  const phi = 0.618033988749895; // golden ratio conjugate
+  let step = Math.floor(max_n * phi) || 1;
+  // ensure step and max_n are coprime for a full cycle permutation
+  while (gcd(step, max_n) !== 1) step = (step + 1) % max_n || 1;
+
+  const start = hash % Math.max(1, max_n); // seed-dependent start
+  const idx = ((start + (n % max_n + max_n) % max_n * step) % max_n) >>> 0;
+
+  // Hue: uniformly cover [0,1) with a seed offset; center of each "bin" to avoid overlaps
+  const hOffset = ((hash >>> 8) & 0xFFFFFF) / 0x1000000; // [0,1)
+  const h = frac(hOffset + (idx + 0.5) / max_n);
+
+  // Keep colors vivid: high S, mid/high L with tiny seed+index jitter for variety
+  const s = 0.85 + 0.10 * rand01(hash, idx, 0xA8F1);         // 0.85 .. 0.95
+  const l = 0.56 + 0.16 * (rand01(hash, idx, 0xC0FFEE) - 0.5); // ~0.48 .. 0.64
+
+  const [r, g, b] = hslToRgb(h, s, l);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+
 function buildCategoricalColorExpression(): Expression {
   console.log('Building categorical color expression:', { 
     currentField, 
@@ -2441,35 +2532,16 @@ function buildCategoricalColorExpression(): Expression {
       return ['literal', '#888'] as any;
     }
     
-    // Generate a consistent random color for each category using a simple hash
-    function hashStringToColor(str: string): string {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = ((hash << 5) - hash + str.charCodeAt(i)) & 0xffffffff;
-      }
-      
-      // Convert hash to RGB values with good color distribution
-      const r = (hash & 0xFF0000) >> 16;
-      const g = (hash & 0x00FF00) >> 8;
-      const b = hash & 0x0000FF;
-      
-      // Ensure colors are vibrant by boosting low values
-      const minBrightness = 80;
-      const adjustedR = Math.max(minBrightness, r);
-      const adjustedG = Math.max(minBrightness, g);
-      const adjustedB = Math.max(minBrightness, b);
-      
-      return `rgb(${adjustedR}, ${adjustedG}, ${adjustedB})`;
-    }
-    
     // Build the input value once, coerced to string
     const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
     
     // Create pairs of [category, color] for the match expression
     const pairs: any[] = [];
+	let i = 0
     for (const category of sortedCategories) {
-      const color = hashStringToColor(category);
+      const color = generatePseudoRandomColor(i, sortedCategories.length, "my-random-seed");
       pairs.push(category, color);
+	  i += 1
     }
     
     const result = ['case',

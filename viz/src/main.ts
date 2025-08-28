@@ -2977,7 +2977,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
       // Show/hide color ramp widget based on categorical color mode
       const rampContainer = rampSelect.parentElement?.parentElement;
       if (rampContainer) {
-        rampContainer.style.display = categoricalColorMode === 'colorRamp' ? 'block' : 'none';
+        rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType === 'numeric') ? 'block' : 'none';
       }
       
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);
@@ -3181,13 +3181,13 @@ function updateFieldTypeUI() {
       if (colorOptions) {
         colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
       }
-      
-      // Show/hide color ramp widget based on categorical color mode
-      const rampContainer = rampSelect.parentElement?.parentElement;
-      if (rampContainer) {
-        rampContainer.style.display = categoricalColorMode === 'colorRamp' ? 'block' : 'none';
-      }
     }
+	
+	// Show/hide color ramp widget based on categorical color mode
+	const rampContainer = rampSelect.parentElement?.parentElement;
+	if (rampContainer) {
+	  rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType === 'numeric') ? 'block' : 'none';
+	}
   }
 }
 

@@ -53,6 +53,7 @@ const normLand = document.getElementById('norm-land') as HTMLInputElement;
 const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
+const sharedOptions = document.getElementById('sharedOptions') as HTMLFieldSetElement;
 
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
@@ -2973,6 +2974,12 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
         colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
       }
       
+      // Show/hide color ramp widget based on categorical color mode
+      const rampContainer = rampSelect.parentElement?.parentElement;
+      if (rampContainer) {
+        rampContainer.style.display = categoricalColorMode === 'colorRamp' ? 'block' : 'none';
+      }
+      
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);
     }
   })
@@ -3153,21 +3160,33 @@ function updateFieldTypeUI() {
     if (numericOptions) numericOptions.style.display = 'none';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
     if (colorOptions) colorOptions.style.display = 'none';
+    if (sharedOptions) sharedOptions.style.display = 'none';
     extrusionOptions.style.display = 'none';
-  } else if (currentFieldType === 'numeric') {
-    if (numericOptions) numericOptions.style.display = 'grid';
-    if (categoricalOptions) categoricalOptions.style.display = 'none';
-    if (colorOptions) colorOptions.style.display = 'none';
-    update3DUI(); // This will show/hide extrusion options based on 3D mode
-  } else if (currentFieldType === 'categorical') {
-    if (numericOptions) numericOptions.style.display = 'none';
-    if (categoricalOptions) categoricalOptions.style.display = 'grid';
-    if (colorOptions) colorOptions.style.display = 'none';
-    extrusionOptions.style.display = 'none';
+  } else {
+    // Show shared options when a field is selected
+    if (sharedOptions) sharedOptions.style.display = 'grid';
     
-    // Show/hide color options based on selected mode
-    if (colorOptions) {
-      colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+    if (currentFieldType === 'numeric') {
+      if (numericOptions) numericOptions.style.display = 'grid';
+      if (categoricalOptions) categoricalOptions.style.display = 'none';
+      if (colorOptions) colorOptions.style.display = 'none';
+      update3DUI(); // This will show/hide extrusion options based on 3D mode
+    } else if (currentFieldType === 'categorical') {
+      if (numericOptions) numericOptions.style.display = 'none';
+      if (categoricalOptions) categoricalOptions.style.display = 'grid';
+      if (colorOptions) colorOptions.style.display = 'none';
+      extrusionOptions.style.display = 'none';
+      
+      // Show/hide color options based on selected mode
+      if (colorOptions) {
+        colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+      }
+      
+      // Show/hide color ramp widget based on categorical color mode
+      const rampContainer = rampSelect.parentElement?.parentElement;
+      if (rampContainer) {
+        rampContainer.style.display = categoricalColorMode === 'colorRamp' ? 'block' : 'none';
+      }
     }
   }
 }

@@ -139,20 +139,6 @@
           </label>
         </div>
 
-        <fieldset class="row">
-          <div>
-            <label for="ramp">Color ramp</label>
-            <select id="ramp"></select>
-          </div>
-          <div>
-            <label for="opacity">Opacity</label>
-            <div class="inline">
-              <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-              <output id="opacityVal">0.9</output>
-            </div>
-          </div>
-        </fieldset>
-		
         <fieldset>
           <label>Color scaling</label>
           <div style="display:grid; gap:6px;">
@@ -201,7 +187,7 @@
         <label>Field type: categorical</label>
         <div style="display:grid; gap:6px;">
           <label>Color method</label>
-                     <div style="display:grid; gap:6px;">
+             <div style="display:grid; gap:6px;">
              <label style="display:flex; gap:8px; align-items:center;">
                <input type="radio" name="categoricalColorMode" id="cat-random" value="random" checked>
                <span>Random color</span>
@@ -210,6 +196,7 @@
                <input type="radio" name="categoricalColorMode" id="cat-single" value="single">
                <span>Single color</span>
              </label>
+			 <div style="display:grid; gap:6px;">
              <label style="display:flex; gap:8px; align-items:center;">
                <input type="radio" name="categoricalColorMode" id="cat-ramp" value="colorRamp">
                <span>Color ramp</span>
@@ -228,6 +215,23 @@
               </div>
             </div>
         </div>
+      </fieldset>
+
+      <!-- Shared visualization options -->
+      <fieldset id="sharedOptions" style="display: none;">
+        <fieldset class="row">
+          <div>
+            <label for="ramp">Color ramp</label>
+            <select id="ramp"></select>
+          </div>
+          <div>
+            <label for="opacity">Opacity</label>
+            <div class="inline">
+              <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+              <output id="opacityVal">0.9</output>
+            </div>
+          </div>
+        </fieldset>
       </fieldset>
 
       <div class="divider"></div>

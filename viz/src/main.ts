@@ -19,7 +19,7 @@ const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: BASEMAP_STYLES['OpenStreetMap'],
+  style: BASEMAP_STYLES['OpenFreeMap Positron'],
   center: [-95.3698, 29.7604],
   zoom: 10,
   pitch: 45,
@@ -89,7 +89,7 @@ rampSelect.value = 'Magma';
 for (const key of Object.keys(BASEMAP_STYLES)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
 }
-basemapSelect.value = 'OpenStreetMap';
+basemapSelect.value = 'OpenFreeMap Positron';
 basemapSelect.onchange = () => {
   map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
   map.once('styledata', () => {

@@ -859,7 +859,7 @@ function updateCategoricalFloatingLegend() {
     `;
     countDisplay.textContent = count.toString();
     
-         // Eye toggle button
+     // Eye toggle button
      const eyeBtn = document.createElement('button');
      eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
      eyeBtn.title = isHidden ? 'Show this category' : 'Hide this category';
@@ -1186,9 +1186,6 @@ function applyExtrusionWithCustomColors() {
     // No custom colors, use normal extrusion
     applyExtrusion();
   }
-  
-  // Apply visibility filters
-  applyVisibilityFilters();
 }
 
 function buildCategoricalColorExpressionWithCustomColors(): any {
@@ -1232,6 +1229,9 @@ function buildCategoricalColorExpressionWithCustomColors(): any {
         const g = Math.max(80, (hash & 0x00FF00) >> 8);
         const b = Math.max(80, hash & 0x0000FF);
         color = `rgb(${r}, ${g}, ${b})`;
+
+
+        
       }
     }
     
@@ -1368,8 +1368,8 @@ function applyExtrusionWithVisibility() {
     applyExtrusionWithCustomColors();
   } else {
     applyExtrusion();
-    applyVisibilityFilters();
   }
+  applyVisibilityFilters();
   updateMarkupLayer();
 }
 
@@ -2922,6 +2922,76 @@ function onMultInput() {
   scheduleUpdate('applyOnly');
 }
 
+
+function update3DUI() {
+  if (currentFieldType === 'numeric') {
+    extrusionOptions.style.display = is3DMode ? 'grid' : 'none';
+  } else {
+    extrusionOptions.style.display = 'none';
+  }
+}
+
+function computeAndSetGoodExtrusionDefaults() {
+  if (!currentGeoJSON || !currentField || currentFieldType !== 'numeric') return;
+  
+  const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
+  if (vals.length === 0) return;
+  
+  // Sort values and get p99
+  vals.sort((a, b) => a - b);
+  const p99 = vals[Math.floor(vals.length * 0.99)];
+  
+  // Use existing function to choose best unit and multiplier
+  const { unit, multiplier } = chooseBestMetricUnitForMultiplier(p99);
+  
+  // Set the values
+  multInput.value = String(multiplier);
+  unitsSelect.value = unit;
+  
+  // Cache the settings
+  cachedExtrusionSettings = { multiplier, unit };
+}
+
+function updateFieldTypeUI() {
+  const numericOptions = document.getElementById('numericOptions');
+  const categoricalOptions = document.getElementById('categoricalOptions');
+  
+  if (!currentField) {
+    // Hide all options when no field is selected
+    if (numericOptions) numericOptions.style.display = 'none';
+    if (categoricalOptions) categoricalOptions.style.display = 'none';
+    if (colorOptions) colorOptions.style.display = 'none';
+    if (sharedOptions) sharedOptions.style.display = 'none';
+    extrusionOptions.style.display = 'none';
+  } else {
+    // Show shared options when a field is selected
+    if (sharedOptions) sharedOptions.style.display = 'grid';
+    
+    if (currentFieldType === 'numeric') {
+      if (numericOptions) numericOptions.style.display = 'grid';
+      if (categoricalOptions) categoricalOptions.style.display = 'none';
+      if (colorOptions) colorOptions.style.display = 'none';
+      update3DUI(); // This will show/hide extrusion options based on 3D mode
+    } else if (currentFieldType === 'categorical') {
+      if (numericOptions) numericOptions.style.display = 'none';
+      if (categoricalOptions) categoricalOptions.style.display = 'grid';
+      if (colorOptions) colorOptions.style.display = 'none';
+      extrusionOptions.style.display = 'none';
+      
+      // Show/hide color options based on selected mode
+      if (colorOptions) {
+        colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+      }
+    }
+	
+	// Show/hide color ramp widget based on categorical color mode
+	const rampContainer = rampSelect.parentElement?.parentElement;
+	if (rampContainer) {
+	  rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType === 'numeric') ? 'block' : 'none';
+	}
+  }
+}
+
 /* ---------------- Events ---------------- */
 
 // File load: read METADATA ONLY
@@ -3049,7 +3119,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
       // Show/hide color ramp widget based on categorical color mode
       const rampContainer = rampSelect.parentElement?.parentElement;
       if (rampContainer) {
-        rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType === 'numeric') ? 'block' : 'none';
+        rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType !== 'categorical') ? 'block' : 'none';
       }
       
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);
@@ -3194,77 +3264,6 @@ fieldSelect.addEventListener('change', () => {
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
 });
 
-function update3DUI() {
-  if (currentFieldType === 'numeric') {
-    extrusionOptions.style.display = is3DMode ? 'grid' : 'none';
-  } else {
-    extrusionOptions.style.display = 'none';
-  }
-}
-
-function computeAndSetGoodExtrusionDefaults() {
-  if (!currentGeoJSON || !currentField || currentFieldType !== 'numeric') return;
-  
-  const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
-  if (vals.length === 0) return;
-  
-  // Sort values and get p99
-  vals.sort((a, b) => a - b);
-  const p99 = vals[Math.floor(vals.length * 0.99)];
-  
-  // Use existing function to choose best unit and multiplier
-  const { unit, multiplier } = chooseBestMetricUnitForMultiplier(p99);
-  
-  // Set the values
-  multInput.value = String(multiplier);
-  unitsSelect.value = unit;
-  
-  // Cache the settings
-  cachedExtrusionSettings = { multiplier, unit };
-}
-
-function updateFieldTypeUI() {
-  const numericOptions = document.getElementById('numericOptions');
-  const categoricalOptions = document.getElementById('categoricalOptions');
-  
-  if (!currentField) {
-    // Hide all options when no field is selected
-    if (numericOptions) numericOptions.style.display = 'none';
-    if (categoricalOptions) categoricalOptions.style.display = 'none';
-    if (colorOptions) colorOptions.style.display = 'none';
-    if (sharedOptions) sharedOptions.style.display = 'none';
-    extrusionOptions.style.display = 'none';
-  } else {
-    // Show shared options when a field is selected
-    if (sharedOptions) sharedOptions.style.display = 'grid';
-    
-    if (currentFieldType === 'numeric') {
-      if (numericOptions) numericOptions.style.display = 'grid';
-      if (categoricalOptions) categoricalOptions.style.display = 'none';
-      if (colorOptions) colorOptions.style.display = 'none';
-      update3DUI(); // This will show/hide extrusion options based on 3D mode
-    } else if (currentFieldType === 'categorical') {
-      if (numericOptions) numericOptions.style.display = 'none';
-      if (categoricalOptions) categoricalOptions.style.display = 'grid';
-      if (colorOptions) colorOptions.style.display = 'none';
-      extrusionOptions.style.display = 'none';
-      
-      // Show/hide color options based on selected mode
-      if (colorOptions) {
-        colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
-      }
-    }
-	
-	// Show/hide color ramp widget based on categorical color mode
-	const rampContainer = rampSelect.parentElement?.parentElement;
-	if (rampContainer) {
-	  rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType === 'numeric') ? 'block' : 'none';
-	}
-  }
-}
-
-/* ---------------- Main ---------------- */
-
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
   r.addEventListener('change', () => {
     normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
@@ -3294,6 +3293,8 @@ enable3DCheckbox.addEventListener('change', () => {
     applyExtrusion();
   }
 });
+
+/* ---------------- Main ---------------- */
 
 // default height units
 unitsSelect.value = 'centimeters';

@@ -2545,11 +2545,11 @@ function setPerspective() { map.easeTo({ pitch: 60, duration: 600 }); }
 function setOrtho() { map.easeTo({ pitch: 0, duration: 600 }); }
 function setView(which: string) {
   const views: Record<string, Partial<maplibregl.CameraOptions>> = {
-    top: { pitch: 0, bearing: 0 }, iso: { pitch: 60, bearing: -30 },
+    top: { pitch: 0, bearing: 0 }, perspective: { pitch: 60, bearing: -30 },
     north: { pitch: 60, bearing: 0 }, east: { pitch: 60, bearing: 90 },
     south: { pitch: 60, bearing: 180 }, west: { pitch: 60, bearing: 270 }
   };
-  map.easeTo({ duration: 700, ...(views[which] || views.iso) });
+  map.easeTo({ duration: 700, ...(views[which] || views.perspective) });
 }
 
 /* ---------------- Helpers ---------------- */

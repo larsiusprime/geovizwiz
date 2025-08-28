@@ -782,38 +782,24 @@ function updateCategoricalFloatingLegend() {
     // Default alphabetical sort
     sortedCategories.sort();
   }
+
+  const pairs = buildCategoricalColorPairs();
+  const categoryToColor = new Map<string, string>();
+  for (const pair of pairs) {
+    const category : string = pair[0];
+    const color : string = pair[1];
+    categoryToColor.set(category, color);
+  }
+
+  let fallbackColor = '#888';
+  if (categoricalColorMode === 'single') {
+    fallbackColor = singleColorValue;
+  }
   
-  // Get the color for each category based on current mode
-  const getColorForCategory = (category: string): string => {
-    // Check for custom color first
-    if (customColors.has(category)) {
-      return customColors.get(category)!;
-    }
-    
-    if (categoricalColorMode === 'single') {
-      return singleColorValue;
-    } else if (categoricalColorMode === 'colorRamp') {
-      const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-      const index = sortedCategories.indexOf(category);
-      const denom = Math.max(1, sortedCategories.length - 1);
-      const colorIndex = Math.round((index / denom) * (ramp.length - 1));
-      return ramp[colorIndex];
-    } else {
-      // Random colors - use same hash function as in buildCategoricalColorExpression
-      let hash = 0;
-      for (let i = 0; i < category.length; i++) {
-        hash = ((hash << 5) - hash + category.charCodeAt(i)) & 0xffffffff;
-      }
-      const r = Math.max(80, (hash & 0xFF0000) >> 16);
-      const g = Math.max(80, (hash & 0x00FF00) >> 8);
-      const b = Math.max(80, hash & 0x0000FF);
-      return `rgb(${r}, ${g}, ${b})`;
-    }
-  };
-  
+
   // Create legend items
   sortedCategories.forEach(category => {
-    const color = getColorForCategory(category);
+    const color = categoryToColor.get(category) || fallbackColor;
     const isHidden = hiddenLegendItems.has(category);
     const count = categoryCounts.get(category) || 0;
     
@@ -1161,7 +1147,7 @@ function applyExtrusionWithCustomColors() {
     let colorExpr: any;
     
     if (currentFieldType === 'categorical') {
-      colorExpr = buildCategoricalColorExpressionWithCustomColors();
+      colorExpr = buildCategoricalColorExpression();
     } else {
       colorExpr = buildNumericColorExpressionWithCustomColors();
     }
@@ -1188,61 +1174,7 @@ function applyExtrusionWithCustomColors() {
   }
 }
 
-function buildCategoricalColorExpressionWithCustomColors(): any {
-  if (!currentField || !currentGeoJSON) return ['literal', '#888'];
-  
-  // Collect unique categories
-  const categories = new Set<string>();
-  for (const feature of currentGeoJSON.features) {
-    const value = feature.properties?.[currentField];
-    if (value != null && value !== '' && value !== undefined) {
-      categories.add(String(value));
-    }
-  }
-  
-  const sortedCategories = Array.from(categories).sort();
-  const val = ['to-string', ['coalesce', ['get', currentField], '']];
-  const pairs: any[] = [];
-  
-  for (const category of sortedCategories) {
-    let color: string;
-    
-    if (customColors.has(category)) {
-      color = customColors.get(category)!;
-    } else {
-      // Use original color logic
-      if (categoricalColorMode === 'single') {
-        color = singleColorValue;
-      } else if (categoricalColorMode === 'colorRamp') {
-        const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-        const index = sortedCategories.indexOf(category);
-        const denom = Math.max(1, sortedCategories.length - 1);
-        const colorIndex = Math.round((index / denom) * (ramp.length - 1));
-        color = ramp[colorIndex];
-      } else {
-        // Random colors
-        let hash = 0;
-        for (let i = 0; i < category.length; i++) {
-          hash = ((hash << 5) - hash + category.charCodeAt(i)) & 0xffffffff;
-        }
-        const r = Math.max(80, (hash & 0xFF0000) >> 16);
-        const g = Math.max(80, (hash & 0x00FF00) >> 8);
-        const b = Math.max(80, hash & 0x0000FF);
-        color = `rgb(${r}, ${g}, ${b})`;
 
-
-        
-      }
-    }
-    
-    pairs.push(category, color);
-  }
-  
-  return ['case',
-    ['==', val, ''], '#888',
-    ['match', val, ...pairs, '#888']
-  ];
-}
 
 function buildNumericColorExpressionWithCustomColors(): any {
   if (!currentField || !currentGeoJSON || !currentStats) return ['literal', '#888'];
@@ -2458,100 +2390,88 @@ function generatePseudoRandomColor(n: number, max_n: number, seed: string): stri
 }
 
 
-function buildCategoricalColorExpression(): Expression {
-  console.log('Building categorical color expression:', { 
-    currentField, 
-    categoricalColorMode, 
-    hasGeoJSON: !!currentGeoJSON 
-  });
+function buildCategoricalColorPairs(): Array<[string, string]> {
+  if (!currentField || !currentGeoJSON) return [];
   
-  if (!currentField || !currentGeoJSON) return ['literal', '#888'] as any;
+  // Collect unique categories
+  const categories = new Set<string>();
+  for (const feature of currentGeoJSON.features) {
+    const value = feature.properties?.[currentField];
+    if (value != null && value !== '' && value !== undefined) {
+      categories.add(String(value));
+    }
+  }
+  
+  const sortedCategories = Array.from(categories).sort();
+  
+  if (sortedCategories.length === 0) {
+    return [];
+  }
+  
+  const pairs: Array<[string, string]> = [];
   
   if (categoricalColorMode === 'single') {
-    return ['literal', singleColorValue] as any; // Use selected color
+    // Single color mode: map empty string to the single color
+    pairs.push(['', singleColorValue]);
   } else if (categoricalColorMode === 'colorRamp') {
     // Color ramp: sort categories alphabetically and assign colors linearly
-    const categories = new Set<string>();
-    for (const feature of currentGeoJSON.features) {
-      const value = feature.properties?.[currentField];
-      if (value != null && value !== '' && value !== undefined) {
-        categories.add(String(value));
-      }
-    }
-    
-    const sortedCategories = Array.from(categories).sort();
-    console.log('Categorical field values:', {
-      field: currentField,
-      uniqueValues: sortedCategories,
-      totalFeatures: currentGeoJSON.features.length
-    });
-    
     const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-    
-    if (sortedCategories.length === 0) {
-      return ['literal', '#888'] as any;
-    }
-    
-    // Build the input value once, coerced to string
-    const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
-    
     const denom = Math.max(1, sortedCategories.length - 1);
-    const pairs: any[] = [];
+    
     for (let i = 0; i < sortedCategories.length; i++) {
+      const category = sortedCategories[i];
       const colorIndex = Math.round((i / denom) * (ramp.length - 1));
       const color = ramp[colorIndex];
-      pairs.push(sortedCategories[i], color);
+      pairs.push([category, color]);
     }
-    
-    // If you want empties to be gray, short-circuit those first; otherwise omit this case line.
-    const result = ['case',
-      ['==', val, ''], '#888',
-      ['match', val, ...pairs, '#888']
-    ] as any;
-    
-    console.log('Generated categorical color ramp expression:', JSON.stringify(result));
-    return result;
   } else {
-    // Random colors mode - pre-compute a specific color for each category
-    const categories = new Set<string>();
-    for (const feature of currentGeoJSON.features) {
-      const value = feature.properties?.[currentField];
-      if (value != null && value !== '' && value !== undefined) {
-        categories.add(String(value));
-      }
+    // Random colors mode
+    for (let i = 0; i < sortedCategories.length; i++) {
+      const category = sortedCategories[i];
+      const color = generatePseudoRandomColor(i, sortedCategories.length, "my-random-seed");
+      pairs.push([category, color]);
     }
-    
-    const sortedCategories = Array.from(categories).sort();
-    console.log('Categorical field values for random colors:', {
-      field: currentField,
-      uniqueValues: sortedCategories,
-      totalFeatures: currentGeoJSON.features.length
-    });
-    
-    if (sortedCategories.length === 0) {
+  }
+  
+  // Apply custom colors if they exist
+  const finalPairs: any[] = [];
+  for (const [category, defaultColor] of pairs) {
+    const color = customColors.has(category) ? customColors.get(category)! : defaultColor;
+    finalPairs.push([category, color]);
+  }
+  
+  return finalPairs;
+}
+
+function buildCategoricalColorExpression(): Expression {
+  if (!currentField || !currentGeoJSON) return ['literal', '#888'] as any;
+  
+  // Get the base color pairs from the inner function
+  const pairs = buildCategoricalColorPairs();
+  // flatten pairs into an array of strings
+  let fallbackColor = '#888';
+  if (categoricalColorMode === 'single') {
+    fallbackColor = singleColorValue;
+  }
+
+  if (customColors.size === 0) {
+    if (pairs.length === 0) {
       return ['literal', '#888'] as any;
     }
-    
-    // Build the input value once, coerced to string
-    const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
-    
-    // Create pairs of [category, color] for the match expression
-    const pairs: any[] = [];
-	let i = 0
-    for (const category of sortedCategories) {
-      const color = generatePseudoRandomColor(i, sortedCategories.length, "my-random-seed");
-      pairs.push(category, color);
-	  i += 1
+    if (categoricalColorMode === 'single') {
+      return ['literal', fallbackColor] as any;
     }
-    
-    const result = ['case',
-      ['==', val, ''], '#888',
-      ['match', val, ...pairs, '#888']
-    ] as any;
-    
-    console.log('Generated categorical random color expression:', JSON.stringify(result));
-    return result;
   }
+  const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
+
+  // Build the final expression with fallback
+  const flattenedPairs = pairs.flat();
+  const result = ['case',
+    ['==', val, ''], fallbackColor,
+    ['match', val, ...flattenedPairs, fallbackColor]
+  ] as any;
+  
+  return result;
 }
 
 function fitToData(fc: GeoJSON.FeatureCollection) {

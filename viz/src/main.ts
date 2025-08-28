@@ -19,7 +19,7 @@ import { makeFieldCheckbox, divider } from './utils.dom';
 /* ---------------- Map Bootstrap ----------------- */
 
 
-const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ” target
+const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good "HQ" target
 
 const map = new maplibregl.Map({
   container: 'map',
@@ -1544,52 +1544,21 @@ function updateMarkupLayer() {
   }
   
   // If no features are selected, don't show bounding box
-  if (selectedFeatures.length === 0) return;
+  if (selectedFeatures.length === 0) {
+    return;
+  } 
   
-  const boundingBox: GeoJSON.Feature = minimalBoundingPolygon(selectedFeatures);
+  // Filter features to only include Polygon and MultiPolygon geometries
+  const polygonFeatures = selectedFeatures.filter(feature => 
+    feature.geometry?.type === 'Polygon' || feature.geometry?.type === 'MultiPolygon'
+  ) as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>[];
   
-  // Calculate bounding box of all selected features
-  /* let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-  
-  for (const feature of selectedFeatures) {
-    if (feature.geometry.type === 'Polygon') {
-      for (const ring of feature.geometry.coordinates) {
-        for (const coord of ring) {
-          minLng = Math.min(minLng, coord[0]);
-          minLat = Math.min(minLat, coord[1]);
-          maxLng = Math.max(maxLng, coord[0]);
-          maxLat = Math.max(maxLat, coord[1]);
-        }
-      }
-    } else if (feature.geometry.type === 'MultiPolygon') {
-      for (const polygon of feature.geometry.coordinates) {
-        for (const ring of polygon) {
-          for (const coord of ring) {
-            minLng = Math.min(minLng, coord[0]);
-            minLat = Math.min(minLat, coord[1]);
-            maxLng = Math.max(maxLng, coord[0]);
-            maxLat = Math.max(maxLat, coord[1]);
-          }
-        }
-      }
-    }
+  // If no polygon features, don't show bounding box
+  if (polygonFeatures.length === 0) {
+    return;
   }
   
-  // Create bounding box geometry
-  const boundingBox: GeoJSON.Feature = {
-    type: 'Feature',
-    geometry: {
-      type: 'Polygon',
-      coordinates: [[
-        [minLng, minLat],
-        [maxLng, minLat],
-        [maxLng, maxLat],
-        [minLng, maxLat],
-        [minLng, minLat] // Close the polygon
-      ]]
-    },
-    properties: {}
-  }; */
+  const boundingBox: GeoJSON.Feature = minimalBoundingPolygon(polygonFeatures);
   
   // Add markup source and layer
   map.addSource('markup-source', {

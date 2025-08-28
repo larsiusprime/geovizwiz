@@ -908,41 +908,17 @@ function updateCategoricalFloatingLegend() {
 function updateNumericFloatingLegend() {
   if (!currentField || !currentGeoJSON || !currentStats) return;
   
-  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-  let ranges: { min: number; max: number; color: string; label: string }[] = [];
+  const ranges = buildNumericColorRanges();
+  if (ranges.length === 0) return;
   
-  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-    // Use quantile breaks for ranges
-    const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
-    for (let i = 0; i < breaks.length - 1; i++) {
-      const min = breaks[i];
-      const max = breaks[i + 1];
-      const colorIndex = Math.min(i, ramp.length - 1);
-      ranges.push({
-        min,
-        max,
-        color: ramp[colorIndex],
-        label: `${fmt(min)} - ${fmt(max)}`
-      });
-    }
-  } else {
-    // Linear intervals - create 10 ranges
-    const min = currentStats.min;
-    const max = currentStats.max;
-    const step = (max - min) / 10;
-    
-    for (let i = 0; i < 10; i++) {
-      const rangeMin = min + (step * i);
-      const rangeMax = i === 9 ? max : min + (step * (i + 1));
-      const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
-      ranges.push({
-        min: rangeMin,
-        max: rangeMax,
-        color: ramp[colorIndex],
-        label: `${fmt(rangeMin)} - ${fmt(rangeMax)}`
-      });
-    }
-  }
+  // Convert ranges to the format expected by the legend
+  const legendRanges: { min: number; max: number; color: string; label: string; rangeKey: string }[] = ranges.map(range => ({
+    min: range.min,
+    max: range.max,
+    color: range.color,
+    label: `${fmt(range.min)} - ${fmt(range.max)}`,
+    rangeKey: range.rangeKey
+  }));
   
   // Pre-calculate counts for all ranges in a single pass
   const rangeCounts = new Map<string, number>();
@@ -952,10 +928,10 @@ function updateNumericFloatingLegend() {
       const numValue = Number(value);
       if (!isNaN(numValue)) {
         // Find which range this value belongs to
-        for (let i = 0; i < ranges.length; i++) {
-          const range = ranges[i];
+        for (let i = 0; i < legendRanges.length; i++) {
+          const range = legendRanges[i];
           if (numValue >= range.min && numValue <= range.max) {
-            const rangeKey = `range_${i}`;
+            const rangeKey = range.rangeKey;
             rangeCounts.set(rangeKey, (rangeCounts.get(rangeKey) || 0) + 1);
             break;
           }
@@ -965,8 +941,8 @@ function updateNumericFloatingLegend() {
   }
   
   // Create array of range data with counts for sorting
-  const rangeData = ranges.map((range, index) => {
-    const rangeKey = `range_${index}`;
+  const rangeData = legendRanges.map((range, index) => {
+    const rangeKey = range.rangeKey;
     const count = rangeCounts.get(rangeKey) || 0;
     return { range, index, rangeKey, count };
   });
@@ -989,8 +965,8 @@ function updateNumericFloatingLegend() {
   rangeData.forEach(({ range, index, rangeKey, count }) => {
     const isHidden = hiddenLegendItems.has(rangeKey);
     
-    // Check for custom color
-    const color = customColors.get(rangeKey) || range.color;
+    // Color is already applied from the inner function
+    const color = range.color;
     
     const item = document.createElement('div');
     item.style.cssText = `
@@ -1149,7 +1125,7 @@ function applyExtrusionWithCustomColors() {
     if (currentFieldType === 'categorical') {
       colorExpr = buildCategoricalColorExpression();
     } else {
-      colorExpr = buildNumericColorExpressionWithCustomColors();
+      colorExpr = buildNumericColorExpression();
     }
     
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
@@ -1176,65 +1152,7 @@ function applyExtrusionWithCustomColors() {
 
 
 
-function buildNumericColorExpressionWithCustomColors(): any {
-  if (!currentField || !currentGeoJSON || !currentStats) return ['literal', '#888'];
-  
-  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-  const valueExpr = buildValueExpression();
-  
-  // Build ranges similar to updateNumericFloatingLegend
-  let ranges: { min: number; max: number; color: string }[] = [];
-  
-  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-    const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
-    for (let i = 0; i < breaks.length - 1; i++) {
-      const min = breaks[i];
-      const max = breaks[i + 1];
-      const rangeKey = `range_${i}`;
-      const defaultColor = ramp[Math.min(i, ramp.length - 1)];
-      const color = customColors.get(rangeKey) || defaultColor;
-      ranges.push({ min, max, color });
-    }
-  } else {
-    const min = currentStats.min;
-    const max = currentStats.max;
-    const step = (max - min) / 10;
-    
-    for (let i = 0; i < 10; i++) {
-      const rangeMin = min + (step * i);
-      const rangeMax = i === 9 ? max : min + (step * (i + 1));
-      const rangeKey = `range_${i}`;
-      const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
-      const defaultColor = ramp[colorIndex];
-      const color = customColors.get(rangeKey) || defaultColor;
-      ranges.push({ min: rangeMin, max: rangeMax, color });
-    }
-  }
-  
-  // Build a step expression with custom colors
-  const cases: any[] = ['case'];
-  
-  for (let i = 0; i < ranges.length; i++) {
-    const range = ranges[i];
-    if (i === ranges.length - 1) {
-      // Last range includes the max value
-      cases.push(['all',
-        ['>=', valueExpr, range.min],
-        ['<=', valueExpr, range.max]
-      ], ['literal', range.color]);
-    } else {
-      cases.push(['all',
-        ['>=', valueExpr, range.min],
-        ['<', valueExpr, range.max]
-      ], ['literal', range.color]);
-    }
-  }
-  
-  // Default color
-  cases.push(['literal', '#888']);
-  
-  return cases;
-}
+
 
 function applyVisibilityFilters() {
   // Apply visibility filters if any items are hidden
@@ -3188,5 +3106,77 @@ updateFieldTypeUI();
 
 installWelcome();
 setQuality('high');
+
+function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
+  if (!currentField || !currentGeoJSON || !currentStats) return [];
+  
+  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+  let ranges: Array<{ min: number; max: number; color: string; rangeKey: string }> = [];
+  
+  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+    // Use quantile breaks for ranges
+    const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+    for (let i = 0; i < breaks.length - 1; i++) {
+      const min = breaks[i];
+      const max = breaks[i + 1];
+      const rangeKey = `range_${i}`;
+      const defaultColor = ramp[Math.min(i, ramp.length - 1)];
+      const color = customColors.get(rangeKey) || defaultColor;
+      ranges.push({ min, max, color, rangeKey });
+    }
+  } else {
+    // Linear intervals - create 10 ranges
+    const min = currentStats.min;
+    const max = currentStats.max;
+    const step = (max - min) / 10;
+    
+    for (let i = 0; i < 10; i++) {
+      const rangeMin = min + (step * i);
+      const rangeMax = i === 9 ? max : min + (step * (i + 1));
+      const rangeKey = `range_${i}`;
+      const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
+      const defaultColor = ramp[colorIndex];
+      const color = customColors.get(rangeKey) || defaultColor;
+      ranges.push({ min: rangeMin, max: rangeMax, color, rangeKey });
+    }
+  }
+  
+  return ranges;
+}
+
+function buildNumericColorExpression(): Expression {
+  if (!currentField || !currentGeoJSON || !currentStats) return ['literal', '#888'] as any;
+  
+  const ranges = buildNumericColorRanges();
+  if (ranges.length === 0) {
+    return ['literal', '#888'] as any;
+  }
+  
+  const valueExpr = buildValueExpression();
+  
+  // Build a step expression with the ranges
+  const cases: any[] = ['case'];
+  
+  for (let i = 0; i < ranges.length; i++) {
+    const range = ranges[i];
+    if (i === ranges.length - 1) {
+      // Last range includes the max value
+      cases.push(['all',
+        ['>=', valueExpr, range.min],
+        ['<=', valueExpr, range.max]
+      ], ['literal', range.color]);
+    } else {
+      cases.push(['all',
+        ['>=', valueExpr, range.min],
+        ['<', valueExpr, range.max]
+      ], ['literal', range.color]);
+    }
+  }
+  
+  // Default color
+  cases.push(['literal', '#888']);
+  
+  return cases as any;
+}
 
 

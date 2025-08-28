@@ -2070,14 +2070,6 @@ async function loadSelectedColumns() {
       return features.some(f => f?.properties?.hasOwnProperty(k));
     });
 
-    console.log('Field filtering:', {
-      selectedNumeric: chosenNumericFields.length,
-      availableNumeric: availableNumeric.length,
-      selectedCategorical: chosenCategoricalFields.length,
-      availableCategorical: availableCategorical.length,
-      totalFeatures: features.length
-    });
-
     // Combine all available fields for the dropdown
     const allAvailableFields = [...availableNumeric, ...availableCategorical];
     populateFieldDropdownFromList(allAvailableFields);
@@ -2258,9 +2250,6 @@ function applyExtrusion() {
   if (currentFieldType === 'categorical') {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
-    
-    console.log('Applying categorical color expression:', colorExpr);
-    console.log('Map layer exists:', !!map.getLayer(LAYER_ID));
     
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
@@ -2962,25 +2951,8 @@ fileInput.addEventListener('change', async () => {
       else if (isCategorical) categorical.push(name);
     }
 
-    console.log('numeric', numeric);
-    console.log('categorical', categorical);
-
     lastNumericFieldsFromSchema = numeric.sort();
     lastCategoricalFieldsFromSchema = categorical.sort();
-
-    console.log('Schema detection:', {
-      totalColumns: top.length,
-      numericFields: lastNumericFieldsFromSchema,
-      categoricalFields: lastCategoricalFieldsFromSchema,
-      geometryColumn: primaryGeom,
-      allFields: top.map((node: any) => {
-        const name = node?.element?.name ?? node?.name;
-        const el = node.element ?? {};
-        const typeStr = String(el.type?.type ?? el.type ?? el.physicalType ?? el.primitiveType ?? '');
-        const logical = String(el.logicalType?.type ?? el.logicalType ?? el.convertedType ?? '');
-        return { name, typeStr, logical };
-      })
-    });
 
     // Show numeric fields modal first, then categorical if needed
     if (lastNumericFieldsFromSchema.length > 0) {
@@ -3019,17 +2991,11 @@ fileInput.addEventListener('change', async () => {
 // Categorical color mode event listeners
 document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(el =>
   el.addEventListener('change', () => {
-    console.log('Categorical color mode changed:', { 
-      currentGeoJSON: !!currentGeoJSON, 
-      currentFieldType, 
-      value: el.value 
-    });
     
     if (!currentGeoJSON || currentFieldType !== 'categorical') return;
     const val = (document.querySelector('input[name="categoricalColorMode"]:checked') as HTMLInputElement)?.value;
     if (val === 'random' || val === 'single' || val === 'colorRamp') {
       categoricalColorMode = val;
-      console.log('Updating categorical color mode to:', val);
       
       // Show/hide color options
       if (colorOptions) {
@@ -3148,8 +3114,6 @@ fieldSelect.addEventListener('change', () => {
   } else if (chosenCategoricalFields.includes(currentField)) {
     currentFieldType = 'categorical';
   }
-  
-  console.log('Field changed:', { currentField, currentFieldType, categoricalColorMode });
   
   // Update UI based on field type
   updateFieldTypeUI();

@@ -172,8 +172,67 @@ function ensureMarchingAntsStyles() {
     fill: var(--ants-fill-unselect);
   }
 
+  /* Polygon selection styles */
+  .polygon-fill {
+    fill: var(--ants-fill);
+  }
+
+  .polygon-fill.unselect {
+    fill: var(--ants-fill-unselect);
+  }
+
+  .polygon-path {
+    stroke-width: var(--ants-thickness);
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    fill: none;
+    stroke-dasharray: var(--ants-size), var(--ants-size);
+    animation: stroke-ants var(--ants-speed) linear infinite;
+  }
+
+  .polygon-path.select {
+    stroke: var(--ants-b);
+  }
+
+  .polygon-path.unselect {
+    stroke: #ef4444;
+  }
+
+  .polygon-path-bg {
+    stroke-width: var(--ants-thickness);
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    fill: none;
+    animation: stroke-ants var(--ants-speed) linear infinite;
+    animation-direction: reverse;
+  }
+
+  .polygon-path-bg.select {
+    stroke: var(--ants-a);
+  }
+
+  .polygon-path-bg.unselect {
+    stroke: #ffffff;
+  }
+
+  /* Polygon closing indicator */
+  .polygon-closing-indicator {
+    fill: #ffffff;
+    stroke-width: 2px;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+
+  .polygon-closing-indicator.select {
+    stroke: #000000;
+  }
+
+  .polygon-closing-indicator.unselect {
+    stroke: #ef4444;
+  }
+
   @media (prefers-reduced-motion: reduce) {
-    .selection-rect, .lasso-path { animation-duration: 2s; }
+    .selection-rect, .lasso-path, .polygon-path { animation-duration: 2s; }
   }
   `;
 
@@ -2924,6 +2983,12 @@ function addExtrusionLayer() {
   
   // Right-click for inspection popup
   map.on('contextmenu', LAYER_ID, (e) => {
+    // Disable parcel inspector during polygon selection
+    if (isPolygonSelecting || isPolygonUnselecting) {
+      e.preventDefault();
+      return;
+    }
+    
     const f = e.features?.[0];
     if (!f) return;
     const props = (f.properties || {}) as Record<string, any>;
@@ -4135,6 +4200,9 @@ function setupSelectionModeHandlers() {
   mapContainer.removeEventListener('mousedown', handleLassoMouseDown);
   mapContainer.removeEventListener('mousemove', handleLassoMouseMove);
   mapContainer.removeEventListener('mouseup', handleLassoMouseUp);
+  mapContainer.removeEventListener('mousedown', handlePolygonMouseDown);
+  mapContainer.removeEventListener('mousemove', handlePolygonMouseMove);
+  mapContainer.removeEventListener('dblclick', handlePolygonDoubleClick);
   
   // Add event listeners based on current mode
   switch (currentSelectionMode) {
@@ -4148,8 +4216,12 @@ function setupSelectionModeHandlers() {
       mapContainer.addEventListener('mousemove', handleLassoMouseMove);
       mapContainer.addEventListener('mouseup', handleLassoMouseUp);
       break;
-    case 'select-one':
     case 'select-polygon':
+      mapContainer.addEventListener('mousedown', handlePolygonMouseDown);
+      mapContainer.addEventListener('mousemove', handlePolygonMouseMove);
+      mapContainer.addEventListener('dblclick', handlePolygonDoubleClick);
+      break;
+    case 'select-one':
     case 'off':
       // These modes use the existing map click handler or no selection
       break;
@@ -4592,6 +4664,266 @@ function calculatePolygonBbox(polygon: number[][]): [number, number, number, num
   }
   
   return [minLng, minLat, maxLng, maxLat];
+}
+
+
+/* ---------------- Polygon Selection Tool ---------------- */
+
+// Polygon selection state
+let isPolygonSelecting = false;
+let isPolygonUnselecting = false;
+let polygonPoints: maplibregl.Point[] = [];
+let polygonElement: HTMLDivElement | null = null;
+let polygonSVG: SVGElement | null = null;
+let polygonPath: SVGPathElement | null = null;
+let polygonStartPoint: maplibregl.Point | null = null;
+let isPolygonClosing = false;
+
+// Create polygon drawing element (reuses lasso element structure)
+function createPolygonElement(): HTMLDivElement {
+  const polygon = document.createElement('div');
+  polygon.className = 'polygon-selection';
+  polygon.style.cssText = `
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  `;
+  
+  // Create SVG for polygon path
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  `;
+  
+  // Create fill path (for the colored background)
+  const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  fillPath.setAttribute('class', 'polygon-fill');
+  
+  // Create background path (for the white dashes)
+  const bgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bgPath.setAttribute('class', 'polygon-path-bg select');
+  
+  // Create foreground path (for the black/red dashes)
+  const fgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  fgPath.setAttribute('class', 'polygon-path select');
+  
+  // Create closing indicator circle
+  const closingIndicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  closingIndicator.setAttribute('class', 'polygon-closing-indicator');
+  closingIndicator.setAttribute('r', '8'); // Slightly bigger than the 10px close detection radius
+  closingIndicator.style.display = 'none';
+  
+  svg.appendChild(fillPath);
+  svg.appendChild(bgPath);
+  svg.appendChild(fgPath);
+  svg.appendChild(closingIndicator);
+  polygon.appendChild(svg);
+  document.body.appendChild(polygon);
+  
+  return polygon;
+}
+
+// Initialize polygon element
+polygonElement = createPolygonElement();
+polygonSVG = polygonElement.querySelector('svg') as SVGElement;
+polygonPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
+
+// Polygon selection mouse handlers
+function handlePolygonMouseDown(e: MouseEvent) {
+  // Only activate on shift+left click (select) or alt+left click (unselect)
+  if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
+  
+  // Prevent default behavior
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Determine mode based on modifier keys
+  const isUnselectMode = e.altKey && !e.shiftKey;
+  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  
+  // If this is the first click, start polygon selection
+  if (polygonPoints.length === 0) {
+    isPolygonSelecting = !isUnselectMode;
+    isPolygonUnselecting = isUnselectMode;
+    polygonStartPoint = currentPoint;
+    polygonPoints = [currentPoint];
+    
+    // Temporarily disable map drag pan
+    originalDragPan = map.dragPan.isEnabled();
+    map.dragPan.disable();
+    
+    // Show polygon element
+    if (polygonElement) {
+      polygonElement.style.display = 'block';
+      
+      // Get all path elements
+      const fillPath = polygonElement.querySelector('.polygon-fill') as SVGPathElement;
+      const bgPath = polygonElement.querySelector('.polygon-path-bg') as SVGPathElement;
+      const fgPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
+      
+      // Apply unselect styling if in unselect mode
+      if (isUnselectMode) {
+        fillPath?.setAttribute('class', 'polygon-fill unselect');
+        bgPath?.setAttribute('class', 'polygon-path-bg unselect');
+        fgPath?.setAttribute('class', 'polygon-path unselect');
+      } else {
+        fillPath?.setAttribute('class', 'polygon-fill');
+        bgPath?.setAttribute('class', 'polygon-path-bg select');
+        fgPath?.setAttribute('class', 'polygon-path select');
+      }
+    }
+    
+    // Change cursor
+    map.getCanvas().style.cursor = 'crosshair';
+  } else {
+    // Check if clicking near the start point to close the polygon
+    if (polygonStartPoint && currentPoint.dist(polygonStartPoint) <= 10) {
+      closePolygon();
+    } else {
+      // Add a new point to the polygon
+      polygonPoints.push(currentPoint);
+      updatePolygonPath();
+    }
+  }
+}
+
+function handlePolygonMouseMove(e: MouseEvent) {
+  if ((!isPolygonSelecting && !isPolygonUnselecting) || !polygonElement || polygonPoints.length === 0) return;
+  
+  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  
+  // Check if we're near the start point for closing indication
+  if (polygonStartPoint && currentPoint.dist(polygonStartPoint) <= 10) {
+    if (!isPolygonClosing) {
+      isPolygonClosing = true;
+      // Show closing indicator
+      const closingIndicator = polygonElement.querySelector('.polygon-closing-indicator') as SVGCircleElement;
+      if (closingIndicator) {
+        const isUnselectMode = isPolygonUnselecting;
+        closingIndicator.setAttribute('cx', polygonStartPoint.x.toString());
+        closingIndicator.setAttribute('cy', polygonStartPoint.y.toString());
+        closingIndicator.setAttribute('class', `polygon-closing-indicator ${isUnselectMode ? 'unselect' : 'select'}`);
+        closingIndicator.style.display = 'block';
+      }
+    }
+  } else {
+    if (isPolygonClosing) {
+      isPolygonClosing = false;
+      // Hide closing indicator
+      const closingIndicator = polygonElement.querySelector('.polygon-closing-indicator') as SVGCircleElement;
+      if (closingIndicator) {
+        closingIndicator.style.display = 'none';
+      }
+    }
+  }
+  
+  // Update the path to show line from last point to current mouse position
+  updatePolygonPath(currentPoint);
+}
+
+function updatePolygonPath(currentMousePoint?: maplibregl.Point) {
+  if (!polygonElement || polygonPoints.length === 0) return;
+  
+  // Get all path elements
+  const fillPath = polygonElement.querySelector('.polygon-fill') as SVGPathElement;
+  const bgPath = polygonElement.querySelector('.polygon-path-bg') as SVGPathElement;
+  const fgPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
+  
+  if (!fillPath || !bgPath || !fgPath) return;
+  
+  // Build SVG path
+  let pathData = `M ${polygonPoints[0].x} ${polygonPoints[0].y}`;
+  
+  // Add lines between committed points
+  for (let i = 1; i < polygonPoints.length; i++) {
+    pathData += ` L ${polygonPoints[i].x} ${polygonPoints[i].y}`;
+  }
+  
+  // Add line from last committed point to current mouse position
+  if (currentMousePoint && polygonPoints.length > 0) {
+    pathData += ` L ${currentMousePoint.x} ${currentMousePoint.y}`;
+  }
+  
+  // Close the path if we have enough points
+  if (polygonPoints.length >= 3) {
+    pathData += ` Z`;
+  }
+  
+  // Update all three paths with the same path data
+  fillPath.setAttribute('d', pathData);
+  bgPath.setAttribute('d', pathData);
+  fgPath.setAttribute('d', pathData);
+}
+
+function handlePolygonDoubleClick(e: MouseEvent) {
+  if ((!isPolygonSelecting && !isPolygonUnselecting) || polygonPoints.length < 3) return;
+  
+  // Prevent default behavior
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Close the polygon
+  closePolygon();
+}
+
+function closePolygon() {
+  if ((!isPolygonSelecting && !isPolygonUnselecting) || !polygonElement || polygonPoints.length < 3) return;
+  
+  // Convert screen coordinates to map coordinates
+  const mapCoordinates = polygonPoints.map(point => 
+    map.unproject([point.x, point.y])
+  );
+  
+  // Create a polygon from the coordinates
+  const polygon = mapCoordinates.map(coord => [coord.lng, coord.lat]);
+  
+  // Log coordinates to console
+  const mode = isPolygonUnselecting ? 'Unselect' : 'Select';
+  console.log(`Polygon ${mode} Coordinates:`, polygon);
+  
+  // Select or unselect all parcels within the polygon
+  if (isPolygonUnselecting) {
+    unselectParcelsInPolygon(polygon);
+  } else {
+    selectParcelsInPolygon(polygon);
+  }
+  
+  // Clean up
+  isPolygonSelecting = false;
+  isPolygonUnselecting = false;
+  polygonPoints = [];
+  polygonStartPoint = null;
+  isPolygonClosing = false;
+  
+  // Hide polygon element and closing indicator
+  if (polygonElement) {
+    polygonElement.style.display = 'none';
+    const closingIndicator = polygonElement.querySelector('.polygon-closing-indicator') as SVGCircleElement;
+    if (closingIndicator) {
+      closingIndicator.style.display = 'none';
+    }
+  }
+  
+  // Restore map drag pan
+  if (originalDragPan !== undefined) {
+    if (originalDragPan) {
+      map.dragPan.enable();
+    }
+    originalDragPan = undefined;
+  }
+  
+  // Restore cursor
+  map.getCanvas().style.cursor = '';
 }
 
 

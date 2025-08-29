@@ -213,8 +213,8 @@ function handleRectangleMouseUp(e: MouseEvent) {
     console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
     console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
     
-    // TODO: Here you can add logic to select features within the bbox
-    // For now, we just log the coordinates as requested
+    // Select all parcels within the bounding box
+    selectParcelsInBoundingBox(bbox);
   }
   
   // Clean up
@@ -236,6 +236,105 @@ function handleRectangleMouseUp(e: MouseEvent) {
   
   // Restore cursor
   map.getCanvas().style.cursor = '';
+}
+
+// Function to select parcels within a bounding box
+function selectParcelsInBoundingBox(bbox: [number, number, number, number]) {
+  if (!currentGeoJSON) {
+    console.log('No data loaded to select from');
+    return;
+  }
+  
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  let selectedCount = 0;
+  
+  // Check each feature to see if it intersects with the bounding box
+  for (const feature of currentGeoJSON.features) {
+    if (!feature.geometry || !feature.id) continue;
+    
+    // Check if the feature's bounding box intersects with our selection box
+    if (featureIntersectsBbox(feature, bbox)) {
+      const parcelId = getParcelId(feature);
+      selectedParcels.add(parcelId);
+      
+      // Set feature state for highlighting
+      map.setFeatureState(
+        { source: SOURCE_ID, id: feature.id },
+        { selected: true }
+      );
+      
+      selectedCount++;
+    }
+  }
+  
+  console.log(`Selected ${selectedCount} parcels within the rectangle`);
+  
+  // Update the selection controls UI
+  updateSelectionControls();
+}
+
+// Helper function to check if a feature intersects with a bounding box
+function featureIntersectsBbox(feature: GeoJSON.Feature, bbox: [number, number, number, number]): boolean {
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  
+  if (feature.geometry.type === 'Polygon') {
+    return polygonIntersectsBbox(feature.geometry.coordinates, bbox);
+  } else if (feature.geometry.type === 'MultiPolygon') {
+    return feature.geometry.coordinates.some(polygon => 
+      polygonIntersectsBbox(polygon, bbox)
+    );
+  }
+  
+  return false;
+}
+
+// Helper function to check if a polygon intersects with a bounding box
+function polygonIntersectsBbox(polygon: number[][][], bbox: [number, number, number, number]): boolean {
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  
+  // Check if any point of the polygon is inside the bbox
+  for (const ring of polygon) {
+    for (const coord of ring) {
+      const [lng, lat] = coord;
+      if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
+        return true;
+      }
+    }
+  }
+  
+  // Also check if the bbox is completely inside the polygon
+  // This handles cases where the selection rectangle is smaller than the polygon
+  const bboxCorners = [
+    [minLng, minLat],
+    [maxLng, minLat],
+    [maxLng, maxLat],
+    [minLng, maxLat]
+  ];
+  
+  for (const corner of bboxCorners) {
+    if (pointInPolygon(corner, polygon[0])) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Point-in-polygon test using ray casting algorithm
+function pointInPolygon(point: number[], polygon: number[][]): boolean {
+  const [x, y] = point;
+  let inside = false;
+  
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, yi] = polygon[i];
+    const [xj, yj] = polygon[j];
+    
+    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  
+  return inside;
 }
 
 // Add event listeners to map container

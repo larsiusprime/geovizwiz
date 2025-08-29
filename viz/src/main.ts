@@ -37,6 +37,217 @@ map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
 
+/* ---------------- Rectangle Selection Tool ---------------- */
+
+// Rectangle selection state
+let isRectangleSelecting = false;
+let rectangleStartPoint: maplibregl.Point | null = null;
+let rectangleElement: HTMLDivElement | null = null;
+let originalDragPan: boolean | undefined;
+
+// Inject marching-ants CSS once (uniform speed)
+function ensureMarchingAntsStyles() {
+  if (document.getElementById('marching-ants-style')) return;
+
+  const css = `
+  :root {
+    --ants-size: 8px;        /* dash length */
+    --ants-thickness: 2px;   /* border thickness */
+    --ants-speed: 0.6s;      /* one dash per cycle */
+    --ants-a: #fff;          /* color A */
+    --ants-b: #000;          /* color B */
+    --ants-fill: rgba(59,130,246,0.10);
+  }
+
+  /* Animate only px on the moving axis; anchor the other axis with 0/100% */
+  @keyframes ants {
+    from {
+      background-position:
+        0 0,          /* top    */
+        0 100%,       /* bottom */
+        0 0,          /* left   */
+        100% 0;       /* right  */
+    }
+    to {
+      background-position:
+        var(--ants-size) 0,
+        var(--ants-size) 100%,
+        0 var(--ants-size),
+        100% var(--ants-size);
+    }
+  }
+
+  .selection-rect {
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    box-sizing: border-box;
+
+    /* fill sits under the ants */
+    background-color: var(--ants-fill);
+
+    /* 4 edge layers */
+    background-image:
+      linear-gradient(90deg, var(--ants-a) 50%, var(--ants-b) 0), /* top */
+      linear-gradient(90deg, var(--ants-a) 50%, var(--ants-b) 0), /* bottom */
+      linear-gradient(0deg,  var(--ants-a) 50%, var(--ants-b) 0), /* left */
+      linear-gradient(0deg,  var(--ants-a) 50%, var(--ants-b) 0); /* right */
+
+    background-size:
+      var(--ants-size) var(--ants-thickness),
+      var(--ants-size) var(--ants-thickness),
+      var(--ants-thickness) var(--ants-size),
+      var(--ants-thickness) var(--ants-size);
+
+    background-repeat:
+      repeat-x, repeat-x, repeat-y, repeat-y;
+
+    /* Start positions match @keyframes 'from' so interpolation is px-only */
+    background-position:
+      0 0,
+      0 100%,
+      0 0,
+      100% 0;
+
+    animation: ants var(--ants-speed) linear infinite;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .selection-rect { animation-duration: 2s; }
+  }
+  `;
+
+  const style = document.createElement('style');
+  style.id = 'marching-ants-style';
+  style.textContent = css;
+  document.head.appendChild(style);
+}
+
+function createRectangleElement(): HTMLDivElement {
+  ensureMarchingAntsStyles();
+  const rect = document.createElement('div');
+  rect.className = 'selection-rect';
+  document.body.appendChild(rect);
+  return rect;
+}
+
+// Initialize rectangle element
+rectangleElement = createRectangleElement();
+
+// Rectangle selection mouse handlers
+function handleRectangleMouseDown(e: MouseEvent) {
+  // Only activate on shift+left click
+  if (!e.shiftKey || e.button !== 0) return;
+  
+  // Prevent default behavior
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Start rectangle selection
+  isRectangleSelecting = true;
+  rectangleStartPoint = new maplibregl.Point(e.clientX, e.clientY);
+  
+  // Temporarily disable map drag pan
+  originalDragPan = map.dragPan.isEnabled();
+  map.dragPan.disable();
+  
+  // Show rectangle element
+  if (rectangleElement) {
+    rectangleElement.style.display = 'block';
+    rectangleElement.style.left = `${e.clientX}px`;
+    rectangleElement.style.top = `${e.clientY}px`;
+    rectangleElement.style.width = '0px';
+    rectangleElement.style.height = '0px';
+  }
+  
+  // Change cursor
+  map.getCanvas().style.cursor = 'crosshair';
+}
+
+function handleRectangleMouseMove(e: MouseEvent) {
+  if (!isRectangleSelecting || !rectangleStartPoint || !rectangleElement) return;
+  
+  // Calculate rectangle dimensions
+  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  const left = Math.min(rectangleStartPoint.x, currentPoint.x);
+  const top = Math.min(rectangleStartPoint.y, currentPoint.y);
+  const width = Math.abs(currentPoint.x - rectangleStartPoint.x);
+  const height = Math.abs(currentPoint.y - rectangleStartPoint.y);
+  
+  // Update rectangle element
+  rectangleElement.style.left = `${left}px`;
+  rectangleElement.style.top = `${top}px`;
+  rectangleElement.style.width = `${width}px`;
+  rectangleElement.style.height = `${height}px`;
+}
+
+function handleRectangleMouseUp(e: MouseEvent) {
+  if (!isRectangleSelecting || !rectangleStartPoint || !rectangleElement) return;
+  
+  // Calculate final rectangle
+  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  const left = Math.min(rectangleStartPoint.x, currentPoint.x);
+  const top = Math.min(rectangleStartPoint.y, currentPoint.y);
+  const width = Math.abs(currentPoint.x - rectangleStartPoint.x);
+  const height = Math.abs(currentPoint.y - rectangleStartPoint.y);
+  
+  // Only process if rectangle has meaningful size
+  if (width > 5 && height > 5) {
+    // Convert screen coordinates to map coordinates
+    const topLeft = map.unproject([left, top]);
+    const bottomRight = map.unproject([left + width, top + height]);
+    
+    // Create bounding box
+    const bbox: [number, number, number, number] = [
+      Math.min(topLeft.lng, bottomRight.lng),
+      Math.min(topLeft.lat, bottomRight.lat),
+      Math.max(topLeft.lng, bottomRight.lng),
+      Math.max(topLeft.lat, bottomRight.lat)
+    ];
+    
+    // Log coordinates to console
+    console.log('Rectangle Selection Coordinates:');
+    console.log('Screen space:', { left, top, width, height });
+    console.log('Map coordinates (bbox):', bbox);
+    console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
+    console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
+    
+    // TODO: Here you can add logic to select features within the bbox
+    // For now, we just log the coordinates as requested
+  }
+  
+  // Clean up
+  isRectangleSelecting = false;
+  rectangleStartPoint = null;
+  
+  // Hide rectangle element
+  if (rectangleElement) {
+    rectangleElement.style.display = 'none';
+  }
+  
+  // Restore map drag pan
+  if (originalDragPan !== undefined) {
+    if (originalDragPan) {
+      map.dragPan.enable();
+    }
+    originalDragPan = undefined;
+  }
+  
+  // Restore cursor
+  map.getCanvas().style.cursor = '';
+}
+
+// Add event listeners to map container
+const mapContainer = map.getContainer();
+mapContainer.addEventListener('mousedown', handleRectangleMouseDown);
+mapContainer.addEventListener('mousemove', handleRectangleMouseMove);
+mapContainer.addEventListener('mouseup', handleRectangleMouseUp);
+
+// Also handle mouse events on the document to catch mouse up outside the map
+document.addEventListener('mouseup', handleRectangleMouseUp);
+
+
 /* ---------------- UI elements ---------------- */
 
 

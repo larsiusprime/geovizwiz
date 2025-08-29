@@ -142,6 +142,9 @@ rectangleElement = createRectangleElement();
 
 // Rectangle selection mouse handlers
 function handleRectangleMouseDown(e: MouseEvent) {
+  // Only activate if we're in rectangle selection mode
+  if (currentSelectionMode !== 'select-rectangle') return;
+  
   // Only activate on shift+left click (select) or alt+left click (unselect)
   if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
   
@@ -186,7 +189,7 @@ function handleRectangleMouseDown(e: MouseEvent) {
 }
 
 function handleRectangleMouseMove(e: MouseEvent) {
-  if ((!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
+  if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
   // Calculate rectangle dimensions
   const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
@@ -203,7 +206,7 @@ function handleRectangleMouseMove(e: MouseEvent) {
 }
 
 function handleRectangleMouseUp(e: MouseEvent) {
-  if ((!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
+  if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
   // Calculate final rectangle
   const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
@@ -403,14 +406,9 @@ function pointInPolygon(point: number[], polygon: number[][]): boolean {
   return inside;
 }
 
-// Add event listeners to map container
-const mapContainer = map.getContainer();
-mapContainer.addEventListener('mousedown', handleRectangleMouseDown);
-mapContainer.addEventListener('mousemove', handleRectangleMouseMove);
-mapContainer.addEventListener('mouseup', handleRectangleMouseUp);
-
 // Also handle mouse events on the document to catch mouse up outside the map
 document.addEventListener('mouseup', handleRectangleMouseUp);
+document.addEventListener('mouseup', handleLassoMouseUp);
 
 
 /* ---------------- UI elements ---------------- */
@@ -2851,6 +2849,9 @@ function addExtrusionLayer() {
 
   // NEW: parcel selection and inspection
   map.on('click', LAYER_ID, (e) => {
+    // Only handle clicks in select-one mode
+    if (currentSelectionMode !== 'select-one') return;
+    
     const f = e.features?.[0];
     if (!f) return;
     
@@ -4063,8 +4064,42 @@ function handleSubmenuButtonClick(mode: string) {
   updateSubmenuActiveStates();
   selectSubmenu.classList.remove('show');
   
-  // TODO: Implement mode-specific functionality
+  // Set up mode-specific event handlers
+  setupSelectionModeHandlers();
+  
   console.log(`Selection mode changed to: ${mode}`);
+}
+
+// Set up event handlers based on current selection mode
+function setupSelectionModeHandlers() {
+  const mapContainer = map.getContainer();
+  
+  // Remove all existing mouse event listeners
+  mapContainer.removeEventListener('mousedown', handleRectangleMouseDown);
+  mapContainer.removeEventListener('mousemove', handleRectangleMouseMove);
+  mapContainer.removeEventListener('mouseup', handleRectangleMouseUp);
+  mapContainer.removeEventListener('mousedown', handleLassoMouseDown);
+  mapContainer.removeEventListener('mousemove', handleLassoMouseMove);
+  mapContainer.removeEventListener('mouseup', handleLassoMouseUp);
+  
+  // Add event listeners based on current mode
+  switch (currentSelectionMode) {
+    case 'select-rectangle':
+      mapContainer.addEventListener('mousedown', handleRectangleMouseDown);
+      mapContainer.addEventListener('mousemove', handleRectangleMouseMove);
+      mapContainer.addEventListener('mouseup', handleRectangleMouseUp);
+      break;
+    case 'select-lasso':
+      mapContainer.addEventListener('mousedown', handleLassoMouseDown);
+      mapContainer.addEventListener('mousemove', handleLassoMouseMove);
+      mapContainer.addEventListener('mouseup', handleLassoMouseUp);
+      break;
+    case 'select-one':
+    case 'select-polygon':
+    case 'off':
+      // These modes use the existing map click handler or no selection
+      break;
+  }
 }
 
 // Initialize toolbar
@@ -4075,6 +4110,9 @@ function initializeToolbar() {
   
   // Set initial button states based on window visibility
   updateToolbarButtonStates();
+  
+  // Set up initial selection mode handlers
+  setupSelectionModeHandlers();
   
   // Handle main select button click
   selectToolButton.addEventListener('click', (e) => {
@@ -4147,6 +4185,337 @@ if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', initializeToolbar);
 } else {
   initializeToolbar();
+}
+
+
+/* ---------------- Lasso Selection Tool ---------------- */
+
+// Lasso selection state
+let isLassoSelecting = false;
+let isLassoUnselecting = false;
+let lassoPoints: maplibregl.Point[] = [];
+let lassoElement: HTMLDivElement | null = null;
+let lassoSVG: SVGElement | null = null;
+let lassoPath: SVGPathElement | null = null;
+
+// Create lasso drawing element
+function createLassoElement(): HTMLDivElement {
+  const lasso = document.createElement('div');
+  lasso.className = 'lasso-selection';
+  lasso.style.cssText = `
+    position: absolute;
+    pointer-events: none;
+    z-index: 1000;
+    display: none;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  `;
+  
+  // Create SVG for lasso path
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.style.cssText = `
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  `;
+  
+  // Create path element
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('fill', 'rgba(59,130,246,0.10)');
+  path.setAttribute('stroke', '#3b82f6');
+  path.setAttribute('stroke-width', '2');
+  path.setAttribute('stroke-dasharray', '5,5');
+  path.setAttribute('stroke-linejoin', 'round');
+  path.setAttribute('stroke-linecap', 'round');
+  
+  svg.appendChild(path);
+  lasso.appendChild(svg);
+  document.body.appendChild(lasso);
+  
+  return lasso;
+}
+
+// Initialize lasso element
+lassoElement = createLassoElement();
+lassoSVG = lassoElement.querySelector('svg') as SVGElement;
+lassoPath = lassoElement.querySelector('path') as SVGPathElement;
+
+// Lasso selection mouse handlers
+function handleLassoMouseDown(e: MouseEvent) {
+  // Only activate on shift+left click (select) or alt+left click (unselect)
+  if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
+  
+  // Prevent default behavior
+  e.preventDefault();
+  e.stopPropagation();
+  
+  // Determine mode based on modifier keys
+  const isUnselectMode = e.altKey && !e.shiftKey;
+  
+  // Start lasso selection/unselection
+  if (isUnselectMode) {
+    isLassoUnselecting = true;
+  } else {
+    isLassoSelecting = true;
+  }
+  
+  // Initialize lasso points
+  lassoPoints = [new maplibregl.Point(e.clientX, e.clientY)];
+  
+  // Temporarily disable map drag pan
+  originalDragPan = map.dragPan.isEnabled();
+  map.dragPan.disable();
+  
+  // Show lasso element
+  if (lassoElement) {
+    lassoElement.style.display = 'block';
+    
+    // Apply unselect styling if in unselect mode
+    if (isUnselectMode) {
+      lassoPath?.setAttribute('fill', 'rgba(239,68,68,0.10)');
+      lassoPath?.setAttribute('stroke', '#ef4444');
+    } else {
+      lassoPath?.setAttribute('fill', 'rgba(59,130,246,0.10)');
+      lassoPath?.setAttribute('stroke', '#3b82f6');
+    }
+  }
+  
+  // Change cursor
+  map.getCanvas().style.cursor = 'crosshair';
+}
+
+function handleLassoMouseMove(e: MouseEvent) {
+  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoPath) return;
+  
+  // Sample points every 5 pixels to avoid too many points
+  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  const lastPoint = lassoPoints[lassoPoints.length - 1];
+  
+  if (currentPoint.dist(lastPoint) >= 5) {
+    lassoPoints.push(currentPoint);
+    updateLassoPath();
+  }
+}
+
+function updateLassoPath() {
+  if (!lassoPath || lassoPoints.length < 2) return;
+  
+  // Build SVG path
+  let pathData = `M ${lassoPoints[0].x} ${lassoPoints[0].y}`;
+  
+  for (let i = 1; i < lassoPoints.length; i++) {
+    pathData += ` L ${lassoPoints[i].x} ${lassoPoints[i].y}`;
+  }
+  
+  // Close the path by connecting to the first point
+  if (lassoPoints.length > 2) {
+    pathData += ` Z`;
+  }
+  
+  lassoPath.setAttribute('d', pathData);
+}
+
+function handleLassoMouseUp(e: MouseEvent) {
+  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoPath) return;
+  
+  // Close the lasso by adding the first point again if we have enough points
+  if (lassoPoints.length >= 3) {
+    lassoPoints.push(lassoPoints[0]);
+    updateLassoPath();
+    
+    // Convert screen coordinates to map coordinates
+    const mapCoordinates = lassoPoints.map(point => 
+      map.unproject([point.x, point.y])
+    );
+    
+    // Create a polygon from the coordinates
+    const polygon = mapCoordinates.map(coord => [coord.lng, coord.lat]);
+    
+    // Log coordinates to console
+    const mode = isLassoUnselecting ? 'Unselect' : 'Select';
+    console.log(`Lasso ${mode} Coordinates:`, polygon);
+    
+    // Select or unselect all parcels within the lasso polygon
+    if (isLassoUnselecting) {
+      unselectParcelsInPolygon(polygon);
+    } else {
+      selectParcelsInPolygon(polygon);
+    }
+  }
+  
+  // Clean up
+  isLassoSelecting = false;
+  isLassoUnselecting = false;
+  lassoPoints = [];
+  
+  // Hide lasso element
+  if (lassoElement) {
+    lassoElement.style.display = 'none';
+  }
+  
+  // Restore map drag pan
+  if (originalDragPan !== undefined) {
+    if (originalDragPan) {
+      map.dragPan.enable();
+    }
+    originalDragPan = undefined;
+  }
+  
+  // Restore cursor
+  map.getCanvas().style.cursor = '';
+}
+
+// Function to select parcels within a polygon
+function selectParcelsInPolygon(polygon: number[][]) {
+  if (!currentGeoJSON) {
+    console.log('No data loaded to select from');
+    return;
+  }
+  
+  // Calculate bounding box for the lasso polygon
+  const bbox = calculatePolygonBbox(polygon);
+  
+  let selectedCount = 0;
+  
+  // First, filter features by bounding box intersection (broad-phase collision detection)
+  const candidateFeatures = currentGeoJSON.features.filter(feature => {
+    if (!feature.geometry || !feature.id) return false;
+    return featureIntersectsBbox(feature, bbox);
+  });
+  
+  console.log(`Broad-phase filtering: ${candidateFeatures.length} features out of ${currentGeoJSON.features.length} candidates`);
+  
+  // Then, perform detailed polygon intersection checks only on the filtered subset
+  for (const feature of candidateFeatures) {
+    if (!feature.geometry || !feature.id) continue;
+    
+    // Check if the feature intersects with our lasso polygon
+    if (featureIntersectsPolygon(feature, polygon)) {
+      const parcelId = getParcelId(feature);
+      selectedParcels.add(parcelId);
+      
+      // Set feature state for highlighting
+      map.setFeatureState(
+        { source: SOURCE_ID, id: feature.id },
+        { selected: true }
+      );
+      
+      selectedCount++;
+    }
+  }
+  
+  console.log(`Selected ${selectedCount} parcels within the lasso`);
+  
+  // Update the selection controls UI
+  updateSelectionControls();
+}
+
+// Function to unselect parcels within a polygon
+function unselectParcelsInPolygon(polygon: number[][]) {
+  if (!currentGeoJSON) {
+    console.log('No data loaded to unselect from');
+    return;
+  }
+  
+  // Calculate bounding box for the lasso polygon
+  const bbox = calculatePolygonBbox(polygon);
+  
+  let unselectedCount = 0;
+  
+  // First, filter features by bounding box intersection (broad-phase collision detection)
+  const candidateFeatures = currentGeoJSON.features.filter(feature => {
+    if (!feature.geometry || !feature.id) return false;
+    return featureIntersectsBbox(feature, bbox);
+  });
+  
+  console.log(`Broad-phase filtering: ${candidateFeatures.length} features out of ${currentGeoJSON.features.length} candidates`);
+  
+  // Then, perform detailed polygon intersection checks only on the filtered subset
+  for (const feature of candidateFeatures) {
+    if (!feature.geometry || !feature.id) continue;
+    
+    // Check if the feature intersects with our lasso polygon
+    if (featureIntersectsPolygon(feature, polygon)) {
+      const parcelId = getParcelId(feature);
+      
+      // Only unselect if it was previously selected
+      if (selectedParcels.has(parcelId)) {
+        selectedParcels.delete(parcelId);
+        
+        // Set feature state to remove highlighting
+        map.setFeatureState(
+          { source: SOURCE_ID, id: feature.id },
+          { selected: false }
+        );
+        
+        unselectedCount++;
+      }
+    }
+  }
+  
+  console.log(`Unselected ${unselectedCount} parcels within the lasso`);
+  
+  // Update the selection controls UI
+  updateSelectionControls();
+}
+
+// Helper function to check if a feature intersects with a polygon
+function featureIntersectsPolygon(feature: GeoJSON.Feature, polygon: number[][]): boolean {
+  if (feature.geometry.type === 'Polygon') {
+    return polygonIntersectsPolygon(feature.geometry.coordinates, polygon);
+  } else if (feature.geometry.type === 'MultiPolygon') {
+    return feature.geometry.coordinates.some(poly => 
+      polygonIntersectsPolygon(poly, polygon)
+    );
+  }
+  
+  return false;
+}
+
+// Helper function to check if a polygon intersects with another polygon
+function polygonIntersectsPolygon(polygon1: number[][][], polygon2: number[][]): boolean {
+  // Check if any point of polygon1 is inside polygon2
+  for (const ring of polygon1) {
+    for (const coord of ring) {
+      const [lng, lat] = coord;
+      if (pointInPolygon([lng, lat], polygon2)) {
+        return true;
+      }
+    }
+  }
+  
+  // Also check if any point of polygon2 is inside polygon1
+  for (const coord of polygon2) {
+    const [lng, lat] = coord;
+    if (pointInPolygon([lng, lat], polygon1[0])) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Helper function to calculate bounding box for a polygon
+function calculatePolygonBbox(polygon: number[][]): [number, number, number, number] {
+  let minLng = Infinity;
+  let minLat = Infinity;
+  let maxLng = -Infinity;
+  let maxLat = -Infinity;
+  
+  for (const coord of polygon) {
+    const [lng, lat] = coord;
+    minLng = Math.min(minLng, lng);
+    minLat = Math.min(minLat, lat);
+    maxLng = Math.max(maxLng, lng);
+    maxLat = Math.max(maxLat, lat);
+  }
+  
+  return [minLng, minLat, maxLng, maxLat];
 }
 
 

@@ -453,15 +453,13 @@ btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px
 btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
 settingsContent.prepend(btnQuality); // position at top of settings content
 const btnMinimizeSettings = document.getElementById('btnMinimizeSettings') as HTMLButtonElement;
-const btnShowSettings = document.getElementById('btnShowSettings') as HTMLButtonElement;
 
-// Top toolbar
-const topToolbar = document.getElementById('topToolbar') as HTMLDivElement;
+// Toolbar elements
+const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
 const btnMinimizeLegend = document.getElementById('btnMinimizeLegend') as HTMLButtonElement;
-const btnShowLegend = document.getElementById('btnShowLegend') as HTMLButtonElement;
 const legendTitle = document.getElementById('legendTitle') as HTMLDivElement;
 const legendContent = document.getElementById('legendContent') as HTMLDivElement;
 
@@ -639,13 +637,8 @@ function minimizeSettings() {
   settingsContent.style.display = 'none';
   controlsEl.style.display = 'none';
   
-  // Move settings button to toolbar (flow from left to right)
-  btnShowSettings.style.position = '';
-  btnShowSettings.style.left = '';
-  btnShowSettings.style.top = '';
-  
-  topToolbar.appendChild(btnShowSettings);
-  updateToolbarVisibility();
+  // Update toolbar button states
+  updateToolbarButtonStates();
 }
 
 function showSettings() {
@@ -653,14 +646,8 @@ function showSettings() {
   settingsContent.style.display = 'block';
   controlsEl.style.display = 'grid';
   
-  // Remove settings button from toolbar and reset positioning
-  if (btnShowSettings.parentNode === topToolbar) {
-    topToolbar.removeChild(btnShowSettings);
-    btnShowSettings.style.position = '';
-    btnShowSettings.style.left = '';
-    btnShowSettings.style.top = '';
-  }
-  updateToolbarVisibility();
+  // Update toolbar button states
+  updateToolbarButtonStates();
 }
 
 function minimizeLegend() {
@@ -669,13 +656,9 @@ function minimizeLegend() {
   floatingLegend.style.display = 'none';
   isLegendVisible = false;
   
-  // Move legend button to toolbar (flow from left to right)
-  btnShowLegend.style.position = '';
-  btnShowLegend.style.left = '';
-  btnShowLegend.style.top = '';
+  // Update toolbar button states
+  updateToolbarButtonStates();
   
-  topToolbar.appendChild(btnShowLegend);
-  updateToolbarVisibility();
   // Update selection controls position
   updateSelectionControlsPosition();
   // Update legend position
@@ -688,32 +671,14 @@ function showLegend() {
   legendContent.style.display = 'block';
   floatingLegend.style.display = 'block';
   
-  // Remove legend button from toolbar and reset positioning
-  if (btnShowLegend.parentNode === topToolbar) {
-    topToolbar.removeChild(btnShowLegend);
-    btnShowLegend.style.position = '';
-    btnShowLegend.style.left = '';
-    btnShowLegend.style.top = '';
-  }
-  updateToolbarVisibility();
+  // Update toolbar button states
+  updateToolbarButtonStates();
+  
   updateFloatingLegend();
   // Update selection controls position
   updateSelectionControlsPosition();
   // Update legend position
   updateLegendPosition();
-}
-
-function updateToolbarVisibility() {
-  // Show toolbar only if there are minimized windows
-  const hasMinimizedWindows = topToolbar.children.length > 0;
-  topToolbar.style.display = hasMinimizedWindows ? 'flex' : 'none';
-  
-  // Adjust controls position if toolbar is visible and settings are not minimized
-  if (hasMinimizedWindows && !isSettingsMinimized) {
-    controlsEl.style.top = '50px'; // Account for toolbar height
-  } else if (!isSettingsMinimized) {
-    controlsEl.style.top = '10px'; // Default position
-  }
 }
 
 // Dragging functions
@@ -3818,9 +3783,7 @@ colorPicker.addEventListener('input', () => {
 
 // Window management event listeners
 btnMinimizeSettings.addEventListener('click', minimizeSettings);
-btnShowSettings.addEventListener('click', showSettings);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
-btnShowLegend.addEventListener('click', showLegend);
 
 // No longer needed - legend toggle removed from settings
 
@@ -4110,12 +4073,8 @@ function initializeToolbar() {
   updateToolbarIcon();
   updateSubmenuActiveStates();
   
-  // Set initial settings button state based on controls visibility
-  if (controlsEl.style.display === 'none') {
-    settingsToolButton.classList.remove('active');
-  } else {
-    settingsToolButton.classList.add('active');
-  }
+  // Set initial button states based on window visibility
+  updateToolbarButtonStates();
   
   // Handle main select button click
   selectToolButton.addEventListener('click', (e) => {
@@ -4126,13 +4085,20 @@ function initializeToolbar() {
   // Handle settings button click
   settingsToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
-    // Toggle settings visibility
-    if (controlsEl.style.display === 'none') {
-      controlsEl.style.display = 'grid';
-      settingsToolButton.classList.add('active');
+    if (isSettingsMinimized) {
+      showSettings();
     } else {
-      controlsEl.style.display = 'none';
-      settingsToolButton.classList.remove('active');
+      minimizeSettings();
+    }
+  });
+  
+  // Handle legend button click
+  legendToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (isLegendMinimized) {
+      showLegend();
+    } else {
+      minimizeLegend();
     }
   });
   
@@ -4153,6 +4119,27 @@ function initializeToolbar() {
       selectSubmenu.classList.remove('show');
     }
   });
+}
+
+// Update toolbar button states based on window visibility
+function updateToolbarButtonStates() {
+  // Settings button state
+  if (isSettingsMinimized) {
+    settingsToolButton.classList.add('inactive');
+    settingsToolButton.classList.remove('active');
+  } else {
+    settingsToolButton.classList.remove('inactive');
+    settingsToolButton.classList.add('active');
+  }
+  
+  // Legend button state
+  if (isLegendMinimized) {
+    legendToolButton.classList.add('inactive');
+    legendToolButton.classList.remove('active');
+  } else {
+    legendToolButton.classList.remove('inactive');
+    legendToolButton.classList.add('active');
+  }
 }
 
 // Initialize toolbar when DOM is ready

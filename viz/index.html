@@ -116,6 +116,18 @@
       fill: inherit;
     }
 
+    .toolbar-button.inactive {
+      background: #f8f8f8;
+      border-color: #ddd;
+      opacity: 0.5;
+      cursor: default;
+    }
+
+    .toolbar-button.inactive:hover {
+      background: #f8f8f8;
+      border-color: #ddd;
+    }
+
     .toolbar-button svg {
       width: 28px;
       height: 28px;
@@ -192,6 +204,10 @@
           <img src="src/svg/settings.svg" alt="Settings" />
         </button>
         
+        <button id="legendToolButton" class="toolbar-button" title="Legend">
+          <img src="src/svg/legend.svg" alt="Legend" />
+        </button>
+        
         <div id="selectSubmenu" class="toolbar-submenu">
           <button class="submenu-button" data-mode="select-one" title="Select individual parcels by clicking">
             <img src="src/svg/select_cursor.svg" alt="Select One" />
@@ -216,25 +232,7 @@
         </div>
       </div>
       
-      <!-- Top Toolbar for minimized windows -->
-    <div id="topToolbar" style="
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 40px;
-      background: rgba(255, 255, 255, 0.9);
-      border-bottom: 1px solid #ddd;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 0 12px;
-      z-index: 20;
-      backdrop-filter: blur(4px);
-      display: none;
-    ">
-      <!-- Minimized window buttons will appear here -->
-    </div>
+
 
           <div id="controls" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
       <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
@@ -524,30 +522,7 @@
     "></div>
   </div>
 
-  <!-- Hidden buttons for toolbar (will be moved to toolbar when minimized) -->
-  <div style="display: none;">
-    <button id="btnShowSettings" style="
-      border: none;
-      background: rgba(248, 248, 248, 0.8);
-      cursor: pointer;
-      font-size: 14px;
-      color: #333;
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid #ddd;
-    " title="Show Settings">Settings</button>
-    
-    <button id="btnShowLegend" style="
-      border: none;
-      background: rgba(248, 248, 248, 0.8);
-      cursor: pointer;
-      font-size: 14px;
-      color: #333;
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid #ddd;
-    " title="Show Legend">Legend</button>
-  </div>
+
 
   <script type="module" src="/src/main.ts"></script>
 </body>

@@ -34,6 +34,17 @@ const map = new maplibregl.Map({
   pixelRatio: HQ_PR // supersample: render at higher internal resolution (smooth lines)
 });
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+/* ---------------- Cursor Management ---------------- */
+
+// Update cursor based on active tool
+function updateCursor() {
+  if (isInfoToolActive) {
+    map.getCanvas().style.cursor = 'pointer';
+  } else {
+    // When SELECT mode is engaged, use arrow cursor
+    map.getCanvas().style.cursor = 'default';
+  }
+}
 
 
 /* ---------------- Rectangle Selection Tool ---------------- */
@@ -299,8 +310,8 @@ function handleRectangleMouseDown(e: MouseEvent) {
     }
   }
   
-  // Change cursor
-  map.getCanvas().style.cursor = 'crosshair';
+  // Change cursor to arrow for SELECT mode
+  map.getCanvas().style.cursor = 'default';
 }
 
 function handleRectangleMouseMove(e: MouseEvent) {
@@ -390,7 +401,7 @@ function handleRectangleMouseUp(e: MouseEvent) {
   }
   
   // Restore cursor
-  map.getCanvas().style.cursor = '';
+  updateCursor();
 }
 
 // Function to select parcels within a bounding box
@@ -1300,19 +1311,7 @@ function updateCategoricalFloatingLegend() {
     font-size: 12px;
   `;
   
-  const clearButton = document.createElement('button');
-  clearButton.textContent = 'Clear';
-  clearButton.style.cssText = `
-    padding: 4px 8px;
-    border: 1px solid #ddd;
-    background: #f8f8f8;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 12px;
-  `;
-  
   searchContainer.appendChild(searchInput);
-  searchContainer.appendChild(clearButton);
   legendContent.appendChild(searchContainer);
   
   // Create legend items
@@ -1472,10 +1471,6 @@ function updateCategoricalFloatingLegend() {
     filterCategories(target.value);
   });
   
-  clearButton.addEventListener('click', () => {
-    searchInput.value = '';
-    filterCategories('');
-  });
 }
 
 function updateNumericFloatingLegend() {
@@ -3010,8 +3005,14 @@ function addExtrusionLayer() {
     }
   });
   
-  map.on('mouseenter', LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
-  map.on('mouseleave', LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
+  map.on('mouseenter', LAYER_ID, () => { 
+    if (isInfoToolActive) {
+      map.getCanvas().style.cursor = 'pointer';
+    }
+  });
+  map.on('mouseleave', LAYER_ID, () => { 
+    updateCursor();
+  });
   
   // ESC key to close popup
   document.addEventListener('keydown', (e) => {
@@ -3049,10 +3050,9 @@ function addPopupSearchFunctionality() {
     const popupElement = activePopup?.getElement();
     if (popupElement) {
       const searchInput = popupElement.querySelector('#popupSearch') as HTMLInputElement;
-      const clearButton = popupElement.querySelector('#popupSearchClear') as HTMLButtonElement;
       const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement;
       
-      if (searchInput && clearButton && tableBody) {
+      if (searchInput && tableBody) {
         const filterFields = (searchText: string) => {
           const rows = tableBody.querySelectorAll('tr');
           rows.forEach(row => {
@@ -3068,11 +3068,6 @@ function addPopupSearchFunctionality() {
         searchInput.addEventListener('input', (e) => {
           const target = e.target as HTMLInputElement;
           filterFields(target.value);
-        });
-        
-        clearButton.addEventListener('click', () => {
-          searchInput.value = '';
-          filterFields('');
         });
       }
     }
@@ -3701,7 +3696,6 @@ function buildPopupHTML(props: Record<string, any>): string {
       <div style="font-weight:600;margin-bottom:2px">Loaded fields</div>
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <input type="text" id="popupSearch" placeholder="Search fields..." style="flex:1;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
-        <button id="popupSearchClear" style="padding:4px 8px;border:1px solid #ddd;background:#f8f8f8;border-radius:4px;cursor:pointer;font-size:12px;">Clear</button>
       </div>
       <div style="overflow-y:auto; max-height:400px;">
         <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
@@ -4283,6 +4277,9 @@ function initializeToolbar() {
   // Set up initial selection mode handlers
   setupSelectionModeHandlers();
   
+  // Set initial cursor state
+  updateCursor();
+  
   // Handle main select button click
   selectToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -4324,6 +4321,9 @@ function initializeToolbar() {
     
     // Update selection mode handlers to reflect info tool state
     setupSelectionModeHandlers();
+    
+    // Update cursor based on new tool state
+    updateCursor();
   });
   
   // Handle legend button click
@@ -4495,8 +4495,8 @@ function handleLassoMouseDown(e: MouseEvent) {
     }
   }
   
-  // Change cursor
-  map.getCanvas().style.cursor = 'crosshair';
+  // Change cursor to arrow for SELECT mode
+  map.getCanvas().style.cursor = 'default';
 }
 
 function handleLassoMouseMove(e: MouseEvent) {
@@ -4570,11 +4570,9 @@ function handleLassoMouseUp(e: MouseEvent) {
       if (isSelectOnlyMode) {
         // Select only these parcels, unselect all others
         clearAllSelections();
-        selectParcelsInPolygon(polygon);
-      } else {
-        // Add parcels to selection
-        selectParcelsInPolygon(polygon);
       }
+      // Add parcels to selection
+      selectParcelsInPolygon(polygon);
     }
   }
   
@@ -4597,7 +4595,7 @@ function handleLassoMouseUp(e: MouseEvent) {
   }
   
   // Restore cursor
-  map.getCanvas().style.cursor = '';
+  updateCursor();
 }
 
 // Function to select parcels within a polygon
@@ -4878,8 +4876,8 @@ function handlePolygonMouseDown(e: MouseEvent) {
       }
     }
     
-    // Change cursor
-    map.getCanvas().style.cursor = 'crosshair';
+    // Change cursor to arrow for SELECT mode
+    map.getCanvas().style.cursor = 'default';
   } else {
     // Check if clicking near the start point to close the polygon
     if (polygonStartPoint && currentPoint.dist(polygonStartPoint) <= 10) {
@@ -5024,7 +5022,7 @@ function closePolygon() {
   }
   
   // Restore cursor
-  map.getCanvas().style.cursor = '';
+  updateCursor();
 }
 
 

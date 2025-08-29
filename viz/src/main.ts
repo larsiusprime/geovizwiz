@@ -4049,4 +4049,118 @@ function buildNumericColorExpression(): Expression {
   return result;
 }
 
+/* ---------------- Vertical Toolbar ---------------- */
+
+// Toolbar state
+let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | 'select-polygon' | 'off' = 'select-one';
+
+// Toolbar elements
+const selectToolButton = document.getElementById('selectToolButton') as HTMLButtonElement;
+const settingsToolButton = document.getElementById('settingsToolButton') as HTMLButtonElement;
+const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
+const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
+
+// Icon mappings for different selection modes
+const selectionModeIcons: Record<string, string> = {
+  'select-one': 'src/svg/select_cursor.svg',
+  'select-rectangle': 'src/svg/select_rectangle.svg',
+  'select-lasso': 'src/svg/select_lasso.svg',
+  'select-polygon': 'src/svg/select_polygon.svg',
+  'off': 'src/svg/select_none.svg'
+};
+
+// Update the main toolbar button icon based on current selection mode
+function updateToolbarIcon() {
+  const iconPath = selectionModeIcons[currentSelectionMode];
+  selectToolButton.innerHTML = `<img src="${iconPath}" alt="Select" />`;
+  
+  // Update active state
+  if (currentSelectionMode === 'off') {
+    selectToolButton.classList.remove('active');
+  } else {
+    selectToolButton.classList.add('active');
+  }
+}
+
+// Update submenu active states
+function updateSubmenuActiveStates() {
+  submenuButtons.forEach(button => {
+    const mode = button.getAttribute('data-mode');
+    if (mode === currentSelectionMode) {
+      button.classList.add('active');
+    } else {
+      button.classList.remove('active');
+    }
+  });
+}
+
+// Handle submenu button clicks
+function handleSubmenuButtonClick(mode: string) {
+  currentSelectionMode = mode as any;
+  updateToolbarIcon();
+  updateSubmenuActiveStates();
+  selectSubmenu.classList.remove('show');
+  
+  // TODO: Implement mode-specific functionality
+  console.log(`Selection mode changed to: ${mode}`);
+}
+
+// Initialize toolbar
+function initializeToolbar() {
+  // Set initial state
+  updateToolbarIcon();
+  updateSubmenuActiveStates();
+  
+  // Set initial settings button state based on controls visibility
+  if (controlsEl.style.display === 'none') {
+    settingsToolButton.classList.remove('active');
+  } else {
+    settingsToolButton.classList.add('active');
+  }
+  
+  // Handle main select button click
+  selectToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectSubmenu.classList.toggle('show');
+  });
+  
+  // Handle settings button click
+  settingsToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Toggle settings visibility
+    if (controlsEl.style.display === 'none') {
+      controlsEl.style.display = 'grid';
+      settingsToolButton.classList.add('active');
+    } else {
+      controlsEl.style.display = 'none';
+      settingsToolButton.classList.remove('active');
+    }
+  });
+  
+  // Handle submenu button clicks
+  submenuButtons.forEach(button => {
+    button.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const mode = button.getAttribute('data-mode');
+      if (mode) {
+        handleSubmenuButtonClick(mode);
+      }
+    });
+  });
+  
+  // Close submenu when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!selectToolButton.contains(e.target as Node) && !selectSubmenu.contains(e.target as Node)) {
+      selectSubmenu.classList.remove('show');
+    }
+  });
+}
+
+// Initialize toolbar when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeToolbar);
+} else {
+  initializeToolbar();
+}
+
 

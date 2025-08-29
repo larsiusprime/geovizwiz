@@ -68,13 +68,155 @@
     .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width .2s linear; }
     .progress.indeterminate .bar { width: 30%; animation: indet 1.2s infinite linear; }
     @keyframes indet { 0% { margin-left: -30% } 100% { margin-left: 100% } }
+
+    /* Vertical Toolbar Styles */
+    #verticalToolbar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 64px;
+      background: rgba(255, 255, 255, 0.95);
+      border-right: 1px solid #ddd;
+      z-index: 25;
+      backdrop-filter: blur(4px);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 8px;
+      box-sizing: border-box;
+    }
+
+    .toolbar-button {
+      width: 48px;
+      height: 40px;
+      border: 1px solid #ddd;
+      background: #f8f8f8;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .toolbar-button:hover {
+      background: #f0f0f0;
+      border-color: #bbb;
+    }
+
+    .toolbar-button.active {
+      background: #f0f0f0;
+      border-color: #bbb;
+      color: inherit;
+    }
+
+    .toolbar-button.active svg path {
+      fill: inherit;
+    }
+
+    .toolbar-button svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .toolbar-button img {
+      width: 28px;
+      height: 28px;
+    }
+
+    .toolbar-submenu {
+      position: absolute;
+      left: 100%;
+      top: 0;
+      margin-left: 8px;
+      background: rgba(255, 255, 255, 0.98);
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+      backdrop-filter: blur(4px);
+      display: none;
+      flex-direction: column;
+      gap: 2px;
+      padding: 6px;
+      min-width: 160px;
+      z-index: 30;
+    }
+
+    .toolbar-submenu.show {
+      display: flex;
+    }
+
+    .submenu-button {
+      padding: 8px 12px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 4px;
+      text-align: left;
+      font-size: 13px;
+      color: #333;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      transition: background-color 0.2s ease;
+    }
+
+    .submenu-button:hover {
+      background: #f0f0f0;
+    }
+
+    .submenu-button img {
+      width: 20px;
+      height: 20px;
+    }
+
+    .submenu-button.active {
+      background: #3b82f6;
+      color: white;
+    }
   </style>
 </head>
-<body>
-  <div id="app">
-    <div id="map"></div>
-    
-    <!-- Top Toolbar for minimized windows -->
+  <body>
+    <div id="app">
+      <div id="map"></div>
+      
+      <!-- Vertical Toolbar -->
+      <div id="verticalToolbar">
+        <button id="selectToolButton" class="toolbar-button" title="Select Tool">
+          <img src="src/svg/select_cursor.svg" alt="Select" />
+        </button>
+        
+        <button id="settingsToolButton" class="toolbar-button" title="Settings">
+          <img src="src/svg/settings.svg" alt="Settings" />
+        </button>
+        
+        <div id="selectSubmenu" class="toolbar-submenu">
+          <button class="submenu-button" data-mode="select-one" title="Select individual parcels by clicking">
+            <img src="src/svg/select_cursor.svg" alt="Select One" />
+            One
+          </button>
+          <button class="submenu-button" data-mode="select-rectangle" title="Select parcels by drawing a rectangle (Shift+click+drag)">
+            <img src="src/svg/select_rectangle.svg" alt="Select Rectangle" />
+            Rectangle
+          </button>
+          <button class="submenu-button" data-mode="select-lasso" title="Select parcels by drawing a freeform lasso (not implemented)">
+            <img src="src/svg/select_lasso.svg" alt="Select Lasso" />
+            Lasso
+          </button>
+          <button class="submenu-button" data-mode="select-polygon" title="Select parcels by drawing a polygon (not implemented)">
+            <img src="src/svg/select_polygon.svg" alt="Select Polygon" />
+            Polygon
+          </button>
+          <button class="submenu-button" data-mode="off" title="Disable all selection tools">
+            <img src="src/svg/select_none.svg" alt="Select Off" />
+            Off
+          </button>
+        </div>
+      </div>
+      
+      <!-- Top Toolbar for minimized windows -->
     <div id="topToolbar" style="
       position: absolute;
       top: 0;
@@ -94,7 +236,7 @@
       <!-- Minimized window buttons will appear here -->
     </div>
 
-    <div id="controls" style="position: absolute; top: 10px; left: 10px; width: min(92vw, 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+          <div id="controls" style="position: absolute; top: 10px; left: 80px; width: min(92vw, 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
       <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
         <div style="font-weight: 600; font-size: 13px;">Settings</div>
         <button id="btnMinimizeSettings" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">

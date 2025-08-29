@@ -41,6 +41,7 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
 // Rectangle selection state
 let isRectangleSelecting = false;
+let isRectangleUnselecting = false;
 let rectangleStartPoint: maplibregl.Point | null = null;
 let rectangleElement: HTMLDivElement | null = null;
 let originalDragPan: boolean | undefined;
@@ -57,6 +58,7 @@ function ensureMarchingAntsStyles() {
     --ants-a: #fff;          /* color A */
     --ants-b: #000;          /* color B */
     --ants-fill: rgba(59,130,246,0.10);
+    --ants-fill-unselect: rgba(239,68,68,0.10);
   }
 
   /* Animate only px on the moving axis; anchor the other axis with 0/100% */
@@ -113,6 +115,10 @@ function ensureMarchingAntsStyles() {
     animation: ants var(--ants-speed) linear infinite;
   }
 
+  .selection-rect.unselect {
+    background-color: var(--ants-fill-unselect);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .selection-rect { animation-duration: 2s; }
   }
@@ -137,28 +143,43 @@ rectangleElement = createRectangleElement();
 
 // Rectangle selection mouse handlers
 function handleRectangleMouseDown(e: MouseEvent) {
-  // Only activate on shift+left click
-  if (!e.shiftKey || e.button !== 0) return;
+  // Only activate on shift+left click (select) or alt+left click (unselect)
+  if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
   
   // Prevent default behavior
   e.preventDefault();
   e.stopPropagation();
   
-  // Start rectangle selection
-  isRectangleSelecting = true;
+  // Determine mode based on modifier keys
+  const isUnselectMode = e.altKey && !e.shiftKey;
+  
+  // Start rectangle selection/unselection
+  if (isUnselectMode) {
+    isRectangleUnselecting = true;
+  } else {
+    isRectangleSelecting = true;
+  }
+  
   rectangleStartPoint = new maplibregl.Point(e.clientX, e.clientY);
   
   // Temporarily disable map drag pan
   originalDragPan = map.dragPan.isEnabled();
   map.dragPan.disable();
   
-  // Show rectangle element
+  // Show rectangle element with appropriate styling
   if (rectangleElement) {
     rectangleElement.style.display = 'block';
     rectangleElement.style.left = `${e.clientX}px`;
     rectangleElement.style.top = `${e.clientY}px`;
     rectangleElement.style.width = '0px';
     rectangleElement.style.height = '0px';
+    
+    // Apply unselect styling if in unselect mode
+    if (isUnselectMode) {
+      rectangleElement.classList.add('unselect');
+    } else {
+      rectangleElement.classList.remove('unselect');
+    }
   }
   
   // Change cursor
@@ -166,7 +187,7 @@ function handleRectangleMouseDown(e: MouseEvent) {
 }
 
 function handleRectangleMouseMove(e: MouseEvent) {
-  if (!isRectangleSelecting || !rectangleStartPoint || !rectangleElement) return;
+  if ((!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
   // Calculate rectangle dimensions
   const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
@@ -183,7 +204,7 @@ function handleRectangleMouseMove(e: MouseEvent) {
 }
 
 function handleRectangleMouseUp(e: MouseEvent) {
-  if (!isRectangleSelecting || !rectangleStartPoint || !rectangleElement) return;
+  if ((!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
   // Calculate final rectangle
   const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
@@ -207,23 +228,30 @@ function handleRectangleMouseUp(e: MouseEvent) {
     ];
     
     // Log coordinates to console
-    console.log('Rectangle Selection Coordinates:');
+    const mode = isRectangleUnselecting ? 'Unselect' : 'Select';
+    console.log(`Rectangle ${mode} Coordinates:`);
     console.log('Screen space:', { left, top, width, height });
     console.log('Map coordinates (bbox):', bbox);
     console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
     console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
     
-    // Select all parcels within the bounding box
-    selectParcelsInBoundingBox(bbox);
+    // Select or unselect all parcels within the bounding box
+    if (isRectangleUnselecting) {
+      unselectParcelsInBoundingBox(bbox);
+    } else {
+      selectParcelsInBoundingBox(bbox);
+    }
   }
   
   // Clean up
   isRectangleSelecting = false;
+  isRectangleUnselecting = false;
   rectangleStartPoint = null;
   
   // Hide rectangle element
   if (rectangleElement) {
     rectangleElement.style.display = 'none';
+    rectangleElement.classList.remove('unselect');
   }
   
   // Restore map drag pan
@@ -268,6 +296,45 @@ function selectParcelsInBoundingBox(bbox: [number, number, number, number]) {
   }
   
   console.log(`Selected ${selectedCount} parcels within the rectangle`);
+  
+  // Update the selection controls UI
+  updateSelectionControls();
+}
+
+// Function to unselect parcels within a bounding box
+function unselectParcelsInBoundingBox(bbox: [number, number, number, number]) {
+  if (!currentGeoJSON) {
+    console.log('No data loaded to unselect from');
+    return;
+  }
+  
+  const [minLng, minLat, maxLng, maxLat] = bbox;
+  let unselectedCount = 0;
+  
+  // Check each feature to see if it intersects with the bounding box
+  for (const feature of currentGeoJSON.features) {
+    if (!feature.geometry || !feature.id) continue;
+    
+    // Check if the feature's bounding box intersects with our selection box
+    if (featureIntersectsBbox(feature, bbox)) {
+      const parcelId = getParcelId(feature);
+      
+      // Only unselect if it was previously selected
+      if (selectedParcels.has(parcelId)) {
+        selectedParcels.delete(parcelId);
+        
+        // Set feature state to remove highlighting
+        map.setFeatureState(
+          { source: SOURCE_ID, id: feature.id },
+          { selected: false }
+        );
+        
+        unselectedCount++;
+      }
+    }
+  }
+  
+  console.log(`Unselected ${unselectedCount} parcels within the rectangle`);
   
   // Update the selection controls UI
   updateSelectionControls();
@@ -1966,9 +2033,8 @@ function updateMarkupLayer() {
 
 // New parcel selection system functions
 function getParcelId(feature: any): string {
-  // Generate a unique ID for the parcel based on its properties
-  // This could be improved to use actual parcel IDs if available
-  return `${feature.geometry.coordinates[0][0]}_${feature.geometry.coordinates[0][1]}`;
+  // Use the feature's unique ID, which is guaranteed to be unique
+  return feature.id.toString();
 }
 
 function toggleParcelSelection(feature: any) {

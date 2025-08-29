@@ -10,7 +10,7 @@
     *, *::before, *::after { box-sizing: border-box; }
 
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
-    #map { position: absolute; inset: 0; }
+    #map { position: absolute; left: 64px; top: 0; right: 0; bottom: 0; }
 
     .window-header:hover {
       background: rgba(240, 240, 240, 0.9);
@@ -236,7 +236,7 @@
       <!-- Minimized window buttons will appear here -->
     </div>
 
-          <div id="controls" style="position: absolute; top: 10px; left: 80px; width: min(92vw, 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+          <div id="controls" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
       <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
         <div style="font-weight: 600; font-size: 13px;">Settings</div>
         <button id="btnMinimizeSettings" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">

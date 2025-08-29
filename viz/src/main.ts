@@ -241,6 +241,11 @@ let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
 
+// New parcel selection system
+let selectedParcels = new Set<string>(); // Track selected parcel IDs
+let highlightColor = '#FFFF00'; // Default bright yellow
+let selectionControlsPanel: HTMLDivElement | null = null;
+
 // Sorting state
 let legendSortField: 'name' | 'count' | null = 'count';
 let legendSortDirection: 'asc' | 'desc' = 'desc';
@@ -295,6 +300,10 @@ function minimizeLegend() {
   
   topToolbar.appendChild(btnShowLegend);
   updateToolbarVisibility();
+  // Update selection controls position
+  updateSelectionControlsPosition();
+  // Update legend position
+  updateLegendPosition();
 }
 
 function showLegend() {
@@ -312,6 +321,10 @@ function showLegend() {
   }
   updateToolbarVisibility();
   updateFloatingLegend();
+  // Update selection controls position
+  updateSelectionControlsPosition();
+  // Update legend position
+  updateLegendPosition();
 }
 
 function updateToolbarVisibility() {
@@ -362,6 +375,11 @@ function handleMouseMove(e: MouseEvent) {
   dragTarget.style.left = `${clampedX}px`;
   dragTarget.style.top = `${clampedY}px`;
   dragTarget.style.transform = 'none'; // Remove any transform when dragging
+  
+  // If dragging the selection controls panel, update legend position
+  if (dragTarget.id === 'selectionControlsPanel') {
+    updateLegendPosition();
+  }
 }
 
 function handleMouseUp() {
@@ -917,10 +935,44 @@ function updateCategoricalFloatingLegend() {
      checkbox.onchange = () => {
        if (checkbox.checked) {
          selectedLegendItems.add(category);
+         // Add all parcels in this category to selection
+         if (currentGeoJSON) {
+           for (const feature of currentGeoJSON.features) {
+             const value = feature.properties?.[currentField!];
+             if (value != null && value !== '' && value !== undefined) {
+               const featureCategory = String(value);
+               if (featureCategory === category && feature.id !== undefined) {
+                 const parcelId = getParcelId(feature);
+                 selectedParcels.add(parcelId);
+                 map.setFeatureState(
+                   { source: SOURCE_ID, id: feature.id },
+                   { selected: true }
+                 );
+               }
+             }
+           }
+         }
        } else {
          selectedLegendItems.delete(category);
+         // Remove all parcels in this category from selection
+         if (currentGeoJSON) {
+           for (const feature of currentGeoJSON.features) {
+             const value = feature.properties?.[currentField!];
+             if (value != null && value !== '' && value !== undefined) {
+               const featureCategory = String(value);
+               if (featureCategory === category && feature.id !== undefined) {
+                 const parcelId = getParcelId(feature);
+                 selectedParcels.delete(parcelId);
+                 map.setFeatureState(
+                   { source: SOURCE_ID, id: feature.id },
+                   { selected: false }
+                 );
+               }
+             }
+           }
+         }
        }
-       updateMarkupLayer();
+       updateSelectionControls();
        updateFloatingLegend(); // Refresh to update header checkbox state
      };
      
@@ -1143,10 +1195,42 @@ function updateNumericFloatingLegend() {
      checkbox.onchange = () => {
        if (checkbox.checked) {
          selectedLegendItems.add(rangeKey);
+         // Add all parcels in this range to selection
+         if (currentGeoJSON) {
+           for (const feature of currentGeoJSON.features) {
+             const value = Number(feature.properties?.[currentField!]);
+             if (Number.isFinite(value)) {
+               if (value >= range.min && value <= range.max && feature.id !== undefined) {
+                 const parcelId = getParcelId(feature);
+                 selectedParcels.add(parcelId);
+                 map.setFeatureState(
+                   { source: SOURCE_ID, id: feature.id },
+                   { selected: true }
+                 );
+               }
+             }
+           }
+         }
        } else {
          selectedLegendItems.delete(rangeKey);
+         // Remove all parcels in this range from selection
+         if (currentGeoJSON) {
+           for (const feature of currentGeoJSON.features) {
+             const value = Number(feature.properties?.[currentField!]);
+             if (Number.isFinite(value)) {
+               if (value >= range.min && value <= range.max && feature.id !== undefined) {
+                 const parcelId = getParcelId(feature);
+                 selectedParcels.delete(parcelId);
+                 map.setFeatureState(
+                   { source: SOURCE_ID, id: feature.id },
+                   { selected: false }
+                 );
+               }
+             }
+           }
+         }
        }
-       updateMarkupLayer();
+       updateSelectionControls();
        updateFloatingLegend(); // Refresh to update header checkbox state
      };
      
@@ -1443,6 +1527,11 @@ function minimalBoundingPolygon(
 
 
 function updateMarkupLayer() {
+  // DISABLED: Old bounding polygon system
+  // The new parcel selection system uses feature state highlighting instead
+  return;
+  
+  /* Original code commented out:
   if (!currentGeoJSON) return;
   
   // Remove existing markup layers if they exist
@@ -1562,6 +1651,209 @@ function updateMarkupLayer() {
       'line-opacity': 1.0
     }
   });
+  */
+}
+
+// New parcel selection system functions
+function getParcelId(feature: any): string {
+  // Generate a unique ID for the parcel based on its properties
+  // This could be improved to use actual parcel IDs if available
+  return `${feature.geometry.coordinates[0][0]}_${feature.geometry.coordinates[0][1]}`;
+}
+
+function toggleParcelSelection(feature: any) {
+  const parcelId = getParcelId(feature);
+  if (selectedParcels.has(parcelId)) {
+    selectedParcels.delete(parcelId);
+    map.setFeatureState(
+      { source: SOURCE_ID, id: feature.id },
+      { selected: false }
+    );
+  } else {
+    selectedParcels.add(parcelId);
+    map.setFeatureState(
+      { source: SOURCE_ID, id: feature.id },
+      { selected: true }
+    );
+  }
+  updateSelectionControls();
+}
+
+function addParcelToSelection(feature: any) {
+  const parcelId = getParcelId(feature);
+  selectedParcels.add(parcelId);
+  map.setFeatureState(
+    { source: SOURCE_ID, id: feature.id },
+    { selected: true }
+  );
+  updateSelectionControls();
+}
+
+function removeParcelFromSelection(feature: any) {
+  const parcelId = getParcelId(feature);
+  selectedParcels.delete(parcelId);
+  map.setFeatureState(
+    { source: SOURCE_ID, id: feature.id },
+    { selected: false }
+  );
+  updateSelectionControls();
+}
+
+function clearAllSelections() {
+  // Clear all feature states
+  if (currentGeoJSON) {
+    for (const feature of currentGeoJSON.features) {
+      if (feature.id !== undefined) {
+        map.setFeatureState(
+          { source: SOURCE_ID, id: feature.id },
+          { selected: false }
+        );
+      }
+    }
+  }
+  selectedParcels.clear();
+  updateSelectionControls();
+}
+
+function updateSelectionControls() {
+  if (selectedParcels.size === 0) {
+    // Hide selection controls panel
+    if (selectionControlsPanel) {
+      selectionControlsPanel.style.display = 'none';
+    }
+  } else {
+    // Show selection controls panel
+    if (!selectionControlsPanel) {
+      createSelectionControlsPanel();
+    }
+    if (selectionControlsPanel) {
+      selectionControlsPanel.style.display = 'block';
+      // Update the count
+      const countElement = selectionControlsPanel.querySelector('#selectedCount');
+      if (countElement) {
+        countElement.textContent = selectedParcels.size.toString();
+      }
+    }
+  }
+}
+
+function createSelectionControlsPanel() {
+  // Remove existing panel if it exists
+  if (selectionControlsPanel) {
+    selectionControlsPanel.remove();
+  }
+
+  // Create new panel
+  selectionControlsPanel = document.createElement('div');
+  selectionControlsPanel.id = 'selectionControlsPanel';
+  
+  // Check if legend is visible and adjust positioning
+  const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';
+  const legendWidth = legendVisible ? 280 : 0; // Legend max-width is 280px
+  const legendRight = 20; // Legend right margin
+  const panelRight = legendVisible ? (legendWidth + legendRight + 10) : 20; // Add 10px gap
+  
+  selectionControlsPanel.style.cssText = `
+    position: absolute;
+    top: 60px;
+    right: ${panelRight}px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 15;
+    backdrop-filter: blur(4px);
+    min-width: 200px;
+    cursor: move;
+  `;
+
+  selectionControlsPanel.innerHTML = `
+    <div class="window-header" style="
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      background: rgba(248, 248, 248, 0.8);
+      border-radius: 8px 8px 0 0;
+      cursor: move;
+    ">
+      <div style="font-weight: 600; font-size: 13px;">Selection Controls</div>
+    </div>
+    <div style="padding: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 12px;">Selected:</span>
+        <span id="selectedCount" style="font-weight: 600;">${selectedParcels.size}</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <span style="font-size: 12px;">Highlight color:</span>
+        <input type="color" id="highlightColorPicker" value="${highlightColor}" style="width: 30px; height: 20px; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
+      </div>
+      <button id="unselectAllBtn" style="
+        width: 100%;
+        border: 1px solid #ddd;
+        background: #f8f8f8;
+        padding: 6px 8px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 12px;
+      ">Unselect All</button>
+    </div>
+  `;
+
+  // Add event listeners
+  const unselectAllBtn = selectionControlsPanel.querySelector('#unselectAllBtn') as HTMLButtonElement;
+  const colorPicker = selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement;
+
+  unselectAllBtn.addEventListener('click', clearAllSelections);
+  
+  colorPicker.addEventListener('change', (e) => {
+    const target = e.target as HTMLInputElement;
+    highlightColor = target.value;
+    updateHighlightColors();
+  });
+
+  // Add to document
+  document.body.appendChild(selectionControlsPanel);
+  
+  // Make the panel draggable
+  makeDraggable(selectionControlsPanel);
+  
+  // Update legend position to be below the panel
+  updateLegendPosition();
+}
+
+function updateHighlightColors() {
+  // Update the fill color expression to include highlighting
+  if (currentFieldType === 'categorical') {
+    // For categorical fields, rebuild the color expression with highlighting
+    const colorExpr = buildCategoricalColorExpression();
+    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
+  } else {
+    applyExtrusion();
+  }
+}
+
+function updateSelectionControlsPosition() {
+  if (!selectionControlsPanel) return;
+  
+  const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';
+  const legendWidth = legendVisible ? 280 : 0;
+  const legendRight = 20;
+  const panelRight = legendVisible ? (legendWidth + legendRight + 10) : 20;
+  
+  selectionControlsPanel.style.right = `${panelRight}px`;
+}
+
+function updateLegendPosition() {
+  if (!floatingLegend || !selectionControlsPanel) return;
+  
+  // Position legend below the selection controls panel
+  const panelRect = selectionControlsPanel.getBoundingClientRect();
+  const panelBottom = panelRect.bottom;
+  const legendTop = panelBottom + 10; // 10px gap
+  
+  floatingLegend.style.top = `${legendTop}px`;
 }
 
 function installWelcome() {
@@ -2095,6 +2387,13 @@ async function loadSelectedColumns() {
 
     for (const f of features) roundGeometryInPlace(f);
 
+    // Ensure all features have IDs for the selection system
+    features.forEach((feature, index) => {
+      if (feature.id === undefined) {
+        feature.id = index;
+      }
+    });
+
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
 
@@ -2176,6 +2475,14 @@ function clearData() {
   fieldSelect.replaceChildren(new Option('— load a file first —', ''));
   // Clear cached extrusion settings when data is cleared
   cachedExtrusionSettings = null;
+  
+  // Clear selection state
+  selectedParcels.clear();
+  selectedLegendItems.clear();
+  if (selectionControlsPanel) {
+    selectionControlsPanel.style.display = 'none';
+  }
+  
   hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
@@ -2202,13 +2509,32 @@ function addExtrusionLayer() {
     }
   });
 
-  // NEW: click to inspect
+  // NEW: parcel selection and inspection
   map.on('click', LAYER_ID, (e) => {
+    const f = e.features?.[0];
+    if (!f) return;
+    
+    // Handle different click modes
+    if (e.originalEvent.shiftKey) {
+      // Shift-click: always add to selection
+      addParcelToSelection(f);
+    } else if (e.originalEvent.altKey) {
+      // Alt-click: always remove from selection
+      removeParcelFromSelection(f);
+    } else {
+      // Regular left-click: toggle selection
+      toggleParcelSelection(f);
+    }
+  });
+  
+  // Right-click for inspection popup
+  map.on('contextmenu', LAYER_ID, (e) => {
     const f = e.features?.[0];
     if (!f) return;
     const props = (f.properties || {}) as Record<string, any>;
     showPopup(props, e.lngLat);
   });
+  
   map.on('mouseenter', LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
   ensureErrorLayer();
@@ -2331,21 +2657,10 @@ function applyExtrusion() {
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
     map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   } else {
-    // Existing numeric field logic
-    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
+    // For numeric fields, use the new color expression builder
+    const colorExpr = buildNumericColorExpression();
     const valueExpr = buildValueExpression();
     
-    let colorExpr: Expression;
-    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-      colorExpr = makeStepColorExpression(valueExpr, ramp, colorBreaks);
-    } else {
-      const nmin = currentStats?.min ?? 0;
-      const nmax = currentStats?.max ?? 1;
-      const cmin = colorDomain?.lo ?? nmin;
-      const cmax = colorDomain?.hi ?? nmax;
-      colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, cmin, cmax);
-    }
-
     const rawMult = Number(multInput.value);
     const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
     const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
@@ -2448,8 +2763,8 @@ function generatePseudoRandomColor(n: number, max_n: number, seed: string): stri
   const h = frac(hOffset + (idx + 0.5) / max_n);
 
   // Keep colors vivid: high S, mid/high L with tiny seed+index jitter for variety
-  const s = 0.85 + 0.10 * rand01(hash, idx, 0xA8F1);         // 0.85 .. 0.95
-  const l = 0.56 + 0.16 * (rand01(hash, idx, 0xC0FFEE) - 0.5); // ~0.48 .. 0.64
+  const s = 0.45 + 0.10 * rand01(hash, idx, 0xA8F1);         
+  const l = 0.56 + 0.16 * (rand01(hash, idx, 0xC0FFEE) - 0.5); 
 
   const [r, g, b] = hslToRgb(h, s, l);
   return `rgb(${r}, ${g}, ${b})`;
@@ -2532,9 +2847,15 @@ function buildCategoricalColorExpression(): Expression {
 
   // Build the final expression with fallback
   const flattenedPairs = pairs.flat();
-  const result = ['case',
+  const baseResult = ['case',
     ['==', val, ''], fallbackColor,
     ['match', val, ...flattenedPairs, fallbackColor]
+  ] as any;
+  
+  // Add highlighting for selected parcels
+  const result = ['case',
+    ['boolean', ['feature-state', 'selected'], false], highlightColor,
+    baseResult
   ] as any;
   
   return result;
@@ -3210,8 +3531,9 @@ fieldSelect.addEventListener('change', () => {
     }
   }
   
-  // Clear selections when field changes
+  // Clear legend selections when field changes, but preserve parcel selections
   selectedLegendItems.clear();
+  // Note: selectedParcels is preserved so highlighting continues to work
   
   // Clear cached extrusion settings when field changes
   cachedExtrusionSettings = null;
@@ -3341,7 +3663,14 @@ function buildNumericColorExpression(): Expression {
   // Default color
   cases.push(['literal', '#888']);
   
-  return cases as any;
+  // Add highlighting for selected parcels
+  const baseResult = cases as any;
+  const result = ['case',
+    ['boolean', ['feature-state', 'selected'], false], highlightColor,
+    baseResult
+  ] as any;
+  
+  return result;
 }
 
 

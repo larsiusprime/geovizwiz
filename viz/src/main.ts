@@ -797,6 +797,42 @@ function updateCategoricalFloatingLegend() {
   }
   
 
+  // Add search bar to legend
+  const searchContainer = document.createElement('div');
+  searchContainer.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 4px;
+  `;
+  
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search categories...';
+  searchInput.style.cssText = `
+    flex: 1;
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+  `;
+  
+  const clearButton = document.createElement('button');
+  clearButton.textContent = 'Clear';
+  clearButton.style.cssText = `
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    background: #f8f8f8;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  `;
+  
+  searchContainer.appendChild(searchInput);
+  searchContainer.appendChild(clearButton);
+  legendContent.appendChild(searchContainer);
+  
   // Create legend items
   sortedCategories.forEach(category => {
     const color = categoryToColor.get(category) || fallbackColor;
@@ -804,6 +840,7 @@ function updateCategoricalFloatingLegend() {
     const count = categoryCounts.get(category) || 0;
     
     const item = document.createElement('div');
+    item.setAttribute('data-category', category);
     item.style.cssText = `
       display: flex;
       align-items: center;
@@ -903,6 +940,26 @@ function updateCategoricalFloatingLegend() {
   if ((legendContent as any)._updateSortIndicators) {
     (legendContent as any)._updateSortIndicators();
   }
+  
+  // Add search functionality
+  const filterCategories = (searchText: string) => {
+    const items = legendContent.querySelectorAll('[data-category]');
+    items.forEach(item => {
+      const category = item.getAttribute('data-category') || '';
+      const matches = category.toLowerCase().includes(searchText.toLowerCase());
+      (item as HTMLElement).style.display = matches ? 'flex' : 'none';
+    });
+  };
+  
+  searchInput.addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    filterCategories(target.value);
+  });
+  
+  clearButton.addEventListener('click', () => {
+    searchInput.value = '';
+    filterCategories('');
+  });
 }
 
 function updateNumericFloatingLegend() {
@@ -961,6 +1018,47 @@ function updateNumericFloatingLegend() {
     });
   }
   
+  // Add search bar to legend
+  const searchContainer = document.createElement('div');
+  searchContainer.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding: 4px;
+  `;
+  
+  const searchLabel = document.createElement('span');
+  searchLabel.textContent = 'Find:';
+  searchLabel.style.cssText = 'font-size: 12px;';
+  
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search ranges...';
+  searchInput.style.cssText = `
+    flex: 1;
+    padding: 4px 6px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+  `;
+  
+  const clearButton = document.createElement('button');
+  clearButton.textContent = 'Clear';
+  clearButton.style.cssText = `
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    background: #f8f8f8;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+  `;
+  
+  searchContainer.appendChild(searchLabel);
+  searchContainer.appendChild(searchInput);
+  searchContainer.appendChild(clearButton);
+  legendContent.appendChild(searchContainer);
+  
   // Create legend items
   rangeData.forEach(({ range, index, rangeKey, count }) => {
     const isHidden = hiddenLegendItems.has(rangeKey);
@@ -969,6 +1067,7 @@ function updateNumericFloatingLegend() {
     const color = range.color;
     
     const item = document.createElement('div');
+    item.setAttribute('data-range', range.label);
     item.style.cssText = `
       display: flex;
       align-items: center;
@@ -1067,6 +1166,26 @@ function updateNumericFloatingLegend() {
   if ((legendContent as any)._updateSortIndicators) {
     (legendContent as any)._updateSortIndicators();
   }
+  
+  // Add search functionality
+  const filterRanges = (searchText: string) => {
+    const items = legendContent.querySelectorAll('[data-range]');
+    items.forEach(item => {
+      const rangeLabel = item.getAttribute('data-range') || '';
+      const matches = rangeLabel.toLowerCase().includes(searchText.toLowerCase());
+      (item as HTMLElement).style.display = matches ? 'flex' : 'none';
+    });
+  };
+  
+  searchInput.addEventListener('input', (e) => {
+    const target = e.target as HTMLInputElement;
+    filterRanges(target.value);
+  });
+  
+  clearButton.addEventListener('click', () => {
+    searchInput.value = '';
+    filterRanges('');
+  });
 }
 
 // Custom color overrides for individual legend items
@@ -2106,6 +2225,44 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
     .setHTML(buildPopupHTML(props))
     .addTo(map);
   lastPicked = { props, lngLat };
+  
+  // Add search functionality to the popup
+  addPopupSearchFunctionality();
+}
+
+function addPopupSearchFunctionality() {
+  setTimeout(() => {
+    const popupElement = activePopup?.getElement();
+    if (popupElement) {
+      const searchInput = popupElement.querySelector('#popupSearch') as HTMLInputElement;
+      const clearButton = popupElement.querySelector('#popupSearchClear') as HTMLButtonElement;
+      const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement;
+      
+      if (searchInput && clearButton && tableBody) {
+        const filterFields = (searchText: string) => {
+          const rows = tableBody.querySelectorAll('tr');
+          rows.forEach(row => {
+            const fieldNameCell = row.querySelector('td:first-child code');
+            if (fieldNameCell) {
+              const fieldName = fieldNameCell.textContent || '';
+              const matches = fieldName.toLowerCase().includes(searchText.toLowerCase());
+              (row as HTMLElement).style.display = matches ? '' : 'none';
+            }
+          });
+        };
+        
+        searchInput.addEventListener('input', (e) => {
+          const target = e.target as HTMLInputElement;
+          filterFields(target.value);
+        });
+        
+        clearButton.addEventListener('click', () => {
+          searchInput.value = '';
+          filterFields('');
+        });
+      }
+    }
+  }, 0);
 }
 
 /* --- value expression builder (handles normalization) --- */
@@ -2153,6 +2310,7 @@ function applyGrayRendering() {
 
   if (activePopup && lastPicked) {
     activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
+    addPopupSearchFunctionality();
   }
 }
 
@@ -2203,6 +2361,7 @@ function applyExtrusion() {
 
   if (activePopup && lastPicked) {
     activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
+    addPopupSearchFunctionality();
   }
 }
 
@@ -2731,13 +2890,19 @@ function buildPopupHTML(props: Record<string, any>): string {
         </div>` : ''}
       <div style="height:1px;background:#eee;margin:6px 0"></div>
       <div style="font-weight:600;margin-bottom:2px">Loaded fields</div>
-      <div style="overflow:auto;">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+        <input type="text" id="popupSearch" placeholder="Search fields..." style="flex:1;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
+        <button id="popupSearchClear" style="padding:4px 8px;border:1px solid #ddd;background:#f8f8f8;border-radius:4px;cursor:pointer;font-size:12px;">Clear</button>
+      </div>
+      <div style="overflow-y:auto; max-height:400px;">
         <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
           <colgroup>
             <col span="1" style="width:65%">
             <col span="1" style="width:35%">
           </colgroup>
+          <tbody id="popupFieldsTable">
           ${rows}
+          </tbody>
         </table>
       </div>
     </div>`;

@@ -78,6 +78,12 @@ function ensureMarchingAntsStyles() {
     }
   }
 
+  /* Animated stroke dash for SVG paths */
+  @keyframes stroke-ants {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: calc(var(--ants-size) * 2); }
+  }
+
   .selection-rect {
     position: absolute;
     pointer-events: none;
@@ -116,10 +122,58 @@ function ensureMarchingAntsStyles() {
 
   .selection-rect.unselect {
     background-color: var(--ants-fill-unselect);
+    background-image:
+      linear-gradient(90deg, #ffffff 50%, #ef4444 0), /* top */
+      linear-gradient(90deg, #ffffff 50%, #ef4444 0), /* bottom */
+      linear-gradient(0deg,  #ffffff 50%, #ef4444 0), /* left */
+      linear-gradient(0deg,  #ffffff 50%, #ef4444 0); /* right */
+  }
+
+  /* Lasso path with animated marching ants - dual path approach */
+  .lasso-path {
+    stroke-width: var(--ants-thickness);
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    fill: none;
+    stroke-dasharray: var(--ants-size), var(--ants-size);
+    animation: stroke-ants var(--ants-speed) linear infinite;
+  }
+
+  .lasso-path.select {
+    stroke: var(--ants-b);
+  }
+
+  .lasso-path.unselect {
+    stroke: #ef4444;
+  }
+
+  .lasso-path-bg {
+    stroke-width: var(--ants-thickness);
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    fill: none;
+    animation: stroke-ants var(--ants-speed) linear infinite;
+    animation-direction: reverse;
+  }
+
+  .lasso-path-bg.select {
+    stroke: var(--ants-a);
+  }
+
+  .lasso-path-bg.unselect {
+    stroke: #ffffff;
+  }
+
+  .lasso-fill {
+    fill: var(--ants-fill);
+  }
+
+  .lasso-fill.unselect {
+    fill: var(--ants-fill-unselect);
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .selection-rect { animation-duration: 2s; }
+    .selection-rect, .lasso-path { animation-duration: 2s; }
   }
   `;
 
@@ -4224,16 +4278,21 @@ function createLassoElement(): HTMLDivElement {
     pointer-events: none;
   `;
   
-  // Create path element
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('fill', 'rgba(59,130,246,0.10)');
-  path.setAttribute('stroke', '#3b82f6');
-  path.setAttribute('stroke-width', '2');
-  path.setAttribute('stroke-dasharray', '5,5');
-  path.setAttribute('stroke-linejoin', 'round');
-  path.setAttribute('stroke-linecap', 'round');
+  // Create fill path (for the colored background)
+  const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  fillPath.setAttribute('class', 'lasso-fill');
   
-  svg.appendChild(path);
+  // Create background path (for the white dashes)
+  const bgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  bgPath.setAttribute('class', 'lasso-path-bg select');
+  
+  // Create foreground path (for the black/red dashes)
+  const fgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  fgPath.setAttribute('class', 'lasso-path select');
+  
+  svg.appendChild(fillPath);
+  svg.appendChild(bgPath);
+  svg.appendChild(fgPath);
   lasso.appendChild(svg);
   document.body.appendChild(lasso);
   
@@ -4243,7 +4302,7 @@ function createLassoElement(): HTMLDivElement {
 // Initialize lasso element
 lassoElement = createLassoElement();
 lassoSVG = lassoElement.querySelector('svg') as SVGElement;
-lassoPath = lassoElement.querySelector('path') as SVGPathElement;
+lassoPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
 
 // Lasso selection mouse handlers
 function handleLassoMouseDown(e: MouseEvent) {
@@ -4275,13 +4334,20 @@ function handleLassoMouseDown(e: MouseEvent) {
   if (lassoElement) {
     lassoElement.style.display = 'block';
     
+    // Get all path elements
+    const fillPath = lassoElement.querySelector('.lasso-fill') as SVGPathElement;
+    const bgPath = lassoElement.querySelector('.lasso-path-bg') as SVGPathElement;
+    const fgPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
+    
     // Apply unselect styling if in unselect mode
     if (isUnselectMode) {
-      lassoPath?.setAttribute('fill', 'rgba(239,68,68,0.10)');
-      lassoPath?.setAttribute('stroke', '#ef4444');
+      fillPath?.setAttribute('class', 'lasso-fill unselect');
+      bgPath?.setAttribute('class', 'lasso-path-bg unselect');
+      fgPath?.setAttribute('class', 'lasso-path unselect');
     } else {
-      lassoPath?.setAttribute('fill', 'rgba(59,130,246,0.10)');
-      lassoPath?.setAttribute('stroke', '#3b82f6');
+      fillPath?.setAttribute('class', 'lasso-fill');
+      bgPath?.setAttribute('class', 'lasso-path-bg select');
+      fgPath?.setAttribute('class', 'lasso-path select');
     }
   }
   
@@ -4290,7 +4356,7 @@ function handleLassoMouseDown(e: MouseEvent) {
 }
 
 function handleLassoMouseMove(e: MouseEvent) {
-  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoPath) return;
+  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoElement) return;
   
   // Sample points every 5 pixels to avoid too many points
   const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
@@ -4303,7 +4369,14 @@ function handleLassoMouseMove(e: MouseEvent) {
 }
 
 function updateLassoPath() {
-  if (!lassoPath || lassoPoints.length < 2) return;
+  if (!lassoElement || lassoPoints.length < 2) return;
+  
+  // Get all path elements
+  const fillPath = lassoElement.querySelector('.lasso-fill') as SVGPathElement;
+  const bgPath = lassoElement.querySelector('.lasso-path-bg') as SVGPathElement;
+  const fgPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
+  
+  if (!fillPath || !bgPath || !fgPath) return;
   
   // Build SVG path
   let pathData = `M ${lassoPoints[0].x} ${lassoPoints[0].y}`;
@@ -4317,11 +4390,14 @@ function updateLassoPath() {
     pathData += ` Z`;
   }
   
-  lassoPath.setAttribute('d', pathData);
+  // Update all three paths with the same path data
+  fillPath.setAttribute('d', pathData);
+  bgPath.setAttribute('d', pathData);
+  fgPath.setAttribute('d', pathData);
 }
 
 function handleLassoMouseUp(e: MouseEvent) {
-  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoPath) return;
+  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoElement) return;
   
   // Close the lasso by adding the first point again if we have enough points
   if (lassoPoints.length >= 3) {

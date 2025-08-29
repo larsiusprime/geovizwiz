@@ -29,9 +29,9 @@ const map = new maplibregl.Map({
   pitch: 45,
   bearing: -20,
   hash: true,
-
-  // supersample: render at higher internal resolution (smooth lines)
-  pixelRatio: HQ_PR
+  boxZoom: false,
+  doubleClickZoom: false,
+  pixelRatio: HQ_PR // supersample: render at higher internal resolution (smooth lines)
 });
 map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');

@@ -258,18 +258,20 @@ function handleRectangleMouseDown(e: MouseEvent) {
   // Only activate if we're in rectangle selection mode
   if (currentSelectionMode !== 'select-rectangle') return;
   
-  // Only activate on shift+left click (select) or alt+left click (unselect)
-  if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
+  // Only activate on left click (select only), shift+left click (add), or alt+left click (remove)
+  if (e.button !== 0) return;
   
   // Prevent default behavior
   e.preventDefault();
   e.stopPropagation();
   
   // Determine mode based on modifier keys
-  const isUnselectMode = e.altKey && !e.shiftKey;
+  const isAddMode = e.shiftKey && !e.altKey;
+  const isRemoveMode = e.altKey && !e.shiftKey;
+  const isSelectOnlyMode = !e.shiftKey && !e.altKey;
   
   // Start rectangle selection/unselection
-  if (isUnselectMode) {
+  if (isRemoveMode) {
     isRectangleUnselecting = true;
   } else {
     isRectangleSelecting = true;
@@ -289,8 +291,8 @@ function handleRectangleMouseDown(e: MouseEvent) {
     rectangleElement.style.width = '0px';
     rectangleElement.style.height = '0px';
     
-    // Apply unselect styling if in unselect mode
-    if (isUnselectMode) {
+    // Apply styling based on mode
+    if (isRemoveMode) {
       rectangleElement.classList.add('unselect');
     } else {
       rectangleElement.classList.remove('unselect');
@@ -350,11 +352,21 @@ function handleRectangleMouseUp(e: MouseEvent) {
     console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
     console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
     
-    // Select or unselect all parcels within the bounding box
+    // Handle different selection modes
     if (isRectangleUnselecting) {
+      // Remove parcels from selection
       unselectParcelsInBoundingBox(bbox);
     } else {
-      selectParcelsInBoundingBox(bbox);
+      // Check if this is select-only mode (no modifiers)
+      const isSelectOnlyMode = !e.shiftKey && !e.altKey;
+      if (isSelectOnlyMode) {
+        // Select only these parcels, unselect all others
+        clearAllSelections();
+        selectParcelsInBoundingBox(bbox);
+      } else {
+        // Add parcels to selection
+        selectParcelsInBoundingBox(bbox);
+      }
     }
   }
   
@@ -2962,45 +2974,61 @@ function addExtrusionLayer() {
 
   // NEW: parcel selection and inspection
   map.on('click', LAYER_ID, (e) => {
-    // Only handle clicks in select-one mode
-    if (currentSelectionMode !== 'select-one') return;
-    
     const f = e.features?.[0];
     if (!f) return;
     
-    // Handle different click modes
-    if (e.originalEvent.shiftKey) {
-      // Shift-click: always add to selection
-      addParcelToSelection(f);
-    } else if (e.originalEvent.altKey) {
-      // Alt-click: always remove from selection
-      removeParcelFromSelection(f);
-    } else {
-      // Regular left-click: toggle selection
-      toggleParcelSelection(f);
-    }
-  });
-  
-  // Right-click for inspection popup
-  map.on('contextmenu', LAYER_ID, (e) => {
-    // Disable parcel inspector during polygon selection
-    if (isPolygonSelecting || isPolygonUnselecting) {
-      e.preventDefault();
+    // Handle info tool
+    if (isInfoToolActive) {
+      const props = (f.properties || {}) as Record<string, any>;
+      showPopup(props, e.lngLat);
       return;
     }
     
-    const f = e.features?.[0];
-    if (!f) return;
-    const props = (f.properties || {}) as Record<string, any>;
-    showPopup(props, e.lngLat);
+    // Handle selection tools
+    if (currentSelectionMode === 'select-one') {
+      // Handle different click modes
+      if (e.originalEvent.shiftKey) {
+        // Shift-click: always add to selection
+        addParcelToSelection(f);
+      } else if (e.originalEvent.altKey) {
+        // Alt-click: always remove from selection
+        removeParcelFromSelection(f);
+      } else {
+        // Regular left-click: select only this parcel, unselect all others
+        clearAllSelections();
+        addParcelToSelection(f);
+      }
+    }
+  });
+  
+  // Right-click to close popup
+  map.on('contextmenu', LAYER_ID, (e) => {
+    if (activePopup) {
+      activePopup.remove();
+      activePopup = null;
+      lastPicked = null;
+    }
   });
   
   map.on('mouseenter', LAYER_ID, () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', LAYER_ID, () => { map.getCanvas().style.cursor = ''; });
+  
+  // ESC key to close popup
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && activePopup) {
+      activePopup.remove();
+      activePopup = null;
+      lastPicked = null;
+    }
+  });
+  
   ensureErrorLayer();
 }
 
 function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
+  // Only show popup if info tool is active
+  if (!isInfoToolActive) return;
+  
   if (activePopup) activePopup.remove();
   activePopup = new maplibregl.Popup({
     closeButton: true,
@@ -4134,21 +4162,24 @@ function buildNumericColorExpression(): Expression {
 /* ---------------- Vertical Toolbar ---------------- */
 
 // Toolbar state
-let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | 'select-polygon' | 'off' = 'select-one';
+let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | 'select-polygon' = 'select-one';
 
 // Toolbar elements
 const selectToolButton = document.getElementById('selectToolButton') as HTMLButtonElement;
 const settingsToolButton = document.getElementById('settingsToolButton') as HTMLButtonElement;
+const infoToolButton = document.getElementById('infoToolButton') as HTMLButtonElement;
 const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
+
+// Tool state
+let isInfoToolActive = false;
 
 // Icon mappings for different selection modes
 const selectionModeIcons: Record<string, string> = {
   'select-one': 'src/svg/select_cursor.svg',
   'select-rectangle': 'src/svg/select_rectangle.svg',
   'select-lasso': 'src/svg/select_lasso.svg',
-  'select-polygon': 'src/svg/select_polygon.svg',
-  'off': 'src/svg/select_none.svg'
+  'select-polygon': 'src/svg/select_polygon.svg'
 };
 
 // Update the main toolbar button icon based on current selection mode
@@ -4156,12 +4187,8 @@ function updateToolbarIcon() {
   const iconPath = selectionModeIcons[currentSelectionMode];
   selectToolButton.innerHTML = `<img src="${iconPath}" alt="Select" />`;
   
-  // Update active state
-  if (currentSelectionMode === 'off') {
-    selectToolButton.classList.remove('active');
-  } else {
-    selectToolButton.classList.add('active');
-  }
+  // Update active tool state
+  selectToolButton.classList.add('active-tool');
 }
 
 // Update submenu active states
@@ -4169,9 +4196,9 @@ function updateSubmenuActiveStates() {
   submenuButtons.forEach(button => {
     const mode = button.getAttribute('data-mode');
     if (mode === currentSelectionMode) {
-      button.classList.add('active');
+      button.classList.add('active-tool');
     } else {
-      button.classList.remove('active');
+      button.classList.remove('active-tool');
     }
   });
 }
@@ -4182,6 +4209,18 @@ function handleSubmenuButtonClick(mode: string) {
   updateToolbarIcon();
   updateSubmenuActiveStates();
   selectSubmenu.classList.remove('show');
+  
+  // Inactivate info tool when selection tool is activated
+  if (isInfoToolActive) {
+    isInfoToolActive = false;
+    infoToolButton.classList.remove('active-tool');
+    // Close popup if info tool is deactivated
+    if (activePopup) {
+      activePopup.remove();
+      activePopup = null;
+      lastPicked = null;
+    }
+  }
   
   // Set up mode-specific event handlers
   setupSelectionModeHandlers();
@@ -4204,6 +4243,11 @@ function setupSelectionModeHandlers() {
   mapContainer.removeEventListener('mousemove', handlePolygonMouseMove);
   mapContainer.removeEventListener('dblclick', handlePolygonDoubleClick);
   
+  // If info tool is active, don't add any selection event listeners
+  if (isInfoToolActive) {
+    return;
+  }
+  
   // Add event listeners based on current mode
   switch (currentSelectionMode) {
     case 'select-rectangle':
@@ -4222,8 +4266,7 @@ function setupSelectionModeHandlers() {
       mapContainer.addEventListener('dblclick', handlePolygonDoubleClick);
       break;
     case 'select-one':
-    case 'off':
-      // These modes use the existing map click handler or no selection
+      // This mode uses the existing map click handler
       break;
   }
 }
@@ -4254,6 +4297,33 @@ function initializeToolbar() {
     } else {
       minimizeSettings();
     }
+  });
+  
+  // Handle info button click
+  infoToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    
+    // Toggle info tool
+    isInfoToolActive = !isInfoToolActive;
+    
+    // Update button state
+    if (isInfoToolActive) {
+      infoToolButton.classList.add('active-tool');
+      // Inactivate selection tool
+      selectToolButton.classList.remove('active-tool');
+    } else {
+      infoToolButton.classList.remove('active-tool');
+    }
+    
+    // Close popup if info tool is deactivated
+    if (!isInfoToolActive && activePopup) {
+      activePopup.remove();
+      activePopup = null;
+      lastPicked = null;
+    }
+    
+    // Update selection mode handlers to reflect info tool state
+    setupSelectionModeHandlers();
   });
   
   // Handle legend button click
@@ -4378,18 +4448,20 @@ lassoPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
 
 // Lasso selection mouse handlers
 function handleLassoMouseDown(e: MouseEvent) {
-  // Only activate on shift+left click (select) or alt+left click (unselect)
-  if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
+  // Only activate on left click (select only), shift+left click (add), or alt+left click (remove)
+  if (e.button !== 0) return;
   
   // Prevent default behavior
   e.preventDefault();
   e.stopPropagation();
   
   // Determine mode based on modifier keys
-  const isUnselectMode = e.altKey && !e.shiftKey;
+  const isAddMode = e.shiftKey && !e.altKey;
+  const isRemoveMode = e.altKey && !e.shiftKey;
+  const isSelectOnlyMode = !e.shiftKey && !e.altKey;
   
   // Start lasso selection/unselection
-  if (isUnselectMode) {
+  if (isRemoveMode) {
     isLassoUnselecting = true;
   } else {
     isLassoSelecting = true;
@@ -4411,8 +4483,8 @@ function handleLassoMouseDown(e: MouseEvent) {
     const bgPath = lassoElement.querySelector('.lasso-path-bg') as SVGPathElement;
     const fgPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
     
-    // Apply unselect styling if in unselect mode
-    if (isUnselectMode) {
+    // Apply styling based on mode
+    if (isRemoveMode) {
       fillPath?.setAttribute('class', 'lasso-fill unselect');
       bgPath?.setAttribute('class', 'lasso-path-bg unselect');
       fgPath?.setAttribute('class', 'lasso-path unselect');
@@ -4488,11 +4560,21 @@ function handleLassoMouseUp(e: MouseEvent) {
     const mode = isLassoUnselecting ? 'Unselect' : 'Select';
     console.log(`Lasso ${mode} Coordinates:`, polygon);
     
-    // Select or unselect all parcels within the lasso polygon
+    // Handle different selection modes
     if (isLassoUnselecting) {
+      // Remove parcels from selection
       unselectParcelsInPolygon(polygon);
     } else {
-      selectParcelsInPolygon(polygon);
+      // Check if this is select-only mode (no modifiers)
+      const isSelectOnlyMode = !e.shiftKey && !e.altKey;
+      if (isSelectOnlyMode) {
+        // Select only these parcels, unselect all others
+        clearAllSelections();
+        selectParcelsInPolygon(polygon);
+      } else {
+        // Add parcels to selection
+        selectParcelsInPolygon(polygon);
+      }
     }
   }
   
@@ -4678,6 +4760,7 @@ let polygonSVG: SVGElement | null = null;
 let polygonPath: SVGPathElement | null = null;
 let polygonStartPoint: maplibregl.Point | null = null;
 let isPolygonClosing = false;
+let polygonSelectionMode: 'select-only' | 'add' | 'remove' = 'select-only';
 
 // Create polygon drawing element (reuses lasso element structure)
 function createPolygonElement(): HTMLDivElement {
@@ -4740,21 +4823,33 @@ polygonPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
 
 // Polygon selection mouse handlers
 function handlePolygonMouseDown(e: MouseEvent) {
-  // Only activate on shift+left click (select) or alt+left click (unselect)
-  if (!((e.shiftKey && !e.altKey) || (e.altKey && !e.shiftKey)) || e.button !== 0) return;
+  // Only activate on left click (select only), shift+left click (add), or alt+left click (remove)
+  if (e.button !== 0) return;
   
   // Prevent default behavior
   e.preventDefault();
   e.stopPropagation();
   
   // Determine mode based on modifier keys
-  const isUnselectMode = e.altKey && !e.shiftKey;
+  const isAddMode = e.shiftKey && !e.altKey;
+  const isRemoveMode = e.altKey && !e.shiftKey;
+  const isSelectOnlyMode = !e.shiftKey && !e.altKey;
   const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
   
   // If this is the first click, start polygon selection
   if (polygonPoints.length === 0) {
-    isPolygonSelecting = !isUnselectMode;
-    isPolygonUnselecting = isUnselectMode;
+    isPolygonSelecting = !isRemoveMode;
+    isPolygonUnselecting = isRemoveMode;
+    
+    // Store the selection mode
+    if (isRemoveMode) {
+      polygonSelectionMode = 'remove';
+    } else if (isAddMode) {
+      polygonSelectionMode = 'add';
+    } else {
+      polygonSelectionMode = 'select-only';
+    }
+    
     polygonStartPoint = currentPoint;
     polygonPoints = [currentPoint];
     
@@ -4771,8 +4866,8 @@ function handlePolygonMouseDown(e: MouseEvent) {
       const bgPath = polygonElement.querySelector('.polygon-path-bg') as SVGPathElement;
       const fgPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
       
-      // Apply unselect styling if in unselect mode
-      if (isUnselectMode) {
+      // Apply styling based on mode
+      if (isRemoveMode) {
         fillPath?.setAttribute('class', 'polygon-fill unselect');
         bgPath?.setAttribute('class', 'polygon-path-bg unselect');
         fgPath?.setAttribute('class', 'polygon-path unselect');
@@ -4891,10 +4986,16 @@ function closePolygon() {
   const mode = isPolygonUnselecting ? 'Unselect' : 'Select';
   console.log(`Polygon ${mode} Coordinates:`, polygon);
   
-  // Select or unselect all parcels within the polygon
-  if (isPolygonUnselecting) {
+  // Handle different selection modes
+  if (polygonSelectionMode === 'remove') {
+    // Remove parcels from selection
     unselectParcelsInPolygon(polygon);
+  } else if (polygonSelectionMode === 'select-only') {
+    // Select only these parcels, unselect all others
+    clearAllSelections();
+    selectParcelsInPolygon(polygon);
   } else {
+    // Add parcels to selection
     selectParcelsInPolygon(polygon);
   }
   

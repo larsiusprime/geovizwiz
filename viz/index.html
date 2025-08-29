@@ -116,16 +116,30 @@
       fill: inherit;
     }
 
+    /* Active tool state for mutually exclusive tools (Info, Select) */
+    .toolbar-button.active-tool {
+      background: #ffffff;
+      border-color: #3b82f6;
+      border-width: 2px;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      color: inherit;
+    }
+
+    .toolbar-button.active-tool svg path {
+      fill: inherit;
+    }
+
     .toolbar-button.inactive {
-      background: #f8f8f8;
-      border-color: #ddd;
-      opacity: 0.5;
+      background: #e5e7eb;
+      border-color: #9ca3af;
+      opacity: 0.7;
       cursor: default;
+      color: #6b7280;
     }
 
     .toolbar-button.inactive:hover {
-      background: #f8f8f8;
-      border-color: #ddd;
+      background: #e5e7eb;
+      border-color: #9ca3af;
     }
 
     .toolbar-button svg {
@@ -184,7 +198,7 @@
       height: 20px;
     }
 
-    .submenu-button.active {
+    .submenu-button.active-tool {
       background: #3b82f6;
       color: white;
     }
@@ -196,15 +210,20 @@
       
       <!-- Vertical Toolbar -->
       <div id="verticalToolbar">
+        
+        <button id="settingsToolButton" class="toolbar-button" title="Show/hide settings">
+          <img src="src/svg/settings.svg" alt="Settings" />
+        </button>
+        
+        <button id="infoToolButton" class="toolbar-button" title="Inspect tool">
+          <img src="src/svg/info.svg" alt="Info" />
+        </button>
+        
         <button id="selectToolButton" class="toolbar-button" title="Select Tool">
           <img src="src/svg/select_cursor.svg" alt="Select" />
         </button>
         
-        <button id="settingsToolButton" class="toolbar-button" title="Settings">
-          <img src="src/svg/settings.svg" alt="Settings" />
-        </button>
-        
-        <button id="legendToolButton" class="toolbar-button" title="Legend">
+        <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
           <img src="src/svg/legend.svg" alt="Legend" />
         </button>
         
@@ -224,10 +243,6 @@
           <button class="submenu-button" data-mode="select-polygon" title="Select parcels by drawing a polygon">
             <img src="src/svg/select_polygon.svg" alt="Select Polygon" />
             Polygon
-          </button>
-          <button class="submenu-button" data-mode="off" title="Disable all selection tools">
-            <img src="src/svg/select_none.svg" alt="Select Off" />
-            Off
           </button>
         </div>
       </div>

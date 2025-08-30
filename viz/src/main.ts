@@ -288,7 +288,7 @@ function handleRectangleMouseDown(e: MouseEvent) {
     isRectangleSelecting = true;
   }
   
-  rectangleStartPoint = new maplibregl.Point(e.clientX, e.clientY);
+  rectangleStartPoint = getViewportPoint(e);
   
   // Temporarily disable map drag pan
   originalDragPan = map.dragPan.isEnabled();
@@ -296,9 +296,10 @@ function handleRectangleMouseDown(e: MouseEvent) {
   
   // Show rectangle element with appropriate styling
   if (rectangleElement) {
+    const viewportPoint = getViewportPoint(e);
     rectangleElement.style.display = 'block';
-    rectangleElement.style.left = `${e.clientX}px`;
-    rectangleElement.style.top = `${e.clientY}px`;
+    rectangleElement.style.left = `${viewportPoint.x}px`;
+    rectangleElement.style.top = `${viewportPoint.y}px`;
     rectangleElement.style.width = '0px';
     rectangleElement.style.height = '0px';
     
@@ -317,12 +318,12 @@ function handleRectangleMouseDown(e: MouseEvent) {
 function handleRectangleMouseMove(e: MouseEvent) {
   if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
-  // Calculate rectangle dimensions
-  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
-  const left = Math.min(rectangleStartPoint.x, currentPoint.x);
-  const top = Math.min(rectangleStartPoint.y, currentPoint.y);
-  const width = Math.abs(currentPoint.x - rectangleStartPoint.x);
-  const height = Math.abs(currentPoint.y - rectangleStartPoint.y);
+  // Calculate rectangle dimensions for visual positioning (viewport coordinates)
+  const currentViewportPoint = getViewportPoint(e);
+  const left = Math.min(rectangleStartPoint.x, currentViewportPoint.x);
+  const top = Math.min(rectangleStartPoint.y, currentViewportPoint.y);
+  const width = Math.abs(currentViewportPoint.x - rectangleStartPoint.x);
+  const height = Math.abs(currentViewportPoint.y - rectangleStartPoint.y);
   
   // Update rectangle element
   rectangleElement.style.left = `${left}px`;
@@ -334,18 +335,18 @@ function handleRectangleMouseMove(e: MouseEvent) {
 function handleRectangleMouseUp(e: MouseEvent) {
   if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
-  // Calculate final rectangle
-  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
-  const left = Math.min(rectangleStartPoint.x, currentPoint.x);
-  const top = Math.min(rectangleStartPoint.y, currentPoint.y);
-  const width = Math.abs(currentPoint.x - rectangleStartPoint.x);
-  const height = Math.abs(currentPoint.y - rectangleStartPoint.y);
+  // Calculate final rectangle for selection logic (map coordinates)
+  const currentMapPoint = getMapPoint(e);
+  const mapLeft = Math.min(rectangleStartPoint.x, currentMapPoint.x);
+  const mapTop = Math.min(rectangleStartPoint.y, currentMapPoint.y);
+  const mapWidth = Math.abs(currentMapPoint.x - rectangleStartPoint.x);
+  const mapHeight = Math.abs(currentMapPoint.y - rectangleStartPoint.y);
   
   // Only process if rectangle has meaningful size
-  if (width > 5 && height > 5) {
+  if (mapWidth > 5 && mapHeight > 5) {
     // Convert screen coordinates to map coordinates
-    const topLeft = map.unproject([left, top]);
-    const bottomRight = map.unproject([left + width, top + height]);
+    const topLeft = map.unproject([mapLeft, mapTop]);
+    const bottomRight = map.unproject([mapLeft + mapWidth, mapTop + mapHeight]);
     
     // Create bounding box
     const bbox: [number, number, number, number] = [
@@ -358,7 +359,7 @@ function handleRectangleMouseUp(e: MouseEvent) {
     // Log coordinates to console
     const mode = isRectangleUnselecting ? 'Unselect' : 'Select';
     console.log(`Rectangle ${mode} Coordinates:`);
-    console.log('Screen space:', { left, top, width, height });
+    console.log('Screen space:', { left: mapLeft, top: mapTop, width: mapWidth, height: mapHeight });
     console.log('Map coordinates (bbox):', bbox);
     console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
     console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
@@ -4467,8 +4468,8 @@ function handleLassoMouseDown(e: MouseEvent) {
     isLassoSelecting = true;
   }
   
-  // Initialize lasso points
-  lassoPoints = [new maplibregl.Point(e.clientX, e.clientY)];
+  // Initialize lasso points (viewport coordinates for visual positioning)
+  lassoPoints = [getViewportPoint(e)];
   
   // Temporarily disable map drag pan
   originalDragPan = map.dragPan.isEnabled();
@@ -4502,8 +4503,8 @@ function handleLassoMouseDown(e: MouseEvent) {
 function handleLassoMouseMove(e: MouseEvent) {
   if ((!isLassoSelecting && !isLassoUnselecting) || !lassoElement) return;
   
-  // Sample points every 5 pixels to avoid too many points
-  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  // Sample points every 5 pixels to avoid too many points (viewport coordinates for visual positioning)
+  const currentPoint = getViewportPoint(e);
   const lastPoint = lassoPoints[lassoPoints.length - 1];
   
   if (currentPoint.dist(lastPoint) >= 5) {
@@ -4548,10 +4549,17 @@ function handleLassoMouseUp(e: MouseEvent) {
     lassoPoints.push(lassoPoints[0]);
     updateLassoPath();
     
-    // Convert screen coordinates to map coordinates
-    const mapCoordinates = lassoPoints.map(point => 
-      map.unproject([point.x, point.y])
-    );
+    // Convert viewport coordinates to map coordinates for selection logic
+    const mapCoordinates = lassoPoints.map(point => {
+      // Convert viewport coordinates to map container coordinates first
+      const canvas = map.getCanvas();
+      const rect = canvas.getBoundingClientRect();
+      const mapPoint = new maplibregl.Point(
+        point.x - rect.left,
+        point.y - rect.top
+      );
+      return map.unproject([mapPoint.x, mapPoint.y]);
+    });
     
     // Create a polygon from the coordinates
     const polygon = mapCoordinates.map(coord => [coord.lng, coord.lat]);
@@ -4832,7 +4840,7 @@ function handlePolygonMouseDown(e: MouseEvent) {
   const isAddMode = e.shiftKey && !e.altKey;
   const isRemoveMode = e.altKey && !e.shiftKey;
   const isSelectOnlyMode = !e.shiftKey && !e.altKey;
-  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  const currentPoint = getViewportPoint(e);
   
   // If this is the first click, start polygon selection
   if (polygonPoints.length === 0) {
@@ -4893,7 +4901,7 @@ function handlePolygonMouseDown(e: MouseEvent) {
 function handlePolygonMouseMove(e: MouseEvent) {
   if ((!isPolygonSelecting && !isPolygonUnselecting) || !polygonElement || polygonPoints.length === 0) return;
   
-  const currentPoint = new maplibregl.Point(e.clientX, e.clientY);
+  const currentPoint = getViewportPoint(e);
   
   // Check if we're near the start point for closing indication
   if (polygonStartPoint && currentPoint.dist(polygonStartPoint) <= 10) {
@@ -4972,10 +4980,17 @@ function handlePolygonDoubleClick(e: MouseEvent) {
 function closePolygon() {
   if ((!isPolygonSelecting && !isPolygonUnselecting) || !polygonElement || polygonPoints.length < 3) return;
   
-  // Convert screen coordinates to map coordinates
-  const mapCoordinates = polygonPoints.map(point => 
-    map.unproject([point.x, point.y])
-  );
+  // Convert viewport coordinates to map coordinates for selection logic
+  const mapCoordinates = polygonPoints.map(point => {
+    // Convert viewport coordinates to map container coordinates first
+    const canvas = map.getCanvas();
+    const rect = canvas.getBoundingClientRect();
+    const mapPoint = new maplibregl.Point(
+      point.x - rect.left,
+      point.y - rect.top
+    );
+    return map.unproject([mapPoint.x, mapPoint.y]);
+  });
   
   // Create a polygon from the coordinates
   const polygon = mapCoordinates.map(coord => [coord.lng, coord.lat]);

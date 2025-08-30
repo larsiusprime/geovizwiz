@@ -152,6 +152,32 @@
       height: 28px;
     }
 
+    .toolbar-button .hotkey {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      font-size: 8px;
+      font-weight: bold;
+      color: #666;
+      background: rgba(255, 255, 255, 0.8);
+      border-radius: 2px;
+      padding: 1px 2px;
+      line-height: 1;
+    }
+
+    .toolbar-button .corner-triangle {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 6px;
+      height: 6px;
+      opacity: 0.7;
+    }
+
+    .toolbar-button.has-submenu {
+      position: relative;
+    }
+
     .toolbar-submenu {
       position: absolute;
       left: 100%;
@@ -211,18 +237,26 @@
       <!-- Vertical Toolbar -->
       <div id="verticalToolbar">
         
+        <button id="panToolButton" class="toolbar-button" title="Pan tool (H)">
+          <img src="src/svg/pan.svg" alt="Pan" />
+          <span class="hotkey">H</span>
+        </button>
+        
+        <button id="selectToolButton" class="toolbar-button has-submenu" title="Select Tool (V)">
+          <img src="src/svg/select_cursor.svg" alt="Select" />
+          <span class="hotkey">V</span>
+          <img src="src/svg/corner_triangle.svg" alt="" class="corner-triangle" />
+        </button>
+        
+        <button id="infoToolButton" class="toolbar-button" title="Inspect tool (I)">
+          <img src="src/svg/info.svg" alt="Info" />
+          <span class="hotkey">I</span>
+        </button>
+
         <button id="settingsToolButton" class="toolbar-button" title="Show/hide settings">
           <img src="src/svg/settings.svg" alt="Settings" />
         </button>
-        
-        <button id="infoToolButton" class="toolbar-button" title="Inspect tool">
-          <img src="src/svg/info.svg" alt="Info" />
-        </button>
-        
-        <button id="selectToolButton" class="toolbar-button" title="Select Tool">
-          <img src="src/svg/select_cursor.svg" alt="Select" />
-        </button>
-        
+               
         <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
           <img src="src/svg/legend.svg" alt="Legend" />
         </button>

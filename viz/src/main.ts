@@ -40,6 +40,8 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 function updateCursor() {
   if (isInfoToolActive) {
     map.getCanvas().style.cursor = 'pointer';
+  } else if (isPanToolActive) {
+    map.getCanvas().style.cursor = 'grab';
   } else {
     // When SELECT mode is engaged, use arrow cursor
     map.getCanvas().style.cursor = 'default';
@@ -63,6 +65,30 @@ function getMapPoint(e: MouseEvent): maplibregl.Point {
   );
 }
 
+// Pan tool mouse handlers - just for cursor management
+function handlePanMouseDown(e: MouseEvent) {
+  if (!isPanToolActive || e.button !== 0) return;
+  
+  isPanning = true;
+  map.getCanvas().style.cursor = 'grabbing';
+}
+
+function handlePanMouseMove(_e: MouseEvent) {
+  // No special handling needed - MapLibre handles the panning
+}
+
+function handlePanMouseUp(_e: MouseEvent) {
+  if (!isPanToolActive || !isPanning) return;
+  
+  isPanning = false;
+  map.getCanvas().style.cursor = 'grab';
+}
+
+
+/* ---------------- Pan Tool ---------------- */
+
+// Pan tool state
+let isPanning = false;
 
 /* ---------------- Rectangle Selection Tool ---------------- */
 
@@ -305,6 +331,7 @@ function handleRectangleMouseDown(e: MouseEvent) {
     isRectangleSelecting = true;
   }
   
+  // Store start point in viewport coordinates for visual positioning
   rectangleStartPoint = getViewportPoint(e);
   
   // Temporarily disable map drag pan
@@ -352,18 +379,34 @@ function handleRectangleMouseMove(e: MouseEvent) {
 function handleRectangleMouseUp(e: MouseEvent) {
   if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
   
-  // Calculate final rectangle for selection logic (map coordinates)
-  const currentMapPoint = getMapPoint(e);
-  const mapLeft = Math.min(rectangleStartPoint.x, currentMapPoint.x);
-  const mapTop = Math.min(rectangleStartPoint.y, currentMapPoint.y);
-  const mapWidth = Math.abs(currentMapPoint.x - rectangleStartPoint.x);
-  const mapHeight = Math.abs(currentMapPoint.y - rectangleStartPoint.y);
+  // Get current point in viewport coordinates
+  const currentViewportPoint = getViewportPoint(e);
+  
+  // Calculate rectangle dimensions in viewport coordinates
+  const viewportLeft = Math.min(rectangleStartPoint.x, currentViewportPoint.x);
+  const viewportTop = Math.min(rectangleStartPoint.y, currentViewportPoint.y);
+  const viewportWidth = Math.abs(currentViewportPoint.x - rectangleStartPoint.x);
+  const viewportHeight = Math.abs(currentViewportPoint.y - rectangleStartPoint.y);
   
   // Only process if rectangle has meaningful size
-  if (mapWidth > 5 && mapHeight > 5) {
-    // Convert screen coordinates to map coordinates
-    const topLeft = map.unproject([mapLeft, mapTop]);
-    const bottomRight = map.unproject([mapLeft + mapWidth, mapTop + mapHeight]);
+  if (viewportWidth > 5 && viewportHeight > 5) {
+    // Convert viewport coordinates to map coordinates for selection logic
+    const canvas = map.getCanvas();
+    const rect = canvas.getBoundingClientRect();
+    
+    // Convert viewport coordinates to map container coordinates
+    const mapStartPoint = new maplibregl.Point(
+      rectangleStartPoint.x - rect.left,
+      rectangleStartPoint.y - rect.top
+    );
+    const mapCurrentPoint = new maplibregl.Point(
+      currentViewportPoint.x - rect.left,
+      currentViewportPoint.y - rect.top
+    );
+    
+    // Convert to geographic coordinates
+    const topLeft = map.unproject([mapStartPoint.x, mapStartPoint.y]);
+    const bottomRight = map.unproject([mapCurrentPoint.x, mapCurrentPoint.y]);
     
     // Create bounding box
     const bbox: [number, number, number, number] = [
@@ -376,7 +419,7 @@ function handleRectangleMouseUp(e: MouseEvent) {
     // Log coordinates to console
     const mode = isRectangleUnselecting ? 'Unselect' : 'Select';
     console.log(`Rectangle ${mode} Coordinates:`);
-    console.log('Screen space:', { left: mapLeft, top: mapTop, width: mapWidth, height: mapHeight });
+    console.log('Viewport space:', { left: viewportLeft, top: viewportTop, width: viewportWidth, height: viewportHeight });
     console.log('Map coordinates (bbox):', bbox);
     console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
     console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
@@ -3032,12 +3075,26 @@ function addExtrusionLayer() {
     updateCursor();
   });
   
-  // ESC key to close popup
+  // Keyboard event handling
   document.addEventListener('keydown', (e) => {
+    // ESC key to close popup
     if (e.key === 'Escape' && activePopup) {
       activePopup.remove();
       activePopup = null;
       lastPicked = null;
+    }
+    
+    // Hotkey handling
+    const key = e.key.toLowerCase();
+    if (key === HOTKEYS.PAN) {
+      e.preventDefault();
+      activateTool('pan');
+    } else if (key === HOTKEYS.SELECT) {
+      e.preventDefault();
+      activateTool('select');
+    } else if (key === HOTKEYS.INFO) {
+      e.preventDefault();
+      activateTool('info');
     }
   });
   
@@ -4180,11 +4237,20 @@ let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | '
 const selectToolButton = document.getElementById('selectToolButton') as HTMLButtonElement;
 const settingsToolButton = document.getElementById('settingsToolButton') as HTMLButtonElement;
 const infoToolButton = document.getElementById('infoToolButton') as HTMLButtonElement;
+const panToolButton = document.getElementById('panToolButton') as HTMLButtonElement;
 const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 
 // Tool state
 let isInfoToolActive = false;
+let isPanToolActive = false;
+
+// Hotkey definitions - easily changeable
+const HOTKEYS = {
+  PAN: 'h',
+  SELECT: 'v',
+  INFO: 'i'
+};
 
 // Icon mappings for different selection modes
 const selectionModeIcons: Record<string, string> = {
@@ -4197,10 +4263,9 @@ const selectionModeIcons: Record<string, string> = {
 // Update the main toolbar button icon based on current selection mode
 function updateToolbarIcon() {
   const iconPath = selectionModeIcons[currentSelectionMode];
-  selectToolButton.innerHTML = `<img src="${iconPath}" alt="Select" />`;
-  
-  // Update active tool state
-  selectToolButton.classList.add('active-tool');
+  selectToolButton.innerHTML = `<img src="${iconPath}" alt="Select" />
+          <span class="hotkey">V</span>
+          <img src="src/svg/corner_triangle.svg" alt="" class="corner-triangle" />`;
 }
 
 // Update submenu active states
@@ -4215,6 +4280,52 @@ function updateSubmenuActiveStates() {
   });
 }
 
+// Function to activate a specific tool and deactivate others
+function activateTool(tool: 'pan' | 'info' | 'select') {
+  // Deactivate all tools first
+  isPanToolActive = false;
+  isInfoToolActive = false;
+  
+  // Remove active-tool class from all buttons
+  panToolButton.classList.remove('active-tool');
+  infoToolButton.classList.remove('active-tool');
+  selectToolButton.classList.remove('active-tool');
+  
+  // Activate the specified tool
+  switch (tool) {
+    case 'pan':
+      isPanToolActive = true;
+      panToolButton.classList.add('active-tool');
+      // Enable drag pan for pan tool
+      map.dragPan.enable();
+      break;
+    case 'info':
+      isInfoToolActive = true;
+      infoToolButton.classList.add('active-tool');
+      // Disable drag pan for info tool
+      map.dragPan.disable();
+      break;
+    case 'select':
+      selectToolButton.classList.add('active-tool');
+      // Disable drag pan for select tool
+      map.dragPan.disable();
+      break;
+  }
+  
+  // Update selection mode handlers
+  setupSelectionModeHandlers();
+  
+  // Update cursor
+  updateCursor();
+  
+  // Close popup if info tool is deactivated
+  if (!isInfoToolActive && activePopup) {
+    activePopup.remove();
+    activePopup = null;
+    lastPicked = null;
+  }
+}
+
 // Handle submenu button clicks
 function handleSubmenuButtonClick(mode: string) {
   currentSelectionMode = mode as any;
@@ -4222,20 +4333,8 @@ function handleSubmenuButtonClick(mode: string) {
   updateSubmenuActiveStates();
   selectSubmenu.classList.remove('show');
   
-  // Inactivate info tool when selection tool is activated
-  if (isInfoToolActive) {
-    isInfoToolActive = false;
-    infoToolButton.classList.remove('active-tool');
-    // Close popup if info tool is deactivated
-    if (activePopup) {
-      activePopup.remove();
-      activePopup = null;
-      lastPicked = null;
-    }
-  }
-  
-  // Set up mode-specific event handlers
-  setupSelectionModeHandlers();
+  // Activate select tool
+  activateTool('select');
   
   console.log(`Selection mode changed to: ${mode}`);
 }
@@ -4254,6 +4353,17 @@ function setupSelectionModeHandlers() {
   mapContainer.removeEventListener('mousedown', handlePolygonMouseDown);
   mapContainer.removeEventListener('mousemove', handlePolygonMouseMove);
   mapContainer.removeEventListener('dblclick', handlePolygonDoubleClick);
+  mapContainer.removeEventListener('mousedown', handlePanMouseDown);
+  mapContainer.removeEventListener('mousemove', handlePanMouseMove);
+  mapContainer.removeEventListener('mouseup', handlePanMouseUp);
+  
+  // Add pan tool event listeners if pan tool is active
+  if (isPanToolActive) {
+    mapContainer.addEventListener('mousedown', handlePanMouseDown);
+    mapContainer.addEventListener('mousemove', handlePanMouseMove);
+    mapContainer.addEventListener('mouseup', handlePanMouseUp);
+    return;
+  }
   
   // If info tool is active, don't add any selection event listeners
   if (isInfoToolActive) {
@@ -4283,6 +4393,12 @@ function setupSelectionModeHandlers() {
   }
 }
 
+// Helper function to close all submenus
+function closeAllSubmenus() {
+  selectSubmenu.classList.remove('show');
+  // Add other submenus here if they exist in the future
+}
+
 // Initialize toolbar
 function initializeToolbar() {
   // Set initial state
@@ -4292,21 +4408,59 @@ function initializeToolbar() {
   // Set initial button states based on window visibility
   updateToolbarButtonStates();
   
+  // Activate pan tool by default
+  activateTool('pan');
+  
   // Set up initial selection mode handlers
   setupSelectionModeHandlers();
   
   // Set initial cursor state
   updateCursor();
   
-  // Handle main select button click
-  selectToolButton.addEventListener('click', (e) => {
+  // Handle main select button click and hold behavior
+  let selectButtonHoldTimer: number | null = null;
+  let selectButtonHoldDuration = 200; // milliseconds to hold before showing submenu
+
+  selectToolButton.addEventListener('mousedown', (e) => {
     e.stopPropagation();
-    selectSubmenu.classList.toggle('show');
+    
+    // Start hold timer
+    selectButtonHoldTimer = window.setTimeout(() => {
+      selectSubmenu.classList.add('show');
+      selectButtonHoldTimer = null;
+    }, selectButtonHoldDuration);
+  });
+
+  selectToolButton.addEventListener('mouseup', (e) => {
+    e.stopPropagation();
+    
+    // If timer is still running, it was a quick click - toggle current option
+    if (selectButtonHoldTimer) {
+      clearTimeout(selectButtonHoldTimer);
+      selectButtonHoldTimer = null;
+      
+      // Toggle the current selection mode
+      const currentButton = selectSubmenu.querySelector(`[data-mode="${currentSelectionMode}"]`) as HTMLButtonElement;
+      if (currentButton) {
+        handleSubmenuButtonClick(currentSelectionMode);
+      }
+      // Close submenu after toggling
+      closeAllSubmenus();
+    }
+  });
+
+  selectToolButton.addEventListener('mouseleave', () => {
+    // Clear timer if mouse leaves button
+    if (selectButtonHoldTimer) {
+      clearTimeout(selectButtonHoldTimer);
+      selectButtonHoldTimer = null;
+    }
   });
   
   // Handle settings button click
   settingsToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
+    closeAllSubmenus();
     if (isSettingsMinimized) {
       showSettings();
     } else {
@@ -4314,39 +4468,38 @@ function initializeToolbar() {
     }
   });
   
+  // Handle pan button click
+  panToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    
+    if (isPanToolActive) {
+      // If pan is already active, deactivate it
+      activateTool('select');
+    } else {
+      // Activate pan tool
+      activateTool('pan');
+    }
+  });
+  
   // Handle info button click
   infoToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
+    closeAllSubmenus();
     
-    // Toggle info tool
-    isInfoToolActive = !isInfoToolActive;
-    
-    // Update button state
     if (isInfoToolActive) {
-      infoToolButton.classList.add('active-tool');
-      // Inactivate selection tool
-      selectToolButton.classList.remove('active-tool');
+      // If info is already active, deactivate it
+      activateTool('select');
     } else {
-      infoToolButton.classList.remove('active-tool');
+      // Activate info tool
+      activateTool('info');
     }
-    
-    // Close popup if info tool is deactivated
-    if (!isInfoToolActive && activePopup) {
-      activePopup.remove();
-      activePopup = null;
-      lastPicked = null;
-    }
-    
-    // Update selection mode handlers to reflect info tool state
-    setupSelectionModeHandlers();
-    
-    // Update cursor based on new tool state
-    updateCursor();
   });
   
   // Handle legend button click
   legendToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
+    closeAllSubmenus();
     if (isLegendMinimized) {
       showLegend();
     } else {
@@ -4361,6 +4514,8 @@ function initializeToolbar() {
       const mode = button.getAttribute('data-mode');
       if (mode) {
         handleSubmenuButtonClick(mode);
+        // Close submenu after selecting an option
+        closeAllSubmenus();
       }
     });
   });
@@ -4368,7 +4523,7 @@ function initializeToolbar() {
   // Close submenu when clicking outside
   document.addEventListener('click', (e) => {
     if (!selectToolButton.contains(e.target as Node) && !selectSubmenu.contains(e.target as Node)) {
-      selectSubmenu.classList.remove('show');
+      closeAllSubmenus();
     }
   });
 }

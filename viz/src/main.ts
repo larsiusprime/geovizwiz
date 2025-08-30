@@ -46,6 +46,23 @@ function updateCursor() {
   }
 }
 
+/* ---------------- Helper Functions ---------------- */
+
+// Helper function to get viewport coordinates for visual elements
+function getViewportPoint(e: MouseEvent): maplibregl.Point {
+  return new maplibregl.Point(e.clientX, e.clientY);
+}
+
+// Helper function to convert viewport coordinates to map container coordinates
+function getMapPoint(e: MouseEvent): maplibregl.Point {
+  const canvas = map.getCanvas();
+  const rect = canvas.getBoundingClientRect();
+  return new maplibregl.Point(
+    e.clientX - rect.left,
+    e.clientY - rect.top
+  );
+}
+
 
 /* ---------------- Rectangle Selection Tool ---------------- */
 

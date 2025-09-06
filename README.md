@@ -20,3 +20,11 @@ application runs without contacting Google, which is useful for development.
 The Slack webhook is never contacted directly from the browser. During
 development, the Vite dev server proxies requests from `/api/slack` to the URL
 set in `VITE_SLACK_WEBHOOK_URL`, avoiding CORS restrictions.
+
+## Flexible data dictionary
+
+Field labels and available filters in the parcel visualizer are driven by
+`viz/public/data-dictionary.json`. Jurisdictions can add or remove entries in
+this file to customize which variables appear in the map and pop‑up data
+tables. The app only requires core fields for land value, improvement value and
+the development category used to flag vacant or under‑utilized parcels.

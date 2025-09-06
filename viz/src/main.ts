@@ -7,6 +7,7 @@ import { compressors } from 'hyparquet-compressors';
 
 // Local imports
 import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS } from './config';
+import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './utils.dictionary';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
@@ -188,27 +189,6 @@ basemapSelect.onchange = () => {
 
 
 /* ---------------- Constants ---------------- */
-
-
-const FIELD_LABELS: Record<string, string> = {
-  exemption_flag: 'Exemption Flag',
-  property_category: 'Property Category',
-  new_tax: 'New Tax',
-  new_tax_per_sqft: 'New Tax per Sqft',
-  tax_change: 'Tax Change',
-  tax_change_per_sqft: 'Tax Change per Sqft',
-  current_tax: 'Current Tax',
-  current_tax_per_sqft: 'Current Tax per Sqft',
-  REALIMPROV: 'Improvements Assessed Value',
-  REALIMPROV_per_sqft: 'Improvements Value per Sqft',
-  REALLANDVA: 'Land Assessed Value',
-  REALLANDVA_per_sqft: 'Land Value per Sqft',
-  TLLDIMPROV: 'Total Land & Improvements',
-  TLLDIMPROV_per_sqft: 'Total Land & Improvements per Sqft',
-  IMPR_LAND_RATIO: 'Improvement to Land Ratio'
-};
-const ALL_FIELDS = Object.keys(FIELD_LABELS);
-const NUMERIC_FIELDS = ALL_FIELDS.filter(k => k !== 'property_category');
 
 const FAST_PR = window.devicePixelRatio;                  // normal speed
 const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ target
@@ -393,6 +373,13 @@ async function loadSelectedColumns() {
     let features = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
     if (features.length === 0) throw new Error('No Polygon/MultiPolygon features found.');
 
+    const required = [DEV_CATEGORY_FIELD, 'REALIMPROV', 'REALLANDVA'];
+    for (const key of required) {
+      if (!features[0]?.properties?.hasOwnProperty(key)) {
+        throw new Error(`Required field missing: ${key}`);
+      }
+    }
+
     sanitizeFeaturesInPlace(features);
     for (const f of features) {
       const p = (f.properties || {}) as Record<string, any>;
@@ -431,7 +418,7 @@ async function loadSelectedColumns() {
     // auto-select the best (prefer REALLANDVA_per_sqft if present)
     currentField = available.includes('REALLANDVA_per_sqft')
       ? 'REALLANDVA_per_sqft'
-      : (available.includes('new_tax_per_sqft') ? 'new_tax_per_sqft' : (autoPickMainField(available) ?? null));
+      : (autoPickMainField(available) ?? null);
     if (currentField) {
       fieldSelect.value = currentField;
       currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
@@ -1121,11 +1108,12 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
   });
 });
 
-// default height units
-unitsSelect.value = 'centimeters';
-setQuality('high');
-loadSettings('main');
-setTab('main');
-loadDefaultDataset();
-
-
+async function init() {
+  await loadDataDictionary();
+  unitsSelect.value = 'centimeters';
+  setQuality('high');
+  loadSettings('main');
+  setTab('main');
+  await loadDefaultDataset();
+}
+init();

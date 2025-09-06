@@ -25,13 +25,11 @@
       background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow);
       display:none; gap:var(--gap); z-index:10;
     }
-    #settingsBtn {
-      position:absolute; top:10px; right:10px;
-      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; z-index:20;
+    #mapBtns {
+      position:absolute; top:10px; right:10px; display:flex; gap:10px; z-index:20;
     }
-    #expandBtn {
-      position:absolute; top:10px; right:60px;
-      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; z-index:20;
+    #mapBtns button {
+      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
     }
     #closeControls {
       position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8;
@@ -88,8 +86,10 @@
       <div id="mapHolder-main" class="map-holder">
         <div id="mapBox" class="map-box">
           <div id="map"></div>
-          <button id="expandBtn">⤢</button>
-          <button id="settingsBtn">Settings</button>
+          <div id="mapBtns">
+            <button id="settingsBtn">Settings</button>
+            <button id="expandBtn">⤢</button>
+          </div>
           <div id="controls">
             <button id="closeControls">×</button>
             <fieldset>

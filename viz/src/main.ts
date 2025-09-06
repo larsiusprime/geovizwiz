@@ -20,8 +20,8 @@ const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ
 
 const map = new maplibregl.Map({
   container: 'map',
-  // Use a reliable default that works offline (solid background)
-  style: BASEMAP_STYLES['Simple Gray'],
+  // Default to OpenStreetMap; fallback style handled elsewhere
+  style: BASEMAP_STYLES['OpenStreetMap'],
   center: [-95.3698, 29.7604],
   zoom: 10,
   pitch: 45,
@@ -113,14 +113,7 @@ function loadSettings(tab: 'main' | 'under') {
     const obj = JSON.parse(raw);
     if (obj.basemap) {
       // Fallback if a previously saved basemap no longer exists
-      basemapSelect.value = BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'Simple Gray';
-      map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
-      map.once('styledata', () => {
-        if (currentGeoJSON) {
-          addOrUpdateSource(currentGeoJSON);
-          applyFilterAndScaling();
-        }
-      });
+      setBasemap(BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'OpenStreetMap');
     }
     if (obj.field) { fieldSelect.value = obj.field; currentField = obj.field; }
     if (obj.ramp) rampSelect.value = obj.ramp;
@@ -177,18 +170,9 @@ rampSelect.value = 'Magma';
 for (const key of Object.keys(BASEMAP_STYLES)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
 }
-// Default to a safe, offline-friendly style. Users can switch to OSM/Topo.
-basemapSelect.value = 'Simple Gray';
-basemapSelect.onchange = () => {
-  map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
-  map.once('styledata', () => {
-    if (currentGeoJSON) {
-      addOrUpdateSource(currentGeoJSON);
-      applyFilterAndScaling();
-    }
-  });
-  saveSettings(currentTab);
-};
+// Default to OpenStreetMap; other styles available in dropdown
+basemapSelect.value = 'OpenStreetMap';
+basemapSelect.onchange = () => { setBasemap(basemapSelect.value); saveSettings(currentTab); };
 
 
 /* ---------------- Constants ---------------- */
@@ -651,14 +635,58 @@ function populateCategoryOptions(fc: GeoJSON.FeatureCollection) {
   }
 }
 
-function updateUnderTotals(fc: GeoJSON.FeatureCollection) {
-  const counts: Record<string, number> = { Vacant: 0, 'Parking Lot': 0, Underdeveloped: 0 };
-  for (const f of fc.features) {
-    const cat = String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '');
-    if (counts.hasOwnProperty(cat)) counts[cat]++;
-  }
-  underTotals.textContent = `Vacant: ${counts['Vacant']}, Parking Lots: ${counts['Parking Lot']}, Underdeveloped: ${counts['Underdeveloped']}`;
+function fmtRounded(n: number): string {
+  if (n >= 1_000_000) return `~${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} million`;
+  const v = Math.round(n / 1000) * 1000;
+  return `~${v.toLocaleString()}`;
 }
+
+function updateUnderTotals(fc: GeoJSON.FeatureCollection) {
+  const totals: Record<string, number> = { Vacant: 0, 'Parking Lot': 0, Underdeveloped: 0 };
+  let totalNonExempt = 0;
+  for (const f of fc.features) {
+    const p = f.properties as any;
+    const land = Number(p?.REALLANDVA);
+    if (!Number.isFinite(land)) continue;
+    const exempt = Number(p?.exemption_flag) !== 0;
+    if (!exempt) totalNonExempt += land;
+    const cat = String(p?.[DEV_CATEGORY_FIELD] ?? '');
+    if (!exempt && totals.hasOwnProperty(cat)) totals[cat] += land;
+  }
+  const sumUnder = totals['Vacant'] + totals['Parking Lot'] + totals['Underdeveloped'];
+  const pct = (v: number) => totalNonExempt ? ((v / totalNonExempt) * 100).toFixed(1) + '%' : '0%';
+  underTotals.innerHTML = [
+    `<div>Vacant: ${fmtRounded(totals['Vacant'])} (${pct(totals['Vacant'])})</div>`,
+    `<div>Parking Lot: ${fmtRounded(totals['Parking Lot'])} (${pct(totals['Parking Lot'])})</div>`,
+    `<div>Underdeveloped: ${fmtRounded(totals['Underdeveloped'])} (${pct(totals['Underdeveloped'])})</div>`,
+    `<div>Nonexempt total: ${fmtRounded(totalNonExempt)}</div>`,
+    `<div>Total of these: ${fmtRounded(sumUnder)} (${pct(sumUnder)})</div>`
+  ].join('');
+}
+
+function setBasemap(name: string) {
+  const style = BASEMAP_STYLES[name] || BASEMAP_STYLES['OpenStreetMap'];
+  basemapSelect.value = name;
+  const onError = (e: any) => {
+    if (e?.sourceId !== 'ofm-tiles') return;
+    console.warn('Basemap load failed, reverting to OpenStreetMap', e);
+    map.off('error', onError);
+    basemapSelect.value = 'OpenStreetMap';
+    map.setStyle(BASEMAP_STYLES['OpenStreetMap']);
+  };
+  if (name === 'OpenFreeMap') {
+    map.on('error', onError);
+  }
+  map.setStyle(style);
+  map.once('styledata', () => {
+    map.off('error', onError);
+    if (currentGeoJSON) {
+      addOrUpdateSource(currentGeoJSON);
+      applyFilterAndScaling();
+    }
+  });
+}
+
 
 function applyFilterAndScaling() {
   if (!currentGeoJSON) return;

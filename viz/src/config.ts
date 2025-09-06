@@ -7,6 +7,20 @@ export const OSM_STYLE: any = {
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm-tiles', minzoom: 0, maxzoom: 19 }]
 };
 
+// OpenFreeMap tiles; may fail if CORS headers are missing
+export const OPENFREEMAP_STYLE: any = {
+  version: 8,
+  sources: {
+    'ofm-tiles': {
+      type: 'raster',
+      tiles: ['https://tile.openfreemap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenFreeMap, © OpenStreetMap contributors'
+    }
+  },
+  layers: [{ id: 'ofm-tiles', type: 'raster', source: 'ofm-tiles', minzoom: 0, maxzoom: 19 }]
+};
+
 const TOPO_STYLE: any = {
   version: 8,
   sources: { 'topo-tiles': { type: 'raster', tiles: ['https://a.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://b.tile.opentopomap.org/{z}/{x}/{y}.png', 'https://c.tile.opentopomap.org/{z}/{x}/{y}.png'], tileSize: 256, attribution: '© OpenStreetMap contributors, SRTM | Map style © OpenTopoMap (CC-BY-SA)' } },
@@ -29,6 +43,7 @@ const SIMPLE_STYLE: any = {
 export const BASEMAP_STYLES: Record<string, any> = {
   'Simple Gray': SIMPLE_STYLE,
   'OpenStreetMap': OSM_STYLE,
+  'OpenFreeMap': OPENFREEMAP_STYLE,
   'Topographic': TOPO_STYLE
 };
 

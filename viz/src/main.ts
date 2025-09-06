@@ -48,27 +48,112 @@ const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const closeControls = document.getElementById('closeControls') as HTMLButtonElement;
 const basemapSelect = document.getElementById('basemap') as HTMLSelectElement;
 
-const tabButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('#tabs button'));
+const expandBtn = document.getElementById('expandBtn') as HTMLButtonElement;
+const mapBox = document.getElementById('mapBox') as HTMLDivElement;
+const mainHolder = document.getElementById('mapHolder-main') as HTMLDivElement;
+const underHolder = document.getElementById('mapHolder-under') as HTMLDivElement;
+const mainSection = document.getElementById('mainSection') as HTMLElement;
+const underSection = document.getElementById('underSection') as HTMLElement;
 const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
 const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
 const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
+const underTotals = document.getElementById('underTotals') as HTMLDivElement;
 function categoryInputs() {
   return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
-
-tabButtons.forEach(btn => btn.onclick = () => setTab(btn.dataset.tab as 'main'|'under'));
 categoryContainer.addEventListener('change', () => {
   applyFilterAndScaling();
+  saveSettings(currentTab);
 });
-scaleFiltered.addEventListener('change', () => applyFilterAndScaling());
+scaleFiltered.addEventListener('change', () => { applyFilterAndScaling(); saveSettings(currentTab); });
 invertHeights.addEventListener('change', () => {
   if (currentTab === 'under') applyFilterAndScaling();
   else computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+  saveSettings(currentTab);
 });
 
 settingsBtn.onclick = () => { controlsEl.style.display = 'grid'; settingsBtn.style.display = 'none'; };
 closeControls.onclick = () => { controlsEl.style.display = 'none'; settingsBtn.style.display = 'block'; };
+
+expandBtn.onclick = () => {
+  const expanded = mapBox.classList.toggle('expanded');
+  if (expanded) {
+    document.body.appendChild(mapBox);
+    document.body.style.overflow = 'hidden';
+  } else {
+    (currentTab === 'main' ? mainHolder : underHolder).appendChild(mapBox);
+    document.body.style.overflow = '';
+  }
+  map.resize();
+};
+
+function saveSettings(tab: 'main' | 'under') {
+  const obj: any = {
+    basemap: basemapSelect.value,
+    field: fieldSelect.value,
+    ramp: rampSelect.value,
+    mult: multInput.value,
+    units: unitsSelect.value,
+    opacity: opacityInput.value,
+    invert: invertHeights.checked,
+    colorMode: (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value,
+    scaleFiltered: scaleFiltered.checked,
+    categories: categoryInputs().filter(i => i.checked).map(i => i.value)
+  };
+  localStorage.setItem(`gvw_settings_${tab}`, JSON.stringify(obj));
+}
+
+function loadSettings(tab: 'main' | 'under') {
+  const raw = localStorage.getItem(`gvw_settings_${tab}`);
+  if (!raw) return;
+  try {
+    const obj = JSON.parse(raw);
+    if (obj.basemap) {
+      basemapSelect.value = obj.basemap;
+      map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
+      map.once('styledata', () => {
+        if (currentGeoJSON) {
+          addOrUpdateSource(currentGeoJSON);
+          applyFilterAndScaling();
+        }
+      });
+    }
+    if (obj.field) { fieldSelect.value = obj.field; currentField = obj.field; }
+    if (obj.ramp) rampSelect.value = obj.ramp;
+    if (obj.mult) multInput.value = obj.mult;
+    if (obj.units) unitsSelect.value = obj.units;
+    if (obj.opacity) { opacityInput.value = obj.opacity; if (opacityOut) opacityOut.value = Number(obj.opacity).toFixed(2); }
+    invertHeights.checked = !!obj.invert;
+    if (obj.colorMode) {
+      const radio = document.querySelector<HTMLInputElement>(`input[name="colorMode"][value="${obj.colorMode}"]`);
+      if (radio) radio.checked = true;
+    }
+    scaleFiltered.checked = !!obj.scaleFiltered;
+    if (obj.categories && categoryContainer.childElementCount) {
+      categoryInputs().forEach(i => { i.checked = obj.categories.includes(i.value); });
+    }
+  } catch {}
+}
+
+function switchSection(tab: 'main' | 'under') {
+  if (currentTab === tab) return;
+  saveSettings(currentTab);
+  if (tab === 'main') mainHolder.appendChild(mapBox); else underHolder.appendChild(mapBox);
+  loadSettings(tab);
+  setTab(tab);
+  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+}
+
+const observer = new IntersectionObserver(entries => {
+  for (const e of entries) {
+    if (e.isIntersecting) {
+      switchSection(e.target.id === 'underSection' ? 'under' : 'main');
+    }
+  }
+}, { threshold: 0.5 });
+observer.observe(mainSection);
+observer.observe(underSection);
 
 // Loading overlay
 const loadingOverlay = document.getElementById('loadingOverlay')!;
@@ -98,6 +183,7 @@ basemapSelect.onchange = () => {
       applyFilterAndScaling();
     }
   });
+  saveSettings(currentTab);
 };
 
 
@@ -332,6 +418,8 @@ async function loadSelectedColumns() {
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
     populateCategoryOptions(currentGeoJSON);
+    updateUnderTotals(currentGeoJSON);
+    loadSettings(currentTab);
 
     // dropdown = predetermined numeric fields (ensure they exist)
     const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
@@ -534,7 +622,6 @@ function applyExtrusion() {
 }
 function setTab(tab: 'main' | 'under') {
   currentTab = tab;
-  tabButtons.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   if (tab === 'main') {
     categoryFieldset.style.display = 'none';
     map.setFilter(LAYER_ID, null);
@@ -571,6 +658,15 @@ function populateCategoryOptions(fc: GeoJSON.FeatureCollection) {
     label.appendChild(document.createTextNode(v));
     categoryContainer.appendChild(label);
   }
+}
+
+function updateUnderTotals(fc: GeoJSON.FeatureCollection) {
+  const counts: Record<string, number> = { Vacant: 0, 'Parking Lot': 0, Underdeveloped: 0 };
+  for (const f of fc.features) {
+    const cat = String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '');
+    if (counts.hasOwnProperty(cat)) counts[cat]++;
+  }
+  underTotals.textContent = `Vacant: ${counts['Vacant']}, Parking Lots: ${counts['Parking Lot']}, Underdeveloped: ${counts['Underdeveloped']}`;
 }
 
 function applyFilterAndScaling() {
@@ -975,31 +1071,34 @@ function onMultInput() {
     if (val === 'continuous' || val === 'quantiles') {
       colorMode = val;
       scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+      saveSettings(currentTab);
     }
   })
 );
 
 rampSelect.addEventListener('change', () => {
-  // if quantiles, new color count ⇒ recompute breaks
   const needsRecompute = (colorMode === 'quantiles');
   scheduleUpdate(needsRecompute ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
+  saveSettings(currentTab);
 });
 
-multInput.addEventListener('input', onMultInput);
+multInput.addEventListener('input', () => { onMultInput(); saveSettings(currentTab); });
 
-multInput.addEventListener('change', onMultInput);
+multInput.addEventListener('change', () => { onMultInput(); saveSettings(currentTab); });
 
-unitsSelect.addEventListener('change', () => scheduleUpdate('applyOnly'));
+unitsSelect.addEventListener('change', () => { scheduleUpdate('applyOnly'); saveSettings(currentTab); });
 
 opacityInput.addEventListener('input', () => {
   if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
   scheduleUpdate('applyOnly');
+  saveSettings(currentTab);
 });
 
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;
   if (!currentGeoJSON || !currentField) return;
-  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true)
+  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+  saveSettings(currentTab);
 });
 
 async function loadDefaultDataset() {
@@ -1018,12 +1117,15 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
     normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
     if (!currentGeoJSON || !currentField) return;
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    saveSettings(currentTab);
   });
 });
 
 // default height units
 unitsSelect.value = 'centimeters';
 setQuality('high');
+loadSettings('main');
+setTab('main');
 loadDefaultDataset();
 
 

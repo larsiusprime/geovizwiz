@@ -11,195 +11,178 @@
   </script>
   <link rel="icon" href="data:,">
   <style>
-    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; --tabH:48px; --titleH:40px; }
-    *, *::before, *::after { box-sizing: border-box; }
-
-    html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
-    #title {
-      position:absolute; top:0; left:0; right:0; height:var(--titleH);
-      display:flex; align-items:center; justify-content:center;
-      background:var(--panel); box-shadow:var(--shadow); font-weight:600; z-index:40;
-    }
-    #tabs { position:absolute; top:var(--titleH); left:0; right:0; height:var(--tabH); display:flex; gap:6px; align-items:center; padding:6px 10px; background:var(--panel); box-shadow:var(--shadow); z-index:30; }
-    #tabs button { border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; }
-    #tabs button.active { background:#e0e0e0; }
-    #map { position:absolute; top:calc(var(--titleH) + var(--tabH)); bottom:0; left:0; right:0; }
-
+    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
+    *, *::before, *::after { box-sizing:border-box; }
+    html, body { margin:0; font-family:system-ui,sans-serif; }
+    #title { position:sticky; top:0; z-index:40; padding:10px; background:var(--panel); box-shadow:var(--shadow); font-weight:600; text-align:center; }
+    .section { padding:10px; }
+    .map-holder { position:relative; height:60vh; }
+    .map-box { position:relative; height:100%; }
+    #map { position:absolute; inset:0; }
     #controls {
-      position: absolute; top: calc(var(--titleH) + var(--tabH) + 10px); right: 10px;
-      width: min(92vw, 420px);
-      background: var(--panel); padding: 12px; border-radius: 12px; box-shadow: var(--shadow);
-      display: none; gap: var(--gap); z-index: 10;
+      position:absolute; top:10px; right:10px;
+      width:min(92vw,420px);
+      background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow);
+      display:none; gap:var(--gap); z-index:10;
     }
     #settingsBtn {
-      position:absolute; top: calc(var(--titleH) + var(--tabH) + 10px); right:10px;
+      position:absolute; top:10px; right:10px;
+      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; z-index:20;
+    }
+    #expandBtn {
+      position:absolute; top:10px; right:60px;
       border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; z-index:20;
     }
     #closeControls {
       position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8;
       padding:2px 6px; border-radius:6px; cursor:pointer;
     }
-
-    #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
-    #controls label { display:block; font-size: 12px; color: #333; }
+    #controls fieldset { border:0; padding:0; margin:0; display:grid; gap:6px; }
+    #controls label { display:block; font-size:12px; color:#333; }
     #controls select, #controls input[type="number"], #controls input[type="text"] {
-      width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
+      width:100%; padding:6px 8px; border-radius:8px; border:1px solid #ddd; font-size:14px;
     }
-
     #controls .row {
-      display: grid;
-      grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-      gap: var(--gap);
-      align-items: end;
+      display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+      gap:var(--gap); align-items:end;
     }
-    #controls .row > * { min-width: 0; }
-
-    #controls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+    #controls .row > * { min-width:0; }
+    #controls .buttons { display:flex; flex-wrap:wrap; gap:6px; }
     #controls button {
-      border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
+      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
     }
-    #controls button:hover { background: #f0f0f0; }
-
-    #legend { display: none; align-items: center; gap: 6px; }
+    #controls button:hover { background:#f0f0f0; }
+    #legend { display:none; align-items:center; gap:6px; }
     .muted { color:#666; font-size:12px; }
-
-    .inline { display:grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
-    input[type="range"] { width: 100%; margin: 0; }
-    output { font-size: 12px; color:#333; min-width: 2.8ch; text-align: right; }
-
+    .inline { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
+    input[type="range"] { width:100%; margin:0; }
+    output { font-size:12px; color:#333; min-width:2.8ch; text-align:right; }
     #categoryFieldset { display:none; }
     #categoryFilter { display:grid; gap:6px; }
-
-    /* overlays */
     .overlay {
-      position: absolute; inset: 0; display: none; place-items: center;
-      background: rgba(0,0,0,.35); z-index: 30;
+      position:fixed; inset:0; display:none; place-items:center;
+      background:rgba(0,0,0,.35); z-index:30;
     }
-    .overlay.show { display: grid; }
+    .overlay.show { display:grid; }
     .modal {
-      width: min(96vw, 680px); max-height: 88vh; overflow: hidden;
-      background: #fff; border-radius: 12px; box-shadow: var(--shadow); padding: 14px; display: grid; gap: 10px;
+      width:min(96vw,680px); max-height:88vh; overflow:hidden;
+      background:#fff; border-radius:12px; box-shadow:var(--shadow); padding:14px; display:grid; gap:10px;
     }
-    .modal h3 { margin: 0 0 4px; font-size: 16px; }
-    .modal .footer { display: flex; gap: 8px; justify-content: flex-end; }
-
-    .section-title { font-weight: 600; margin-top: 4px; }
-    .divider { height: 1px; background: #e6e6e6; margin: 6px 0; }
-
-    /* field lists */
-    .fieldlist { display: grid; grid-template-columns: 1fr; gap: 8px; }
-    #fieldList { max-height: 60vh; overflow: auto; padding-right: 4px; }
-
-    .progress { height: 8px; background: #eee; border-radius: 999px; overflow: hidden; }
-    .progress .bar { height: 100%; width: 0%; background: #3b82f6; transition: width .2s linear; }
-    .progress.indeterminate .bar { width: 30%; animation: indet 1.2s infinite linear; }
-    @keyframes indet { 0% { margin-left: -30% } 100% { margin-left: 100% } }
+    .modal h3 { margin:0 0 4px; font-size:16px; }
+    .modal .footer { display:flex; gap:8px; justify-content:flex-end; }
+    .section-title { font-weight:600; margin-top:4px; }
+    .divider { height:1px; background:#e6e6e6; margin:6px 0; }
+    .fieldlist { display:grid; grid-template-columns:1fr; gap:8px; }
+    #fieldList { max-height:60vh; overflow:auto; padding-right:4px; }
+    .progress { height:8px; background:#eee; border-radius:999px; overflow:hidden; }
+    .progress .bar { height:100%; width:0%; background:#3b82f6; transition:width .2s linear; }
+    .progress.indeterminate .bar { width:30%; animation:indet 1.2s infinite linear; }
+    @keyframes indet { 0% { margin-left:-30% } 100% { margin-left:100% } }
+    .map-box.expanded { position:fixed; inset:0; height:100vh; width:100vw; z-index:1000; }
   </style>
 </head>
 <body>
-    <div id="app">
+  <div id="app">
     <div id="title">South Bend Civil Map</div>
-    <div id="tabs">
-      <button data-tab="main" class="active">Land value per sqft</button>
-      <button data-tab="under">Vacant/Parking/Underdeveloped</button>
-    </div>
-    <div id="map"></div>
-    <button id="settingsBtn">Settings</button>
-
-    <div id="controls">
-    <button id="closeControls">×</button>
-
-      <fieldset>
-        <label for="basemap">Base map</label>
-        <select id="basemap"></select>
-      </fieldset>
-
-      <fieldset>
-        <label for="field">Numeric field to visualize</label>
-        <select id="field"></select>
-
-        <!-- NEW: normalization choices -->
-        <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
-            <span>as-is</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="normMode" id="norm-land" value="perLand" disabled />
-            <span>…per land size <em id="normLandUnit">(unit)</em></span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" disabled />
-            <span>…per building size <em id="normBldgUnit">(unit)</em></span>
-          </label>
-        </div>
-      </fieldset>
-
-      <fieldset class="row">
-        <div>
-          <label for="ramp">Color ramp</label>
-          <select id="ramp"></select>
-        </div>
-        <div>
-          <label for="opacity">Opacity</label>
-          <div class="inline">
-            <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-            <output id="opacityVal">0.9</output>
+    <section id="mainSection" class="section">
+      <div id="mapHolder-main" class="map-holder">
+        <div id="mapBox" class="map-box">
+          <div id="map"></div>
+          <button id="expandBtn">⤢</button>
+          <button id="settingsBtn">Settings</button>
+          <div id="controls">
+            <button id="closeControls">×</button>
+            <fieldset>
+              <label for="basemap">Base map</label>
+              <select id="basemap"></select>
+            </fieldset>
+            <fieldset>
+              <label for="field">Numeric field to visualize</label>
+              <select id="field"></select>
+              <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
+                  <span>as-is</span>
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="normMode" id="norm-land" value="perLand" disabled />
+                  <span>…per land size <em id="normLandUnit">(unit)</em></span>
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" disabled />
+                  <span>…per building size <em id="normBldgUnit">(unit)</em></span>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset class="row">
+              <div>
+                <label for="ramp">Color ramp</label>
+                <select id="ramp"></select>
+              </div>
+              <div>
+                <label for="opacity">Opacity</label>
+                <div class="inline">
+                  <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+                  <output id="opacityVal">0.9</output>
+                </div>
+              </div>
+            </fieldset>
+            <fieldset class="row">
+              <div>
+                <label for="mult">Extrusion multiplier</label>
+                <input id="mult" type="number" step=".1" value="1" />
+              </div>
+              <div>
+                <label for="units">Units</label>
+                <select id="units">
+                  <option value="centimeters" selected>centimeters</option>
+                  <option value="meters">meters</option>
+                  <option value="inches">inches</option>
+                  <option value="feet">feet</option>
+                  <option value="kilometers">kilometers</option>
+                  <option value="miles">miles</option>
+                  <option value="stories">stories (~3.3m)</option>
+                </select>
+              </div>
+            </fieldset>
+            <fieldset>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" id="invertHeights" />
+                <span>Invert height scale</span>
+              </label>
+            </fieldset>
+            <fieldset>
+              <label>Color scaling</label>
+              <div style="display:grid; gap:6px;">
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="colorMode" id="color-cont" value="continuous">
+                  <span>Linear (min→max, clamped p1–p99)</span>
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
+                  <span>Quantiles (equal-frequency, p1–p99)</span>
+                </label>
+              </div>
+            </fieldset>
+            <fieldset id="categoryFieldset">
+              <label>Category filter</label>
+              <div id="categoryFilter"></div>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" id="scaleFiltered" />
+                <span>Scale heights using filtered data</span>
+              </label>
+            </fieldset>
+            <fieldset id="legend"></fieldset>
           </div>
         </div>
-      </fieldset>
-
-      <fieldset class="row">
-        <div>
-          <label for="mult">Extrusion multiplier</label>
-          <input id="mult" type="number" step=".1" value="1" />
-        </div>
-        <div>
-          <label for="units">Units</label>
-          <select id="units">
-            <option value="centimeters" selected>centimeters</option>
-            <option value="meters">meters</option>
-            <option value="inches">inches</option>
-            <option value="feet">feet</option>
-            <option value="kilometers">kilometers</option>
-            <option value="miles">miles</option>
-            <option value="stories">stories (~3.3m)</option>
-          </select>
-        </div>
-      </fieldset>
-
-      <fieldset>
-        <label style="display:flex; gap:8px; align-items:center;">
-          <input type="checkbox" id="invertHeights" />
-          <span>Invert height scale</span>
-        </label>
-      </fieldset>
-
-    <fieldset>
-      <label>Color scaling</label>
-      <div style="display:grid; gap:6px;">
-      <label style="display:flex; gap:8px; align-items:center;">
-        <input type="radio" name="colorMode" id="color-cont" value="continuous">
-        <span>Linear (min→max, clamped p1–p99)</span>
-      </label>
-      <label style="display:flex; gap:8px; align-items:center;">
-        <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
-        <span>Quantiles (equal-frequency, p1–p99)</span>
-      </label>
       </div>
-    </fieldset>
-
-    <fieldset id="categoryFieldset">
-      <label>Category filter</label>
-      <div id="categoryFilter"></div>
-      <label style="display:flex; gap:8px; align-items:center;">
-        <input type="checkbox" id="scaleFiltered" />
-        <span>Scale heights using filtered data</span>
-      </label>
-    </fieldset>
-
-      <fieldset id="legend"></fieldset>
-    </div>
+    </section>
+    <section id="underSection" class="section">
+      <h2>Vacant &amp; Underdeveloped</h2>
+      <p class="muted">Vacant parcels contain no structures, Parking Lots are surface parking areas, and Underdeveloped parcels have minimal improvements.</p>
+      <div id="underTotals" class="muted"></div>
+      <div id="mapHolder-under" class="map-holder"></div>
+    </section>
   </div>
 
   <!-- Modal 1: Field chooser -->
@@ -222,23 +205,19 @@
   <!-- Modal 2: Size identification -->
   <div id="sizeOverlay" class="overlay">
     <div class="modal">
-      <h3>Identify land & building size fields</h3>
+      <h3>Identify land &amp; building size fields</h3>
       <div class="muted">Please identify which of your loaded fields represent: (a) total finished floor area for all buildings, and (b) total land area.</div>
-
       <div style="display:grid; gap:8px;">
         <label>Building size field</label>
         <select id="bldgField"></select>
         <label>Building size unit</label>
         <select id="bldgUnit"></select>
-
         <div class="divider"></div>
-
         <label>Land size field</label>
         <select id="landField"></select>
         <label>Land size unit</label>
         <select id="landUnit"></select>
       </div>
-
       <div class="footer">
         <button id="btnSizeBack">Back</button>
         <button id="btnSizeSkip">Skip</button>

@@ -13,18 +13,23 @@ const TOPO_STYLE: any = {
   layers: [{ id: 'topo-tiles', type: 'raster', source: 'topo-tiles', minzoom: 0, maxzoom: 17 }]
 };
 
-// OpenFreeMap styles
-const OFM_STYLES: Record<string, string> = {
-  'OpenFreeMap': 'https://tile.openfreemap.org/styles/openfreemap',
-  'OpenFreeMap Positron': 'https://tile.openfreemap.org/styles/positron',
-  'OpenFreeMap Pioneer': 'https://tile.openfreemap.org/styles/pioneer',
-  'OpenFreeMap Dark': 'https://tile.openfreemap.org/styles/dark'
+// Simple, offline-safe background style
+const SIMPLE_STYLE: any = {
+  version: 8,
+  sources: {},
+  layers: [
+    {
+      id: 'background',
+      type: 'background',
+      paint: { 'background-color': '#e8eaed' }
+    }
+  ]
 };
 
 export const BASEMAP_STYLES: Record<string, any> = {
+  'Simple Gray': SIMPLE_STYLE,
   'OpenStreetMap': OSM_STYLE,
-  'Topographic': TOPO_STYLE,
-  ...OFM_STYLES
+  'Topographic': TOPO_STYLE
 };
 
 // Source / layer IDs

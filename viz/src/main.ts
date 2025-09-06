@@ -20,7 +20,8 @@ const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ
 
 const map = new maplibregl.Map({
   container: 'map',
-  style: BASEMAP_STYLES['OpenFreeMap Positron'],
+  // Use a reliable default that works offline (solid background)
+  style: BASEMAP_STYLES['Simple Gray'],
   center: [-95.3698, 29.7604],
   zoom: 10,
   pitch: 45,
@@ -111,7 +112,8 @@ function loadSettings(tab: 'main' | 'under') {
   try {
     const obj = JSON.parse(raw);
     if (obj.basemap) {
-      basemapSelect.value = obj.basemap;
+      // Fallback if a previously saved basemap no longer exists
+      basemapSelect.value = BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'Simple Gray';
       map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
       map.once('styledata', () => {
         if (currentGeoJSON) {
@@ -175,7 +177,8 @@ rampSelect.value = 'Magma';
 for (const key of Object.keys(BASEMAP_STYLES)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
 }
-basemapSelect.value = 'OpenFreeMap Positron';
+// Default to a safe, offline-friendly style. Users can switch to OSM/Topo.
+basemapSelect.value = 'Simple Gray';
 basemapSelect.onchange = () => {
   map.setStyle(BASEMAP_STYLES[basemapSelect.value]);
   map.once('styledata', () => {
@@ -571,6 +574,7 @@ function buildValueExpression(): Expression {
 
 function applyExtrusion() {
   if (!currentGeoJSON || !currentField || !currentStats) return;
+  if (!map.getLayer(LAYER_ID)) return;
 
   const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
   const valueExpr = buildValueExpression();
@@ -611,7 +615,7 @@ function setTab(tab: 'main' | 'under') {
   currentTab = tab;
   if (tab === 'main') {
     categoryFieldset.style.display = 'none';
-    map.setFilter(LAYER_ID, null);
+    if (map.getLayer(LAYER_ID)) map.setFilter(LAYER_ID, null);
     computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
     applyExtrusion();
   } else {
@@ -1111,9 +1115,13 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 async function init() {
   await loadDataDictionary();
   unitsSelect.value = 'centimeters';
-  setQuality('high');
-  loadSettings('main');
-  setTab('main');
-  await loadDefaultDataset();
+  // Defer all map-mutating actions until the style is fully loaded.
+  map.once('load', async () => {
+    setQuality('high');
+    // Apply any saved basemap/style; re-add data after style switches.
+    loadSettings('main');
+    setTab('main');
+    await loadDefaultDataset();
+  });
 }
 init();

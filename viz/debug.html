@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Info</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .debug-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        pre {
+            background: #f8f8f8;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            white-space: pre-wrap;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+        .warning { background-color: #fff3cd; color: #856404; }
+        button {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background-color: #0056b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Debug Information</h1>
+        
+        <div class="debug-section">
+            <h3>Environment Variables Debug</h3>
+            <div id="envDebug">Loading...</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>Sign-in Debug</h3>
+            <div id="signinDebug">Loading...</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>All Sign-ins History</h3>
+            <div id="signinsHistory">Loading...</div>
+        </div>
+        
+        <div class="debug-section">
+            <h3>Actions</h3>
+            <button onclick="refreshDebug()">🔄 Refresh Debug Info</button>
+            <button onclick="clearDebug()">🗑️ Clear Debug Info</button>
+            <button onclick="testSlackWebhook()">📤 Test Slack Webhook</button>
+        </div>
+    </div>
+
+    <script>
+        function refreshDebug() {
+            loadDebugInfo();
+        }
+        
+        function clearDebug() {
+            localStorage.removeItem('gvw_debug');
+            localStorage.removeItem('gvw_signin_debug');
+            localStorage.removeItem('gvw_signins');
+            loadDebugInfo();
+        }
+        
+        async function testSlackWebhook() {
+            // Test the proxy server endpoint
+            const proxyUrl = "http://localhost:3001/api/slack";
+            
+            console.log('Testing proxy URL:', proxyUrl);
+            
+            try {
+                const response = await fetch(proxyUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: 'Debug test message from debug page via proxy' })
+                });
+                
+                if (response.ok) {
+                    alert('✅ Slack test message sent successfully!');
+                } else {
+                    alert(`❌ Slack test failed: ${response.status}`);
+                }
+            } catch (error) {
+                alert(`❌ Slack test error: ${error.message}`);
+            }
+        }
+        
+        function loadDebugInfo() {
+            // Environment debug
+            const envDebug = localStorage.getItem('gvw_debug');
+            const envDebugDiv = document.getElementById('envDebug');
+            if (envDebug) {
+                const parsed = JSON.parse(envDebug);
+                envDebugDiv.innerHTML = `
+                    <div class="status ${parsed.hasSlackWebhook ? 'success' : 'error'}">
+                        Slack Webhook: ${parsed.hasSlackWebhook ? '✅ Found' : '❌ Missing'}
+                    </div>
+                    <div class="status ${parsed.enableGoogleAuth ? 'success' : 'warning'}">
+                        Google Auth: ${parsed.enableGoogleAuth ? '✅ Enabled' : '⚠️ Disabled'}
+                    </div>
+                    <div class="status ${parsed.hasClientId ? 'success' : 'error'}">
+                        Google Client ID: ${parsed.hasClientId ? '✅ Found' : '❌ Missing'}
+                    </div>
+                    <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                `;
+            } else {
+                envDebugDiv.innerHTML = '<div class="status error">No environment debug info found</div>';
+            }
+            
+            // Sign-in debug
+            const signinDebug = localStorage.getItem('gvw_signin_debug');
+            const signinDebugDiv = document.getElementById('signinDebug');
+            if (signinDebug) {
+                const parsed = JSON.parse(signinDebug);
+                signinDebugDiv.innerHTML = `
+                    <div class="status ${parsed.slackWebhookExists ? 'success' : 'error'}">
+                        Slack Webhook Available: ${parsed.slackWebhookExists ? '✅ Yes' : '❌ No'}
+                    </div>
+                    <div class="status ${parsed.emailFound ? 'success' : 'error'}">
+                        Email Found: ${parsed.emailFound ? '✅ Yes' : '❌ No'}
+                    </div>
+                    <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                `;
+            } else {
+                signinDebugDiv.innerHTML = '<div class="status warning">No sign-in debug info found (try signing in first)</div>';
+            }
+            
+            // Sign-ins history
+            const signinsHistory = localStorage.getItem('gvw_signins');
+            const signinsHistoryDiv = document.getElementById('signinsHistory');
+            if (signinsHistory) {
+                const parsed = JSON.parse(signinsHistory);
+                signinsHistoryDiv.innerHTML = `
+                    <div class="status success">Found ${parsed.length} sign-in(s)</div>
+                    <pre>${JSON.stringify(parsed, null, 2)}</pre>
+                `;
+            } else {
+                signinsHistoryDiv.innerHTML = '<div class="status warning">No sign-ins history found</div>';
+            }
+        }
+        
+        // Load debug info on page load
+        loadDebugInfo();
+    </script>
+</body>
+</html> 

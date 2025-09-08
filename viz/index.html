@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>South Bend Civil Map</title>
+  <title>South Bend Civic Mapper</title>
   <script>
     if (!localStorage.getItem('gvw_signins')) {
       window.location.href = 'login.html';
@@ -15,22 +15,28 @@
     *, *::before, *::after { box-sizing:border-box; }
     html, body { margin:0; font-family:system-ui,sans-serif; }
     #title { position:sticky; top:0; z-index:40; padding:10px; background:var(--panel); box-shadow:var(--shadow); font-weight:600; text-align:center; }
-    .section { padding:10px; }
+    #app { max-width:1200px; margin:0 auto; padding:0 12px; }
+    .section { padding:16px 10px; }
     .map-holder { position:relative; height:60vh; }
     .map-box { position:relative; height:100%; }
-    #map { position:absolute; inset:0; }
+    #map, #map-under, #map-ratio { position:absolute; inset:0; }
     #controls {
       position:absolute; top:10px; right:10px;
       width:min(92vw,420px);
       background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow);
       display:none; gap:var(--gap); z-index:10;
     }
-    #mapBtns {
+    /* Unified map controls */
+    .map-controls {
       position:absolute; top:10px; right:10px; display:flex; gap:10px; z-index:20;
     }
-    #mapBtns button {
+    .map-controls button {
       border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
     }
+    .map-controls button:hover { background:#f0f0f0; }
+    /* Back-compat for existing main id */
+    #mapBtns { position:absolute; top:10px; right:10px; display:flex; gap:10px; z-index:20; }
+    #mapBtns button { border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; }
     #closeControls {
       position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8;
       padding:2px 6px; border-radius:6px; cursor:pointer;
@@ -77,16 +83,40 @@
     .progress.indeterminate .bar { width:30%; animation:indet 1.2s infinite linear; }
     @keyframes indet { 0% { margin-left:-30% } 100% { margin-left:100% } }
     .map-box.expanded { position:fixed; inset:0; height:100vh; width:100vw; z-index:1000; }
+
+    /* Underutilized totals card */
+    #underTotals { color:inherit; }
+    #underTotals .totals-card {
+      background:var(--panel);
+      box-shadow:var(--shadow);
+      border-radius:12px;
+      padding:12px;
+      display:inline-block;
+      min-width:min(92vw, 360px);
+    }
+    #underTotals .totals-title {
+      font-weight:600; margin:0 0 6px; font-size:14px;
+    }
+    #underTotals .totals-grid {
+      display:grid; grid-template-columns:1fr auto; gap:6px 12px; align-items:baseline;
+      font-variant-numeric: tabular-nums;
+    }
+    #underTotals .totals-grid .label { color:#333; }
+    #underTotals .totals-grid .value { text-align:right; }
+    #underTotals .totals-grid .pct { color:#666; margin-left:6px; font-size:12px; }
+    #underTotals .sum-row { margin-top:6px; padding-top:6px; border-top:1px solid #e6e6e6; font-weight:600; }
   </style>
 </head>
 <body>
   <div id="app">
-    <div id="title">South Bend Civil Map</div>
+    <div id="title">South Bend Civic Mapper</div>
     <section id="mainSection" class="section">
+      <h2>Assessed Value</h2>
+      <p class="muted">3D extrusions visualize the selected assessed value per parcel (land, improvements, or totals). Use Settings to change the field, color ramp, and units.</p>
       <div id="mapHolder-main" class="map-holder">
         <div id="mapBox" class="map-box">
           <div id="map"></div>
-          <div id="mapBtns">
+          <div id="mapBtns" class="map-controls">
             <button id="settingsBtn">Settings</button>
             <button id="expandBtn">⤢</button>
           </div>
@@ -122,8 +152,8 @@
               <div>
                 <label for="opacity">Opacity</label>
                 <div class="inline">
-                  <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-                  <output id="opacityVal">0.9</output>
+                  <input id="opacity" type="range" min="0" max="1" step="0.05" value="0" />
+                  <output id="opacityVal">0.00</output>
                 </div>
               </div>
             </fieldset>
@@ -180,8 +210,69 @@
     <section id="underSection" class="section">
       <h2>Vacant &amp; Underdeveloped</h2>
       <p class="muted">Vacant parcels contain no structures, Parking Lots are surface parking areas, and Underdeveloped parcels have minimal improvements.</p>
-      <div id="underTotals" class="muted"></div>
-      <div id="mapHolder-under" class="map-holder"></div>
+      <div id="underTotals"></div>
+      <div id="mapHolder-under" class="map-holder">
+        <div class="map-box">
+          <div id="map-under"></div>
+          <div id="mapBtnsUnder" class="map-controls">
+            <button id="underSettingsBtn">Settings</button>
+            <button id="underExpandBtn">⤢</button>
+          </div>
+          <div id="underControls" style="position:absolute; top:10px; right:10px; width:min(92vw,420px); background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow); display:none; gap:var(--gap); z-index:30;">
+            <button id="underCloseControls" style="position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8; padding:2px 6px; border-radius:6px; cursor:pointer;">×</button>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="under-ramp">Color ramp</label>
+              <select id="under-ramp"></select>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="under-opacity">Opacity</label>
+              <div class="inline">
+                <input id="under-opacity" type="range" min="0" max="1" step="0.05" value="0" />
+                <output id="underOpacityVal">0.00</output>
+              </div>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" id="underInvertHeights" />
+                <span>Invert height scale</span>
+              </label>
+            </fieldset>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="ratioSection" class="section">
+      <h2>Improvement-to-Land Ratio</h2>
+      <p class="muted">Shows the ratio of improvements value to land value (REALIMPROV ÷ REALLANDVA). Heights are inverted to emphasize low ratios; darkest red indicates the tallest extrusions.</p>
+      <div id="mapHolder-ratio" class="map-holder">
+        <div class="map-box">
+          <div id="map-ratio"></div>
+          <div id="mapBtnsRatio" class="map-controls">
+            <button id="ratioSettingsBtn">Settings</button>
+            <button id="ratioExpandBtn">⤢</button>
+          </div>
+          <div id="ratioControls" style="position:absolute; top:10px; right:10px; width:min(92vw,420px); background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow); display:none; gap:var(--gap); z-index:30;">
+            <button id="ratioCloseControls" style="position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8; padding:2px 6px; border-radius:6px; cursor:pointer;">×</button>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="ratio-ramp">Color ramp</label>
+              <select id="ratio-ramp"></select>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="ratio-opacity">Opacity</label>
+              <div class="inline">
+                <input id="ratio-opacity" type="range" min="0" max="1" step="0.05" value="0" />
+                <output id="ratioOpacityVal">0.00</output>
+              </div>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="checkbox" id="ratioInvertHeights" checked />
+                <span>Invert height scale</span>
+              </label>
+            </fieldset>
+          </div>
+        </div>
+      </div>
     </section>
   </div>
 

@@ -63,7 +63,8 @@ export const COLOR_RAMPS: Record<string, string[]> = {
   Plasma:  ['#0D0887','#5B02A3','#9A179B','#CB4679','#ED7953','#FB9F3A','#F0F921'],
   Turbo:   ['#30123B','#4145AB','#2CC0F0','#6AE4B4','#C6F86D','#F9DD32','#F28C21','#CB3E1F','#8A0D2C'],
   YlOrRd:  ['#FFFFB2','#FECC5C','#FD8D3C','#F03B20','#BD0026'],
-  Blues:   ['#DEEBF7','#9ECAE1','#6BAED6','#3182BD','#08519C']
+  Blues:   ['#DEEBF7','#9ECAE1','#6BAED6','#3182BD','#08519C'],
+  Reds:    ['#FEE5D9','#FCBBA1','#FB6A4A','#DE2D26','#A50F15']
 };
 
 // Unit conversion (unchanged)

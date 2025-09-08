@@ -2,3 +2,12 @@ node_modules/*
 
 public/*
 !public/data-dictionary.json
+
+dist/
+*.log
+*.local
+*.env.local
+.idea/
+.vscode/
+.DS_Store
+.env

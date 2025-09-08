@@ -800,8 +800,12 @@ function renderMapFor(
   if (!(max > min)) { min = 0; max = 1; }
 
   const scaleVals = invert ? vals.map(v => (max - v)) : vals;
-  const pVal = percentile(scaleVals, HEIGHT_PCTL);
-  if (!Number.isFinite(pVal) || pVal <= 0) return;
+  let pVal = percentile(scaleVals, HEIGHT_PCTL);
+  if (!Number.isFinite(pVal) || pVal <= 0) {
+    // Fallback: try non-inverted values; if still invalid, use 1
+    const alt = percentile(vals, HEIGHT_PCTL);
+    pVal = (Number.isFinite(alt) && alt > 0) ? alt : 1;
+  }
   const heightScale = (HEIGHT_CAP_METERS / pVal) * (Number.isFinite(multiplierFactor) ? multiplierFactor : 1);
 
   let ramp = COLOR_RAMPS[rampKey] || COLOR_RAMPS['Viridis'];

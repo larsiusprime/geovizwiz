@@ -9,7 +9,8 @@ const CORE_FIELD_LABELS: Record<string, string> = {
   REALLANDVA_per_sqft: 'Land Value per Sqft',
   TLLDIMPROV: 'Total Land & Improvements',
   TLLDIMPROV_per_sqft: 'Total Land & Improvements per Sqft',
-  IMPR_LAND_RATIO: 'Improvement to Land Ratio'
+  IMPR_LAND_RATIO: 'Improvement to Land Ratio',
+  IMPR_PCT_TOTAL: 'Improvements % of Total Value'
 };
 
 export let FIELD_LABELS: Record<string, string> = { ...CORE_FIELD_LABELS };

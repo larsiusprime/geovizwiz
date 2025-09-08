@@ -320,6 +320,9 @@ let colorDomain: { lo: number; hi: number; label: string } | null = null;
 
 // For quantiles: thresholds between classes
 let colorBreaks: number[] | null = null;
+// For inverted heights: ranking (quintile) breaks on the raw metric
+let heightRankBreaks: number[] | null = null;
+const HEIGHT_RANK_BINS = 5; // quintiles for inverted-height ranking
 
 // staged loading
 let lastAsyncBuffer: AsyncBuffer | null = null;
@@ -496,8 +499,10 @@ async function loadSelectedColumns() {
       const land = Number(p.REALLANDVA);
       const impr = Number(p.REALIMPROV);
       if (Number.isFinite(land) && Number.isFinite(impr)) {
-        p.TLLDIMPROV = land + impr;
+        const total = land + impr;
+        p.TLLDIMPROV = total;
         if (land > 0) p.IMPR_LAND_RATIO = impr / land;
+        if (total > 0) p.IMPR_PCT_TOTAL = (impr / total) * 100;
       }
     }
 
@@ -522,6 +527,7 @@ async function loadSelectedColumns() {
     const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
     if (features[0]?.properties?.hasOwnProperty('REALIMPROV') && features[0]?.properties?.hasOwnProperty('REALLANDVA')) {
       available.push('IMPR_LAND_RATIO');
+      available.push('IMPR_PCT_TOTAL');
     }
     populateFieldDropdownFromList(available);
     // Populate per-map field selects with the same list
@@ -559,8 +565,8 @@ async function loadSelectedColumns() {
     }
 
     addOrUpdateSourceFor(map, /*withClick*/ true);
-    addOrUpdateSourceWhenReady(mapUnder, /*withClick*/ false);
-    addOrUpdateSourceWhenReady(mapRatio, /*withClick*/ false);
+    addOrUpdateSourceWhenReady(mapUnder, /*withClick*/ true);
+    addOrUpdateSourceWhenReady(mapRatio, /*withClick*/ true);
 
     // auto-multiplier for current normalization mode → p99 = 2km (centimeters)
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
@@ -603,6 +609,8 @@ function updateErrorLayer() {
 
   if (currentField === 'IMPR_LAND_RATIO') {
     filter = ['<=', ['to-number', ['get', 'REALLANDVA']], 0];
+  } else if (currentField === 'IMPR_PCT_TOTAL') {
+    filter = ['<=', ['+', ['to-number', ['get', 'REALIMPROV']], ['to-number', ['get', 'REALLANDVA']]], 0];
   } else if (normalizationMode === 'perLand' && landSizeField) {
     // land invalid when ≤ 0  (zero not allowed)
     filter = ['<=', ['to-number', ['get', landSizeField]], 0];
@@ -660,15 +668,16 @@ function addExtrusionLayerFor(m: maplibregl.Map, withClick = false) {
       const f = e.features?.[0];
       if (!f) return;
       const props = (f.properties || {}) as Record<string, any>;
-      showPopup(props, e.lngLat);
+      showPopup(m, props, e.lngLat);
     });
     m.on('mouseenter', LAYER_ID, () => { m.getCanvas().style.cursor = 'pointer'; });
     m.on('mouseleave', LAYER_ID, () => { m.getCanvas().style.cursor = ''; });
-    ensureErrorLayerFor(m);
+    // Show red dashed error outlines only on the main map
+    if (m === map) ensureErrorLayerFor(m);
   }
 }
 
-function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
+function showPopup(m: maplibregl.Map, props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
   if (activePopup) activePopup.remove();
   activePopup = new maplibregl.Popup({
     closeButton: true,
@@ -677,7 +686,7 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
   })
     .setLngLat(lngLat)
     .setHTML(buildPopupHTML(props))
-    .addTo(map);
+    .addTo(m);
   lastPicked = { props, lngLat };
 }
 
@@ -689,6 +698,12 @@ function buildValueExpression(): Expression {
     const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
     const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
     base = ['case', ['<=', den, 0], 0, ['/', num, den]] as any;
+  } else if (currentField === 'IMPR_PCT_TOTAL') {
+    const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
+    const land: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
+    const den: Expression = ['+', num, land] as any;
+    // percent 0..100
+    base = ['case', ['<=', den, 0], 0, ['*', ['/', num, den], 100]] as any;
   } else {
     base = ['to-number', ['get', currentField]] as any;
   }
@@ -722,6 +737,11 @@ function buildValueExpressionFor(field: string, mode: 'asis'|'perLand'|'perBuild
     const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
     const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
     base = ['case', ['<=', den, 0], 0, ['/', num, den]] as any;
+  } else if (field === 'IMPR_PCT_TOTAL') {
+    const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
+    const land: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
+    const den: Expression = ['+', num, land] as any;
+    base = ['case', ['<=', den, 0], 0, ['*', ['/', num, den], 100]] as any;
   } else {
     base = ['to-number', ['get', field]] as any;
   }
@@ -761,10 +781,24 @@ function applyExtrusion() {
   const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
   let heightBase: Expression = valueExpr;
-  if (invertHeights.checked && currentStats) {
+  let heightExpr: Expression;
+  if (invertHeights.checked && currentField === 'IMPR_PCT_TOTAL') {
+    // simple invert within 0..100 domain
+    heightExpr = ['*', ['-', 100, valueExpr] as any, multiplier * unitFactor] as any;
+  } else if (invertHeights.checked && heightRankBreaks && heightRankBreaks.length) {
+    // Use inverted rank (quintiles): highest values => smallest height
+    const k = Math.max(2, HEIGHT_RANK_BINS);
+    const idxExpr = makeStepIndexExpression(valueExpr, heightRankBreaks);
+    const denom = (k - 1);
+    const rankInv: Expression = ['/', ['-', denom, idxExpr as any], denom] as any; // (k-1 - idx)/(k-1)
+    heightExpr = ['*', rankInv, multiplier * unitFactor] as any;
+  } else if (invertHeights.checked && currentStats) {
+    // Fallback: linear invert when rank breaks not available
     heightBase = ['-', currentStats.max, valueExpr] as any;
+    heightExpr = ['*', heightBase, multiplier * unitFactor] as any;
+  } else {
+    heightExpr = ['*', heightBase, multiplier * unitFactor] as any;
   }
-  const heightExpr: Expression = ['*', heightBase, multiplier * unitFactor] as any;
 
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
@@ -799,8 +833,21 @@ function renderMapFor(
   for (const v of vals) { if (v < min) min = v; if (v > max) max = v; }
   if (!(max > min)) { min = 0; max = 1; }
 
-  const scaleVals = invert ? vals.map(v => (max - v)) : vals;
-  let pVal = percentile(scaleVals, HEIGHT_PCTL);
+  // For inverted heights, use rank (quintiles) on raw values
+  const usePctInvert = invert && field === 'IMPR_PCT_TOTAL';
+  const rankBreaks = invert && !usePctInvert ? quantileBreaks(vals, HEIGHT_RANK_BINS, 1, 99) : [];
+  const k = Math.max(2, HEIGHT_RANK_BINS);
+  const denom = (k - 1);
+  const toIdx = (v: number) => {
+    let i = 0;
+    while (i < rankBreaks.length && v >= rankBreaks[i]) i++;
+    return i;
+  };
+  // Height autoscale uses simple invert for percentage, rank-based otherwise
+  const scaleValsForHeight = invert
+    ? (usePctInvert ? vals.map(v => 100 - v) : vals.map(v => (denom - toIdx(v)) / denom))
+    : vals;
+  let pVal = percentile(scaleValsForHeight, HEIGHT_PCTL);
   if (!Number.isFinite(pVal) || pVal <= 0) {
     // Fallback: try non-inverted values; if still invalid, use 1
     const alt = percentile(vals, HEIGHT_PCTL);
@@ -816,25 +863,40 @@ function renderMapFor(
   let legendText = '';
   const colorBaseExpr: Expression = invert ? (['-', max, valueExpr] as any) : valueExpr;
   if (colorMode === 'quantiles') {
-    const breaksOnScale = quantileBreaks(scaleVals, ramp.length, 1, 99);
-    // Use thresholds in the same domain as colorBaseExpr (scaleVals domain when inverted)
+    // Color breaks follow raw/inverted-linear values to preserve expected ramp
+    const colorScaleVals = invert
+      ? (usePctInvert ? vals.map(v => 100 - v) : vals.map(v => (max - v)))
+      : vals;
+    const breaksOnScale = quantileBreaks(colorScaleVals, ramp.length, 1, 99);
     const breaks = breaksOnScale;
     colorExpr = makeStepColorExpression(colorBaseExpr, ramp, breaks);
-    const lo = percentile(scaleVals, 1);
-    const hi = percentile(scaleVals, 99);
+    const lo = percentile(colorScaleVals, 1);
+    const hi = percentile(colorScaleVals, 99);
     const edges = [lo, ...breaksOnScale, hi].map(v => Number(v).toLocaleString()).join(' | ');
     legendText = `Quantiles (p1–p99): ${edges}`;
   } else {
-    const pLow = percentile(scaleVals, 1);
-    const pHigh = percentile(scaleVals, 99);
+    const colorScaleVals = invert ? vals.map(v => (max - v)) : vals;
+    const pLow = percentile(colorScaleVals, 1);
+    const pHigh = percentile(colorScaleVals, 99);
     const lo = Number.isFinite(pLow) ? pLow : min;
     const hi = Number.isFinite(pHigh) ? pHigh : max;
     colorExpr = makeColorExpressionFromExpr(colorBaseExpr, ramp, lo, hi);
     legendText = `${lo.toLocaleString()} → ${hi.toLocaleString()}`;
   }
 
-  let heightBase: Expression = invert ? (['-', max, valueExpr] as any) : valueExpr;
-  const heightExpr: Expression = ['*', heightBase, heightScale] as any;
+  let heightExpr: Expression;
+  if (invert) {
+    if (usePctInvert) {
+      heightExpr = ['*', ['-', 100, valueExpr] as any, heightScale] as any;
+    } else {
+      const idxExpr = makeStepIndexExpression(valueExpr, rankBreaks);
+      const rankInv: Expression = ['/', ['-', denom, idxExpr as any], denom] as any; // (k-1 - idx)/(k-1)
+      heightExpr = ['*', rankInv, heightScale] as any;
+    }
+  } else {
+    const heightBase: Expression = valueExpr;
+    heightExpr = ['*', heightBase, heightScale] as any;
+  }
 
   m.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   m.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
@@ -875,15 +937,7 @@ function setTab(tab: TabKey) {
   } else if (tab === 'ratio') {
     categoryFieldset.style.display = 'none';
     reverseColors = true;            // darkest = tallest when inverted
-    invertHeights.checked = true;    // emphasize low ratios
     if (COLOR_RAMPS['Reds']) rampSelect.value = 'Reds';
-    if (currentGeoJSON) {
-      const hasRatio = !!currentGeoJSON.features[0]?.properties?.hasOwnProperty('IMPR_LAND_RATIO');
-      if (hasRatio) {
-        currentField = 'IMPR_LAND_RATIO';
-        fieldSelect.value = 'IMPR_LAND_RATIO';
-      }
-    }
     if (map.getLayer(LAYER_ID)) map.setFilter(LAYER_ID, null);
     computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
     applyExtrusion();
@@ -968,7 +1022,7 @@ function setBasemapFor(m: maplibregl.Map, name: string) {
   m.once('styledata', () => {
     m.off('error', onError);
     if (currentGeoJSON) {
-      addOrUpdateSourceFor(m, m === map /*withClick only for main*/);
+      addOrUpdateSourceFor(m, /*withClick*/ true);
       // trigger re-render for under/ratio after style change
       if (m === mapUnder) renderUnderNow();
       if (m === mapRatio) renderRatioNow();
@@ -1029,7 +1083,7 @@ function renderRatioNow() {
     mapRatio,
     ratioField,
     'asis',
-    /*invert*/ ratioInvertHeights?.checked ?? true,
+    /*invert*/ !!(ratioInvertHeights?.checked),
     ratioRampSelect?.value || 'Reds',
     /*reverse*/ true,
     (parseInt(ratioOpacityInput?.value || '0') / 100),
@@ -1083,6 +1137,12 @@ function computeDisplayedMetricFromProps(props: Record<string, any>): number | n
     const num = numOrNull(props.REALIMPROV);
     const den = numOrNull(props.REALLANDVA);
     base = (num != null && den != null && den > 0) ? num / den : null;
+  } else if (currentField === 'IMPR_PCT_TOTAL') {
+    const impr = numOrNull(props.REALIMPROV);
+    const land = numOrNull(props.REALLANDVA);
+    if (impr == null || land == null) return null;
+    const total = impr + land;
+    base = total > 0 ? (impr / total) * 100 : null;
   } else {
     base = numOrNull(props[currentField]);
   }
@@ -1104,6 +1164,17 @@ function computeExtrusionHeightMeters(metricValue: number): number {
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
   const mult = Number(multInput.value);
   const multiplier = Number.isFinite(mult) ? mult : 0;
+  if (invertHeights.checked && currentField === 'IMPR_PCT_TOTAL') {
+    return (100 - metricValue) * multiplier * unitFactor;
+  }
+  if (invertHeights.checked && heightRankBreaks && heightRankBreaks.length) {
+    const k = Math.max(2, HEIGHT_RANK_BINS);
+    let i = 0;
+    while (i < heightRankBreaks.length && metricValue >= heightRankBreaks[i]) i++;
+    const denom = (k - 1);
+    const rankInv = (denom - i) / denom;
+    return rankInv * multiplier * unitFactor;
+  }
   return metricValue * multiplier * unitFactor;
 }
 
@@ -1173,6 +1244,12 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
       const den = Number(p?.REALLANDVA);
       if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) continue;
       base = num / den;
+    } else if (field === 'IMPR_PCT_TOTAL') {
+      const impr = Number(p?.REALIMPROV);
+      const land = Number(p?.REALLANDVA);
+      const total = impr + land;
+      if (!Number.isFinite(impr) || !Number.isFinite(land) || total <= 0) continue;
+      base = (impr / total) * 100;
     } else {
       base = Number(p?.[field]);
       if (!Number.isFinite(base)) continue;
@@ -1214,6 +1291,17 @@ function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks
   return out as any;
 }
 
+// Build a step expression that returns the 0-based bin index for the given breaks
+// Example: step(value, 0, b1, 1, b2, 2, ...)
+function makeStepIndexExpression(valueExpr: Expression, breaks: number[]): Expression {
+  const b = breaks.slice();
+  const out: (number | Expression)[] = ['step', valueExpr, 0];
+  for (let i = 0; i < b.length; i++) {
+    out.push(b[i], i + 1);
+  }
+  return out as any;
+}
+
 // Auto-multiplier so p-th percentile reaches capMeters, in given units
 function computeAndApplyAutoMultiplier(
   unitsKeyOrAuto: 'auto' | keyof typeof UNIT_TO_METERS = 'auto',
@@ -1227,13 +1315,31 @@ function computeAndApplyAutoMultiplier(
   // values for the CURRENT normalization mode
   const vals = getNumericValuesNormalized(src, currentField, normalizationMode);
   let scaleVals = vals;
+  // For inverted heights, prefer simple invert for percentage metric; otherwise use rank-based fallback
   if (invertHeights.checked) {
-    let maxV = -Infinity;
-    for (const v of vals) if (v > maxV) maxV = v;
-    scaleVals = vals.map(v => maxV - v);
+    if (currentField === 'IMPR_PCT_TOTAL') {
+      heightRankBreaks = null;
+      scaleVals = vals.map(v => 100 - v);
+    } else {
+      heightRankBreaks = quantileBreaks(vals, HEIGHT_RANK_BINS, 1, 99);
+      const k = Math.max(2, HEIGHT_RANK_BINS);
+      const denom = (k - 1);
+      const toIdx = (v: number) => {
+        let i = 0;
+        while (i < heightRankBreaks.length && v >= heightRankBreaks[i]) i++;
+        return i;
+      };
+      scaleVals = vals.map(v => (denom - toIdx(v)) / denom);
+    }
+  } else {
+    heightRankBreaks = null;
   }
-  const pVal = percentile(scaleVals, p);
-  if (!Number.isFinite(pVal) || pVal <= 0) return;
+  // Use p-th percentile of the active values; fallback to non-inverted; final fallback to 1
+  let pVal = percentile(scaleVals, p);
+  if (!Number.isFinite(pVal) || pVal <= 0) {
+    const alt = percentile(vals, p);
+    pVal = (Number.isFinite(alt) && alt > 0) ? alt : 1;
+  }
 
   // ---- Color domain / breaks ----
   if (colorMode === 'quantiles') {

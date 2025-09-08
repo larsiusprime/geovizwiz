@@ -20,7 +20,7 @@
     .map-holder { position:relative; height:60vh; }
     .map-box { position:relative; height:100%; }
     #map, #map-under, #map-ratio { position:absolute; inset:0; }
-    #controls {
+    #controls, .settings-panel {
       position:absolute; top:10px; right:10px;
       width:min(92vw,420px);
       background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow);
@@ -41,21 +41,21 @@
       position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8;
       padding:2px 6px; border-radius:6px; cursor:pointer;
     }
-    #controls fieldset { border:0; padding:0; margin:0; display:grid; gap:6px; }
-    #controls label { display:block; font-size:12px; color:#333; }
-    #controls select, #controls input[type="number"], #controls input[type="text"] {
+    #controls fieldset, .settings-panel fieldset { border:0; padding:0; margin:0; display:grid; gap:6px; }
+    #controls label, .settings-panel label { display:block; font-size:12px; color:#333; }
+    #controls select, #controls input[type="number"], #controls input[type="text"], .settings-panel select, .settings-panel input[type="number"], .settings-panel input[type="text"] {
       width:100%; padding:6px 8px; border-radius:8px; border:1px solid #ddd; font-size:14px;
     }
-    #controls .row {
+    #controls .row, .settings-panel .row {
       display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
       gap:var(--gap); align-items:end;
     }
-    #controls .row > * { min-width:0; }
-    #controls .buttons { display:flex; flex-wrap:wrap; gap:6px; }
-    #controls button {
+    #controls .row > *, .settings-panel .row > * { min-width:0; }
+    #controls .buttons, .settings-panel .buttons { display:flex; flex-wrap:wrap; gap:6px; }
+    #controls button, .settings-panel button {
       border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
     }
-    #controls button:hover { background:#f0f0f0; }
+    #controls button:hover, .settings-panel button:hover { background:#f0f0f0; }
     #legend { display:none; align-items:center; gap:6px; }
     .muted { color:#666; font-size:12px; }
     .inline { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
@@ -120,7 +120,7 @@
             <button id="settingsBtn">Settings</button>
             <button id="expandBtn">⤢</button>
           </div>
-          <div id="controls">
+          <div id="controls" class="settings-panel">
             <button id="closeControls">×</button>
             <fieldset>
               <label for="basemap">Base map</label>
@@ -129,7 +129,7 @@
             <fieldset>
               <label for="field">Numeric field to visualize</label>
               <select id="field"></select>
-              <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
+              <div id="normGroup" style="display:none; gap:6px; margin-top:6px;">
                 <label style="display:flex; gap:8px; align-items:center;">
                   <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
                   <span>as-is</span>
@@ -152,8 +152,8 @@
               <div>
                 <label for="opacity">Opacity</label>
                 <div class="inline">
-                  <input id="opacity" type="range" min="0" max="1" step="0.05" value="0" />
-                  <output id="opacityVal">0.00</output>
+                  <input id="opacity" type="range" min="0" max="100" step="1" value="100" />
+                  <output id="opacityVal">100%</output>
                 </div>
               </div>
             </fieldset>
@@ -162,7 +162,7 @@
                 <label for="mult">Extrusion multiplier</label>
                 <input id="mult" type="number" step=".1" value="1" />
               </div>
-              <div>
+              <div style="display:none">
                 <label for="units">Units</label>
                 <select id="units">
                   <option value="centimeters" selected>centimeters</option>
@@ -218,8 +218,16 @@
             <button id="underSettingsBtn">Settings</button>
             <button id="underExpandBtn">⤢</button>
           </div>
-          <div id="underControls" style="position:absolute; top:10px; right:10px; width:min(92vw,420px); background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow); display:none; gap:var(--gap); z-index:30;">
+          <div id="underControls" class="settings-panel" style="position:absolute; top:10px; right:10px;">
             <button id="underCloseControls" style="position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8; padding:2px 6px; border-radius:6px; cursor:pointer;">×</button>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="under-field">Numeric field to visualize</label>
+              <select id="under-field"></select>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="under-basemap">Base map</label>
+              <select id="under-basemap"></select>
+            </fieldset>
             <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
               <label for="under-ramp">Color ramp</label>
               <select id="under-ramp"></select>
@@ -227,9 +235,13 @@
             <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
               <label for="under-opacity">Opacity</label>
               <div class="inline">
-                <input id="under-opacity" type="range" min="0" max="1" step="0.05" value="0" />
-                <output id="underOpacityVal">0.00</output>
+                <input id="under-opacity" type="range" min="0" max="100" step="1" value="100" />
+                <output id="underOpacityVal">100%</output>
               </div>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="under-mult">Extrusion multiplier</label>
+              <input id="under-mult" type="number" step=".1" value="1" />
             </fieldset>
             <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
               <label style="display:flex; gap:8px; align-items:center;">
@@ -237,6 +249,15 @@
                 <span>Invert height scale</span>
               </label>
             </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label>Category filter</label>
+              <div id="underCategoryFilter" style="display:grid; gap:6px;">
+                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" value="Vacant" checked /><span>Vacant</span></label>
+                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" value="Parking Lot" checked /><span>Parking Lot</span></label>
+                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" value="Underdeveloped" checked /><span>Underdeveloped</span></label>
+              </div>
+            </fieldset>
+            <fieldset id="underLegend"></fieldset>
           </div>
         </div>
       </div>
@@ -251,8 +272,16 @@
             <button id="ratioSettingsBtn">Settings</button>
             <button id="ratioExpandBtn">⤢</button>
           </div>
-          <div id="ratioControls" style="position:absolute; top:10px; right:10px; width:min(92vw,420px); background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow); display:none; gap:var(--gap); z-index:30;">
+          <div id="ratioControls" class="settings-panel" style="position:absolute; top:10px; right:10px;">
             <button id="ratioCloseControls" style="position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8; padding:2px 6px; border-radius:6px; cursor:pointer;">×</button>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="ratio-field">Numeric field to visualize</label>
+              <select id="ratio-field"></select>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="ratio-basemap">Base map</label>
+              <select id="ratio-basemap"></select>
+            </fieldset>
             <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
               <label for="ratio-ramp">Color ramp</label>
               <select id="ratio-ramp"></select>
@@ -260,9 +289,13 @@
             <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
               <label for="ratio-opacity">Opacity</label>
               <div class="inline">
-                <input id="ratio-opacity" type="range" min="0" max="1" step="0.05" value="0" />
-                <output id="ratioOpacityVal">0.00</output>
+                <input id="ratio-opacity" type="range" min="0" max="100" step="1" value="100" />
+                <output id="ratioOpacityVal">100%</output>
               </div>
+            </fieldset>
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+              <label for="ratio-mult">Extrusion multiplier</label>
+              <input id="ratio-mult" type="number" step=".1" value="1" />
             </fieldset>
             <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
               <label style="display:flex; gap:8px; align-items:center;">
@@ -270,6 +303,7 @@
                 <span>Invert height scale</span>
               </label>
             </fieldset>
+            <fieldset id="ratioLegend"></fieldset>
           </div>
         </div>
       </div>

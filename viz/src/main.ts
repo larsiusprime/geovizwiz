@@ -100,6 +100,11 @@ const underRampSelect = document.getElementById('under-ramp') as HTMLSelectEleme
 const underOpacityInput = document.getElementById('under-opacity') as HTMLInputElement;
 const underOpacityOut = document.getElementById('underOpacityVal') as HTMLOutputElement;
 const underInvertHeights = document.getElementById('underInvertHeights') as HTMLInputElement;
+const underBasemapSelect = document.getElementById('under-basemap') as HTMLSelectElement;
+const underMultInput = document.getElementById('under-mult') as HTMLInputElement;
+const underLegendEl = document.getElementById('underLegend') as HTMLFieldSetElement;
+const underCategoryContainer = document.getElementById('underCategoryFilter') as HTMLDivElement;
+const underFieldSelect = document.getElementById('under-field') as HTMLSelectElement;
 
 // Ratio map controls
 const ratioSettingsBtn = document.getElementById('ratioSettingsBtn') as HTMLButtonElement;
@@ -110,8 +115,15 @@ const ratioRampSelect = document.getElementById('ratio-ramp') as HTMLSelectEleme
 const ratioOpacityInput = document.getElementById('ratio-opacity') as HTMLInputElement;
 const ratioOpacityOut = document.getElementById('ratioOpacityVal') as HTMLOutputElement;
 const ratioInvertHeights = document.getElementById('ratioInvertHeights') as HTMLInputElement;
+const ratioBasemapSelect = document.getElementById('ratio-basemap') as HTMLSelectElement;
+const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement;
+const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement;
+const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
 function categoryInputs() {
   return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+}
+function categoryInputsUnder() {
+  return Array.from((underCategoryContainer || document.createElement('div')).querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
 categoryContainer.addEventListener('change', () => {
   applyFilterAndScaling();
@@ -214,7 +226,12 @@ function loadSettings(tab: TabKey) {
     if (obj.ramp) rampSelect.value = obj.ramp;
     if (obj.mult) multInput.value = obj.mult;
     if (obj.units) unitsSelect.value = obj.units;
-    if (obj.opacity) { opacityInput.value = obj.opacity; if (opacityOut) opacityOut.value = Number(obj.opacity).toFixed(2); }
+    if (obj.opacity != null) {
+      const raw = Number(obj.opacity);
+      const pct = Number.isFinite(raw) ? (raw <= 1 ? Math.round(raw * 100) : Math.round(raw)) : 100;
+      opacityInput.value = String(Math.max(0, Math.min(100, pct)));
+      if (opacityOut) opacityOut.value = `${opacityInput.value}%`;
+    }
     invertHeights.checked = !!obj.invert;
     if (obj.colorMode) {
       const radio = document.querySelector<HTMLInputElement>(`input[name="colorMode"][value="${obj.colorMode}"]`);
@@ -259,12 +276,26 @@ if (ratioRampSelect) {
   ratioRampSelect.value = COLOR_RAMPS['Reds'] ? 'Reds' : 'Magma';
 }
 
+// Populate basemap selects for under/ratio
+if (underBasemapSelect) {
+  for (const key of Object.keys(BASEMAP_STYLES)) {
+    const opt = document.createElement('option'); opt.value = key; opt.textContent = key; underBasemapSelect.appendChild(opt);
+  }
+  underBasemapSelect.value = 'OpenStreetMap';
+}
+if (ratioBasemapSelect) {
+  for (const key of Object.keys(BASEMAP_STYLES)) {
+    const opt = document.createElement('option'); opt.value = key; opt.textContent = key; ratioBasemapSelect.appendChild(opt);
+  }
+  ratioBasemapSelect.value = 'OpenStreetMap';
+}
+
 for (const key of Object.keys(BASEMAP_STYLES)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
 }
 // Default to OpenStreetMap; other styles available in dropdown
 basemapSelect.value = 'OpenStreetMap';
-basemapSelect.onchange = () => { setBasemap(basemapSelect.value); saveSettings(currentTab); };
+basemapSelect.onchange = () => { setBasemapFor(map, basemapSelect.value); saveSettings(currentTab); };
 
 
 /* ---------------- Constants ---------------- */
@@ -493,6 +524,23 @@ async function loadSelectedColumns() {
       available.push('IMPR_LAND_RATIO');
     }
     populateFieldDropdownFromList(available);
+    // Populate per-map field selects with the same list
+    if (underFieldSelect) {
+      underFieldSelect.replaceChildren();
+      if (!available.length) underFieldSelect.append(new Option('— no data —', ''));
+      else {
+        underFieldSelect.append(new Option('— choose —', ''));
+        for (const n of available) underFieldSelect.append(new Option(FIELD_LABELS[n] ?? n, n));
+      }
+    }
+    if (ratioFieldSelect) {
+      ratioFieldSelect.replaceChildren();
+      if (!available.length) ratioFieldSelect.append(new Option('— no data —', ''));
+      else {
+        ratioFieldSelect.append(new Option('— choose —', ''));
+        for (const n of available) ratioFieldSelect.append(new Option(FIELD_LABELS[n] ?? n, n));
+      }
+    }
 
     // auto-select the best (prefer REALLANDVA_per_sqft if present)
     currentField = available.includes('REALLANDVA_per_sqft')
@@ -501,6 +549,13 @@ async function loadSelectedColumns() {
     if (currentField) {
       fieldSelect.value = currentField;
       currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
+    }
+
+    // Defaults for per-map field selections
+    if (underFieldSelect) underFieldSelect.value = currentField || '';
+    if (ratioFieldSelect) {
+      const hasRatio = !!features[0]?.properties?.hasOwnProperty('IMPR_LAND_RATIO');
+      ratioFieldSelect.value = hasRatio ? 'IMPR_LAND_RATIO' : (currentField || '');
     }
 
     addOrUpdateSourceFor(map, /*withClick*/ true);
@@ -573,6 +628,11 @@ function addOrUpdateSourceFor(m: maplibregl.Map, withClick = false) {
     m.addSource(SOURCE_ID, { type: 'geojson', data: currentGeoJSON as any });
     addExtrusionLayerFor(m, withClick);
   }
+  // Ensure initial render occurs once layer exists
+  if (m.getLayer(LAYER_ID)) {
+    if (m === mapUnder) renderUnderNow();
+    else if (m === mapRatio) renderRatioNow();
+  }
 }
 
 function addOrUpdateSourceWhenReady(m: maplibregl.Map, withClick = false) {
@@ -591,7 +651,7 @@ function addExtrusionLayerFor(m: maplibregl.Map, withClick = false) {
     paint: {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
-      'fill-extrusion-opacity': parseFloat(opacityInput.value),
+      'fill-extrusion-opacity': 1,
       'fill-extrusion-vertical-gradient': true
     }
   });
@@ -604,8 +664,8 @@ function addExtrusionLayerFor(m: maplibregl.Map, withClick = false) {
     });
     m.on('mouseenter', LAYER_ID, () => { m.getCanvas().style.cursor = 'pointer'; });
     m.on('mouseleave', LAYER_ID, () => { m.getCanvas().style.cursor = ''; });
+    ensureErrorLayerFor(m);
   }
-  ensureErrorLayerFor(m);
 }
 
 function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
@@ -708,7 +768,7 @@ function applyExtrusion() {
 
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+  map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', (parseInt(opacityInput.value) / 100));
 
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
@@ -726,6 +786,8 @@ function renderMapFor(
   rampKey: string,
   reverse: boolean,
   opacityOverride?: number,
+  multiplierFactor: number = 1,
+  legendEl?: HTMLFieldSetElement | null,
   filteredFc?: GeoJSON.FeatureCollection
 ) {
   if (!currentGeoJSON) return;
@@ -740,32 +802,55 @@ function renderMapFor(
   const scaleVals = invert ? vals.map(v => (max - v)) : vals;
   const pVal = percentile(scaleVals, HEIGHT_PCTL);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
-  const heightScale = HEIGHT_CAP_METERS / pVal;
+  const heightScale = (HEIGHT_CAP_METERS / pVal) * (Number.isFinite(multiplierFactor) ? multiplierFactor : 1);
 
   let ramp = COLOR_RAMPS[rampKey] || COLOR_RAMPS['Viridis'];
   if (reverse && ramp) ramp = ramp.slice().reverse();
 
   const valueExpr = buildValueExpressionFor(field, mode);
   let colorExpr: Expression;
+  let legendText = '';
+  const colorBaseExpr: Expression = invert ? (['-', max, valueExpr] as any) : valueExpr;
   if (colorMode === 'quantiles') {
-    const breaks = quantileBreaks(vals, ramp.length, 1, 99);
-    colorExpr = makeStepColorExpression(valueExpr, ramp, breaks);
+    const breaksOnScale = quantileBreaks(scaleVals, ramp.length, 1, 99);
+    // Use thresholds in the same domain as colorBaseExpr (scaleVals domain when inverted)
+    const breaks = breaksOnScale;
+    colorExpr = makeStepColorExpression(colorBaseExpr, ramp, breaks);
+    const lo = percentile(scaleVals, 1);
+    const hi = percentile(scaleVals, 99);
+    const edges = [lo, ...breaksOnScale, hi].map(v => Number(v).toLocaleString()).join(' | ');
+    legendText = `Quantiles (p1–p99): ${edges}`;
   } else {
-    const pLow = percentile(vals, 1);
-    const pHigh = percentile(vals, 99);
+    const pLow = percentile(scaleVals, 1);
+    const pHigh = percentile(scaleVals, 99);
     const lo = Number.isFinite(pLow) ? pLow : min;
     const hi = Number.isFinite(pHigh) ? pHigh : max;
-    colorExpr = makeColorExpressionFromExpr(valueExpr, ramp, lo, hi);
+    colorExpr = makeColorExpressionFromExpr(colorBaseExpr, ramp, lo, hi);
+    legendText = `${lo.toLocaleString()} → ${hi.toLocaleString()}`;
   }
 
-  let heightBase: Expression = valueExpr;
-  if (invert) heightBase = ['-', max, valueExpr] as any;
+  let heightBase: Expression = invert ? (['-', max, valueExpr] as any) : valueExpr;
   const heightExpr: Expression = ['*', heightBase, heightScale] as any;
 
   m.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
   m.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
-  const op = (typeof opacityOverride === 'number') ? opacityOverride : parseFloat(opacityInput.value);
+  const op = (typeof opacityOverride === 'number') ? opacityOverride : (parseInt(opacityInput.value) / 100);
   m.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', op);
+
+  if (legendEl) {
+    legendEl.replaceChildren();
+    if (legendText) {
+      const row = document.createElement('div');
+      row.style.display = 'flex'; row.style.gap = '6px'; row.style.alignItems = 'center'; row.style.flexWrap = 'wrap';
+      const label = document.createElement('div'); label.textContent = 'Legend:'; label.style.fontSize = '12px';
+      const meta = document.createElement('div'); meta.className = 'muted'; meta.textContent = legendText;
+      row.appendChild(label); row.appendChild(meta);
+      legendEl.appendChild(row);
+      legendEl.style.display = 'grid';
+    } else {
+      legendEl.style.display = 'none';
+    }
+  }
 }
 function setTab(tab: TabKey) {
   currentTab = tab;
@@ -866,32 +951,25 @@ function updateUnderTotals(fc: GeoJSON.FeatureCollection) {
     </div>`;
 }
 
-function setBasemap(name: string) {
+function setBasemapFor(m: maplibregl.Map, name: string) {
   const style = BASEMAP_STYLES[name] || BASEMAP_STYLES['OpenStreetMap'];
-  basemapSelect.value = name;
-  const all = [map, mapUnder, mapRatio];
-  for (const m of all) {
-    const onError = (e: any) => {
-      if (e?.sourceId !== 'ofm-tiles') return;
-      console.warn('Basemap load failed, reverting to OpenStreetMap', e);
-      m.off('error', onError);
-      basemapSelect.value = 'OpenStreetMap';
-      m.setStyle(BASEMAP_STYLES['OpenStreetMap']);
-    };
-    if (name === 'OpenFreeMap') m.on('error', onError);
-    m.setStyle(style);
-    m.once('styledata', () => {
-      m.off('error', onError);
-      if (currentGeoJSON) {
-        addOrUpdateSourceFor(m, m === map /*withClick on main*/);
-        if (m === mapUnder) renderUnderNow();
-        if (m === mapRatio) renderRatioNow();
-      }
-    });
-  }
-  // Re-render secondary maps with current choices
-  renderUnderNow();
-  renderRatioNow();
+  const onError = (e: any) => {
+    if (e?.sourceId !== 'ofm-tiles') return;
+    console.warn('Basemap load failed, reverting to OpenStreetMap', e);
+    m.off('error', onError);
+    m.setStyle(BASEMAP_STYLES['OpenStreetMap']);
+  };
+  if (name === 'OpenFreeMap') m.on('error', onError);
+  m.setStyle(style);
+  m.once('styledata', () => {
+    m.off('error', onError);
+    if (currentGeoJSON) {
+      addOrUpdateSourceFor(m, m === map /*withClick only for main*/);
+      // trigger re-render for under/ratio after style change
+      if (m === mapUnder) renderUnderNow();
+      if (m === mapRatio) renderRatioNow();
+    }
+  });
 }
 
 
@@ -916,7 +994,7 @@ function applyFilterAndScaling() {
 
 function renderUnderNow() {
   if (!currentGeoJSON || !mapUnder.getLayer(LAYER_ID)) return;
-  const selected = categoryInputs().filter(i => i.checked).map(i => i.value);
+  const selected = categoryInputsUnder().filter(i => i.checked).map(i => i.value);
   let filter: any = null;
   if (selected.length) filter = ['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any;
   mapUnder.setFilter(LAYER_ID, filter);
@@ -925,7 +1003,7 @@ function renderUnderNow() {
     ? { type: 'FeatureCollection', features: currentGeoJSON.features.filter(f => selected.includes(String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? ''))) } as GeoJSON.FeatureCollection
     : undefined;
 
-  const field = currentField || 'REALLANDVA';
+  const field = (underFieldSelect?.value || currentField) || 'REALLANDVA';
   renderMapFor(
     mapUnder,
     field,
@@ -933,21 +1011,26 @@ function renderUnderNow() {
     /*invert*/ underInvertHeights?.checked || false,
     underRampSelect?.value || rampSelect.value,
     /*reverse*/ false,
-    parseFloat(underOpacityInput?.value || '0'),
+    (parseInt(underOpacityInput?.value || '0') / 100),
+    parseFloat(underMultInput?.value || '1') || 1,
+    underLegendEl,
     filteredFc
   );
 }
 
 function renderRatioNow() {
   if (!currentGeoJSON || !mapRatio.getLayer(LAYER_ID)) return;
+  const ratioField = (ratioFieldSelect?.value || 'IMPR_LAND_RATIO');
   renderMapFor(
     mapRatio,
-    'IMPR_LAND_RATIO',
+    ratioField,
     'asis',
     /*invert*/ ratioInvertHeights?.checked ?? true,
     ratioRampSelect?.value || 'Reds',
     /*reverse*/ true,
-    parseFloat(ratioOpacityInput?.value || '0')
+    (parseInt(ratioOpacityInput?.value || '0') / 100),
+    parseFloat(ratioMultInput?.value || '1') || 1,
+    ratioLegendEl
   );
 }
 
@@ -1365,7 +1448,7 @@ multInput.addEventListener('change', () => { onMultInput(); saveSettings(current
 unitsSelect.addEventListener('change', () => { scheduleUpdate('applyOnly'); saveSettings(currentTab); });
 
 opacityInput.addEventListener('input', () => {
-  if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
+  if (opacityOut) opacityOut.value = `${parseInt(opacityInput.value).toFixed(0)}%`;
   scheduleUpdate('applyOnly');
   saveSettings(currentTab);
   renderUnderNow();
@@ -1374,13 +1457,19 @@ opacityInput.addEventListener('input', () => {
 
 // Under map listeners
 underRampSelect?.addEventListener('change', () => { renderUnderNow(); });
-underOpacityInput?.addEventListener('input', () => { if (underOpacityOut) underOpacityOut.value = Number(underOpacityInput.value).toFixed(2); renderUnderNow(); });
+underOpacityInput?.addEventListener('input', () => { if (underOpacityOut) underOpacityOut.value = `${parseInt(underOpacityInput.value).toFixed(0)}%`; renderUnderNow(); });
 underInvertHeights?.addEventListener('change', () => { renderUnderNow(); });
+underMultInput?.addEventListener('input', () => { renderUnderNow(); });
+underBasemapSelect?.addEventListener('change', () => { setBasemapFor(mapUnder, underBasemapSelect.value); });
+underFieldSelect?.addEventListener('change', () => { renderUnderNow(); });
 
 // Ratio map listeners
 ratioRampSelect?.addEventListener('change', () => { renderRatioNow(); });
-ratioOpacityInput?.addEventListener('input', () => { if (ratioOpacityOut) ratioOpacityOut.value = Number(ratioOpacityInput.value).toFixed(2); renderRatioNow(); });
+ratioOpacityInput?.addEventListener('input', () => { if (ratioOpacityOut) ratioOpacityOut.value = `${parseInt(ratioOpacityInput.value).toFixed(0)}%`; renderRatioNow(); });
 ratioInvertHeights?.addEventListener('change', () => { renderRatioNow(); });
+ratioMultInput?.addEventListener('input', () => { renderRatioNow(); });
+ratioBasemapSelect?.addEventListener('change', () => { setBasemapFor(mapRatio, ratioBasemapSelect.value); });
+ratioFieldSelect?.addEventListener('change', () => { renderRatioNow(); });
 
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;

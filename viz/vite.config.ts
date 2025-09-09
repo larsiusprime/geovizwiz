@@ -16,17 +16,29 @@ export default defineConfig(({ mode }) => {
         }
       }
     },
-    server: slackWebhook
-      ? {
-          proxy: {
-            '/api/slack': {
-              target: slackWebhook,
-              changeOrigin: true,
-              secure: true,
-              rewrite: () => ''
+    // Dev server proxies
+    server: {
+      proxy: {
+        // Optional: post dev logs to Slack via local endpoint
+        ...(slackWebhook
+          ? {
+              '/api/slack': {
+                target: slackWebhook,
+                changeOrigin: true,
+                secure: true,
+                rewrite: () => ''
+              }
             }
-          }
+          : {}),
+
+        // Proxy remote GeoParquet to avoid browser CORS (dev only)
+        '/data': {
+          target: 'https://landeconomics.blob.core.windows.net/public-sharing-cle',
+          changeOrigin: true,
+          secure: true,
+          rewrite: (p: string) => p.replace(/^\/data/, '')
         }
-      : undefined
+      }
+    }
   };
 });

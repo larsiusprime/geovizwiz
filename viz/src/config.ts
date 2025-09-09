@@ -84,5 +84,11 @@ export const ORIG_CATEGORY_FIELD = 'PROPERTY_CATEGORY';
 export const UNDERUTILIZED_DEFAULTS = ['Vacant', 'Parking Lot', 'Underdeveloped'];
 
 // Default dataset location (South Bend)
-// Prefer public blob; local file remains a fallback for offline use
-export const DEFAULT_DATASET_URL = 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet';
+// In dev, prefer local file to avoid CORS; in prod use public blob.
+export const REMOTE_DATASET_URL = 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet';
+export const LOCAL_DATASET_URL = 'southbend.parquet';
+// Optional Vite dev proxy path for the remote blob (see vite.config.ts)
+export const PROXY_DATASET_URL = '/data/southbend.parquet';
+
+export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL
+  || ((import.meta as any).env?.DEV ? LOCAL_DATASET_URL : REMOTE_DATASET_URL);

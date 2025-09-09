@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL } from './config';
+import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL, REMOTE_DATASET_URL, PROXY_DATASET_URL, LOCAL_DATASET_URL } from './config';
 import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './utils.dictionary';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -592,8 +592,9 @@ async function loadSelectedColumns() {
     updateLegend();
     fitToDataAll(currentGeoJSON);
   } catch (err: any) {
+    // Bubble up so caller can try the next candidate or present a final error
     console.error('GeoParquet load failed:', err);
-    if (!cancelRequested) alert(`GeoParquet load failed: ${err?.message ?? err}`);
+    throw err;
   } finally {
     hideLoading();
   }
@@ -1647,18 +1648,22 @@ fieldSelect.addEventListener('change', () => {
 });
 
 async function loadDefaultDataset() {
-  // Try public blob first; fall back to local file for offline use
-  const candidates = [DEFAULT_DATASET_URL, 'southbend.parquet'];
+  // Prefer local file in dev to avoid CORS; include proxy path if configured.
+  const isDev = (import.meta as any).env?.DEV;
+  const candidates = isDev
+    ? [LOCAL_DATASET_URL, PROXY_DATASET_URL, REMOTE_DATASET_URL].filter(Boolean)
+    : [DEFAULT_DATASET_URL, LOCAL_DATASET_URL];
   for (const url of candidates) {
     try {
       lastAsyncBuffer = await urlToAsyncBuffer(url);
       await loadSelectedColumns();
-      if (url !== candidates[0]) console.info('Loaded local fallback dataset:', url);
+      if (url !== candidates[0]) console.info('Loaded fallback dataset:', url);
       return;
     } catch (err) {
       console.warn('Dataset load failed for', url, err);
     }
   }
+  if (!cancelRequested) alert('Failed to load any dataset (remote and local both unavailable).');
 }
 
 /* ---------------- Main ---------------- */

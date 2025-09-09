@@ -2,6 +2,7 @@ node_modules/*
 
 public/*
 !public/data-dictionary.json
+!public/staticwebapp.config.json
 
 dist/
 *.log

@@ -1,0 +1,16 @@
+{
+  "routes": [
+    { "route": "/login", "serve": "/login.html" },
+    { "route": "/login.html", "serve": "/login.html" }
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/assets/*",
+      "/*.css",
+      "/*.js",
+      "/login",
+      "/login.html"
+    ]
+  }
+}

@@ -5,7 +5,9 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const slackWebhook = env.VITE_SLACK_WEBHOOK_URL;
   return {
-    base: '/viz/',
+    // Serve from domain root in production deployments (Azure SWA)
+    // If you later host under a subpath, set base accordingly
+    base: '/',
     build: {
       rollupOptions: {
         input: {
@@ -28,4 +30,3 @@ export default defineConfig(({ mode }) => {
       : undefined
   };
 });
-

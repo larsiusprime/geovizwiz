@@ -1,5 +1,8 @@
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const SIGNIN_WEBHOOK = import.meta.env.VITE_SIGNIN_WEBHOOK_URL;
+
+const env = import.meta.env || {};
+const CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID;
+const SIGNIN_WEBHOOK = env.VITE_SIGNIN_WEBHOOK_URL;
+
 
 function whenReady(predicate, timeoutMs = 8000) {
   return new Promise((resolve, reject) => {

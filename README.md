@@ -27,6 +27,16 @@ set in `VITE_SLACK_WEBHOOK_URL`, avoiding CORS restrictions. In production,
 `/api/slack` is handled by an Azure Functions backend that posts to the webhook
 URL stored in the `SLACK_WEBHOOK_URL` environment variable.
 
+## Deployment notes
+
+The TypeScript visualizer (`viz/`) must be compiled before deployment. Running
+`npm run build` in the `viz` directory generates a `dist/` folder containing
+JavaScript bundles such as `assets/main.js`. Deploy the contents of this `dist`
+folder to Azure Static Web Apps or any other static host. Serving the source
+files directly (for example, `/src/main.ts`) causes browsers to download the
+TypeScript file with a `video/mp2t` MIME type, which prevents the app from
+loading.
+
 ## Flexible data dictionary
 
 Field labels and available filters in the parcel visualizer are driven by

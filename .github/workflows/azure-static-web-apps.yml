@@ -42,8 +42,7 @@ jobs:
         with:
           action: upload                                 # <-- REQUIRED
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          app_location: viz
-          output_location: dist
+          app_location: viz/dist
           skip_app_build: true                           # we already built
           api_location: api
           production_branch: main

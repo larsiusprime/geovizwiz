@@ -498,6 +498,10 @@ async function loadSelectedColumns() {
     if (!fc?.features) throw new Error('Parser returned no FeatureCollection.');
 
     let features = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+    console.log('[GeoParquet] Parsed FeatureCollection:', {
+      totalFeatures: fc.features?.length ?? 0,
+      polygonFeatures: features.length
+    });
     if (features.length === 0) throw new Error('No Polygon/MultiPolygon features found.');
 
     const required = [DEV_CATEGORY_FIELD, 'REALIMPROV', 'REALLANDVA'];
@@ -1656,6 +1660,12 @@ async function loadDefaultDataset() {
   for (const url of candidates) {
     try {
       lastAsyncBuffer = await urlToAsyncBuffer(url);
+      try {
+        console.log('[GeoParquet] Fetched dataset:', {
+          url,
+          byteLength: lastAsyncBuffer?.byteLength ?? null
+        });
+      } catch {}
       await loadSelectedColumns();
       return;
     } catch (err) {

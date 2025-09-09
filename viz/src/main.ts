@@ -12,6 +12,70 @@ import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './u
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 
+/* ---------------- Post-login Slack notify ---------------- */
+
+// If login flow stored a pending Slack notification, send it here so
+// the request and logs are visible on the main page (not the login tab).
+(function processPendingSlack() {
+  try {
+    const raw = localStorage.getItem('gvw_pending_slack');
+    if (!raw) return;
+    const pending = JSON.parse(raw) as { at?: string; email?: string } | null;
+    if (!pending?.email) {
+      localStorage.removeItem('gvw_pending_slack');
+      return;
+    }
+
+    const text = `Google sign-in: ${pending.email} (post-login)`;
+    const attemptedAt = new Date().toISOString();
+    console.log('[Slack] Sending post-login notification:', { email: pending.email, attemptedAt });
+
+    fetch('/api/slack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    })
+      .then(async (resp) => {
+        const summary = {
+          email: pending.email,
+          url: '/api/slack',
+          status: resp.status,
+          ok: resp.ok,
+          attemptedAt,
+        };
+        console.log('[Slack] Response:', summary);
+        try {
+          localStorage.setItem('gvw_signin_debug', JSON.stringify({
+            ...summary,
+            savedAt: new Date().toISOString()
+          }));
+        } catch {}
+      })
+      .catch((err) => {
+        const summary = {
+          email: pending.email,
+          url: '/api/slack',
+          status: null as number | null,
+          ok: false,
+          error: String(err),
+          attemptedAt,
+        };
+        console.warn('[Slack] Post-login send failed:', summary);
+        try {
+          localStorage.setItem('gvw_signin_debug', JSON.stringify({
+            ...summary,
+            savedAt: new Date().toISOString()
+          }));
+        } catch {}
+      })
+      .finally(() => {
+        try { localStorage.removeItem('gvw_pending_slack'); } catch {}
+      });
+  } catch {
+    // ignore
+  }
+})();
+
 
 /* ---------------- Map Bootstrap ----------------- */
 

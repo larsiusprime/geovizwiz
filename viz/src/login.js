@@ -33,6 +33,27 @@ function recordSignin(cred) {
     const entry = { at: now, credential: cred?.credential ?? null, payload: decodeJwt(cred?.credential || '') };
     existing.push(entry);
     localStorage.setItem('gvw_signins', JSON.stringify(existing));
+    // Stash minimal info to hand off to the main app after redirect
+    try {
+      const email = entry.payload?.email || null;
+      if (email) {
+        const pending = { at: now, email };
+        localStorage.setItem('gvw_pending_slack', JSON.stringify(pending));
+        // Also record a lightweight debug snapshot for the debug page
+        localStorage.setItem('gvw_signin_debug', JSON.stringify({
+          savedAt: now,
+          emailFound: true,
+          email,
+          slackWebhookExists: !!(env?.VITE_SLACK_WEBHOOK_URL)
+        }));
+      } else {
+        localStorage.setItem('gvw_signin_debug', JSON.stringify({
+          savedAt: now,
+          emailFound: false,
+          slackWebhookExists: !!(env?.VITE_SLACK_WEBHOOK_URL)
+        }));
+      }
+    } catch {}
     if (SIGNIN_WEBHOOK) {
       fetch(SIGNIN_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
     }

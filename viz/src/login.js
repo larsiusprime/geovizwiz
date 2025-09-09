@@ -1,6 +1,6 @@
 
 const env = import.meta.env || {};
-const CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID ||
+const CLIENT_ID =
   document.querySelector('meta[name="google-signin-client_id"]')?.content || '';
 const SIGNIN_WEBHOOK = env.VITE_SIGNIN_WEBHOOK_URL;
 
@@ -50,7 +50,7 @@ async function init() {
   const mount = document.getElementById('googleSignIn');
   mount.textContent = 'Loading sign-in…';
 
-  console.log('Google VITE login client:', CLIENT_ID);
+  console.log('Google login client:', CLIENT_ID);
 
   await whenReady(() => window.google?.accounts?.id);
   const g = window.google;

@@ -12,8 +12,9 @@ variables in `viz/` to enable it. Production builds read these values from
 `viz/.env.production`:
 
 - `VITE_ENABLE_GOOGLE_AUTH=true`
-- `VITE_GOOGLE_CLIENT_ID=<your OAuth client id>`
 - `VITE_SLACK_WEBHOOK_URL=<Slack incoming webhook>`
+
+The Google client ID used for sign‑in is defined inline in `viz/login.html`.
 
 When the variables are not set or `VITE_ENABLE_GOOGLE_AUTH` is `false`, the
 application runs without contacting Google, which is useful for development.

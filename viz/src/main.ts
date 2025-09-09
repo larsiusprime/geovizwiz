@@ -519,7 +519,10 @@ async function loadSelectedColumns() {
       if (Number.isFinite(land) && Number.isFinite(impr)) {
         const total = land + impr;
         p.TLLDIMPROV = total;
-        if (land > 0) p.IMPR_LAND_RATIO = impr / land;
+        if (land > 0) {
+          p.IMPR_LAND_RATIO = impr / land;
+          p.IMPR_LAND_PCT = (impr / land) * 100;
+        }
         if (total > 0) p.IMPR_PCT_TOTAL = (impr / total) * 100;
       }
     }
@@ -547,6 +550,7 @@ async function loadSelectedColumns() {
     const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
     if (features[0]?.properties?.hasOwnProperty('REALIMPROV') && features[0]?.properties?.hasOwnProperty('REALLANDVA')) {
       available.push('IMPR_LAND_RATIO');
+      available.push('IMPR_LAND_PCT');
       available.push('IMPR_PCT_TOTAL');
     }
     populateFieldDropdownFromList(available);
@@ -581,7 +585,8 @@ async function loadSelectedColumns() {
     if (underFieldSelect) underFieldSelect.value = currentField || '';
     if (ratioFieldSelect) {
       const hasRatio = !!features[0]?.properties?.hasOwnProperty('IMPR_LAND_RATIO');
-      ratioFieldSelect.value = hasRatio ? 'IMPR_LAND_RATIO' : (currentField || '');
+      const hasPctRatio = !!features[0]?.properties?.hasOwnProperty('IMPR_LAND_PCT');
+      ratioFieldSelect.value = hasPctRatio ? 'IMPR_LAND_PCT' : (hasRatio ? 'IMPR_LAND_RATIO' : (currentField || ''));
     }
 
     addOrUpdateSourceFor(map, /*withClick*/ true);
@@ -629,6 +634,8 @@ function updateErrorLayer() {
   let filter: any = ['==', ['literal', 1], 2]; // matches nothing by default
 
   if (currentField === 'IMPR_LAND_RATIO') {
+    filter = ['<=', ['to-number', ['get', 'REALLANDVA']], 0];
+  } else if (currentField === 'IMPR_LAND_PCT') {
     filter = ['<=', ['to-number', ['get', 'REALLANDVA']], 0];
   } else if (currentField === 'IMPR_PCT_TOTAL') {
     filter = ['<=', ['+', ['to-number', ['get', 'REALIMPROV']], ['to-number', ['get', 'REALLANDVA']]], 0];
@@ -719,6 +726,11 @@ function buildValueExpression(): Expression {
     const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
     const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
     base = ['case', ['<=', den, 0], 0, ['/', num, den]] as any;
+  } else if (currentField === 'IMPR_LAND_PCT') {
+    const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
+    const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
+    // percent 0..∞, but typically 0..several hundred
+    base = ['case', ['<=', den, 0], 0, ['*', ['/', num, den], 100]] as any;
   } else if (currentField === 'IMPR_PCT_TOTAL') {
     const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
     const land: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
@@ -758,6 +770,10 @@ function buildValueExpressionFor(field: string, mode: 'asis'|'perLand'|'perBuild
     const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
     const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
     base = ['case', ['<=', den, 0], 0, ['/', num, den]] as any;
+  } else if (field === 'IMPR_LAND_PCT') {
+    const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
+    const den: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
+    base = ['case', ['<=', den, 0], 0, ['*', ['/', num, den], 100]] as any;
   } else if (field === 'IMPR_PCT_TOTAL') {
     const num: Expression = ['to-number', ['get', 'REALIMPROV']] as any;
     const land: Expression = ['to-number', ['get', 'REALLANDVA']] as any;
@@ -1307,6 +1323,11 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
       const den = Number(p?.REALLANDVA);
       if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) continue;
       base = num / den;
+    } else if (field === 'IMPR_LAND_PCT') {
+      const num = Number(p?.REALIMPROV);
+      const den = Number(p?.REALLANDVA);
+      if (!Number.isFinite(num) || !Number.isFinite(den) || den <= 0) continue;
+      base = (num / den) * 100;
     } else if (field === 'IMPR_PCT_TOTAL') {
       const impr = Number(p?.REALIMPROV);
       const land = Number(p?.REALLANDVA);

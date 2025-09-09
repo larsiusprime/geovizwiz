@@ -22,7 +22,9 @@ GitHub secrets.
 
 The Slack webhook is never contacted directly from the browser. During
 development, the Vite dev server proxies requests from `/api/slack` to the URL
-set in `VITE_SLACK_WEBHOOK_URL`, avoiding CORS restrictions.
+set in `VITE_SLACK_WEBHOOK_URL`, avoiding CORS restrictions. In production,
+`/api/slack` is handled by an Azure Functions backend that posts to the webhook
+URL stored in the `SLACK_WEBHOOK_URL` environment variable.
 
 ## Flexible data dictionary
 

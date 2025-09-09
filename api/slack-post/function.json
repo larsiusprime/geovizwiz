@@ -1,0 +1,8 @@
+{
+  "bindings": [
+    { "authLevel": "anonymous", "type": "httpTrigger", "direction": "in",
+      "name": "req", "methods": ["post"], "route": "slack" },
+    { "type": "http", "direction": "out", "name": "res" }
+  ],
+  "scriptFile": "../slack-post/index.js"
+}

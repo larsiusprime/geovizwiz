@@ -9,20 +9,35 @@ on:
 
 jobs:
   build_and_deploy:
-    # Let preview envs work for PRs; close them when PR closes
     if: github.event_name != 'pull_request' || github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # Use Node 20.19+ for Vite 7
+      - name: Use Node 20.19
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20.19.0
+          cache: 'npm'
+          cache-dependency-path: viz/package-lock.json
+
+      - name: Install deps
+        working-directory: viz
+        run: npm ci
+
+      - name: Build
+        working-directory: viz
+        run: npm run build
+
+      # Upload the already-built artifacts; skip the internal build
       - uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }}   # enables PR comments / previews
-          action: "upload"
-          app_location: "./viz"                     # <-- your app folder
-          output_location: "dist"                   # <-- Vite/React default build folder
-          production_branch: "main"                 # must match SWA’s production branch
+          app_location: viz
+          output_location: dist
+          skip_app_build: true
+          production_branch: main
 
   close_pull_request:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
@@ -31,4 +46,4 @@ jobs:
       - uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN }}
-          action: "close"
+          action: close

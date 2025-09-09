@@ -1,4 +1,5 @@
 import { DEV_CATEGORY_FIELD } from './config';
+import extraLabels from './data-dictionary.json';
 
 // Core fields required for app functionality
 const CORE_FIELD_LABELS: Record<string, string> = {
@@ -17,17 +18,13 @@ export let FIELD_LABELS: Record<string, string> = { ...CORE_FIELD_LABELS };
 export let ALL_FIELDS: string[] = Object.keys(FIELD_LABELS);
 export let NUMERIC_FIELDS: string[] = ALL_FIELDS.filter(k => k !== DEV_CATEGORY_FIELD);
 
-// Merge additional labels from an optional JSON file
+// Merge additional labels from a JSON file bundled with the app (no network fetch)
 export async function loadDataDictionary() {
   try {
-    const res = await fetch('data-dictionary.json');
-    if (res.ok) {
-      const extra = await res.json();
-      FIELD_LABELS = { ...FIELD_LABELS, ...extra };
-      ALL_FIELDS = Object.keys(FIELD_LABELS);
-      NUMERIC_FIELDS = ALL_FIELDS.filter(k => k !== DEV_CATEGORY_FIELD);
-    }
+    FIELD_LABELS = { ...FIELD_LABELS, ...(extraLabels as Record<string, string>) };
+    ALL_FIELDS = Object.keys(FIELD_LABELS);
+    NUMERIC_FIELDS = ALL_FIELDS.filter(k => k !== DEV_CATEGORY_FIELD);
   } catch {
-    // ignore missing file or parse errors
+    // ignore
   }
 }

@@ -90,5 +90,5 @@ export const LOCAL_DATASET_URL = 'southbend.parquet';
 // Optional Vite dev proxy path for the remote blob (see vite.config.ts)
 export const PROXY_DATASET_URL = '/data/southbend.parquet';
 
-export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL
-  || ((import.meta as any).env?.DEV ? LOCAL_DATASET_URL : REMOTE_DATASET_URL);
+// Always prefer explicit env override; otherwise use the remote blob.
+export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL || REMOTE_DATASET_URL;

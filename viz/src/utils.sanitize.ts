@@ -36,15 +36,17 @@ export function fileToAsyncBuffer(file: File): AsyncBuffer {
 export async function urlToAsyncBuffer(url: string): Promise<AsyncBuffer> {
   // Try HTTP Range requests first to avoid downloading the whole file.
   // Falls back to a full GET if ranges are unavailable.
+  // Requires `Access-Control-Expose-Headers: Content-Range` on the server
+  // to read the total length from the browser.
   const rangeHeader = { Range: 'bytes=0-0' } as Record<string, string>;
   try {
     const probe = await fetch(url, { headers: rangeHeader, mode: 'cors' });
-    // If the server supports ranges, it should respond 206 and include Content-Range
-    if (probe.status === 206) {
-      const contentRange = probe.headers.get('Content-Range');
-      // Format: bytes 0-0/123456
-      const total = contentRange?.match(/\/(\d+)$/)?.[1];
-      const byteLength = total ? Number(total) : Number(probe.headers.get('Content-Length') || '0') || 0;
+    const contentRange = probe.headers.get('Content-Range');
+    const total = contentRange?.match(/\/(\d+)$/)?.[1];
+
+    // Only use range logic if the server responded with 206 and a parseable total length
+    if (probe.status === 206 && total) {
+      const byteLength = Number(total);
       if (!Number.isFinite(byteLength) || byteLength <= 0) throw new Error('Unknown content length');
 
       return {
@@ -61,8 +63,8 @@ export async function urlToAsyncBuffer(url: string): Promise<AsyncBuffer> {
       };
     }
 
-    // If the server ignored Range but still returned OK, use full buffer
-    if (probe.ok) {
+    // If the server ignored Range and returned the full file, use that buffer
+    if (probe.status === 200) {
       const buf = await probe.arrayBuffer();
       return { byteLength: buf.byteLength, async slice(start, end) { return buf.slice(start, end ?? buf.byteLength); } };
     }

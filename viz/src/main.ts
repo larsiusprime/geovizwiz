@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL, PROXY_DATASET_URL, REMOTE_DATASET_URL } from './config';
+import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL, LOCAL_DATASET_URL, PROXY_DATASET_URL, REMOTE_DATASET_URL } from './config';
 import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './utils.dictionary';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -1652,11 +1652,11 @@ fieldSelect.addEventListener('change', () => {
 });
 
 async function loadDefaultDataset() {
-  // Prefer local file in dev to avoid CORS; include proxy path if configured.
+  // Prefer local file in dev to avoid CORS; in prod try remote then local.
   const isDev = (import.meta as any).env?.DEV;
   const candidates = isDev
-    ? [PROXY_DATASET_URL, REMOTE_DATASET_URL].filter(Boolean)
-    : [DEFAULT_DATASET_URL];
+    ? [LOCAL_DATASET_URL, PROXY_DATASET_URL, REMOTE_DATASET_URL].filter(Boolean)
+    : [DEFAULT_DATASET_URL, LOCAL_DATASET_URL];
   for (const url of candidates) {
     try {
       lastAsyncBuffer = await urlToAsyncBuffer(url);

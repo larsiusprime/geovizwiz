@@ -1,8 +1,9 @@
-const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const SIGNIN_WEBHOOK = import.meta.env.VITE_SIGNIN_WEBHOOK_URL as string | undefined;
+const env = import.meta.env || {};
+const CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID;
+const SIGNIN_WEBHOOK = env.VITE_SIGNIN_WEBHOOK_URL;
 
-function whenReady(predicate: () => any, timeoutMs = 8000) {
-  return new Promise<void>((resolve, reject) => {
+function whenReady(predicate, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
     const t0 = Date.now();
     (function tick() {
       if (predicate()) return resolve();
@@ -12,7 +13,7 @@ function whenReady(predicate: () => any, timeoutMs = 8000) {
   });
 }
 
-function decodeJwt(token: string): any {
+function decodeJwt(token) {
   try {
     const payload = token.split('.')[1];
     const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
@@ -22,7 +23,7 @@ function decodeJwt(token: string): any {
   }
 }
 
-function recordSignin(cred: any) {
+function recordSignin(cred) {
   try {
     const now = new Date().toISOString();
     const existing = JSON.parse(localStorage.getItem('gvw_signins') || '[]');
@@ -43,15 +44,15 @@ function recordSignin(cred: any) {
 }
 
 async function init() {
-  const mount = document.getElementById('googleSignIn')!;
+  const mount = document.getElementById('googleSignIn');
   mount.textContent = 'Loading sign-in…';
 
-  await whenReady(() => (window as any).google?.accounts?.id);
-  const g = (window as any).google;
+  await whenReady(() => window.google?.accounts?.id);
+  const g = window.google;
 
   g.accounts.id.initialize({
     client_id: CLIENT_ID,
-    callback: (resp: any) => {
+    callback: (resp) => {
       recordSignin(resp);
       window.location.href = '/';
     }
@@ -63,6 +64,6 @@ async function init() {
 
 init().catch(err => {
   console.error(err);
-  const m = document.getElementById('googleSignIn')!;
+  const m = document.getElementById('googleSignIn');
   m.innerHTML = `<div style="font:14px system-ui">Couldn’t load sign-in: ${String(err)}</div>`;
 });

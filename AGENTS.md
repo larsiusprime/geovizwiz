@@ -10,8 +10,9 @@ This file provides instructions for coding agents and new contributors.
 
 ## South Bend Edition
 
-- The `viz` app is configured for South Bend with a default dataset at
-  `viz/public/southbend.parquet`.
+- The `viz` app is configured for South Bend with a default dataset at the public blob:
+  `https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet`.
+  A local fallback `viz/public/southbend.parquet` is used if the network URL is unavailable.
 - Parcel filtering is based on a `status` field whose values may include
   `Vacant`, `Parking Lot`, or `Underdeveloped`.
 - Tabs switch between the full land-value view and an under‑utilized land
@@ -49,4 +50,3 @@ This file provides instructions for coding agents and new contributors.
 
 - Make focused commits with clear, imperative messages (e.g., "Add loading spinner" rather than "Added spinner").
 - Ensure the repo builds and runs before pushing.
-

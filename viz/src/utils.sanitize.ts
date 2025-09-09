@@ -34,7 +34,44 @@ export function fileToAsyncBuffer(file: File): AsyncBuffer {
 }
 
 export async function urlToAsyncBuffer(url: string): Promise<AsyncBuffer> {
-  const resp = await fetch(url);
+  // Try HTTP Range requests first to avoid downloading the whole file.
+  // Falls back to a full GET if ranges are unavailable.
+  const rangeHeader = { Range: 'bytes=0-0' } as Record<string, string>;
+  try {
+    const probe = await fetch(url, { headers: rangeHeader, mode: 'cors' });
+    // If the server supports ranges, it should respond 206 and include Content-Range
+    if (probe.status === 206) {
+      const contentRange = probe.headers.get('Content-Range');
+      // Format: bytes 0-0/123456
+      const total = contentRange?.match(/\/(\d+)$/)?.[1];
+      const byteLength = total ? Number(total) : Number(probe.headers.get('Content-Length') || '0') || 0;
+      if (!Number.isFinite(byteLength) || byteLength <= 0) throw new Error('Unknown content length');
+
+      return {
+        byteLength,
+        async slice(start: number, end?: number) {
+          const endByte = (end != null) ? end - 1 : '';
+          const headers: Record<string, string> = { Range: `bytes=${start}-${endByte}` };
+          const part = await fetch(url, { headers, mode: 'cors' });
+          if (!(part.status === 206 || part.status === 200)) {
+            throw new Error(`Failed ranged fetch ${url}: ${part.status} ${part.statusText}`);
+          }
+          return await part.arrayBuffer();
+        }
+      };
+    }
+
+    // If the server ignored Range but still returned OK, use full buffer
+    if (probe.ok) {
+      const buf = await probe.arrayBuffer();
+      return { byteLength: buf.byteLength, async slice(start, end) { return buf.slice(start, end ?? buf.byteLength); } };
+    }
+  } catch (e) {
+    // Fall through to full fetch below
+  }
+
+  // Fallback: fetch the whole file
+  const resp = await fetch(url, { mode: 'cors' });
   if (!resp.ok) throw new Error(`Failed to fetch ${url}: ${resp.status} ${resp.statusText}`);
   const buf = await resp.arrayBuffer();
   return { byteLength: buf.byteLength, async slice(start, end) { return buf.slice(start, end ?? buf.byteLength); } };

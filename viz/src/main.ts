@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS } from './config';
+import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL } from './config';
 import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './utils.dictionary';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -105,6 +105,8 @@ const underMultInput = document.getElementById('under-mult') as HTMLInputElement
 const underLegendEl = document.getElementById('underLegend') as HTMLFieldSetElement;
 const underCategoryContainer = document.getElementById('underCategoryFilter') as HTMLDivElement;
 const underFieldSelect = document.getElementById('under-field') as HTMLSelectElement;
+const origCategorySelect = document.getElementById('origCategorySelect') as HTMLSelectElement | null;
+const underOrigCategorySelect = document.getElementById('underOrigCategorySelect') as HTMLSelectElement | null;
 
 // Ratio map controls
 const ratioSettingsBtn = document.getElementById('ratioSettingsBtn') as HTMLButtonElement;
@@ -119,6 +121,7 @@ const ratioBasemapSelect = document.getElementById('ratio-basemap') as HTMLSelec
 const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement;
 const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement;
 const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
+const ratioOrigCategorySelect = document.getElementById('ratioOrigCategorySelect') as HTMLSelectElement | null;
 function categoryInputs() {
   return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
@@ -130,6 +133,17 @@ categoryContainer.addEventListener('change', () => {
   saveSettings(currentTab);
   renderUnderNow();
 });
+// Apply filters when toggling checkboxes in the Underutilized panel
+underCategoryContainer?.addEventListener('change', () => {
+  renderUnderNow();
+});
+origCategorySelect?.addEventListener('change', () => {
+  applyFilterAndScaling();
+  renderUnderNow();
+  renderRatioNow();
+});
+underOrigCategorySelect?.addEventListener('change', () => { renderUnderNow(); });
+ratioOrigCategorySelect?.addEventListener('change', () => { renderRatioNow(); });
 scaleFiltered.addEventListener('change', () => { applyFilterAndScaling(); saveSettings(currentTab); });
 invertHeights.addEventListener('change', () => {
   if (currentTab === 'under') applyFilterAndScaling();
@@ -509,6 +523,7 @@ async function loadSelectedColumns() {
     const keep = new Set<string>([
       'id','ID','fid','FID','name','NAME',
       DEV_CATEGORY_FIELD,
+      ORIG_CATEGORY_FIELD,
       ...ALL_FIELDS,
       bldgSizeField || '',
       landSizeField || ''
@@ -520,6 +535,7 @@ async function loadSelectedColumns() {
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
     populateCategoryOptions(currentGeoJSON);
+    populateOriginalCategoryOptions(currentGeoJSON);
     updateUnderTotals(currentGeoJSON);
     loadSettings(currentTab);
 
@@ -967,6 +983,25 @@ function populateCategoryOptions(fc: GeoJSON.FeatureCollection) {
   }
 }
 
+function populateOriginalCategoryOptions(fc: GeoJSON.FeatureCollection) {
+  const vals = new Set<string>();
+  for (const f of fc.features) {
+    const v = String((f.properties as any)?.[ORIG_CATEGORY_FIELD] ?? '').trim();
+    if (v) vals.add(v);
+  }
+  const list = Array.from(vals).sort();
+  const fill = (sel: HTMLSelectElement | null) => {
+    if (!sel) return;
+    sel.replaceChildren();
+    sel.append(new Option('All categories', ''));
+    for (const v of list) sel.append(new Option(v, v));
+    sel.value = '';
+  };
+  fill(origCategorySelect);
+  fill(underOrigCategorySelect);
+  fill(ratioOrigCategorySelect);
+}
+
 function fmtCurrencyRounded(n: number): string {
   if (n >= 1_000_000) return `~$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} million`;
   const v = Math.round(n / 1000) * 1000;
@@ -1035,13 +1070,21 @@ function applyFilterAndScaling() {
   if (!currentGeoJSON) return;
   const selected = categoryInputs().filter(i => i.checked).map(i => i.value);
   let filter: Expression | null = null;
-  if (selected.length) {
-    filter = ['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any;
-  }
+  const refinedFilter = selected.length ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
+  const origVal = origCategorySelect?.value || '';
+  const origFilter = origVal ? (['==', ['get', ORIG_CATEGORY_FIELD], origVal] as any) : null;
+  if (refinedFilter && origFilter) filter = ['all', refinedFilter, origFilter] as any;
+  else if (refinedFilter) filter = refinedFilter;
+  else if (origFilter) filter = origFilter;
   map.setFilter(LAYER_ID, filter as any);
 
-  if (scaleFiltered.checked && selected.length) {
-    const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => selected.includes(String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '')));
+  if (scaleFiltered.checked && (selected.length || (origCategorySelect && origCategorySelect.value))) {
+    const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => {
+      const p = (f.properties as any) || {};
+      const catOk = !selected.length || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
+      const origOk = !origCategorySelect?.value || String(p?.[ORIG_CATEGORY_FIELD] ?? '') === origCategorySelect.value;
+      return catOk && origOk;
+    });
     const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: filtered };
     computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL, fc);
   } else {
@@ -1054,11 +1097,21 @@ function renderUnderNow() {
   if (!currentGeoJSON || !mapUnder.getLayer(LAYER_ID)) return;
   const selected = categoryInputsUnder().filter(i => i.checked).map(i => i.value);
   let filter: any = null;
-  if (selected.length) filter = ['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any;
+  const refinedFilter = selected.length ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
+  const origVal = underOrigCategorySelect?.value || '';
+  const origFilter = origVal ? (['==', ['get', ORIG_CATEGORY_FIELD], origVal] as any) : null;
+  if (refinedFilter && origFilter) filter = ['all', refinedFilter, origFilter] as any;
+  else if (refinedFilter) filter = refinedFilter;
+  else if (origFilter) filter = origFilter;
   mapUnder.setFilter(LAYER_ID, filter);
 
-  const filteredFc = (scaleFiltered.checked && selected.length)
-    ? { type: 'FeatureCollection', features: currentGeoJSON.features.filter(f => selected.includes(String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? ''))) } as GeoJSON.FeatureCollection
+  const filteredFc = (scaleFiltered.checked && (selected.length || (underOrigCategorySelect && underOrigCategorySelect.value)))
+    ? { type: 'FeatureCollection', features: currentGeoJSON.features.filter(f => {
+        const p = (f.properties as any) || {};
+        const catOk = !selected.length || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
+        const origOk = !underOrigCategorySelect?.value || String(p?.[ORIG_CATEGORY_FIELD] ?? '') === underOrigCategorySelect.value;
+        return catOk && origOk;
+      }) } as GeoJSON.FeatureCollection
     : undefined;
 
   const field = (underFieldSelect?.value || currentField) || 'REALLANDVA';
@@ -1079,6 +1132,11 @@ function renderUnderNow() {
 function renderRatioNow() {
   if (!currentGeoJSON || !mapRatio.getLayer(LAYER_ID)) return;
   const ratioField = (ratioFieldSelect?.value || 'IMPR_LAND_RATIO');
+  // Apply original category filter to the ratio map
+  let filter: any = null;
+  const origVal = ratioOrigCategorySelect?.value || '';
+  if (origVal) filter = ['==', ['get', ORIG_CATEGORY_FIELD], origVal] as any;
+  mapRatio.setFilter(LAYER_ID, filter);
   renderMapFor(
     mapRatio,
     ratioField,
@@ -1589,11 +1647,17 @@ fieldSelect.addEventListener('change', () => {
 });
 
 async function loadDefaultDataset() {
-  try {
-    lastAsyncBuffer = await urlToAsyncBuffer('southbend.parquet');
-    await loadSelectedColumns();
-  } catch (err) {
-    console.warn('Default dataset load failed', err);
+  // Try public blob first; fall back to local file for offline use
+  const candidates = [DEFAULT_DATASET_URL, 'southbend.parquet'];
+  for (const url of candidates) {
+    try {
+      lastAsyncBuffer = await urlToAsyncBuffer(url);
+      await loadSelectedColumns();
+      if (url !== candidates[0]) console.info('Loaded local fallback dataset:', url);
+      return;
+    } catch (err) {
+      console.warn('Dataset load failed for', url, err);
+    }
   }
 }
 

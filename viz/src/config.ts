@@ -80,4 +80,9 @@ export const UNIT_TO_METERS = {
 
 // Data field used for vacancy filtering
 export const DEV_CATEGORY_FIELD = 'property_category_refined';
+export const ORIG_CATEGORY_FIELD = 'PROPERTY_CATEGORY';
 export const UNDERUTILIZED_DEFAULTS = ['Vacant', 'Parking Lot', 'Underdeveloped'];
+
+// Default dataset location (South Bend)
+// Prefer public blob; local file remains a fallback for offline use
+export const DEFAULT_DATASET_URL = 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet';

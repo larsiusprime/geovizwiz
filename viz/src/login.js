@@ -1,6 +1,7 @@
 
 const env = import.meta.env || {};
-const CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID;
+const CLIENT_ID = env.VITE_GOOGLE_CLIENT_ID ||
+  document.querySelector('meta[name="google-signin-client_id"]')?.content || '';
 const SIGNIN_WEBHOOK = env.VITE_SIGNIN_WEBHOOK_URL;
 
 
@@ -51,6 +52,10 @@ async function init() {
 
   await whenReady(() => window.google?.accounts?.id);
   const g = window.google;
+
+  if (!CLIENT_ID) {
+    throw new Error('Missing Google client ID');
+  }
 
   g.accounts.id.initialize({
     client_id: CLIENT_ID,

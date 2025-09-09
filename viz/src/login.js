@@ -50,6 +50,8 @@ async function init() {
   const mount = document.getElementById('googleSignIn');
   mount.textContent = 'Loading sign-in…';
 
+  console.log('Google VITE login client:', CLIENT_ID);
+
   await whenReady(() => window.google?.accounts?.id);
   const g = window.google;
 

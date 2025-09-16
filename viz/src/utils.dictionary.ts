@@ -1,6 +1,7 @@
 import { DEV_CATEGORY_FIELD, SELECTED_CITY } from './config';
 import southbendLabels from './dictionaries/southbend.json';
 import syracuseLabels from './dictionaries/syracuse.json';
+import spokaneLabels from './dictionaries/spokane.json';
 
 // Core fields required for app functionality
 const CORE_FIELD_LABELS: Record<string, string> = {
@@ -23,7 +24,10 @@ export let NUMERIC_FIELDS: string[] = ALL_FIELDS.filter(k => k !== DEV_CATEGORY_
 // Merge additional labels from a JSON file bundled with the app (no network fetch)
 export async function loadDataDictionary() {
   try {
-    const extra: Record<string, string> = SELECTED_CITY === 'syracuse' ? (syracuseLabels as any) : (southbendLabels as any);
+    let extra: Record<string, string>;
+    if (SELECTED_CITY === 'syracuse') extra = syracuseLabels as any;
+    else if (SELECTED_CITY === 'spokane') extra = spokaneLabels as any;
+    else extra = southbendLabels as any;
     FIELD_LABELS = { ...FIELD_LABELS, ...extra };
     ALL_FIELDS = Object.keys(FIELD_LABELS);
     NUMERIC_FIELDS = ALL_FIELDS.filter(k => k !== DEV_CATEGORY_FIELD);

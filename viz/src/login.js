@@ -29,16 +29,20 @@ function decodeJwt(token) {
 function recordSignin(cred) {
   try {
     const now = new Date().toISOString();
-    const existing = JSON.parse(localStorage.getItem('gvw_signins') || '[]');
-    const entry = { at: now, credential: cred?.credential ?? null, payload: decodeJwt(cred?.credential || '') };
-    existing.push(entry);
-    localStorage.setItem('gvw_signins', JSON.stringify(existing));
+    const entry = { at: now, payload: decodeJwt(cred?.credential || '') };
+
+    // Mark this browser tab as authenticated for this session only
+    try { sessionStorage.setItem('gvw_session_authed', '1'); } catch {}
     // Stash minimal info to hand off to the main app after redirect
     try {
       const email = entry.payload?.email || null;
       if (email) {
         const pending = { at: now, email };
-        localStorage.setItem('gvw_pending_slack', JSON.stringify(pending));
+        try {
+          sessionStorage.setItem('gvw_pending_slack', JSON.stringify(pending));
+          sessionStorage.setItem('gvw_session_email', email);
+          sessionStorage.removeItem('gvw_session_slack_sent'); // reset per-login
+        } catch {}
         // Also record a lightweight debug snapshot for the debug page
         localStorage.setItem('gvw_signin_debug', JSON.stringify({
           savedAt: now,
@@ -73,6 +77,9 @@ async function init() {
 
   console.log('Google login client:', CLIENT_ID);
 
+  // Clean up any legacy persistent sign-in markers
+  try { localStorage.removeItem('gvw_signins'); } catch {}
+
   await whenReady(() => window.google?.accounts?.id);
   const g = window.google;
 
@@ -87,6 +94,9 @@ async function init() {
       window.location.href = '/';
     }
   });
+
+  // Prevent auto-select carryover across sessions for stricter behavior
+  try { g.accounts.id.disableAutoSelect(); } catch {}
 
   mount.textContent = '';
   g.accounts.id.renderButton(mount, { theme: 'outline', size: 'large' });

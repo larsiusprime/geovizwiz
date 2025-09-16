@@ -12,65 +12,117 @@ import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './u
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 
+/* ---------------- Slack Utils (reliable send) ---------------- */
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 6000): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function postSlackReliable(text: string, maxAttempts = 5): void {
+  let attempt = 0;
+  let done = false;
+  const attemptedAt = new Date().toISOString();
+
+  const trySend = () => {
+    if (done || attempt >= maxAttempts) return;
+    attempt++;
+    fetchWithTimeout('/api/slack', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    }, 6000)
+      .then(async (resp) => {
+        const ok = resp.ok;
+        const summary = { url: '/api/slack', status: resp.status, ok, attempt, attemptedAt };
+        console.log('[Slack] Attempt', attempt, summary);
+        if (ok) {
+          done = true;
+          try { sessionStorage.setItem('gvw_session_slack_sent', '1'); } catch {}
+          try { localStorage.setItem('gvw_signin_debug', JSON.stringify({ ...summary, savedAt: new Date().toISOString() })); } catch {}
+        } else {
+          scheduleRetry();
+        }
+      })
+      .catch((err) => {
+        const summary = { url: '/api/slack', status: null as number | null, ok: false, error: String(err), attempt, attemptedAt };
+        console.warn('[Slack] Attempt failed', summary);
+        try { localStorage.setItem('gvw_signin_debug', JSON.stringify({ ...summary, savedAt: new Date().toISOString() })); } catch {}
+        scheduleRetry();
+      });
+  };
+
+  const scheduleRetry = () => {
+    if (done || attempt >= maxAttempts) return;
+    const delay = Math.min(10000, 400 * Math.pow(2, attempt - 1)); // 400ms, 800ms, 1600ms, 3200ms, 6400ms
+    setTimeout(() => { if (!done) trySend(); }, delay);
+  };
+
+  // Also hook into online/visibilitychange to retry promptly when conditions improve
+  const kick = () => { if (!done && attempt > 0 && attempt < maxAttempts) trySend(); };
+  try { window.addEventListener('online', kick, { passive: true }); } catch {}
+  try { document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') kick(); }, { passive: true } as any); } catch {}
+  try {
+    window.addEventListener('pagehide', () => {
+      if (!done && typeof navigator.sendBeacon === 'function') {
+        const blob = new Blob([JSON.stringify({ text })], { type: 'application/json' });
+        navigator.sendBeacon('/api/slack', blob);
+      }
+    }, { once: true });
+  } catch {}
+
+  trySend();
+}
+
 /* ---------------- Post-login Slack notify ---------------- */
 
 // If login flow stored a pending Slack notification, send it here so
 // the request and logs are visible on the main page (not the login tab).
 (function processPendingSlack() {
   try {
-    const raw = localStorage.getItem('gvw_pending_slack');
+    // Prefer sessionStorage for ephemeral post-login notify; fall back to localStorage for compatibility
+    const raw = sessionStorage.getItem('gvw_pending_slack') ?? localStorage.getItem('gvw_pending_slack');
     if (!raw) return;
     const pending = JSON.parse(raw) as { at?: string; email?: string } | null;
     if (!pending?.email) {
-      localStorage.removeItem('gvw_pending_slack');
+      try { sessionStorage.removeItem('gvw_pending_slack'); } catch {}
+      try { localStorage.removeItem('gvw_pending_slack'); } catch {}
       return;
     }
 
     const text = `Google sign-in: ${pending.email} (post-login)`;
-    const attemptedAt = new Date().toISOString();
-    console.log('[Slack] Sending post-login notification:', { email: pending.email, attemptedAt });
+    console.log('[Slack] Sending post-login notification (reliable):', { email: pending.email });
+    postSlackReliable(text);
+    // Keep pending record until we succeed in this session; the reliable sender sets the sent flag.
+    const poll = setInterval(() => {
+      try {
+        if (sessionStorage.getItem('gvw_session_slack_sent') === '1') {
+          clearInterval(poll);
+          try { sessionStorage.removeItem('gvw_pending_slack'); } catch {}
+          try { localStorage.removeItem('gvw_pending_slack'); } catch {}
+        }
+      } catch {}
+    }, 1000);
+  } catch {
+    // ignore
+  }
+})();
 
-    fetch('/api/slack', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
-    })
-      .then(async (resp) => {
-        const summary = {
-          email: pending.email,
-          url: '/api/slack',
-          status: resp.status,
-          ok: resp.ok,
-          attemptedAt,
-        };
-        console.log('[Slack] Response:', summary);
-        try {
-          localStorage.setItem('gvw_signin_debug', JSON.stringify({
-            ...summary,
-            savedAt: new Date().toISOString()
-          }));
-        } catch {}
-      })
-      .catch((err) => {
-        const summary = {
-          email: pending.email,
-          url: '/api/slack',
-          status: null as number | null,
-          ok: false,
-          error: String(err),
-          attemptedAt,
-        };
-        console.warn('[Slack] Post-login send failed:', summary);
-        try {
-          localStorage.setItem('gvw_signin_debug', JSON.stringify({
-            ...summary,
-            savedAt: new Date().toISOString()
-          }));
-        } catch {}
-      })
-      .finally(() => {
-        try { localStorage.removeItem('gvw_pending_slack'); } catch {}
-      });
+// If there was no explicit pending record, still send once per session
+(function ensureSessionSlackOnce() {
+  try {
+    const already = sessionStorage.getItem('gvw_session_slack_sent') === '1';
+    if (already) return;
+    const email = sessionStorage.getItem('gvw_session_email');
+    if (!email) return;
+    const text = `Google sign-in: ${email} (main)`;
+    console.log('[Slack] Ensuring session Slack notify (reliable):', { email });
+    postSlackReliable(text);
   } catch {
     // ignore
   }

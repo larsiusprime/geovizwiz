@@ -5,9 +5,51 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Civic Mapper</title>
   <script>
-    if (!localStorage.getItem('gvw_signins')) {
-      window.location.href = 'login.html';
+    try {
+      const authed = !!sessionStorage.getItem('gvw_session_authed');
+      if (!authed) window.location.href = 'login.html';
+    } catch {
+      // If storage unavailable, let page load.
     }
+  </script>
+  <script>
+    // Fire a Slack notify from the city picker as a backup path.
+    (function ensureSlackFromIndex(){
+      try {
+        const authed = sessionStorage.getItem('gvw_session_authed') === '1';
+        const email = sessionStorage.getItem('gvw_session_email');
+        const sent = sessionStorage.getItem('gvw_session_slack_sent') === '1';
+        if (!authed || !email || sent) return;
+        let attempt = 0; const maxAttempts = 4;
+        const text = `Google sign-in: ${email} (index)`;
+        const trySend = () => {
+          if (attempt >= maxAttempts) return;
+          attempt++;
+          const ctrl = new AbortController();
+          const t = setTimeout(() => ctrl.abort(), 6000);
+          fetch('/api/slack', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }), signal: ctrl.signal })
+            .then(r => {
+              clearTimeout(t);
+              if (r.ok) sessionStorage.setItem('gvw_session_slack_sent', '1');
+              else setTimeout(trySend, Math.min(10000, 400 * Math.pow(2, attempt-1)));
+            })
+            .catch(() => {
+              clearTimeout(t);
+              setTimeout(trySend, Math.min(10000, 400 * Math.pow(2, attempt-1)));
+            });
+        };
+        window.addEventListener('online', () => { if (attempt>0 && attempt<maxAttempts && sessionStorage.getItem('gvw_session_slack_sent')!=='1') trySend(); }, { passive:true });
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState==='visible' && attempt>0 && attempt<maxAttempts && sessionStorage.getItem('gvw_session_slack_sent')!=='1') trySend(); }, { passive:true });
+        window.addEventListener('pagehide', () => {
+          if (sessionStorage.getItem('gvw_session_slack_sent')==='1') return;
+          if (typeof navigator.sendBeacon === 'function') {
+            const blob = new Blob([JSON.stringify({ text })], { type: 'application/json' });
+            navigator.sendBeacon('/api/slack', blob);
+          }
+        }, { once:true });
+        trySend();
+      } catch {}
+    })();
   </script>
   <link rel="icon" href="data:,">
   <style>

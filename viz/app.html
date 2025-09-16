@@ -5,8 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Civic Mapper</title>
   <script>
-    if (!localStorage.getItem('gvw_signins')) {
-      window.location.href = 'login.html';
+    try {
+      const authed = !!sessionStorage.getItem('gvw_session_authed');
+      if (!authed) window.location.href = 'login.html';
+    } catch {
+      // If storage unavailable, let page load.
     }
   </script>
   <link rel="icon" href="data:,">

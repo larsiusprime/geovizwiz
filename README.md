@@ -37,10 +37,22 @@ files directly (for example, `/src/main.ts`) causes browsers to download the
 TypeScript file with a `video/mp2t` MIME type, which prevents the app from
 loading.
 
+### CORS for Azure Blob datasets
+
+The mapper loads GeoParquet directly from Azure Blob Storage. Ensure CORS is enabled on the storage account that serves `https://landeconomics.blob.core.windows.net/public-sharing-cle/{southbend,syracuse}.parquet`:
+
+- Allowed origins: your production domain(s) and `http://localhost:5173` for dev
+- Allowed methods: `GET, HEAD, OPTIONS`
+- Allowed headers: `*` (or at least `Range, Content-Type`)
+- Exposed headers: `*` (must include `Content-Range` for range requests)
+- Max age: e.g. `3600`
+
+Without these settings, browsers will block cross‑origin requests and the app will fail to load datasets.
+
 ## Flexible data dictionary
 
 Field labels and available filters in the parcel visualizer are driven by
-`viz/public/data-dictionary.json`. Jurisdictions can add or remove entries in
-this file to customize which variables appear in the map and pop‑up data
-tables. The app only requires core fields for land value, improvement value and
-the development category used to flag vacant or under‑utilized parcels.
+city‑specific dictionaries under `viz/src/dictionaries/*.json`. Jurisdictions can
+add a new file and extend `viz/src/config.ts` to register a new city. The app
+only requires core fields for land value, improvement value, and the
+development category used to flag vacant or under‑utilized parcels.

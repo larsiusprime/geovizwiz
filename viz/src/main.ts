@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL, LOCAL_DATASET_URL, PROXY_DATASET_URL, REMOTE_DATASET_URL } from './config';
+import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL } from './config';
 import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './utils.dictionary';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -561,12 +561,47 @@ async function loadSelectedColumns() {
       result?.type === 'FeatureCollection' ? result : result?.geojson;
     if (!fc?.features) throw new Error('Parser returned no FeatureCollection.');
 
-    let features = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
-    console.log('[GeoParquet] Parsed FeatureCollection:', {
-      totalFeatures: fc.features?.length ?? 0,
-      polygonFeatures: features.length
+    // Log geometry type distribution for debugging
+    try {
+      const typeCounts: Record<string, number> = {};
+      for (const f of fc.features) {
+        const t = (f as any)?.geometry?.type ?? 'null';
+        typeCounts[t] = (typeCounts[t] || 0) + 1;
+      }
+      console.log('[GeoParquet] Parsed FeatureCollection:', {
+        totalFeatures: fc.features?.length ?? 0,
+        geometryTypes: typeCounts
+      });
+    } catch {}
+
+    // Accept any geometry whose type name includes 'Polygon' (case-insensitive),
+    // to handle potential Z/M variants.
+    let features = fc.features.filter(f => {
+      const t = (f as any)?.geometry?.type as string | undefined;
+      return !!t && /polygon/i.test(t);
     });
-    if (features.length === 0) throw new Error('No Polygon/MultiPolygon features found.');
+    console.log('[GeoParquet] Polygon-like feature count:', { polygonFeatures: features.length });
+    if (features.length === 0) throw new Error('No Polygon-like features found (expect Polygon/MultiPolygon).');
+
+    // Normalize field names across cities before validations
+    // Map Syracuse fields to expected South Bend-style keys if needed
+    try {
+      const hasRealImprov = features[0]?.properties?.hasOwnProperty('REALIMPROV');
+      const hasRealLand = features[0]?.properties?.hasOwnProperty('REALLANDVA');
+      const hasSyrImprov = features[0]?.properties?.hasOwnProperty('improvement_value');
+      const hasSyrLand = features[0]?.properties?.hasOwnProperty('current_full_land_value');
+      const hasSyrImprovSqft = features[0]?.properties?.hasOwnProperty('improvement_value_per_sqft');
+      const hasSyrLandSqft = features[0]?.properties?.hasOwnProperty('land_value_per_sqft');
+      if ((!hasRealImprov || !hasRealLand) && (hasSyrImprov || hasSyrLand)) {
+        for (const f of features) {
+          const p = (f.properties || {}) as Record<string, any>;
+          if (hasSyrImprov && !p.hasOwnProperty('REALIMPROV')) p.REALIMPROV = p.improvement_value;
+          if (hasSyrLand && !p.hasOwnProperty('REALLANDVA')) p.REALLANDVA = p.current_full_land_value;
+          if (hasSyrImprovSqft && !p.hasOwnProperty('REALIMPROV_per_sqft')) p.REALIMPROV_per_sqft = p.improvement_value_per_sqft;
+          if (hasSyrLandSqft && !p.hasOwnProperty('REALLANDVA_per_sqft')) p.REALLANDVA_per_sqft = p.land_value_per_sqft;
+        }
+      }
+    } catch {}
 
     const required = [DEV_CATEGORY_FIELD, 'REALIMPROV', 'REALLANDVA'];
     for (const key of required) {
@@ -1737,27 +1772,22 @@ fieldSelect.addEventListener('change', () => {
 });
 
 async function loadDefaultDataset() {
-  // Prefer local file in dev to avoid CORS; in prod try remote then local.
-  const isDev = (import.meta as any).env?.DEV;
-  const candidates = isDev
-    ? [LOCAL_DATASET_URL, PROXY_DATASET_URL, REMOTE_DATASET_URL].filter(Boolean)
-    : [DEFAULT_DATASET_URL, LOCAL_DATASET_URL];
-  for (const url of candidates) {
+  // Always load directly from Azure Blob (no local/proxy fallback)
+  const url = DEFAULT_DATASET_URL;
+  try {
+    lastAsyncBuffer = await urlToAsyncBuffer(url);
     try {
-      lastAsyncBuffer = await urlToAsyncBuffer(url);
-      try {
-        console.log('[GeoParquet] Fetched dataset:', {
-          url,
-          byteLength: lastAsyncBuffer?.byteLength ?? null
-        });
-      } catch {}
-      await loadSelectedColumns();
-      return;
-    } catch (err) {
-      console.warn('Dataset load failed for', url, err);
-    }
+      console.log('[GeoParquet] Fetched dataset:', {
+        url,
+        byteLength: lastAsyncBuffer?.byteLength ?? null
+      });
+    } catch {}
+    await loadSelectedColumns();
+    return;
+  } catch (err) {
+    console.warn('Dataset load failed for', url, err);
   }
-  if (!cancelRequested) alert('Failed to load dataset. Check CORS or proxy.');
+  if (!cancelRequested) alert('Failed to load dataset from Azure. Please verify CORS for your domain.');
 }
 
 /* ---------------- Main ---------------- */

@@ -79,16 +79,47 @@ export const UNIT_TO_METERS = {
 };
 
 // Data field used for vacancy filtering
-export const DEV_CATEGORY_FIELD = 'property_category_refined';
-export const ORIG_CATEGORY_FIELD = 'PROPERTY_CATEGORY';
 export const UNDERUTILIZED_DEFAULTS = ['Vacant', 'Parking Lot', 'Underdeveloped'];
 
-// Default dataset location (South Bend)
-// In dev, prefer local file to avoid CORS; in prod use public blob.
-export const REMOTE_DATASET_URL = 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet';
-export const LOCAL_DATASET_URL = 'southbend.parquet';
-// Optional Vite dev proxy path for the remote blob (see vite.config.ts)
-export const PROXY_DATASET_URL = '/data/southbend.parquet';
+// City selection via query string (?city=southbend|syracuse). Defaults to southbend.
+function getCityFromUrl(): 'southbend' | 'syracuse' {
+  try {
+    const u = new URL(window.location.href);
+    const c = (u.searchParams.get('city') || '').toLowerCase();
+    return (c === 'syracuse') ? 'syracuse' : 'southbend';
+  } catch {
+    return 'southbend';
+  }
+}
 
-// Always prefer explicit env override; otherwise use the remote blob.
+export const SELECTED_CITY = getCityFromUrl();
+
+// City-specific fields
+export const DEV_CATEGORY_FIELD = SELECTED_CITY === 'syracuse'
+  ? 'property_land_use_refined'
+  : 'property_category_refined';
+
+export const ORIG_CATEGORY_FIELD = SELECTED_CITY === 'syracuse'
+  ? 'property_land_use_category'
+  : 'PROPERTY_CATEGORY';
+
+// Default dataset locations per city
+const CITY_DATASETS = {
+  southbend: {
+    remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet',
+    local: 'southbend.parquet',
+    proxy: '/data/southbend.parquet'
+  },
+  syracuse: {
+    remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/syracuse.parquet',
+    local: 'syracuse.parquet',
+    proxy: '/data/syracuse.parquet'
+  }
+} as const;
+
+export const REMOTE_DATASET_URL = CITY_DATASETS[SELECTED_CITY].remote;
+export const LOCAL_DATASET_URL = CITY_DATASETS[SELECTED_CITY].local;
+export const PROXY_DATASET_URL = CITY_DATASETS[SELECTED_CITY].proxy;
+
+// Always prefer explicit env override; otherwise use the city-specific remote blob.
 export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL || REMOTE_DATASET_URL;

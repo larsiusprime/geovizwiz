@@ -29,6 +29,9 @@
       width:min(92vw,420px);
       background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow);
       display:none; gap:var(--gap); z-index:10;
+      /* Stricter max height with scrolling */
+      max-height: 70vh;
+      overflow:auto;
     }
     /* Unified map controls */
     .map-controls {
@@ -209,14 +212,7 @@
                 </label>
               </div>
             </fieldset>
-            <fieldset id="categoryFieldset">
-              <label>Category filter</label>
-              <div id="categoryFilter"></div>
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="checkbox" id="scaleFiltered" />
-                <span>Scale heights using filtered data</span>
-              </label>
-            </fieldset>
+            
             <fieldset>
               <label for="origCategorySelect">Original category filter</label>
               <select id="origCategorySelect"></select>

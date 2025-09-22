@@ -201,9 +201,9 @@ const ratioHolder = document.getElementById('mapHolder-ratio') as HTMLDivElement
 const mainSection = document.getElementById('mainSection') as HTMLElement;
 const underSection = document.getElementById('underSection') as HTMLElement;
 const ratioSection = document.getElementById('ratioSection') as HTMLElement;
-const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement;
-const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement;
-const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
+const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement | null;
+const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement | null;
+const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement | null;
 const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
 const underTotals = document.getElementById('underTotals') as HTMLDivElement;
 // Height sliders (bottom-right)
@@ -243,12 +243,12 @@ const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElem
 const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
 const ratioOrigCategorySelect = document.getElementById('ratioOrigCategorySelect') as HTMLSelectElement | null;
 function categoryInputs() {
-  return Array.from(categoryContainer.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
+  return Array.from((categoryContainer || document.createElement('div')).querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
 function categoryInputsUnder() {
   return Array.from((underCategoryContainer || document.createElement('div')).querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
-categoryContainer.addEventListener('change', () => {
+categoryContainer?.addEventListener('change', () => {
   applyFilterAndScaling();
   saveSettings(currentTab);
   renderUnderNow();
@@ -264,7 +264,7 @@ origCategorySelect?.addEventListener('change', () => {
 });
 underOrigCategorySelect?.addEventListener('change', () => { renderUnderNow(); });
 ratioOrigCategorySelect?.addEventListener('change', () => { renderRatioNow(); });
-scaleFiltered.addEventListener('change', () => { applyFilterAndScaling(); saveSettings(currentTab); });
+scaleFiltered?.addEventListener('change', () => { applyFilterAndScaling(); saveSettings(currentTab); });
 invertHeights.addEventListener('change', () => {
   if (currentTab === 'under') applyFilterAndScaling();
   else computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
@@ -341,7 +341,7 @@ function saveSettings(tab: TabKey) {
     opacity: opacityInput.value,
     invert: invertHeights.checked,
     colorMode: (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value,
-    scaleFiltered: scaleFiltered.checked,
+    scaleFiltered: !!scaleFiltered?.checked,
     categories: categoryInputs().filter(i => i.checked).map(i => i.value)
   };
   localStorage.setItem(`gvw_settings_${tab}`, JSON.stringify(obj));
@@ -371,8 +371,8 @@ function loadSettings(tab: TabKey) {
       const radio = document.querySelector<HTMLInputElement>(`input[name="colorMode"][value="${obj.colorMode}"]`);
       if (radio) radio.checked = true;
     }
-    scaleFiltered.checked = !!obj.scaleFiltered;
-    if (obj.categories && categoryContainer.childElementCount) {
+    if (scaleFiltered) scaleFiltered.checked = !!obj.scaleFiltered;
+    if (obj.categories && categoryContainer && categoryContainer.childElementCount) {
       categoryInputs().forEach(i => { i.checked = obj.categories.includes(i.value); });
     }
   } catch {}
@@ -1119,13 +1119,14 @@ function renderMapFor(
 function setTab(tab: TabKey) {
   currentTab = tab;
   if (tab === 'main') {
-    categoryFieldset.style.display = 'none';
+    categoryFieldset && (categoryFieldset.style.display = 'none');
     reverseColors = false;
     if (map.getLayer(LAYER_ID)) map.setFilter(LAYER_ID, null);
     computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
     applyExtrusion();
   } else if (tab === 'under') {
-    categoryFieldset.style.display = 'block';
+    // Do not surface the main map's category filter in this view
+    if (categoryFieldset) categoryFieldset.style.display = 'none';
     reverseColors = false;
     const inputs = categoryInputs();
     if (inputs.length && !inputs.some(i => i.checked)) {
@@ -1133,7 +1134,7 @@ function setTab(tab: TabKey) {
     }
     applyFilterAndScaling();
   } else if (tab === 'ratio') {
-    categoryFieldset.style.display = 'none';
+    if (categoryFieldset) categoryFieldset.style.display = 'none';
     reverseColors = true;            // darkest = tallest when inverted
     if (COLOR_RAMPS['Reds']) rampSelect.value = 'Reds';
     if (map.getLayer(LAYER_ID)) map.setFilter(LAYER_ID, null);
@@ -1143,6 +1144,7 @@ function setTab(tab: TabKey) {
 }
 
 function populateCategoryOptions(fc: GeoJSON.FeatureCollection) {
+  if (!categoryContainer) return;
   const vals = new Set<string>();
   for (const f of fc.features) {
     const v = String((f.properties as any)?.[DEV_CATEGORY_FIELD] ?? '').trim();
@@ -1260,7 +1262,7 @@ function applyFilterAndScaling() {
   else if (origFilter) filter = origFilter;
   map.setFilter(LAYER_ID, filter as any);
 
-  if (scaleFiltered.checked && (selected.length || (origCategorySelect && origCategorySelect.value))) {
+  if (scaleFiltered && scaleFiltered.checked && (selected.length || (origCategorySelect && origCategorySelect.value))) {
     const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => {
       const p = (f.properties as any) || {};
       const catOk = !selected.length || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
@@ -1287,7 +1289,7 @@ function renderUnderNow() {
   else if (origFilter) filter = origFilter;
   mapUnder.setFilter(LAYER_ID, filter);
 
-  const filteredFc = (scaleFiltered.checked && (selected.length || (underOrigCategorySelect && underOrigCategorySelect.value)))
+  const filteredFc = (scaleFiltered && scaleFiltered.checked && (selected.length || (underOrigCategorySelect && underOrigCategorySelect.value)))
     ? { type: 'FeatureCollection', features: currentGeoJSON.features.filter(f => {
         const p = (f.properties as any) || {};
         const catOk = !selected.length || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));

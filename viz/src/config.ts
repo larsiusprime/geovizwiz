@@ -54,6 +54,12 @@ export const ERROR_LAYER_ID = 'gp-error';
 
 // Autoscale caps
 export const HEIGHT_CAP_METERS = 1000;
+// Per-map default caps (meters). Allows independent tuning per map.
+export const HEIGHT_CAPS = {
+  main: 1000,
+  under: 1000,
+  ratio: 1000
+} as const;
 export const HEIGHT_PCTL = 99;
 
 // Color ramps (unchanged)

@@ -38,6 +38,14 @@
       border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
     }
     .map-controls button:hover { background:#f0f0f0; }
+    /* Bottom-right height slider */
+    .height-scale {
+      position:absolute; right:10px; bottom:48px; z-index:20; /* keep clear of attribution */
+      background:rgba(255,255,255,0.85); border:1px solid #ddd; box-shadow:var(--shadow);
+      padding:6px 10px; border-radius:999px; display:flex; align-items:center;
+    }
+    .height-scale input[type="range"] { width:160px; }
+    .height-scale .label { font-size:12px; color:#333; margin-right:8px; }
     /* Back-compat for existing main id */
     #mapBtns { position:absolute; top:10px; right:10px; display:flex; gap:10px; z-index:20; }
     #mapBtns button { border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; }
@@ -122,6 +130,7 @@
       <div id="mapHolder-main" class="map-holder">
         <div id="mapBox" class="map-box">
           <div id="map"></div>
+          <div class="height-scale"><span class="label">Height:</span><input id="heightScale" type="range" min="0" max="100" step="1" value="100" /></div>
           <div id="mapBtns" class="map-controls">
             <button id="settingsBtn">Settings</button>
             <button id="expandBtn">⤢</button>
@@ -163,12 +172,12 @@
                 </div>
               </div>
             </fieldset>
-            <fieldset class="row">
+            <fieldset class="row" style="display:none">
               <div>
                 <label for="mult">Extrusion multiplier</label>
                 <input id="mult" type="number" step=".1" value="1" />
               </div>
-              <div style="display:none">
+              <div>
                 <label for="units">Units</label>
                 <select id="units">
                   <option value="centimeters" selected>centimeters</option>
@@ -224,6 +233,7 @@
       <div id="mapHolder-under" class="map-holder">
         <div class="map-box">
           <div id="map-under"></div>
+          <div class="height-scale"><span class="label">Height:</span><input id="underHeightScale" type="range" min="0" max="100" step="1" value="100" /></div>
           <div id="mapBtnsUnder" class="map-controls">
             <button id="underSettingsBtn">Settings</button>
             <button id="underExpandBtn">⤢</button>
@@ -249,7 +259,7 @@
                 <output id="underOpacityVal">100%</output>
               </div>
             </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px; display:none;">
               <label for="under-mult">Extrusion multiplier</label>
               <input id="under-mult" type="number" step=".1" value="1" />
             </fieldset>
@@ -282,6 +292,7 @@
       <div id="mapHolder-ratio" class="map-holder">
         <div class="map-box">
           <div id="map-ratio"></div>
+          <div class="height-scale"><span class="label">Height:</span><input id="ratioHeightScale" type="range" min="0" max="100" step="1" value="100" /></div>
           <div id="mapBtnsRatio" class="map-controls">
             <button id="ratioSettingsBtn">Settings</button>
             <button id="ratioExpandBtn">⤢</button>
@@ -307,7 +318,7 @@
                 <output id="ratioOpacityVal">100%</output>
               </div>
             </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
+            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px; display:none;">
               <label for="ratio-mult">Extrusion multiplier</label>
               <input id="ratio-mult" type="number" step=".1" value="1" />
             </fieldset>

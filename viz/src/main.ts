@@ -6,7 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 
 // Local imports
-import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL } from './config';
+import { BASEMAP_STYLES, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS, DEV_CATEGORY_FIELD, UNDERUTILIZED_DEFAULTS, ORIG_CATEGORY_FIELD, DEFAULT_DATASET_URL, HEIGHT_CAPS } from './config';
 import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './utils.dictionary';
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -206,6 +206,10 @@ const categoryContainer = document.getElementById('categoryFilter') as HTMLDivEl
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement;
 const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
 const underTotals = document.getElementById('underTotals') as HTMLDivElement;
+// Height sliders (bottom-right)
+const heightScaleMain = document.getElementById('heightScale') as HTMLInputElement | null;
+const heightScaleUnder = document.getElementById('underHeightScale') as HTMLInputElement | null;
+const heightScaleRatio = document.getElementById('ratioHeightScale') as HTMLInputElement | null;
 
 // Under map controls
 const underSettingsBtn = document.getElementById('underSettingsBtn') as HTMLButtonElement;
@@ -263,7 +267,7 @@ ratioOrigCategorySelect?.addEventListener('change', () => { renderRatioNow(); })
 scaleFiltered.addEventListener('change', () => { applyFilterAndScaling(); saveSettings(currentTab); });
 invertHeights.addEventListener('change', () => {
   if (currentTab === 'under') applyFilterAndScaling();
-  else computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+  else computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
   saveSettings(currentTab);
 });
 
@@ -483,6 +487,11 @@ let _pendingRefreshLegend = false;
 type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
 // moved above with TabKey declaration
+
+// Additional height scale factors (0..1), controlled by sliders
+let heightFactorMain = 1;
+let heightFactorUnder = 1;
+let heightFactorRatio = 1;
 
 /* ---------------- FUNCTIONS ----------------- */
 
@@ -966,7 +975,7 @@ function applyExtrusion() {
   }
 
   const rawMult = Number(multInput.value);
-  const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
+  const multiplier = (Number.isFinite(rawMult) ? rawMult : 0) * heightFactorMain;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
   let heightBase: Expression = valueExpr;
   let heightExpr: Expression;
@@ -1010,7 +1019,8 @@ function renderMapFor(
   opacityOverride?: number,
   multiplierFactor: number = 1,
   legendEl?: HTMLFieldSetElement | null,
-  filteredFc?: GeoJSON.FeatureCollection
+  filteredFc?: GeoJSON.FeatureCollection,
+  capMeters: number = HEIGHT_CAP_METERS
 ) {
   if (!currentGeoJSON) return;
   if (!m.getLayer(LAYER_ID)) return;
@@ -1041,7 +1051,7 @@ function renderMapFor(
     const alt = percentile(vals, HEIGHT_PCTL);
     pVal = (Number.isFinite(alt) && alt > 0) ? alt : 1;
   }
-  const heightScale = (HEIGHT_CAP_METERS / pVal) * (Number.isFinite(multiplierFactor) ? multiplierFactor : 1);
+  const heightScale = (capMeters / pVal) * (Number.isFinite(multiplierFactor) ? multiplierFactor : 1);
 
   let ramp = COLOR_RAMPS[rampKey] || COLOR_RAMPS['Viridis'];
   if (reverse && ramp) ramp = ramp.slice().reverse();
@@ -1112,7 +1122,7 @@ function setTab(tab: TabKey) {
     categoryFieldset.style.display = 'none';
     reverseColors = false;
     if (map.getLayer(LAYER_ID)) map.setFilter(LAYER_ID, null);
-    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
     applyExtrusion();
   } else if (tab === 'under') {
     categoryFieldset.style.display = 'block';
@@ -1127,7 +1137,7 @@ function setTab(tab: TabKey) {
     reverseColors = true;            // darkest = tallest when inverted
     if (COLOR_RAMPS['Reds']) rampSelect.value = 'Reds';
     if (map.getLayer(LAYER_ID)) map.setFilter(LAYER_ID, null);
-    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
     applyExtrusion();
   }
 }
@@ -1258,9 +1268,9 @@ function applyFilterAndScaling() {
       return catOk && origOk;
     });
     const fc: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: filtered };
-    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL, fc);
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL, fc);
   } else {
-    computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
   }
   applyExtrusion();
 }
@@ -1295,9 +1305,10 @@ function renderUnderNow() {
     underRampSelect?.value || rampSelect.value,
     /*reverse*/ false,
     (parseInt(underOpacityInput?.value || '0') / 100),
-    parseFloat(underMultInput?.value || '1') || 1,
+    (parseFloat(underMultInput?.value || '1') || 1) * heightFactorUnder,
     underLegendEl,
-    filteredFc
+    filteredFc,
+    HEIGHT_CAPS.under
   );
 }
 
@@ -1317,8 +1328,10 @@ function renderRatioNow() {
     ratioRampSelect?.value || 'Reds',
     /*reverse*/ true,
     (parseInt(ratioOpacityInput?.value || '0') / 100),
-    parseFloat(ratioMultInput?.value || '1') || 1,
-    ratioLegendEl
+    (parseFloat(ratioMultInput?.value || '1') || 1) * heightFactorRatio,
+    ratioLegendEl,
+    undefined,
+    HEIGHT_CAPS.ratio
   );
 }
 
@@ -1393,7 +1406,7 @@ function computeDisplayedMetricFromProps(props: Record<string, any>): number | n
 function computeExtrusionHeightMeters(metricValue: number): number {
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
   const mult = Number(multInput.value);
-  const multiplier = Number.isFinite(mult) ? mult : 0;
+  const multiplier = (Number.isFinite(mult) ? mult : 0) * heightFactorMain;
   if (invertHeights.checked && currentField === 'IMPR_PCT_TOTAL') {
     return (100 - metricValue) * multiplier * unitFactor;
   }
@@ -1418,7 +1431,7 @@ function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80
   _updTimer = window.setTimeout(() => {
     _updTimer = null;
     if (_pendingMode === 'recomputeAndAutoScale') {
-      computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
+      computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
       if (_pendingRefreshLegend) updateLegend();
     } else {
       applyExtrusion();
@@ -1815,6 +1828,23 @@ ratioInvertHeights?.addEventListener('change', () => { renderRatioNow(); });
 ratioMultInput?.addEventListener('input', () => { renderRatioNow(); });
 ratioBasemapSelect?.addEventListener('change', () => { setBasemapFor(mapRatio, ratioBasemapSelect.value); });
 ratioFieldSelect?.addEventListener('change', () => { renderRatioNow(); });
+
+// Height slider listeners (bottom-right)
+heightScaleMain?.addEventListener('input', () => {
+  const v = parseInt(heightScaleMain.value, 10);
+  heightFactorMain = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+  scheduleUpdate('applyOnly');
+});
+heightScaleUnder?.addEventListener('input', () => {
+  const v = parseInt(heightScaleUnder.value, 10);
+  heightFactorUnder = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+  renderUnderNow();
+});
+heightScaleRatio?.addEventListener('input', () => {
+  const v = parseInt(heightScaleRatio.value, 10);
+  heightFactorRatio = Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+  renderRatioNow();
+});
 
 fieldSelect.addEventListener('change', () => {
   currentField = fieldSelect.value || null;

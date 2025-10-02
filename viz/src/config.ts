@@ -119,7 +119,7 @@ const CITY_DATASETS = {
     proxy: '/data/southbend.parquet'
   },
   syracuse: {
-    remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/syracuse.parquet',
+    remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/syracuse_parcels_refined_20251001.parquet',
     local: 'syracuse.parquet',
     proxy: '/data/syracuse.parquet'
   },

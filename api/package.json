@@ -1,1 +1,12 @@
-{ "name": "civicmapper-api", "private": true, "engines": { "node": ">=18" } }
+{
+  "name": "civicmapper-api",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2"
+  }
+}

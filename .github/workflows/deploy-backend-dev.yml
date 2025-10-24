@@ -1,0 +1,46 @@
+name: Deploy Backend (dev)
+
+on:
+  push:
+    branches: [ develop, dev ]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ${{ github.event.repository.name }}-api
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        working-directory: api
+        run: |
+          docker build -t $REGISTRY/$OWNER/$IMAGE_NAME:dev-${{ github.sha }} .
+
+      - name: Push image (dev tag)
+        run: |
+          docker push $REGISTRY/$OWNER/$IMAGE_NAME:dev-${{ github.sha }}
+
+      - name: Summary
+        run: |
+          echo "Pushed $REGISTRY/$OWNER/$IMAGE_NAME:dev-${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+

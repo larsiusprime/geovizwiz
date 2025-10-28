@@ -34,4 +34,5 @@ jobs:
       - name: Purge Front Door cache
         run: |
           az afd endpoint purge -g rg-civicmapper-dev --profile-name afd-civicmapper-dev \
+            --endpoint-name ep-civicmapper-dev \
             --content-paths "/*" --domains ep-civicmapper-dev.azurefd.net

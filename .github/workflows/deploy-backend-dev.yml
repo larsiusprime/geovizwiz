@@ -1,46 +1,34 @@
-name: Deploy Backend (dev)
-
+name: Backend (dev) deploy
 on:
   push:
-    branches: [ develop, dev ]
-  workflow_dispatch: {}
-
-permissions:
-  contents: read
-  packages: write
-
-env:
-  IMAGE_NAME: ${{ github.event.repository.name }}-api
-  REGISTRY: ghcr.io
-  OWNER: ${{ github.repository_owner }}
-
+    branches: [ "develop" ]
+    paths: [ "api/**", ".github/workflows/deploy-backend-dev.yml" ]
+permissions: { id-token: write, contents: read }
 jobs:
-  build-and-push:
+  build-push-deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
+    environment: dev
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.repository_owner }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build image
-        working-directory: api
-        run: |
-          docker build -t $REGISTRY/$OWNER/$IMAGE_NAME:dev-${{ github.sha }} .
+      - name: ACR login
+        run: az acr login --name acrcivicmapperdev
 
-      - name: Push image (dev tag)
+      - name: Build & push image
         run: |
-          docker push $REGISTRY/$OWNER/$IMAGE_NAME:dev-${{ github.sha }}
+          IMAGE=acrcivicmapperdev.azurecr.io/civicmapper-api:${{ github.sha }}
+          docker build -t $IMAGE ./api
+          docker push $IMAGE
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
 
-      - name: Summary
+      - name: Deploy to Container Apps
         run: |
-          echo "Pushed $REGISTRY/$OWNER/$IMAGE_NAME:dev-${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          az containerapp update -g rg-civicmapper-dev -n api-civicmapper-dev --image "$IMAGE"
 

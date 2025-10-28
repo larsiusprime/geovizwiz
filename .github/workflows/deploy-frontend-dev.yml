@@ -1,45 +1,37 @@
-name: Deploy Frontend (dev)
-
+name: Frontend (dev) deploy
 on:
   push:
-    branches: [ develop, dev ]
-  workflow_dispatch: {}
-
-permissions:
-  contents: read
-
+    branches: [ "develop" ]
+    paths: [ "viz/**", ".github/workflows/deploy-frontend-dev.yml" ]
+permissions: { id-token: write, contents: read }
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
+    environment: dev
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: viz/package-lock.json
-
-      - name: Install deps
-        working-directory: viz
-        run: npm ci
-
-      - name: Build (Vite)
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build SPA
         working-directory: viz
         env:
-          VITE_API_BASE: ${{ secrets.VITE_API_BASE_DEV || 'http://localhost:8080' }}
-          VITE_TILE_API_URL: ${{ secrets.VITE_TILE_API_URL_DEV || 'http://localhost:8000/tiles/{z}/{x}/{y}.pbf' }}
-          VITE_DEFAULT_DATASET_URL: ${{ secrets.VITE_DEFAULT_DATASET_URL_DEV || '' }}
-        run: npm run build
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: frontend-dev-dist
-          path: viz/dist
+          VITE_API_BASE: "https://api.dev.civicmapper.org"     # or "https://dev.civicmapper.org/api" if you route via FD path
+          VITE_TILE_API_URL: "https://tiles.dev.civicmapper.org"
+        run: |
+          npm ci
+          npm run build
+      - name: Upload to Storage Static Website
+        run: |
+          az storage blob upload-batch --account-name stcivicmapperdev \
+            -d '$web' -s viz/dist --overwrite
+      - name: Purge Front Door cache
+        run: |
+          az afd endpoint purge -g rg-civicmapper-dev --profile-name afd-civicmapper-dev \
+            --content-paths "/*" --domains ep-civicmapper-dev.azurefd.net
 

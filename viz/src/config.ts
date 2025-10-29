@@ -1,7 +1,8 @@
 import type { Expression } from 'maplibre-gl';
+import { API_BASE as ENV_API_BASE } from './env';
 
 // API and tiles via env (Vite)
-export const API_BASE = (import.meta as any).env?.VITE_API_BASE || 'http://localhost:8080';
+export const API_BASE = ENV_API_BASE;
 export const TILE_URL = (import.meta as any).env?.VITE_TILE_API_URL || 'http://localhost:8000/tiles/{z}/{x}/{y}.pbf';
 
 // Base map styles

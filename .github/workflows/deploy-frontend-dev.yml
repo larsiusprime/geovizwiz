@@ -23,6 +23,8 @@ jobs:
         env:
           VITE_API_BASE: "https://api.dev.civicmapper.org"     # or "https://dev.civicmapper.org/api" if you route via FD path
           VITE_TILE_API_URL: "https://tiles.dev.civicmapper.org"
+          VITE_ENV_LABEL: "Dev"
+          VITE_DEPLOY_ENV: "dev"
         run: |
           npm ci
           npm run build

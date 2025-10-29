@@ -11,6 +11,8 @@ import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
+import { SLACK_ENDPOINT } from './env';
+import { makeSigninText } from './slack-signin';
 
 /* ---------------- Slack Utils (reliable send) ---------------- */
 
@@ -32,14 +34,14 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
   const trySend = () => {
     if (done || attempt >= maxAttempts) return;
     attempt++;
-    fetchWithTimeout('/api/slack', {
+    fetchWithTimeout(SLACK_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     }, 6000)
       .then(async (resp) => {
         const ok = resp.ok;
-        const summary = { url: '/api/slack', status: resp.status, ok, attempt, attemptedAt };
+        const summary = { url: SLACK_ENDPOINT, status: resp.status, ok, attempt, attemptedAt };
         console.log('[Slack] Attempt', attempt, summary);
         if (ok) {
           done = true;
@@ -50,7 +52,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
         }
       })
       .catch((err) => {
-        const summary = { url: '/api/slack', status: null as number | null, ok: false, error: String(err), attempt, attemptedAt };
+        const summary = { url: SLACK_ENDPOINT, status: null as number | null, ok: false, error: String(err), attempt, attemptedAt };
         console.warn('[Slack] Attempt failed', summary);
         try { localStorage.setItem('gvw_signin_debug', JSON.stringify({ ...summary, savedAt: new Date().toISOString() })); } catch {}
         scheduleRetry();
@@ -71,7 +73,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
     window.addEventListener('pagehide', () => {
       if (!done && typeof navigator.sendBeacon === 'function') {
         const blob = new Blob([JSON.stringify({ text })], { type: 'application/json' });
-        navigator.sendBeacon('/api/slack', blob);
+        navigator.sendBeacon(SLACK_ENDPOINT, blob);
       }
     }, { once: true });
   } catch {}
@@ -95,7 +97,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
       return;
     }
 
-    const text = `Google sign-in: ${pending.email} (post-login)`;
+    const text = makeSigninText(pending.email, 'post-login');
     console.log('[Slack] Sending post-login notification (reliable):', { email: pending.email });
     postSlackReliable(text);
     // Keep pending record until we succeed in this session; the reliable sender sets the sent flag.
@@ -120,7 +122,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
     if (already) return;
     const email = sessionStorage.getItem('gvw_session_email');
     if (!email) return;
-    const text = `Google sign-in: ${email} (main)`;
+    const text = makeSigninText(email, 'main');
     console.log('[Slack] Ensuring session Slack notify (reliable):', { email });
     postSlackReliable(text);
   } catch {

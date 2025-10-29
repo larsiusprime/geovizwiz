@@ -1,11 +1,20 @@
+import { SIGNIN_WEBHOOK_URL, SLACK_ENDPOINT, HAS_DIRECT_SLACK_WEBHOOK } from './env';
+import { makeSigninText } from './slack-signin';
 
-const env = import.meta.env || {};
+type CredentialResponse = {
+  credential?: string;
+};
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
 const CLIENT_ID =
-  document.querySelector('meta[name="google-signin-client_id"]')?.content || '';
-const SIGNIN_WEBHOOK = env.VITE_SIGNIN_WEBHOOK_URL;
+  document.querySelector<HTMLMetaElement>('meta[name="google-signin-client_id"]')?.content || '';
 
-
-function whenReady(predicate, timeoutMs = 8000) {
+function whenReady(predicate: () => boolean, timeoutMs = 8000): Promise<void> {
   return new Promise((resolve, reject) => {
     const t0 = Date.now();
     (function tick() {
@@ -16,8 +25,9 @@ function whenReady(predicate, timeoutMs = 8000) {
   });
 }
 
-function decodeJwt(token) {
+function decodeJwt(token: string | undefined | null): unknown {
   try {
+    if (!token) return null;
     const payload = token.split('.')[1];
     const json = atob(payload.replace(/-/g, '+').replace(/_/g, '/'));
     return JSON.parse(decodeURIComponent(escape(json)));
@@ -26,61 +36,68 @@ function decodeJwt(token) {
   }
 }
 
-function recordSignin(cred) {
+function recordSignin(cred: CredentialResponse | null | undefined): void {
   try {
     const now = new Date().toISOString();
-    const entry = { at: now, payload: decodeJwt(cred?.credential || '') };
+    const payload = decodeJwt(cred?.credential ?? '') as { email?: string } | null;
+    const entry = { at: now, payload };
 
-    // Mark this browser tab as authenticated for this session only
     try { sessionStorage.setItem('gvw_session_authed', '1'); } catch {}
-    // Stash minimal info to hand off to the main app after redirect
+
     try {
-      const email = entry.payload?.email || null;
+      const email = payload?.email ?? null;
       if (email) {
         const pending = { at: now, email };
         try {
           sessionStorage.setItem('gvw_pending_slack', JSON.stringify(pending));
           sessionStorage.setItem('gvw_session_email', email);
-          sessionStorage.removeItem('gvw_session_slack_sent'); // reset per-login
+          sessionStorage.removeItem('gvw_session_slack_sent');
         } catch {}
-        // Also record a lightweight debug snapshot for the debug page
         localStorage.setItem('gvw_signin_debug', JSON.stringify({
           savedAt: now,
           emailFound: true,
           email,
-          slackWebhookExists: !!(env?.VITE_SLACK_WEBHOOK_URL)
+          slackWebhookExists: HAS_DIRECT_SLACK_WEBHOOK
         }));
       } else {
         localStorage.setItem('gvw_signin_debug', JSON.stringify({
           savedAt: now,
           emailFound: false,
-          slackWebhookExists: !!(env?.VITE_SLACK_WEBHOOK_URL)
+          slackWebhookExists: HAS_DIRECT_SLACK_WEBHOOK
         }));
       }
     } catch {}
-    if (SIGNIN_WEBHOOK) {
-      fetch(SIGNIN_WEBHOOK, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(entry) }).catch(() => {});
-    }
-    if (entry.payload?.email) {
-      fetch('/api/slack', {
+
+    if (SIGNIN_WEBHOOK_URL) {
+      fetch(SIGNIN_WEBHOOK_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: `Google sign-in: ${entry.payload.email}` })
+        body: JSON.stringify(entry)
+      }).catch(() => {});
+    }
+
+    const email = (payload as { email?: string } | null)?.email;
+    if (email) {
+      const text = makeSigninText(email, 'login');
+      fetch(SLACK_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text })
       }).catch(() => {});
     }
   } catch {}
 }
 
-async function init() {
+async function init(): Promise<void> {
   const mount = document.getElementById('googleSignIn');
+  if (!mount) return;
   mount.textContent = 'Loading sign-in…';
 
   console.log('Google login client:', CLIENT_ID);
 
-  // Clean up any legacy persistent sign-in markers
   try { localStorage.removeItem('gvw_signins'); } catch {}
 
-  await whenReady(() => window.google?.accounts?.id);
+  await whenReady(() => Boolean(window.google?.accounts?.id));
   const g = window.google;
 
   if (!CLIENT_ID) {
@@ -89,21 +106,22 @@ async function init() {
 
   g.accounts.id.initialize({
     client_id: CLIENT_ID,
-    callback: (resp) => {
+    callback: (resp: CredentialResponse) => {
       recordSignin(resp);
       window.location.href = '/';
     }
   });
 
-  // Prevent auto-select carryover across sessions for stricter behavior
   try { g.accounts.id.disableAutoSelect(); } catch {}
 
   mount.textContent = '';
   g.accounts.id.renderButton(mount, { theme: 'outline', size: 'large' });
 }
 
-init().catch(err => {
+init().catch((err) => {
   console.error(err);
-  const m = document.getElementById('googleSignIn');
-  m.innerHTML = `<div style="font:14px system-ui">Couldn’t load sign-in: ${String(err)}</div>`;
+  const mount = document.getElementById('googleSignIn');
+  if (mount) {
+    mount.innerHTML = `<div style="font:14px system-ui">Couldn’t load sign-in: ${String(err)}</div>`;
+  }
 });

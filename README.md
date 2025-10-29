@@ -13,6 +13,7 @@ variables in `viz/` to enable it. Production builds read these values from
 
 - `VITE_ENABLE_GOOGLE_AUTH=true`
 - `VITE_SLACK_WEBHOOK_URL=<Slack incoming webhook>`
+- `VITE_ENV_LABEL=<Dev|Prod>` (optional, used to prefix Slack sign-in alerts)
 
 The Google client ID used for sign‑in is defined inline in `viz/login.html`.
 

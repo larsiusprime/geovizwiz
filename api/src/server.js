@@ -57,7 +57,7 @@ app.get("/api/hello", (_req, res) =>
   res.json({ message: "hello", env: process.env.NODE_ENV || "dev" })
 );
 
-app.post("/api/slack", async (req, res) => {
+app.post(["/slack", "/api/slack"], async (req, res) => {
   if (!slackWebhook) {
     return res.status(500).json({ ok: false, error: "Slack webhook not configured" });
   }

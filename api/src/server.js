@@ -28,6 +28,8 @@ console.log(
 );
 
 const slackWebhook = (process.env.SLACK_WEBHOOK_URL || process.env.SLACK_WEBHOOK || "").trim();
+const slackWebhookConfigured = Boolean(slackWebhook);
+let slackWebhookWarned = false;
 const envLabel = deriveEnvLabel();
 
 const app = express();
@@ -58,8 +60,12 @@ app.get("/api/hello", (_req, res) =>
 );
 
 app.post(["/slack", "/api/slack"], async (req, res) => {
-  if (!slackWebhook) {
-    return res.status(500).json({ ok: false, error: "Slack webhook not configured" });
+  if (!slackWebhookConfigured) {
+    if (!slackWebhookWarned) {
+      console.warn("[Slack] Webhook not configured; skipping post");
+      slackWebhookWarned = true;
+    }
+    return res.status(204).send();
   }
 
   const body = typeof req.body === "object" && req.body ? { ...req.body } : {};

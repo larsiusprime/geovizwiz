@@ -2,9 +2,10 @@ const https = require('https');
 
 module.exports = async function (context, req) {
   try {
-    const webhook = process.env.SLACK_WEBHOOK_URL;
+    const webhook = (process.env.SLACK_WEBHOOK_URL || '').trim();
     if (!webhook) {
-      context.res = { status: 500, body: 'Server misconfigured: SLACK_WEBHOOK_URL missing' };
+      context.log('[Slack] Webhook not configured; skipping post');
+      context.res = { status: 204 };
       return;
     }
 

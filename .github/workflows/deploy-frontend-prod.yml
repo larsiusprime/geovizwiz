@@ -34,6 +34,7 @@ jobs:
             --auth-mode login \
             -d '$web' -s viz/dist --overwrite
       - name: Purge Front Door cache
+        continue-on-error: true
         run: |
           az afd endpoint purge -g rg-civicmapper-prod --profile-name afd-civicmapper-prod \
             --endpoint-name ep-civicmapper-prod \

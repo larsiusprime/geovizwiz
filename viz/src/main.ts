@@ -89,6 +89,14 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
 // the request and logs are visible on the main page (not the login tab).
 (function processPendingSlack() {
   try {
+    // Skip Slack notifications in local development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('[Slack] Skipping notifications (local development)');
+      // Clean up any pending notifications
+      try { sessionStorage.removeItem('gvw_pending_slack'); } catch {}
+      try { localStorage.removeItem('gvw_pending_slack'); } catch {}
+      return;
+    }
     // Prefer sessionStorage for ephemeral post-login notify; fall back to localStorage for compatibility
     const raw = sessionStorage.getItem('gvw_pending_slack') ?? localStorage.getItem('gvw_pending_slack');
     if (!raw) return;
@@ -120,6 +128,11 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
 // If there was no explicit pending record, still send once per session
 (function ensureSessionSlackOnce() {
   try {
+    // Skip Slack notifications in local development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('[Slack] Skipping notifications (local development)');
+      return;
+    }
     const already = sessionStorage.getItem('gvw_session_slack_sent') === '1';
     if (already) return;
     const email = sessionStorage.getItem('gvw_session_email');

@@ -3,59 +3,356 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Put It On A Map</title>
-  <link rel="icon" href="data:,">
+  <title>Civic Mapper - 3D Civic Data Visualization</title>
+  <link rel="icon" type="image/svg+xml" href="/viz/favicon.svg">
   <style>
-    :root { --bg:#0b1020; --fg:#eaf0ff; --muted:#a8b3d1; --btn:#8ab4ff; --btn2:#2dd4bf; --card:#121a33; }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#182244 0,#0b1020 55%,#0b1020 100%);color:var(--fg)}
-    .wrap{min-height:100%;display:flex;flex-direction:column}
-    header{padding:20px 16px;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;width:100%}
-    header a.logo{font-weight:700;letter-spacing:.2px;text-decoration:none;color:var(--fg)}
-    main{flex:1;display:grid;place-items:center;padding:30px 16px}
-    .hero{max-width:1100px;width:100%;display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center}
-    .hero h1{margin:0 0 10px;font-size:clamp(28px,4.4vw,46px);line-height:1.1}
-    .hero p{margin:0;color:var(--muted);font-size:clamp(14px,1.6vw,18px)}
-    .cta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
-    .cta a{display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:600}
-    .cta a.primary{background:var(--btn);color:#081428}
-    .cta a.secondary{background:var(--btn2);color:#051c17}
-    .card{background:var(--card);border:1px solid #223055aa;border-radius:14px;padding:14px}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
-    .feat h3{margin:0 0 6px;font-size:16px}
-    .feat p{margin:0;color:var(--muted);font-size:14px}
-    footer{padding:18px 16px;color:var(--muted);font-size:12px;text-align:center}
-    @media (max-width:900px){ .hero{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
+    :root {
+      /* Modern neutral palette */
+      --color-gray-50: #f8fafc;
+      --color-gray-100: #f1f5f9;
+      --color-gray-200: #e2e8f0;
+      --color-gray-600: #475569;
+      --color-gray-800: #1e293b;
+      --color-gray-900: #0f172a;
+      --color-primary: #3b82f6;
+      --color-secondary: #14b8a6;
+      --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    }
+    
+    * { box-sizing: border-box; }
+    
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: var(--font-sans);
+      background: linear-gradient(135deg, var(--color-gray-50) 0%, var(--color-gray-200) 100%);
+      color: var(--color-gray-900);
+    }
+    
+    .wrap {
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    header {
+      padding: 1.5rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      max-width: 1200px;
+      margin: 0 auto;
+      width: 100%;
+    }
+    
+    .logo {
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+      text-decoration: none;
+      color: var(--color-gray-900);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    
+    .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+    }
+    
+    nav a {
+      text-decoration: none;
+      color: var(--color-gray-600);
+      font-weight: 500;
+      font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+    
+    nav a:hover {
+      color: var(--color-primary);
+    }
+    
+    main {
+      flex: 1;
+      display: grid;
+      place-items: center;
+      padding: 2rem 1rem;
+    }
+    
+    .hero {
+      max-width: 1200px;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 1.2fr 1fr;
+      gap: 3rem;
+      align-items: center;
+    }
+    
+    .hero h1 {
+      margin: 0 0 1rem;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      line-height: 1.1;
+      font-weight: 700;
+      background: linear-gradient(135deg, #1e3a8a 0%, #0d9488 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero p {
+      margin: 0 0 2rem;
+      color: var(--color-gray-600);
+      font-size: clamp(1rem, 1.5vw, 1.125rem);
+      line-height: 1.75;
+    }
+    
+    .cta {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.75rem;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1rem;
+      transition: all 0.2s;
+      border: none;
+      cursor: pointer;
+    }
+    
+    .btn-primary {
+      background: var(--color-primary);
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #2563eb;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+    }
+    
+    .btn-secondary {
+      background: var(--color-secondary);
+      color: white;
+    }
+    
+    .btn-secondary:hover {
+      background: #0d9488;
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(20, 184, 166, 0.3);
+    }
+    
+    .card {
+      background: white;
+      border: 1px solid var(--color-gray-200);
+      border-radius: 1rem;
+      padding: 1rem;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+    
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    
+    .feat {
+      background: white;
+      border: 1px solid var(--color-gray-200);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      transition: all 0.2s;
+    }
+    
+    .feat:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+      border-color: var(--color-primary);
+    }
+    
+    .feat h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--color-gray-900);
+    }
+    
+    .feat p {
+      margin: 0;
+      color: var(--color-gray-600);
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    
+    .preview {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      border-radius: 1rem;
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 400px;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    
+    .preview svg {
+      width: 100%;
+      max-width: 400px;
+      height: auto;
+    }
+    
+    footer {
+      padding: 2rem 1rem;
+      text-align: center;
+      color: var(--color-gray-600);
+      font-size: 0.875rem;
+      border-top: 1px solid var(--color-gray-200);
+      background: white;
+    }
+    
+    @media (max-width: 900px) {
+      .hero {
+        grid-template-columns: 1fr;
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .preview {
+        min-height: 300px;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <a class="logo" href="/">putitonamap</a>
-      <nav><a href="/viz" class="logo" style="opacity:.8">Launch viz ↗</a></nav>
+      <a class="logo" href="/">
+        <div class="logo-icon">CM</div>
+        Civic Mapper
+      </a>
+      <nav>
+        <a href="/viz">Launch App →</a>
+      </nav>
     </header>
+    
     <main>
       <section class="hero">
         <div>
-          <h1>Turn raw parcel data into 3D insight</h1>
-          <p>Load GeoParquet, GeoPackage, or zipped Shapefiles. Filter fields, pick ramps, extrude by value, and explore — all locally in your browser.</p>
+          <h1>View 3D Maps of Land Values</h1>
+          <p>
+            Explore cities across the United States with interactive 3D visualizations of 
+            land values, property assessments, and development patterns. Powerful insights 
+            delivered directly in your browser.
+          </p>
           <div class="cta">
-            <a class="primary" href="/viz">Open the viz</a>
-            <a class="secondary" href="https://github.com/larsiusprime/geovizwiz" target="_blank" rel="noopener">View source</a>
+            <a class="btn btn-primary" href="/viz/login.html">Get Started</a>
+            <a class="btn btn-secondary" href="mailto:greg@landeconomics.org">Contact Us</a>
           </div>
           <div class="grid">
-            <div class="feat card"><h3>Local-first</h3><p>No upload: files stay on your machine.</p></div>
-            <div class="feat card"><h3>Flexible formats</h3><p>GeoParquet, GPKG, or SHP (.zip).</p></div>
-            <div class="feat card"><h3>Smart scaling</h3><p>Quantiles / Equal-interval ramps. Auto height clamping.</p></div>
+            <div class="feat card">
+              <h3>🗺️ Multiple Cities</h3>
+              <p>Explore land values across cities in the United States.</p>
+            </div>
+            <div class="feat card">
+              <h3>📊 Interactive 3D</h3>
+              <p>Visualize property data with intuitive 3D maps and controls.</p>
+            </div>
+            <div class="feat card">
+              <h3>💡 Powerful Insights</h3>
+              <p>Understand land values, assessments, and development patterns.</p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 3rem; padding: 2rem; background: white; border: 2px solid var(--color-primary); border-radius: 1rem; text-align: center;">
+            <h3 style="margin: 0 0 0.75rem; font-size: 1.25rem; color: var(--color-gray-900);">Want to Add Your City?</h3>
+            <p style="margin: 0 0 1rem; color: var(--color-gray-600);">
+              Interested in visualizing land values for your city? Reach out to learn more.
+            </p>
+            <a href="mailto:greg@landeconomics.org" class="btn btn-primary">Contact Us</a>
           </div>
         </div>
-        <div class="card">
-          <img src="data:image/svg+xml;utf8,<?xml version='1.0' encoding='UTF-8'?><svg xmlns='http://www.w3.org/2000/svg' width='640' height='420'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%238ab4ff'/><stop offset='1' stop-color='%232dd4bf'/></linearGradient></defs><rect width='100%%' height='100%%' fill='%23121a33'/><g transform='translate(40,320)'><rect x='0' y='-50' width='60' height='50' fill='url(%23g)'/><rect x='80' y='-120' width='60' height='120' fill='url(%23g)'/><rect x='160' y='-80' width='60' height='80' fill='url(%23g)'/><rect x='240' y='-180' width='60' height='180' fill='url(%23g)'/><rect x='320' y='-100' width='60' height='100' fill='url(%23g)'/></g><text x='40' y='50' fill='%23eaf0ff' font-family='system-ui' font-size='18'>/viz — local 3D parcel viz</text></svg>" alt="preview" style="max-width:100%;border-radius:10px;border:1px solid #223055aa;">
+        
+        <div class="preview">
+          <svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="grad1" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#3b82f6"/>
+                <stop offset="100%" stop-color="#14b8a6"/>
+              </linearGradient>
+            </defs>
+            <!-- 3D Buildings -->
+            <g opacity="0.9">
+              <!-- Building 1 -->
+              <path d="M50,200 L50,150 L90,130 L90,180 Z" fill="#2563eb" opacity="0.8"/>
+              <path d="M50,150 L90,130 L130,150 L90,170 Z" fill="#60a5fa"/>
+              <path d="M90,130 L130,150 L130,200 L90,180 Z" fill="#1d4ed8" opacity="0.9"/>
+              
+              <!-- Building 2 -->
+              <path d="M140,210 L140,140 L180,120 L180,190 Z" fill="#0d9488" opacity="0.8"/>
+              <path d="M140,140 L180,120 L220,140 L180,160 Z" fill="#14b8a6"/>
+              <path d="M180,120 L220,140 L220,210 L180,190 Z" fill="#0f766e" opacity="0.9"/>
+              
+              <!-- Building 3 -->
+              <path d="M230,220 L230,170 L270,150 L270,200 Z" fill="#3b82f6" opacity="0.8"/>
+              <path d="M230,170 L270,150 L310,170 L270,190 Z" fill="#60a5fa"/>
+              <path d="M270,150 L310,170 L310,220 L270,200 Z" fill="#2563eb" opacity="0.9"/>
+              
+              <!-- Building 4 -->
+              <path d="M100,240 L100,200 L140,180 L140,220 Z" fill="#14b8a6" opacity="0.8"/>
+              <path d="M100,200 L140,180 L180,200 L140,220 Z" fill="#2dd4bf"/>
+              <path d="M140,180 L180,200 L180,240 L140,220 Z" fill="#0d9488" opacity="0.9"/>
+              
+              <!-- Building 5 -->
+              <path d="M270,250 L270,210 L310,190 L310,230 Z" fill="#1d4ed8" opacity="0.8"/>
+              <path d="M270,210 L310,190 L350,210 L310,230 Z" fill="#3b82f6"/>
+              <path d="M310,190 L350,210 L350,250 L310,230 Z" fill="#1e40af" opacity="0.9"/>
+            </g>
+            
+            <!-- Grid lines -->
+            <g stroke="#ffffff" stroke-width="1" opacity="0.3">
+              <line x1="50" y1="250" x2="350" y2="250"/>
+              <line x1="50" y1="230" x2="350" y2="230"/>
+              <line x1="50" y1="210" x2="350" y2="210"/>
+            </g>
+            
+            <!-- Text -->
+            <text x="200" y="280" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">
+              3D Parcel Visualization
+            </text>
+          </svg>
         </div>
       </section>
     </main>
-    <footer>© <span id="y"></span> Put It On A Map • All local, all client-side</footer>
+    
+    <footer>
+      <div style="margin-bottom: 1rem;">
+        <div style="font-size: 0.75rem; color: var(--color-gray-600); margin-bottom: 0.75rem;">Created by</div>
+        <a href="https://landeconomics.org" target="_blank" rel="noopener" style="display: inline-block; text-decoration: none; padding: 0.75rem 1.25rem; background: white; border: 1px solid var(--color-gray-200); border-radius: 0.5rem; transition: all 0.2s;">
+          <img src="/viz/cle-logo.svg" alt="Center for Land Economics" style="height: 40px; display: block;">
+        </a>
+      </div>
+      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--color-gray-200);">
+        © <span id="year"></span> Civic Mapper • All processing happens locally in your browser
+      </div>
+    </footer>
   </div>
-  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+  <script>
+    document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
 </body>
 </html>

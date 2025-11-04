@@ -1,4 +1,6 @@
 // Imports
+import './design-system.css';
+import './components.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
 import type { Expression } from 'maplibre-gl';
@@ -356,7 +358,7 @@ function loadSettings(tab: TabKey) {
     const obj = JSON.parse(raw);
     if (obj.basemap) {
       // Fallback if a previously saved basemap no longer exists
-      setBasemap(BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'OpenStreetMap');
+      setBasemapFor(map, BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'OpenStreetMap');
     }
     if (obj.field) { fieldSelect.value = obj.field; currentField = obj.field; }
     if (obj.ramp) rampSelect.value = obj.ramp;
@@ -1547,7 +1549,7 @@ function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks
 // Example: step(value, 0, b1, 1, b2, 2, ...)
 function makeStepIndexExpression(valueExpr: Expression, breaks: number[]): Expression {
   const b = breaks.slice();
-  const out: (number | Expression)[] = ['step', valueExpr, 0];
+  const out: any[] = ['step', valueExpr, 0];
   for (let i = 0; i < b.length; i++) {
     out.push(b[i], i + 1);
   }
@@ -1578,7 +1580,7 @@ function computeAndApplyAutoMultiplier(
       const denom = (k - 1);
       const toIdx = (v: number) => {
         let i = 0;
-        while (i < heightRankBreaks.length && v >= heightRankBreaks[i]) i++;
+        while (i < (heightRankBreaks?.length || 0) && heightRankBreaks && v >= heightRankBreaks[i]) i++;
         return i;
       };
       scaleVals = vals.map(v => (denom - toIdx(v)) / denom);

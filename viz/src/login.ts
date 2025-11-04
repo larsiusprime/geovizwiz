@@ -108,7 +108,7 @@ async function init(): Promise<void> {
     client_id: CLIENT_ID,
     callback: (resp: CredentialResponse) => {
       recordSignin(resp);
-      window.location.href = '/';
+      window.location.href = '/index.html';
     }
   });
 

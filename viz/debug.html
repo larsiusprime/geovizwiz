@@ -3,82 +3,132 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Debug Info</title>
+    <title>Debug Info - Civic Mapper</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+    <link rel="stylesheet" href="/src/design-system.css">
+    <link rel="stylesheet" href="/src/components.css">
     <style>
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            padding: var(--space-8) var(--space-4);
         }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        .debug-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        .debug-header {
+            text-align: center;
+            margin-bottom: var(--space-8);
+        }
+        .debug-header h1 {
+            margin: 0 0 var(--space-2);
+            font-size: var(--text-4xl);
+            font-weight: var(--font-bold);
+        }
+        .debug-header p {
+            margin: 0;
+            color: var(--text-secondary);
         }
         .debug-section {
-            margin: 20px 0;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
+            margin-bottom: var(--space-6);
         }
         .debug-section h3 {
-            margin-top: 0;
-            color: #333;
+            margin: 0 0 var(--space-4);
+            font-size: var(--text-xl);
+            font-weight: var(--font-semibold);
+            color: var(--text-primary);
+        }
+        .debug-content {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-xl);
+            padding: var(--space-4);
         }
         pre {
-            background: #f8f8f8;
-            padding: 10px;
-            border-radius: 5px;
+            background: var(--color-gray-100);
+            padding: var(--space-3);
+            border-radius: var(--radius-md);
             overflow-x: auto;
             white-space: pre-wrap;
+            font-family: var(--font-mono);
+            font-size: var(--text-sm);
+            margin: var(--space-3) 0;
         }
         .status {
-            padding: 10px;
-            border-radius: 5px;
-            margin: 10px 0;
+            padding: var(--space-3);
+            border-radius: var(--radius-lg);
+            margin: var(--space-2) 0;
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
         }
-        .success { background-color: #d4edda; color: #155724; }
-        .error { background-color: #f8d7da; color: #721c24; }
-        .warning { background-color: #fff3cd; color: #856404; }
-        button {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
+        .status-success {
+            background-color: #d1fae5;
+            color: #065f46;
+            border: 1px solid #a7f3d0;
         }
-        button:hover { background-color: #0056b3; }
+        .status-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+        .status-warning {
+            background-color: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+        .actions {
+            display: flex;
+            gap: var(--space-3);
+            flex-wrap: wrap;
+            padding: var(--space-4);
+            background: var(--bg-surface);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-xl);
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>🔍 Debug Information</h1>
+    <div class="debug-container">
+        <div class="debug-header">
+            <h1>🔍 Debug Information</h1>
+            <p>Development and testing tools for Civic Mapper</p>
+        </div>
         
         <div class="debug-section">
-            <h3>Environment Variables Debug</h3>
-            <div id="envDebug">Loading...</div>
+            <h3>Environment Variables</h3>
+            <div class="debug-content" id="envDebug">
+                <div class="status status-warning">Loading...</div>
+            </div>
         </div>
         
         <div class="debug-section">
             <h3>Sign-in Debug</h3>
-            <div id="signinDebug">Loading...</div>
+            <div class="debug-content" id="signinDebug">
+                <div class="status status-warning">Loading...</div>
+            </div>
         </div>
         
         <div class="debug-section">
-            <h3>All Sign-ins History</h3>
-            <div id="signinsHistory">Loading...</div>
+            <h3>Sign-ins History</h3>
+            <div class="debug-content" id="signinsHistory">
+                <div class="status status-warning">Loading...</div>
+            </div>
         </div>
         
         <div class="debug-section">
             <h3>Actions</h3>
-            <button onclick="refreshDebug()">🔄 Refresh Debug Info</button>
-            <button onclick="clearDebug()">🗑️ Clear Debug Info</button>
-            <button onclick="testSlackWebhook()">📤 Test Slack Webhook</button>
+            <div class="actions">
+                <button class="btn btn-primary" onclick="refreshDebug()">
+                    🔄 Refresh Debug Info
+                </button>
+                <button class="btn btn-ghost" onclick="clearDebug()">
+                    🗑️ Clear Debug Info
+                </button>
+                <button class="btn btn-secondary" onclick="testSlackWebhook()">
+                    📤 Test Slack Webhook
+                </button>
+            </div>
         </div>
     </div>
 
@@ -95,7 +145,6 @@
         }
         
         async function testSlackWebhook() {
-            // Test the proxy server endpoint
             const proxyUrl = "http://localhost:3001/api/slack";
             
             console.log('Testing proxy URL:', proxyUrl);
@@ -124,19 +173,19 @@
             if (envDebug) {
                 const parsed = JSON.parse(envDebug);
                 envDebugDiv.innerHTML = `
-                    <div class="status ${parsed.hasSlackWebhook ? 'success' : 'error'}">
-                        Slack Webhook: ${parsed.hasSlackWebhook ? '✅ Found' : '❌ Missing'}
+                    <div class="status ${parsed.hasSlackWebhook ? 'status-success' : 'status-error'}">
+                        <span>Slack Webhook: ${parsed.hasSlackWebhook ? '✅ Found' : '❌ Missing'}</span>
                     </div>
-                    <div class="status ${parsed.enableGoogleAuth ? 'success' : 'warning'}">
-                        Google Auth: ${parsed.enableGoogleAuth ? '✅ Enabled' : '⚠️ Disabled'}
+                    <div class="status ${parsed.enableGoogleAuth ? 'status-success' : 'status-warning'}">
+                        <span>Google Auth: ${parsed.enableGoogleAuth ? '✅ Enabled' : '⚠️ Disabled'}</span>
                     </div>
-                    <div class="status ${parsed.hasClientId ? 'success' : 'error'}">
-                        Google Client ID: ${parsed.hasClientId ? '✅ Found' : '❌ Missing'}
+                    <div class="status ${parsed.hasClientId ? 'status-success' : 'status-error'}">
+                        <span>Google Client ID: ${parsed.hasClientId ? '✅ Found' : '❌ Missing'}</span>
                     </div>
                     <pre>${JSON.stringify(parsed, null, 2)}</pre>
                 `;
             } else {
-                envDebugDiv.innerHTML = '<div class="status error">No environment debug info found</div>';
+                envDebugDiv.innerHTML = '<div class="status status-error">No environment debug info found</div>';
             }
             
             // Sign-in debug
@@ -145,16 +194,16 @@
             if (signinDebug) {
                 const parsed = JSON.parse(signinDebug);
                 signinDebugDiv.innerHTML = `
-                    <div class="status ${parsed.slackWebhookExists ? 'success' : 'error'}">
-                        Slack Webhook Available: ${parsed.slackWebhookExists ? '✅ Yes' : '❌ No'}
+                    <div class="status ${parsed.slackWebhookExists ? 'status-success' : 'status-error'}">
+                        <span>Slack Webhook Available: ${parsed.slackWebhookExists ? '✅ Yes' : '❌ No'}</span>
                     </div>
-                    <div class="status ${parsed.emailFound ? 'success' : 'error'}">
-                        Email Found: ${parsed.emailFound ? '✅ Yes' : '❌ No'}
+                    <div class="status ${parsed.emailFound ? 'status-success' : 'status-error'}">
+                        <span>Email Found: ${parsed.emailFound ? '✅ Yes' : '❌ No'}</span>
                     </div>
                     <pre>${JSON.stringify(parsed, null, 2)}</pre>
                 `;
             } else {
-                signinDebugDiv.innerHTML = '<div class="status warning">No sign-in debug info found (try signing in first)</div>';
+                signinDebugDiv.innerHTML = '<div class="status status-warning">No sign-in debug info found (try signing in first)</div>';
             }
             
             // Sign-ins history
@@ -163,11 +212,11 @@
             if (signinsHistory) {
                 const parsed = JSON.parse(signinsHistory);
                 signinsHistoryDiv.innerHTML = `
-                    <div class="status success">Found ${parsed.length} sign-in(s)</div>
+                    <div class="status status-success">Found ${parsed.length} sign-in(s)</div>
                     <pre>${JSON.stringify(parsed, null, 2)}</pre>
                 `;
             } else {
-                signinsHistoryDiv.innerHTML = '<div class="status warning">No sign-ins history found</div>';
+                signinsHistoryDiv.innerHTML = '<div class="status status-warning">No sign-ins history found</div>';
             }
         }
         
@@ -175,4 +224,4 @@
         loadDebugInfo();
     </script>
 </body>
-</html> 
+</html>

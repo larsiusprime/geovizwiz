@@ -4,7 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign in - Civic Mapper</title>
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg">
+  <link rel="shortcut icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="mask-icon" href="/favicon.svg" color="#0f172a">
   <meta name="google-signin-client_id" content="793689631746-edpplm97okul4onns51kvgos77v0mlv7.apps.googleusercontent.com" />
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
@@ -138,23 +140,6 @@
       min-height: 44px;
     }
 
-    .divider {
-      display: flex;
-      align-items: center;
-      gap: var(--space-4);
-      margin: var(--space-6) 0;
-      color: var(--text-tertiary);
-      font-size: var(--text-sm);
-    }
-
-    .divider::before,
-    .divider::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: var(--border-default);
-    }
-
     .features {
       display: flex;
       flex-direction: column;
@@ -225,8 +210,8 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/login-4w5sTbeN.js"></script>
-  <link rel="modulepreload" crossorigin href="/assets/slack-signin-CUi40C-q.js">
+  <script type="module" crossorigin src="/assets/login-CpAkf8MR.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/slack-signin-DTE1B_Sl.js">
   <link rel="stylesheet" crossorigin href="/assets/components-BvolGV5c.css">
 </head>
 <body>
@@ -255,20 +240,10 @@
         <div class="spinner"></div>
       </div>
 
-      <div class="divider">or continue with</div>
-
       <div class="features">
         <div class="feature-item">
           <div class="feature-icon">✓</div>
-          <span>Secure authentication with Google</span>
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon">✓</div>
-          <span>Access all city datasets</span>
-        </div>
-        <div class="feature-item">
-          <div class="feature-icon">✓</div>
-          <span>Save your visualization preferences</span>
+          <span>Access all visualizations</span>
         </div>
       </div>
 

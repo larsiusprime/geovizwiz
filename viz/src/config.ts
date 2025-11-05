@@ -91,13 +91,14 @@ export const UNIT_TO_METERS = {
 // Data field used for vacancy filtering
 export const UNDERUTILIZED_DEFAULTS = ['Vacant', 'Parking Lot', 'Underdeveloped'];
 
-// City selection via query string (?city=southbend|syracuse). Defaults to southbend.
-function getCityFromUrl(): 'southbend' | 'syracuse' | 'spokane' {
+// City selection via query string (?city=southbend|syracuse|spokane|rochester). Defaults to southbend.
+function getCityFromUrl(): 'southbend' | 'syracuse' | 'spokane' | 'rochester' {
   try {
     const u = new URL(window.location.href);
     const c = (u.searchParams.get('city') || '').toLowerCase();
     if (c === 'syracuse') return 'syracuse';
     if (c === 'spokane') return 'spokane';
+    if (c === 'rochester') return 'rochester';
     return 'southbend';
   } catch {
     return 'southbend';
@@ -107,11 +108,11 @@ function getCityFromUrl(): 'southbend' | 'syracuse' | 'spokane' {
 export const SELECTED_CITY = getCityFromUrl();
 
 // City-specific fields
-export const DEV_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane')
+export const DEV_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane' || SELECTED_CITY === 'rochester')
   ? 'property_land_use_refined'
   : 'property_category_refined';
 
-export const ORIG_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane')
+export const ORIG_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane' || SELECTED_CITY === 'rochester')
   ? 'property_land_use_category'
   : 'PROPERTY_CATEGORY';
 
@@ -134,6 +135,12 @@ const CITY_DATASETS = {
     local: 'spokane.parquet',
     proxy: '/data/spokane.parquet',  // Dev only (Vite proxy)
     filename: 'spokane.parquet'
+  },
+  rochester: {
+    remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/rochester.parquet',
+    local: 'rochester.parquet',
+    proxy: '/data/rochester.parquet',  // Dev only (Vite proxy)
+    filename: 'rochester.parquet'
   }
 } as const;
 

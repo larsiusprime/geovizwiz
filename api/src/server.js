@@ -2,6 +2,12 @@ import express from "express";
 import cors from "cors";
 import https from "https";
 
+const DATA_PROXY_BASE_URL = normalizeBaseUrl(
+  process.env.DATA_PROXY_BASE_URL ||
+    process.env.BLOB_STORAGE_BASE ||
+    "https://landeconomics.blob.core.windows.net/public-sharing-cle"
+);
+
 const rawAllowed = (process.env.ALLOWED_ORIGINS || "")
   .split(",")
   .map((value) => value.trim())
@@ -83,6 +89,14 @@ app.post(["/slack", "/api/slack"], async (req, res) => {
   }
 });
 
+const dataRoutes = ["/data/:filename", "/api/data/:filename"];
+
+for (const route of dataRoutes) {
+  app.options(route, (_req, res) => res.sendStatus(204));
+  app.get(route, handleDatasetProxy);
+  app.head(route, handleDatasetProxy);
+}
+
 app.use((err, _req, res, next) => {
   if (err && err.message === "CORS") {
     return res.status(403).json({ ok: false, error: "CORS" });
@@ -94,6 +108,10 @@ app.listen(process.env.PORT || 8080, () => console.log("API up"));
 
 function normalizeOrigin(origin = "") {
   return origin.replace(/\/+$/, "");
+}
+
+function normalizeBaseUrl(url = "") {
+  return url.replace(/\/+$/, "");
 }
 
 function deriveEnvLabel() {
@@ -143,4 +161,89 @@ function postJson(url, payload) {
       reject(error);
     }
   });
+}
+
+function handleDatasetProxy(req, res) {
+  try {
+    const filename = (req.params?.filename || "").trim();
+    if (!filename) {
+      res.status(400).json({ ok: false, error: "Filename required" });
+      return;
+    }
+
+    if (!isSafeFilename(filename)) {
+      res.status(400).json({ ok: false, error: "Invalid filename" });
+      return;
+    }
+
+    if (!DATA_PROXY_BASE_URL) {
+      res.status(500).json({ ok: false, error: "DATA_PROXY_BASE_URL not configured" });
+      return;
+    }
+
+    const blobUrl = new URL(`${DATA_PROXY_BASE_URL}/${filename}`);
+    const headers = {};
+
+    const rangeHeader = req.headers?.range;
+    if (typeof rangeHeader === "string" && rangeHeader) {
+      headers.Range = rangeHeader;
+    }
+
+    const proxyRequest = https.request(
+      {
+        method: req.method,
+        protocol: blobUrl.protocol,
+        hostname: blobUrl.hostname,
+        port: blobUrl.port,
+        path: `${blobUrl.pathname}${blobUrl.search}`,
+        headers
+      },
+      (proxyResponse) => {
+        const status = proxyResponse.statusCode ?? 502;
+        res.status(status);
+
+        copyHeader(proxyResponse.headers, res, "content-type", "Content-Type");
+        copyHeader(proxyResponse.headers, res, "content-length", "Content-Length");
+        copyHeader(proxyResponse.headers, res, "content-range", "Content-Range");
+        copyHeader(proxyResponse.headers, res, "accept-ranges", "Accept-Ranges");
+        copyHeader(proxyResponse.headers, res, "etag", "ETag");
+        copyHeader(proxyResponse.headers, res, "last-modified", "Last-Modified");
+        copyHeader(proxyResponse.headers, res, "cache-control", "Cache-Control");
+
+        if (req.method === "HEAD") {
+          proxyResponse.resume();
+          proxyResponse.on("end", () => res.end());
+          proxyResponse.on("error", () => res.end());
+          return;
+        }
+
+        proxyResponse.pipe(res);
+      }
+    );
+
+    proxyRequest.on("error", (error) => {
+      console.error("[Dataset Proxy] Error fetching blob", error);
+      if (!res.headersSent) {
+        res.status(502).json({ ok: false, error: "Failed to fetch dataset" });
+      } else {
+        res.end();
+      }
+    });
+
+    proxyRequest.end();
+  } catch (error) {
+    console.error("[Dataset Proxy] Unexpected error", error);
+    res.status(500).json({ ok: false, error: "Dataset proxy error" });
+  }
+}
+
+function isSafeFilename(name) {
+  return /^[A-Za-z0-9_.\-]+$/.test(name);
+}
+
+function copyHeader(source, res, key, targetKey) {
+  const value = source?.[key];
+  if (value !== undefined) {
+    res.setHeader(targetKey, value);
+  }
 }

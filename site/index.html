@@ -3,356 +3,310 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Civic Mapper - 3D Civic Data Visualization</title>
-  <link rel="icon" type="image/svg+xml" href="/viz/favicon.svg">
+  <title>Civic Mapper</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
   <style>
     :root {
-      /* Modern neutral palette */
-      --color-gray-50: #f8fafc;
-      --color-gray-100: #f1f5f9;
-      --color-gray-200: #e2e8f0;
-      --color-gray-600: #475569;
-      --color-gray-800: #1e293b;
-      --color-gray-900: #0f172a;
-      --color-primary: #3b82f6;
-      --color-secondary: #14b8a6;
-      --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      --bg: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.92);
+      --bg-secondary: rgba(15, 23, 42, 0.78);
+      --text-primary: #f8fafc;
+      --text-secondary: rgba(248, 250, 252, 0.72);
+      --accent-primary: #38bdf8;
+      --accent-secondary: #22d3ee;
+      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
     }
-    
-    * { box-sizing: border-box; }
-    
-    html, body {
-      height: 100%;
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
       margin: 0;
-      font-family: var(--font-sans);
-      background: linear-gradient(135deg, var(--color-gray-50) 0%, var(--color-gray-200) 100%);
-      color: var(--color-gray-900);
-    }
-    
-    .wrap {
-      min-height: 100%;
+      min-height: 100vh;
       display: flex;
-      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 45%),
+        radial-gradient(circle at bottom right, rgba(34, 211, 238, 0.18), transparent 40%),
+        var(--bg);
+      font-family: var(--font-sans);
+      color: var(--text-primary);
     }
-    
+
+    main {
+      position: relative;
+      width: min(960px, 92vw);
+      padding: clamp(2.5rem, 4vw, 4rem);
+      background: var(--bg-card);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 32px;
+      box-shadow: 0 40px 120px -50px rgba(15, 23, 42, 0.85);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    main::before {
+      content: "";
+      position: absolute;
+      inset: -20% 30% auto -30%;
+      height: 70%;
+      background: conic-gradient(from 120deg, rgba(56, 189, 248, 0.6), rgba(14, 165, 233, 0.1), rgba(56, 189, 248, 0.6));
+      filter: blur(80px);
+      opacity: 0.6;
+      animation: pulse 12s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: translate(-10%, -6%) scale(1);
+      }
+      50% {
+        transform: translate(6%, 4%) scale(1.05);
+      }
+    }
+
     header {
-      padding: 1.5rem 1rem;
       display: flex;
       justify-content: space-between;
       align-items: center;
-      max-width: 1200px;
-      margin: 0 auto;
-      width: 100%;
+      gap: 1.5rem;
+      margin-bottom: clamp(2.5rem, 5vw, 3.75rem);
     }
-    
-    .logo {
-      font-weight: 700;
-      font-size: 1.25rem;
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      font-weight: 600;
       letter-spacing: -0.02em;
+      color: inherit;
       text-decoration: none;
-      color: var(--color-gray-900);
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
     }
-    
-    .logo-icon {
-      width: 32px;
-      height: 32px;
-      background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
-      border-radius: 0.5rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: white;
-      font-weight: bold;
-    }
-    
-    nav a {
-      text-decoration: none;
-      color: var(--color-gray-600);
-      font-weight: 500;
-      font-size: 0.875rem;
-      transition: color 0.2s;
-    }
-    
-    nav a:hover {
-      color: var(--color-primary);
-    }
-    
-    main {
-      flex: 1;
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
       display: grid;
       place-items: center;
-      padding: 2rem 1rem;
-    }
-    
-    .hero {
-      max-width: 1200px;
-      width: 100%;
-      display: grid;
-      grid-template-columns: 1.2fr 1fr;
-      gap: 3rem;
-      align-items: center;
-    }
-    
-    .hero h1 {
-      margin: 0 0 1rem;
-      font-size: clamp(2rem, 5vw, 3.5rem);
-      line-height: 1.1;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(34, 211, 238, 0.7));
+      color: var(--bg);
       font-weight: 700;
-      background: linear-gradient(135deg, #1e3a8a 0%, #0d9488 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      font-size: 1.05rem;
+      box-shadow: 0 20px 40px -22px rgba(56, 189, 248, 0.8);
     }
-    
-    .hero p {
-      margin: 0 0 2rem;
-      color: var(--color-gray-600);
-      font-size: clamp(1rem, 1.5vw, 1.125rem);
-      line-height: 1.75;
-    }
-    
-    .cta {
-      display: flex;
-      gap: 1rem;
-      flex-wrap: wrap;
-    }
-    
-    .btn {
+
+    .cta-link {
+      color: inherit;
+      text-decoration: none;
+      font-size: 0.95rem;
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      border-radius: 0.75rem;
-      text-decoration: none;
-      font-weight: 600;
+      gap: 0.4rem;
+      padding: 0.65rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(15, 23, 42, 0.45);
+      transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease;
+    }
+
+    .cta-link:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.45);
+      transform: translateY(-2px);
+    }
+
+    h1 {
+      margin: 0 0 1rem;
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      font-size: clamp(1rem, 2vw, 1.1rem);
+    }
+
+    .hero-copy {
+      display: grid;
+      gap: 1.75rem;
+    }
+
+    .cta-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      border-radius: 14px;
+      padding: 0.85rem 1.8rem;
       font-size: 1rem;
-      transition: all 0.2s;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
       border: none;
       cursor: pointer;
     }
-    
-    .btn-primary {
-      background: var(--color-primary);
-      color: white;
+
+    .button-primary {
+      background: linear-gradient(135deg, #38bdf8, #22d3ee);
+      color: var(--bg);
+      box-shadow: 0 22px 45px -18px rgba(56, 189, 248, 0.65);
     }
-    
-    .btn-primary:hover {
-      background: #2563eb;
+
+    .button-primary:hover {
       transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(59, 130, 246, 0.3);
+      box-shadow: 0 26px 55px -18px rgba(56, 189, 248, 0.75);
     }
-    
-    .btn-secondary {
-      background: var(--color-secondary);
-      color: white;
+
+    .button-secondary {
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.35);
     }
-    
-    .btn-secondary:hover {
-      background: #0d9488;
+
+    .button-secondary:hover {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.45);
       transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(20, 184, 166, 0.3);
     }
-    
-    .card {
-      background: white;
-      border: 1px solid var(--color-gray-200);
-      border-radius: 1rem;
-      padding: 1rem;
-      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+
+    .callout {
+      margin-top: clamp(2rem, 5vw, 3rem);
+      padding: clamp(1.4rem, 3vw, 1.8rem);
+      border-radius: 20px;
+      background: var(--bg-secondary);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
     }
-    
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-      margin-top: 2rem;
+
+    .callout strong {
+      font-size: 1.05rem;
+      color: var(--text-primary);
     }
-    
-    .feat {
-      background: white;
-      border: 1px solid var(--color-gray-200);
-      border-radius: 0.75rem;
-      padding: 1.25rem;
-      transition: all 0.2s;
+
+    footer {
+      margin-top: clamp(3rem, 6vw, 4rem);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.2rem;
+      justify-content: space-between;
+      align-items: center;
+      color: rgba(248, 250, 252, 0.65);
+      font-size: 0.9rem;
     }
-    
-    .feat:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-      border-color: var(--color-primary);
-    }
-    
-    .feat h3 {
-      margin: 0 0 0.5rem;
-      font-size: 1rem;
-      font-weight: 600;
-      color: var(--color-gray-900);
-    }
-    
-    .feat p {
-      margin: 0;
-      color: var(--color-gray-600);
-      font-size: 0.875rem;
-      line-height: 1.5;
-    }
-    
-    .preview {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      border-radius: 1rem;
-      padding: 2rem;
+
+    .footer-links {
       display: flex;
       align-items: center;
-      justify-content: center;
-      min-height: 400px;
-      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      gap: 1.2rem;
+      flex-wrap: wrap;
     }
-    
-    .preview svg {
-      width: 100%;
-      max-width: 400px;
-      height: auto;
+
+    .footer-links a {
+      color: inherit;
+      text-decoration: none;
+      transition: color 0.2s ease;
     }
-    
-    footer {
-      padding: 2rem 1rem;
-      text-align: center;
-      color: var(--color-gray-600);
-      font-size: 0.875rem;
-      border-top: 1px solid var(--color-gray-200);
-      background: white;
+
+    .footer-links a:hover {
+      color: var(--accent-primary);
     }
-    
-    @media (max-width: 900px) {
-      .hero {
-        grid-template-columns: 1fr;
+
+    .cle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+      border-radius: 16px;
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: transform 0.2s ease, border 0.2s ease;
+      text-decoration: none;
+    }
+
+    .cle img {
+      height: 40px;
+      display: block;
+    }
+
+    .cle:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.45);
+    }
+
+    @media (max-width: 720px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
       }
-      .grid {
-        grid-template-columns: 1fr;
+
+      .cta-buttons {
+        width: 100%;
       }
-      .preview {
-        min-height: 300px;
+
+      .cta-buttons a {
+        flex: 1 1 auto;
+      }
+
+      footer {
+        flex-direction: column;
+        align-items: flex-start;
       }
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <main>
     <header>
-      <a class="logo" href="/">
-        <div class="logo-icon">CM</div>
+      <a class="brand" href="/">
+        <span class="brand-mark">CM</span>
         Civic Mapper
       </a>
-      <nav>
-        <a href="/viz">Launch App →</a>
-      </nav>
+      <a class="cta-link" href="mailto:greg@landeconomics.org">Contact us ↗</a>
     </header>
-    
-    <main>
-      <section class="hero">
-        <div>
-          <h1>View 3D Maps of Land Values</h1>
-          <p>
-            Explore cities across the United States with interactive 3D visualizations of 
-            land values, property assessments, and development patterns. Powerful insights 
-            delivered directly in your browser.
-          </p>
-          <div class="cta">
-            <a class="btn btn-primary" href="/viz/login.html">Get Started</a>
-            <a class="btn btn-secondary" href="mailto:greg@landeconomics.org">Contact Us</a>
-          </div>
-          <div class="grid">
-            <div class="feat card">
-              <h3>🗺️ Multiple Cities</h3>
-              <p>Explore land values across cities in the United States.</p>
-            </div>
-            <div class="feat card">
-              <h3>📊 Interactive 3D</h3>
-              <p>Visualize property data with intuitive 3D maps and controls.</p>
-            </div>
-            <div class="feat card">
-              <h3>💡 Powerful Insights</h3>
-              <p>Understand land values, assessments, and development patterns.</p>
-            </div>
-          </div>
-          
-          <div style="margin-top: 3rem; padding: 2rem; background: white; border: 2px solid var(--color-primary); border-radius: 1rem; text-align: center;">
-            <h3 style="margin: 0 0 0.75rem; font-size: 1.25rem; color: var(--color-gray-900);">Want to Add Your City?</h3>
-            <p style="margin: 0 0 1rem; color: var(--color-gray-600);">
-              Interested in visualizing land values for your city? Reach out to learn more.
-            </p>
-            <a href="mailto:greg@landeconomics.org" class="btn btn-primary">Contact Us</a>
-          </div>
-        </div>
-        
-        <div class="preview">
-          <svg viewBox="0 0 400 300" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <defs>
-              <linearGradient id="grad1" x1="0" x2="1" y1="0" y2="1">
-                <stop offset="0%" stop-color="#3b82f6"/>
-                <stop offset="100%" stop-color="#14b8a6"/>
-              </linearGradient>
-            </defs>
-            <!-- 3D Buildings -->
-            <g opacity="0.9">
-              <!-- Building 1 -->
-              <path d="M50,200 L50,150 L90,130 L90,180 Z" fill="#2563eb" opacity="0.8"/>
-              <path d="M50,150 L90,130 L130,150 L90,170 Z" fill="#60a5fa"/>
-              <path d="M90,130 L130,150 L130,200 L90,180 Z" fill="#1d4ed8" opacity="0.9"/>
-              
-              <!-- Building 2 -->
-              <path d="M140,210 L140,140 L180,120 L180,190 Z" fill="#0d9488" opacity="0.8"/>
-              <path d="M140,140 L180,120 L220,140 L180,160 Z" fill="#14b8a6"/>
-              <path d="M180,120 L220,140 L220,210 L180,190 Z" fill="#0f766e" opacity="0.9"/>
-              
-              <!-- Building 3 -->
-              <path d="M230,220 L230,170 L270,150 L270,200 Z" fill="#3b82f6" opacity="0.8"/>
-              <path d="M230,170 L270,150 L310,170 L270,190 Z" fill="#60a5fa"/>
-              <path d="M270,150 L310,170 L310,220 L270,200 Z" fill="#2563eb" opacity="0.9"/>
-              
-              <!-- Building 4 -->
-              <path d="M100,240 L100,200 L140,180 L140,220 Z" fill="#14b8a6" opacity="0.8"/>
-              <path d="M100,200 L140,180 L180,200 L140,220 Z" fill="#2dd4bf"/>
-              <path d="M140,180 L180,200 L180,240 L140,220 Z" fill="#0d9488" opacity="0.9"/>
-              
-              <!-- Building 5 -->
-              <path d="M270,250 L270,210 L310,190 L310,230 Z" fill="#1d4ed8" opacity="0.8"/>
-              <path d="M270,210 L310,190 L350,210 L310,230 Z" fill="#3b82f6"/>
-              <path d="M310,190 L350,210 L350,250 L310,230 Z" fill="#1e40af" opacity="0.9"/>
-            </g>
-            
-            <!-- Grid lines -->
-            <g stroke="#ffffff" stroke-width="1" opacity="0.3">
-              <line x1="50" y1="250" x2="350" y2="250"/>
-              <line x1="50" y1="230" x2="350" y2="230"/>
-              <line x1="50" y1="210" x2="350" y2="210"/>
-            </g>
-            
-            <!-- Text -->
-            <text x="200" y="280" text-anchor="middle" fill="#ffffff" font-size="14" font-weight="600">
-              3D Parcel Visualization
-            </text>
-          </svg>
-        </div>
-      </section>
-    </main>
-    
+
+    <section class="hero-copy">
+      <h1>Modern 3D parcel insights for every city.</h1>
+      <p>
+        Civic Mapper brings parcel-level land data to life with immersive 3D visualizations.
+        Explore existing city models today and reach out if you are ready to onboard a new city.
+      </p>
+      <div class="cta-buttons">
+        <a class="button button-primary" href="/viz/login.html">Get started</a>
+        <a class="button button-secondary" href="mailto:greg@landeconomics.org">Talk to us</a>
+      </div>
+
+      <div class="callout">
+        <strong>Want to add your city?</strong>
+        <p>
+          We are actively expanding our coverage. Drop us a line and we will collaborate with you to bring your city's data online.
+        </p>
+        <a class="button button-secondary" href="mailto:greg@landeconomics.org">Email greg@landeconomics.org</a>
+      </div>
+    </section>
+
     <footer>
-      <div style="margin-bottom: 1rem;">
-        <div style="font-size: 0.75rem; color: var(--color-gray-600); margin-bottom: 0.75rem;">Created by</div>
-        <a href="https://landeconomics.org" target="_blank" rel="noopener" style="display: inline-block; text-decoration: none; padding: 0.75rem 1.25rem; background: white; border: 1px solid var(--color-gray-200); border-radius: 0.5rem; transition: all 0.2s;">
-          <img src="/viz/cle-logo.svg" alt="Center for Land Economics" style="height: 40px; display: block;">
-        </a>
+      <div class="footer-links">
+        <span>Need help? <a href="mailto:greg@landeconomics.org">Contact us</a></span>
       </div>
-      <div style="margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--color-gray-200);">
-        © <span id="year"></span> Civic Mapper • All processing happens locally in your browser
-      </div>
+      <a class="cle" href="https://landeconomics.org" target="_blank" rel="noopener">
+        <img src="./CLE-logo.svg" alt="Center for Land Economics" />
+        <span style="font-size: 0.85rem; color: rgba(248, 250, 252, 0.75);">Created by CLE</span>
+      </a>
     </footer>
-  </div>
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  </main>
 </body>
 </html>

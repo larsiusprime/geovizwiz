@@ -1,4 +1,3 @@
-import type { Expression } from 'maplibre-gl';
 import { API_BASE as ENV_API_BASE } from './env';
 
 // API and tiles via env (Vite)
@@ -121,17 +120,20 @@ const CITY_DATASETS = {
   southbend: {
     remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet',
     local: 'southbend.parquet',
-    proxy: '/data/southbend.parquet'
+    proxy: '/data/southbend.parquet',  // Dev only (Vite proxy)
+    filename: 'southbend.parquet'
   },
   syracuse: {
     remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/syracuse_parcels_refined_20251001.parquet',
     local: 'syracuse.parquet',
-    proxy: '/data/syracuse.parquet'
+    proxy: '/data/syracuse.parquet',  // Dev only (Vite proxy)
+    filename: 'syracuse_parcels_refined_20251001.parquet'
   },
   spokane: {
     remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/spokane.parquet',
     local: 'spokane.parquet',
-    proxy: '/data/spokane.parquet'
+    proxy: '/data/spokane.parquet',  // Dev only (Vite proxy)
+    filename: 'spokane.parquet'
   }
 } as const;
 
@@ -139,5 +141,15 @@ export const REMOTE_DATASET_URL = CITY_DATASETS[SELECTED_CITY].remote;
 export const LOCAL_DATASET_URL = CITY_DATASETS[SELECTED_CITY].local;
 export const PROXY_DATASET_URL = CITY_DATASETS[SELECTED_CITY].proxy;
 
-// Always prefer explicit env override; otherwise use the city-specific remote blob.
-export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL || REMOTE_DATASET_URL;
+// Construct API proxy URL dynamically
+export const API_PROXY_DATASET_URL = `${API_BASE}/data/${CITY_DATASETS[SELECTED_CITY].filename}`;
+
+// Use proxy in production to avoid CORS issues, direct remote in dev (if Vite proxy not available)
+// Detect production by checking if we're on a deployed domain (not localhost)
+const isProduction = typeof window !== 'undefined' && 
+  !window.location.hostname.includes('localhost') && 
+  !window.location.hostname.includes('127.0.0.1');
+
+// Always prefer explicit env override; otherwise use proxy in production, remote in dev
+export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL || 
+  (isProduction ? API_PROXY_DATASET_URL : REMOTE_DATASET_URL);

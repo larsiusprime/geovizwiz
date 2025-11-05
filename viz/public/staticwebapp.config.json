@@ -1,7 +1,10 @@
 {
   "routes": [
     { "route": "/login", "serve": "/login.html" },
-    { "route": "/login.html", "serve": "/login.html" }
+    { "route": "/login.html", "serve": "/login.html" },
+    { "route": "/logo.svg", "serve": "/logo.svg" },
+    { "route": "/CLE-logo.svg", "serve": "/CLE-logo.svg" },
+    { "route": "/cle-logo.svg", "serve": "/CLE-logo.svg" }
   ],
   "navigationFallback": {
     "rewrite": "/index.html",
@@ -9,6 +12,11 @@
       "/assets/*",
       "/*.css",
       "/*.js",
+      "/*.svg",
+      "/*.png",
+      "/*.jpg",
+      "/*.ico",
+      "/*.json",
       "/login",
       "/login.html"
     ]

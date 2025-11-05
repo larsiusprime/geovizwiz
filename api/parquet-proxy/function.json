@@ -1,0 +1,9 @@
+{
+  "bindings": [
+    { "authLevel": "anonymous", "type": "httpTrigger", "direction": "in",
+      "name": "req", "methods": ["get", "head", "options"], "route": "data/{filename}" },
+    { "type": "http", "direction": "out", "name": "res" }
+  ],
+  "scriptFile": "../parquet-proxy/index.js"
+}
+

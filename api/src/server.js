@@ -44,8 +44,9 @@ app.use(
       console.warn(`[CORS] Blocked origin: ${origin}`);
       return callback(new Error("CORS"));
     },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    methods: ["GET", "HEAD", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Range"],
+    exposedHeaders: ["Content-Range", "Content-Length", "Content-Type"],
     optionsSuccessStatus: 204
   })
 );

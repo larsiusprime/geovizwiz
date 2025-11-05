@@ -33,6 +33,12 @@ jobs:
           az storage blob upload-batch --account-name stcivicmapperprod \
             --auth-mode login \
             -d '$web' -s viz/dist --overwrite
+          az storage blob upload --account-name stcivicmapperprod \
+            --container-name '$web' \
+            --name favicon.svg \
+            --file viz/dist/favicon.svg \
+            --overwrite \
+            --content-type image/svg+xml
       - name: Purge Front Door cache
         continue-on-error: true
         run: |

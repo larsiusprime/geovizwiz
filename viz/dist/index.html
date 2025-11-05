@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Select Your City - Civic Mapper</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script>
+    // Strict authentication check - redirect to login if not authenticated
+    try {
+      const authed = !!sessionStorage.getItem('gvw_session_authed');
+      if (!authed) {
+        window.location.replace('/login.html');
+      }
+    } catch {
+      // If storage unavailable, redirect to login for safety
+      window.location.replace('/login.html');
+    }
+  </script>
+  <style>
+    body {
+      margin: 0;
+      overflow-x: hidden;
+    }
+
+    /* Header */
+    .header {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-sticky);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid var(--border-default);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .header-content {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: var(--space-4) var(--space-6);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo-link {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      text-decoration: none;
+      color: var(--text-primary);
+      font-weight: var(--font-semibold);
+      font-size: var(--text-lg);
+    }
+
+    .logo-link img {
+      height: 32px;
+    }
+
+    /* Hero Section */
+    .hero {
+      position: relative;
+      padding: var(--space-16) var(--space-6);
+      background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+      overflow: hidden;
+    }
+
+    .hero-content {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-12);
+      align-items: center;
+    }
+
+    .hero-text h1 {
+      margin: 0 0 var(--space-4);
+      font-size: var(--text-5xl);
+      font-weight: var(--font-bold);
+      line-height: var(--line-tight);
+      background: linear-gradient(135deg, #1e3a8a 0%, #0d9488 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-text p {
+      margin: 0 0 var(--space-6);
+      font-size: var(--text-xl);
+      color: var(--text-secondary);
+      line-height: var(--line-relaxed);
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+
+    .hero-scene {
+      position: relative;
+      height: 500px;
+      border-radius: var(--radius-2xl);
+      overflow: hidden;
+      box-shadow: var(--shadow-2xl);
+    }
+
+    #hero-scene {
+      width: 100%;
+      height: 100%;
+    }
+
+    #hero-scene canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Cities Section */
+    .cities {
+      padding: var(--space-16) var(--space-6);
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    .section-header {
+      text-align: center;
+      margin-bottom: var(--space-12);
+    }
+
+    .section-header h2 {
+      margin: 0 0 var(--space-3);
+      font-size: var(--text-4xl);
+      font-weight: var(--font-bold);
+      color: var(--text-primary);
+    }
+
+    .section-header p {
+      margin: 0;
+      font-size: var(--text-lg);
+      color: var(--text-secondary);
+    }
+
+    .city-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: var(--space-6);
+    }
+
+    .city-card {
+      position: relative;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      padding: var(--space-6);
+      text-decoration: none;
+      color: inherit;
+      transition: all var(--transition-base);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      overflow: hidden;
+    }
+
+    .city-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+      transform: scaleX(0);
+      transform-origin: left;
+      transition: transform var(--transition-base);
+    }
+
+    .city-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-xl);
+      border-color: var(--border-accent);
+    }
+
+    .city-card:hover::before {
+      transform: scaleX(1);
+    }
+
+    .city-card-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(135deg, var(--color-primary-500), var(--color-secondary-500));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-inverse);
+      font-size: var(--text-2xl);
+      font-weight: var(--font-bold);
+    }
+
+    .city-card h3 {
+      margin: 0;
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+    }
+
+    .city-card p {
+      margin: 0;
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      line-height: var(--line-relaxed);
+    }
+
+    .city-card-arrow {
+      margin-top: auto;
+      color: var(--accent-primary);
+      font-weight: var(--font-semibold);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    /* Footer */
+    .footer {
+      background: var(--color-gray-900);
+      color: var(--text-inverse);
+      padding: var(--space-12) var(--space-6);
+    }
+
+    .footer-content {
+      max-width: 1280px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-8);
+    }
+
+    .footer-brand {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+    }
+
+    .footer-brand img {
+      height: 32px;
+      filter: brightness(0) invert(1);
+    }
+
+    .footer-brand p {
+      margin: 0;
+      color: var(--color-gray-400);
+      font-size: var(--text-sm);
+    }
+
+    .footer-links {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+      align-items: flex-end;
+    }
+
+    .footer-links a {
+      color: var(--color-gray-400);
+      text-decoration: none;
+      font-size: var(--text-sm);
+      transition: color var(--transition-fast);
+    }
+
+    .footer-links a:hover {
+      color: var(--text-inverse);
+    }
+
+    .footer-bottom {
+      max-width: 1280px;
+      margin: var(--space-8) auto 0;
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--color-gray-800);
+      text-align: center;
+      color: var(--color-gray-500);
+      font-size: var(--text-xs);
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hero-content {
+        grid-template-columns: 1fr;
+      }
+
+      .hero-scene {
+        height: 300px;
+      }
+
+      .hero-text h1 {
+        font-size: var(--text-3xl);
+      }
+
+      .footer-content {
+        grid-template-columns: 1fr;
+        gap: var(--space-6);
+      }
+
+      .footer-links {
+        align-items: flex-start;
+      }
+    }
+  </style>
+  <link rel="stylesheet" crossorigin href="/assets/components-BvolGV5c.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <a href="/index.html" class="logo-link">
+        <img src="/logo.svg" alt="Civic Mapper">
+      </a>
+      <div style="display: flex; gap: var(--space-3); align-items: center;">
+        <span style="font-size: var(--text-sm); color: var(--text-secondary);" id="userEmail"></span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="hero-content" style="grid-template-columns: 1fr; text-align: center; max-width: 900px; margin: 0 auto;">
+      <div class="hero-text">
+        <h1>Select Your City</h1>
+        <p style="margin-bottom: var(--space-8);">
+          Choose a city below to explore 3D maps of land values across the United States.
+        </p>
+        <div style="padding: var(--space-6); background: var(--color-primary-50); border: 2px solid var(--color-primary-200); border-radius: var(--radius-xl);">
+          <h3 style="margin: 0 0 var(--space-3); font-size: var(--text-xl); color: var(--text-primary);">
+            Want to Add Your City?
+          </h3>
+          <p style="margin: 0 0 var(--space-4); color: var(--text-secondary); font-size: var(--text-base);">
+            Interested in visualizing land values for your city? Contact us to learn more.
+          </p>
+          <a href="mailto:greg@landeconomics.org" class="btn btn-primary">Contact Us</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Cities Section -->
+  <section id="cities" class="cities">
+    <div class="section-header" style="display: none;">
+      <h2>Select Your City</h2>
+      <p>Choose a city to explore parcel data and land value visualizations</p>
+    </div>
+    <div class="city-grid">
+      <a class="city-card" href="app.html?city=southbend">
+        <div class="city-card-icon">SB</div>
+        <h3>South Bend, IN</h3>
+        <p>Explore detailed parcel data including land values, improvements, and development status across South Bend.</p>
+        <div class="city-card-arrow">
+          Explore <span>→</span>
+        </div>
+      </a>
+
+      <a class="city-card" href="app.html?city=syracuse">
+        <div class="city-card-icon">SY</div>
+        <h3>Syracuse, NY</h3>
+        <p>Visualize property assessments and land use patterns with comprehensive Syracuse parcel data.</p>
+        <div class="city-card-arrow">
+          Explore <span>→</span>
+        </div>
+      </a>
+
+      <a class="city-card" href="app.html?city=spokane">
+        <div class="city-card-icon">SP</div>
+        <h3>Spokane, WA</h3>
+        <p>Analyze property values and development trends across Spokane with interactive 3D views.</p>
+        <div class="city-card-arrow">
+          Explore <span>→</span>
+        </div>
+      </a>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-content">
+      <div class="footer-brand">
+        <img src="/logo.svg" alt="Civic Mapper">
+        <p>
+          Civic Mapper is a platform for visualizing civic data.
+          All processing happens locally in your browser.
+        </p>
+      </div>
+      <div class="footer-links">
+        <a href="mailto:greg@landeconomics.org">Contact Us</a>
+      </div>
+    </div>
+    <div style="text-align: center; padding: var(--space-6) 0; border-top: 1px solid var(--color-gray-800);">
+      <div style="font-size: var(--text-xs); color: var(--color-gray-500); margin-bottom: var(--space-4);">Created by</div>
+      <a href="https://landeconomics.org" target="_blank" rel="noopener" style="display: inline-block; padding: var(--space-4); background: rgba(255, 255, 255, 0.1); border: 1px solid var(--color-gray-700); border-radius: var(--radius-lg); text-decoration: none; transition: all var(--transition-fast);">
+        <img src="/CLE-logo.svg" alt="Center for Land Economics" style="height: 48px; display: block; filter: brightness(0) invert(1) opacity(0.9);">
+      </a>
+    </div>
+    <div class="footer-bottom">
+      © <span id="year"></span> Civic Mapper. All rights reserved.
+    </div>
+  </footer>
+
+  <script>
+    // Update footer year and show user email
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('year').textContent = new Date().getFullYear();
+      
+      // Display logged-in user email
+      try {
+        const email = sessionStorage.getItem('gvw_session_email');
+        if (email) {
+          document.getElementById('userEmail').textContent = email;
+        }
+      } catch {}
+    });
+    
+    // Logout function
+    function logout() {
+      try {
+        sessionStorage.clear();
+        localStorage.removeItem('gvw_pending_slack');
+        localStorage.removeItem('gvw_signin_debug');
+      } catch {}
+      window.location.replace('/login.html');
+    }
+  </script>
+</body>
+</html>

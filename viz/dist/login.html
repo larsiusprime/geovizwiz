@@ -1,0 +1,310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign in - Civic Mapper</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <meta name="google-signin-client_id" content="793689631746-edpplm97okul4onns51kvgos77v0mlv7.apps.googleusercontent.com" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      position: relative;
+      overflow: hidden;
+    }
+
+    /* Animated background */
+    .bg-animation {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      z-index: 0;
+    }
+
+    .bg-shape {
+      position: absolute;
+      border-radius: var(--radius-full);
+      opacity: 0.1;
+      animation: float 20s infinite ease-in-out;
+    }
+
+    .bg-shape:nth-child(1) {
+      width: 300px;
+      height: 300px;
+      background: var(--color-primary-500);
+      top: -100px;
+      left: -100px;
+      animation-delay: 0s;
+    }
+
+    .bg-shape:nth-child(2) {
+      width: 400px;
+      height: 400px;
+      background: var(--color-secondary-500);
+      bottom: -150px;
+      right: -150px;
+      animation-delay: -5s;
+    }
+
+    .bg-shape:nth-child(3) {
+      width: 250px;
+      height: 250px;
+      background: var(--color-primary-300);
+      top: 50%;
+      right: 10%;
+      animation-delay: -10s;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translate(0, 0) scale(1);
+      }
+      25% {
+        transform: translate(50px, -30px) scale(1.1);
+      }
+      50% {
+        transform: translate(30px, 50px) scale(0.9);
+      }
+      75% {
+        transform: translate(-40px, 20px) scale(1.05);
+      }
+    }
+
+    /* Login container */
+    .login-container {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      max-width: 440px;
+      padding: var(--space-6);
+    }
+
+    .login-card {
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: var(--radius-2xl);
+      padding: var(--space-10);
+      box-shadow: var(--shadow-2xl);
+      text-align: center;
+      animation: slideUp 0.6s ease-out;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .logo-container {
+      display: flex;
+      justify-content: center;
+      margin-bottom: var(--space-6);
+    }
+
+    .logo-container img {
+      height: 48px;
+    }
+
+    .login-title {
+      margin: 0 0 var(--space-3);
+      font-size: var(--text-3xl);
+      font-weight: var(--font-bold);
+      color: var(--text-primary);
+    }
+
+    .login-description {
+      margin: 0 0 var(--space-8);
+      font-size: var(--text-base);
+      color: var(--text-secondary);
+      line-height: var(--line-relaxed);
+    }
+
+    #googleSignIn {
+      display: flex;
+      justify-content: center;
+      margin-bottom: var(--space-6);
+      min-height: 44px;
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+      margin: var(--space-6) 0;
+      color: var(--text-tertiary);
+      font-size: var(--text-sm);
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-default);
+    }
+
+    .features {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-3);
+      margin-top: var(--space-6);
+      text-align: left;
+    }
+
+    .feature-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+    }
+
+    .feature-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: var(--radius-md);
+      background: linear-gradient(135deg, var(--color-primary-500), var(--color-secondary-500));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-inverse);
+      font-weight: var(--font-bold);
+      flex-shrink: 0;
+    }
+
+    .footer-note {
+      margin-top: var(--space-8);
+      padding-top: var(--space-6);
+      border-top: 1px solid var(--border-default);
+      font-size: var(--text-xs);
+      color: var(--text-tertiary);
+    }
+
+    .footer-note a {
+      color: var(--accent-primary);
+      text-decoration: none;
+      font-weight: var(--font-medium);
+    }
+
+    .footer-note a:hover {
+      text-decoration: underline;
+    }
+
+    /* Loading state */
+    .loading-spinner {
+      display: none;
+      justify-content: center;
+      align-items: center;
+      min-height: 44px;
+    }
+
+    .loading-spinner.active {
+      display: flex;
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .login-card {
+        padding: var(--space-6);
+      }
+
+      .login-title {
+        font-size: var(--text-2xl);
+      }
+    }
+  </style>
+  <script type="module" crossorigin src="/assets/login-4w5sTbeN.js"></script>
+  <link rel="modulepreload" crossorigin href="/assets/slack-signin-CUi40C-q.js">
+  <link rel="stylesheet" crossorigin href="/assets/components-BvolGV5c.css">
+</head>
+<body>
+  <!-- Animated background -->
+  <div class="bg-animation">
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+    <div class="bg-shape"></div>
+  </div>
+
+  <!-- Login container -->
+  <div class="login-container">
+    <div class="login-card">
+      <div class="logo-container">
+        <img src="/logo.svg" alt="Civic Mapper">
+      </div>
+
+      <h1 class="login-title">Welcome to Civic Mapper</h1>
+      <p class="login-description">
+        Sign in to access powerful 3D civic data visualizations and explore parcel information.
+      </p>
+
+      <div id="googleSignIn"></div>
+      
+      <div class="loading-spinner" id="loadingSpinner">
+        <div class="spinner"></div>
+      </div>
+
+      <div class="divider">or continue with</div>
+
+      <div class="features">
+        <div class="feature-item">
+          <div class="feature-icon">✓</div>
+          <span>Secure authentication with Google</span>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">✓</div>
+          <span>Access all city datasets</span>
+        </div>
+        <div class="feature-item">
+          <div class="feature-icon">✓</div>
+          <span>Save your visualization preferences</span>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        Questions? Contact us at 
+        <a href="mailto:greg@landeconomics.org">greg@landeconomics.org</a>
+      </div>
+      <div style="margin-top: var(--space-6); padding-top: var(--space-6); border-top: 1px solid var(--border-default); text-align: center;">
+        <div style="font-size: var(--text-xs); color: var(--text-tertiary); margin-bottom: var(--space-3);">Created by</div>
+        <a href="https://landeconomics.org" target="_blank" rel="noopener" style="display: inline-block; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-lg); transition: all var(--transition-fast); background: var(--bg-surface);">
+          <img src="/CLE-logo.svg" alt="Center for Land Economics" style="height: 40px; display: block;">
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Show loading spinner when signing in
+    window.addEventListener('load', () => {
+      const signInDiv = document.getElementById('googleSignIn');
+      const spinner = document.getElementById('loadingSpinner');
+      
+      // Hide spinner once Google button loads
+      const observer = new MutationObserver(() => {
+        if (signInDiv.querySelector('iframe')) {
+          spinner.classList.remove('active');
+        }
+      });
+      
+      observer.observe(signInDiv, { childList: true, subtree: true });
+      
+      // Show spinner initially
+      if (!signInDiv.querySelector('iframe')) {
+        spinner.classList.add('active');
+      }
+    });
+  </script>
+</body>
+</html>

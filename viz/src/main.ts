@@ -1,4 +1,6 @@
 // Imports
+import './design-system.css';
+import './components.css';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
 import type { Expression } from 'maplibre-gl';
@@ -11,6 +13,8 @@ import { FIELD_LABELS, ALL_FIELDS, NUMERIC_FIELDS, loadDataDictionary } from './
 import { sanitizeFeaturesInPlace, urlToAsyncBuffer, type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
+import { SLACK_ENDPOINT } from './env';
+import { makeSigninText } from './slack-signin';
 
 /* ---------------- Slack Utils (reliable send) ---------------- */
 
@@ -32,14 +36,14 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
   const trySend = () => {
     if (done || attempt >= maxAttempts) return;
     attempt++;
-    fetchWithTimeout('/api/slack', {
+    fetchWithTimeout(SLACK_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     }, 6000)
       .then(async (resp) => {
         const ok = resp.ok;
-        const summary = { url: '/api/slack', status: resp.status, ok, attempt, attemptedAt };
+        const summary = { url: SLACK_ENDPOINT, status: resp.status, ok, attempt, attemptedAt };
         console.log('[Slack] Attempt', attempt, summary);
         if (ok) {
           done = true;
@@ -50,7 +54,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
         }
       })
       .catch((err) => {
-        const summary = { url: '/api/slack', status: null as number | null, ok: false, error: String(err), attempt, attemptedAt };
+        const summary = { url: SLACK_ENDPOINT, status: null as number | null, ok: false, error: String(err), attempt, attemptedAt };
         console.warn('[Slack] Attempt failed', summary);
         try { localStorage.setItem('gvw_signin_debug', JSON.stringify({ ...summary, savedAt: new Date().toISOString() })); } catch {}
         scheduleRetry();
@@ -71,7 +75,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
     window.addEventListener('pagehide', () => {
       if (!done && typeof navigator.sendBeacon === 'function') {
         const blob = new Blob([JSON.stringify({ text })], { type: 'application/json' });
-        navigator.sendBeacon('/api/slack', blob);
+        navigator.sendBeacon(SLACK_ENDPOINT, blob);
       }
     }, { once: true });
   } catch {}
@@ -85,6 +89,14 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
 // the request and logs are visible on the main page (not the login tab).
 (function processPendingSlack() {
   try {
+    // Skip Slack notifications in local development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('[Slack] Skipping notifications (local development)');
+      // Clean up any pending notifications
+      try { sessionStorage.removeItem('gvw_pending_slack'); } catch {}
+      try { localStorage.removeItem('gvw_pending_slack'); } catch {}
+      return;
+    }
     // Prefer sessionStorage for ephemeral post-login notify; fall back to localStorage for compatibility
     const raw = sessionStorage.getItem('gvw_pending_slack') ?? localStorage.getItem('gvw_pending_slack');
     if (!raw) return;
@@ -95,7 +107,7 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
       return;
     }
 
-    const text = `Google sign-in: ${pending.email} (post-login)`;
+    const text = makeSigninText(pending.email, 'post-login');
     console.log('[Slack] Sending post-login notification (reliable):', { email: pending.email });
     postSlackReliable(text);
     // Keep pending record until we succeed in this session; the reliable sender sets the sent flag.
@@ -116,11 +128,16 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
 // If there was no explicit pending record, still send once per session
 (function ensureSessionSlackOnce() {
   try {
+    // Skip Slack notifications in local development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      console.log('[Slack] Skipping notifications (local development)');
+      return;
+    }
     const already = sessionStorage.getItem('gvw_session_slack_sent') === '1';
     if (already) return;
     const email = sessionStorage.getItem('gvw_session_email');
     if (!email) return;
-    const text = `Google sign-in: ${email} (main)`;
+    const text = makeSigninText(email, 'main');
     console.log('[Slack] Ensuring session Slack notify (reliable):', { email });
     postSlackReliable(text);
   } catch {
@@ -242,6 +259,63 @@ const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement
 const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement;
 const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
 const ratioOrigCategorySelect = document.getElementById('ratioOrigCategorySelect') as HTMLSelectElement | null;
+
+const mapHelpEls = Array.from(document.querySelectorAll<HTMLDivElement>('.map-help'));
+const orbitTipDismissKey = 'gvw_hide_orbit_tip';
+const hideOrbitTips = () => {
+  for (const el of mapHelpEls) {
+    el.style.display = 'none';
+  }
+};
+
+let orbitTipDismissed = false;
+try {
+  orbitTipDismissed = localStorage.getItem(orbitTipDismissKey) === '1';
+} catch {
+  orbitTipDismissed = false;
+}
+
+if (orbitTipDismissed) {
+  hideOrbitTips();
+} else {
+  for (const el of mapHelpEls) {
+    const closeBtn = el.querySelector<HTMLButtonElement>('.map-help-close');
+    if (!closeBtn) continue;
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideOrbitTips();
+      try { localStorage.setItem(orbitTipDismissKey, '1'); } catch {}
+    });
+  }
+}
+
+const panelSizeWatchers: Array<{ panel: HTMLDivElement; mapBox: HTMLDivElement }> = [];
+const activeFullScreens = new Set<HTMLDivElement>();
+const expandRegistry: Array<{ mapBox: HTMLDivElement; toggle: (expanded: boolean) => void }> = [];
+
+function updateBodyScrollLock() {
+  if (activeFullScreens.size > 0) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+}
+
+function updatePanelMaxHeight(panel: HTMLDivElement, mapBoxEl: HTMLDivElement) {
+  const { height } = mapBoxEl.getBoundingClientRect();
+  if (!height) return;
+  const target = Math.max(240, Math.round(height * 0.75));
+  panel.style.maxHeight = `${target}px`;
+}
+
+window.addEventListener('resize', () => {
+  for (const watcher of panelSizeWatchers) {
+    if (watcher.panel.style.display !== 'none') {
+      updatePanelMaxHeight(watcher.panel, watcher.mapBox);
+    }
+  }
+});
 function categoryInputs() {
   return Array.from((categoryContainer || document.createElement('div')).querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
@@ -277,14 +351,22 @@ function initMapControls(opts: {
   closeBtn: HTMLButtonElement,
   expandBtn?: HTMLButtonElement,
   mapBoxEl: HTMLDivElement,
-  map: maplibregl.Map
+  map: maplibregl.Map,
+  getParent?: () => HTMLElement
 }) {
   const { settingsBtn, panelEl, closeBtn, expandBtn, mapBoxEl, map } = opts;
   const parent = mapBoxEl.parentElement as HTMLElement;
+  const parentGetter = opts.getParent ?? (() => parent);
+
+  panelSizeWatchers.push({ panel: panelEl, mapBox: mapBoxEl });
+
   settingsBtn.onclick = () => {
+    updatePanelMaxHeight(panelEl, mapBoxEl);
     panelEl.style.display = 'grid';
     settingsBtn.style.display = 'none';
-    if (expandBtn) expandBtn.style.display = 'none';
+    if (expandBtn && !mapBoxEl.classList.contains('map-box-expanded')) {
+      expandBtn.style.display = 'none';
+    }
   };
   closeBtn.onclick = () => {
     panelEl.style.display = 'none';
@@ -292,36 +374,49 @@ function initMapControls(opts: {
     if (expandBtn) expandBtn.style.display = 'block';
   };
   if (expandBtn) {
-    expandBtn.onclick = () => {
-      const expanded = mapBoxEl.classList.toggle('expanded');
+    let expanded = false;
+    const updateExpandButton = () => {
+      expandBtn.textContent = expanded ? '⤡' : '⤢';
+      expandBtn.setAttribute('aria-label', expanded ? 'Exit full screen' : 'Enter full screen');
+      expandBtn.title = expanded ? 'Exit full screen (Esc)' : 'Full screen';
+      expandBtn.dataset.expanded = expanded ? 'true' : 'false';
+      expandBtn.style.display = 'block';
+    };
+    const applyExpandedState = (next: boolean) => {
+      if (expanded === next) return;
+      expanded = next;
+      mapBoxEl.classList.toggle('map-box-expanded', expanded);
       if (expanded) {
         document.body.appendChild(mapBoxEl);
-        document.body.style.overflow = 'hidden';
+        activeFullScreens.add(mapBoxEl);
       } else {
-        parent.appendChild(mapBoxEl);
-        document.body.style.overflow = '';
+        parentGetter().appendChild(mapBoxEl);
+        activeFullScreens.delete(mapBoxEl);
       }
+      updateBodyScrollLock();
+      updateExpandButton();
+      updatePanelMaxHeight(panelEl, mapBoxEl);
       map.resize();
     };
+    expandBtn.onclick = () => {
+      applyExpandedState(!expanded);
+    };
+    updateExpandButton();
+    expandRegistry.push({ mapBox: mapBoxEl, toggle: applyExpandedState });
   }
 }
 
 // Initialize map control components for each map
-initMapControls({ settingsBtn, panelEl: controlsEl, closeBtn: closeControls, expandBtn, mapBoxEl: mapBox, map });
+initMapControls({ settingsBtn, panelEl: controlsEl, closeBtn: closeControls, expandBtn, mapBoxEl: mapBox, map, getParent: () => holderForTab(currentTab) });
 initMapControls({ settingsBtn: underSettingsBtn, panelEl: underControlsEl, closeBtn: underCloseControls, expandBtn: underExpandBtn, mapBoxEl: underHolder.querySelector('.map-box') as HTMLDivElement, map: mapUnder });
 initMapControls({ settingsBtn: ratioSettingsBtn, panelEl: ratioControlsEl, closeBtn: ratioCloseControls, expandBtn: ratioExpandBtn, mapBoxEl: ratioHolder.querySelector('.map-box') as HTMLDivElement, map: mapRatio });
 
-expandBtn.onclick = () => {
-  const expanded = mapBox.classList.toggle('expanded');
-  if (expanded) {
-    document.body.appendChild(mapBox);
-    document.body.style.overflow = 'hidden';
-  } else {
-    holderForTab(currentTab).appendChild(mapBox);
-    document.body.style.overflow = '';
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const expandedEntry = expandRegistry.find(({ mapBox }) => mapBox.classList.contains('map-box-expanded'));
+    expandedEntry?.toggle(false);
   }
-  map.resize();
-};
+});
 
 type TabKey = 'main' | 'under' | 'ratio';
 let currentTab: TabKey = 'main';
@@ -354,7 +449,7 @@ function loadSettings(tab: TabKey) {
     const obj = JSON.parse(raw);
     if (obj.basemap) {
       // Fallback if a previously saved basemap no longer exists
-      setBasemap(BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'OpenStreetMap');
+      setBasemapFor(map, BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'OpenStreetMap');
     }
     if (obj.field) { fieldSelect.value = obj.field; currentField = obj.field; }
     if (obj.ramp) rampSelect.value = obj.ramp;
@@ -1545,7 +1640,7 @@ function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks
 // Example: step(value, 0, b1, 1, b2, 2, ...)
 function makeStepIndexExpression(valueExpr: Expression, breaks: number[]): Expression {
   const b = breaks.slice();
-  const out: (number | Expression)[] = ['step', valueExpr, 0];
+  const out: any[] = ['step', valueExpr, 0];
   for (let i = 0; i < b.length; i++) {
     out.push(b[i], i + 1);
   }
@@ -1576,7 +1671,7 @@ function computeAndApplyAutoMultiplier(
       const denom = (k - 1);
       const toIdx = (v: number) => {
         let i = 0;
-        while (i < heightRankBreaks.length && v >= heightRankBreaks[i]) i++;
+        while (i < (heightRankBreaks?.length || 0) && heightRankBreaks && v >= heightRankBreaks[i]) i++;
         return i;
       };
       scaleVals = vals.map(v => (denom - toIdx(v)) / denom);

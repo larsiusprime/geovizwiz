@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Civic Mapper</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="favicon.svg">
+  <link rel="shortcut icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="mask-icon" href="favicon.svg" color="#0f172a">
+  <link rel="stylesheet" href="/src/design-system.css">
+  <link rel="stylesheet" href="/src/components.css">
   <script>
     try {
       const authed = !!sessionStorage.getItem('gvw_session_authed');
@@ -12,382 +17,859 @@
       // If storage unavailable, let page load.
     }
   </script>
-  <link rel="icon" href="data:,">
   <style>
-    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
-    *, *::before, *::after { box-sizing:border-box; }
-    html, body { margin:0; font-family:system-ui,sans-serif; }
-    #title { position:sticky; top:0; z-index:40; padding:10px; background:var(--panel); box-shadow:var(--shadow); font-weight:600; text-align:center; }
-    #title .tip { font-weight:400; font-size:12.5px; color:#555; margin-top:2px; }
-    #app { max-width:1200px; margin:0 auto; padding:0 12px; }
-    .section { padding:16px 10px; }
-    .map-holder { position:relative; height:60vh; }
-    .map-box { position:relative; height:100%; }
-    #map, #map-under, #map-ratio { position:absolute; inset:0; }
-    #controls, .settings-panel {
-      position:absolute; top:10px; right:10px;
-      width:min(92vw,420px);
-      background:var(--panel); padding:12px; border-radius:12px; box-shadow:var(--shadow);
-      display:none; gap:var(--gap); z-index:10;
-      /* Stricter max height with scrolling */
-      max-height: 70vh;
-      overflow:auto;
+    /* App Layout */
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
     }
-    /* Unified map controls */
-    .map-controls {
-      position:absolute; top:10px; right:10px; display:flex; gap:10px; z-index:20;
-    }
-    .map-controls button {
-      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
-    }
-    .map-controls button:hover { background:#f0f0f0; }
-    /* Bottom-right height slider */
-    .height-scale {
-      position:absolute; right:10px; bottom:48px; z-index:20; /* keep clear of attribution */
-      background:rgba(255,255,255,0.85); border:1px solid #ddd; box-shadow:var(--shadow);
-      padding:6px 10px; border-radius:999px; display:flex; align-items:center;
-    }
-    .height-scale input[type="range"] { width:160px; }
-    .height-scale .label { font-size:12px; color:#333; margin-right:8px; }
-    /* Back-compat for existing main id */
-    #mapBtns { position:absolute; top:10px; right:10px; display:flex; gap:10px; z-index:20; }
-    #mapBtns button { border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer; }
-    #closeControls {
-      position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8;
-      padding:2px 6px; border-radius:6px; cursor:pointer;
-    }
-    #controls fieldset, .settings-panel fieldset { border:0; padding:0; margin:0; display:grid; gap:6px; }
-    #controls label, .settings-panel label { display:block; font-size:12px; color:#333; }
-    #controls select, #controls input[type="number"], #controls input[type="text"], .settings-panel select, .settings-panel input[type="number"], .settings-panel input[type="text"] {
-      width:100%; padding:6px 8px; border-radius:8px; border:1px solid #ddd; font-size:14px;
-    }
-    #controls .row, .settings-panel .row {
-      display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr);
-      gap:var(--gap); align-items:end;
-    }
-    #controls .row > *, .settings-panel .row > * { min-width:0; }
-    #controls .buttons, .settings-panel .buttons { display:flex; flex-wrap:wrap; gap:6px; }
-    #controls button, .settings-panel button {
-      border:1px solid #ddd; background:#f8f8f8; padding:6px 8px; border-radius:8px; cursor:pointer;
-    }
-    #controls button:hover, .settings-panel button:hover { background:#f0f0f0; }
-    #legend { display:none; align-items:center; gap:6px; }
-    .muted { color:#666; font-size:12px; }
-    .inline { display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
-    input[type="range"] { width:100%; margin:0; }
-    output { font-size:12px; color:#333; min-width:2.8ch; text-align:right; }
-    #categoryFieldset { display:none; }
-    #categoryFilter { display:grid; gap:6px; }
-    .overlay {
-      position:fixed; inset:0; display:none; place-items:center;
-      background:rgba(0,0,0,.35); z-index:30;
-    }
-    .overlay.show { display:grid; }
-    .modal {
-      width:min(96vw,680px); max-height:88vh; overflow:hidden;
-      background:#fff; border-radius:12px; box-shadow:var(--shadow); padding:14px; display:grid; gap:10px;
-    }
-    .modal h3 { margin:0 0 4px; font-size:16px; }
-    .modal .footer { display:flex; gap:8px; justify-content:flex-end; }
-    .section-title { font-weight:600; margin-top:4px; }
-    .divider { height:1px; background:#e6e6e6; margin:6px 0; }
-    .fieldlist { display:grid; grid-template-columns:1fr; gap:8px; }
-    #fieldList { max-height:60vh; overflow:auto; padding-right:4px; }
-    .progress { height:8px; background:#eee; border-radius:999px; overflow:hidden; }
-    .progress .bar { height:100%; width:0%; background:#3b82f6; transition:width .2s linear; }
-    .progress.indeterminate .bar { width:30%; animation:indet 1.2s infinite linear; }
-    @keyframes indet { 0% { margin-left:-30% } 100% { margin-left:100% } }
-    .map-box.expanded { position:fixed; inset:0; height:100vh; width:100vw; z-index:1000; }
 
-    /* Underutilized totals card */
-    #underTotals { color:inherit; margin-bottom:12px; }
-    #underTotals .totals-card {
-      background:var(--panel);
-      box-shadow:var(--shadow);
-      border-radius:12px;
-      padding:12px;
-      display:inline-block;
-      min-width:min(92vw, 360px);
+    /* Top Navigation */
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: var(--z-sticky);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border-default);
+      box-shadow: var(--shadow-sm);
     }
-    #underTotals .totals-title {
-      font-weight:600; margin:0 0 6px; font-size:14px;
+
+    .app-header-content {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--space-3) var(--space-4);
     }
-    #underTotals .totals-grid {
-      display:grid; grid-template-columns:1fr auto; gap:6px 12px; align-items:baseline;
+
+    .app-header-left {
+      display: flex;
+      align-items: center;
+      gap: var(--space-4);
+    }
+
+    .app-logo img {
+      height: 32px;
+    }
+
+    .app-breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+    }
+
+    .app-breadcrumb-separator {
+      color: var(--text-tertiary);
+    }
+
+    .app-city-name {
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+    }
+
+    /* Main Content Area */
+    .app-main {
+      flex: 1;
+      overflow-y: auto;
+      background: var(--bg-base);
+    }
+
+    .content-section {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: var(--space-6);
+    }
+
+    .section-title {
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-2xl);
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+    }
+
+    .section-description {
+      margin: 0 0 var(--space-6);
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      line-height: var(--line-relaxed);
+    }
+
+    /* Map Container */
+    .map-container {
+      position: relative;
+      height: 600px;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+      background: var(--bg-surface);
+    }
+
+    .map-view {
+      position: absolute;
+      inset: 0;
+    }
+
+    #map, #map-under, #map-ratio {
+      width: 100%;
+      height: 100%;
+    }
+
+    /* Map Controls */
+    .map-controls {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      display: flex;
+      gap: var(--space-2);
+      z-index: var(--z-dropdown);
+    }
+
+    .control-panel {
+      position: absolute;
+      top: var(--space-4);
+      right: var(--space-4);
+      width: min(92vw, 420px);
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      box-shadow: var(--shadow-xl);
+      padding: var(--space-4);
+      display: none;
+      flex-direction: column;
+      gap: var(--space-4);
+      overflow-y: auto;
+      z-index: var(--z-fixed);
+    }
+
+    .control-panel.active {
+      display: flex;
+    }
+
+    .control-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: var(--space-3);
+      border-bottom: 1px solid var(--border-default);
+    }
+
+    .control-panel-title {
+      margin: 0;
+      font-size: var(--text-lg);
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .control-group-title {
+      font-size: var(--text-sm);
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+      margin-bottom: var(--space-1);
+    }
+
+    .control-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-3);
+    }
+
+    /* Height Slider */
+    .height-control {
+      position: absolute;
+      right: var(--space-4);
+      bottom: 48px;
+      z-index: var(--z-dropdown);
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border-default);
+      box-shadow: var(--shadow-md);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-full);
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+
+    .height-control-label {
+      font-size: var(--text-xs);
+      color: var(--text-secondary);
+      font-weight: var(--font-medium);
+    }
+
+    .height-control input[type="range"] {
+      width: 160px;
+    }
+
+    /* Totals Card */
+    .totals-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      padding: var(--space-4);
+      box-shadow: var(--shadow-sm);
+      margin-bottom: var(--space-6);
+      max-width: 500px;
+    }
+
+    .totals-title {
+      margin: 0 0 var(--space-3);
+      font-size: var(--text-lg);
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+    }
+
+    .totals-grid {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: var(--space-2) var(--space-4);
+      align-items: baseline;
       font-variant-numeric: tabular-nums;
     }
-    #underTotals .totals-grid .label { color:#333; }
-    #underTotals .totals-grid .value { text-align:right; }
-    #underTotals .totals-grid .pct { color:#666; margin-left:6px; font-size:12px; }
-    #underTotals .sum-row { margin-top:6px; padding-top:6px; border-top:1px solid #e6e6e6; font-weight:600; }
+
+    .totals-grid .label {
+      color: var(--text-secondary);
+      font-size: var(--text-sm);
+    }
+
+    .totals-grid .value {
+      text-align: right;
+      font-weight: var(--font-medium);
+      font-size: var(--text-sm);
+    }
+
+    .totals-grid .pct {
+      color: var(--text-tertiary);
+      margin-left: var(--space-2);
+      font-size: var(--text-xs);
+    }
+
+    .totals-grid .sum-row {
+      margin-top: var(--space-2);
+      padding-top: var(--space-2);
+      border-top: 1px solid var(--border-default);
+      font-weight: var(--font-semibold);
+    }
+
+    /* Legend */
+    .legend {
+      display: none;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+    }
+
+    .legend.active {
+      display: flex;
+    }
+
+    /* Checkbox/Radio Groups */
+    .checkbox-group,
+    .radio-group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .checkbox-item,
+    .radio-item {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      font-size: var(--text-sm);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+
+    .checkbox-item input,
+    .radio-item input {
+      cursor: pointer;
+    }
+
+    /* Expanded Map */
+    .map-box-expanded {
+      position: fixed !important;
+      inset: 0 !important;
+      height: 100vh !important;
+      width: 100vw !important;
+      z-index: 1000 !important;
+      border-radius: 0 !important;
+      background: var(--bg-surface);
+    }
+
+    .map-help {
+      position: absolute;
+      left: var(--space-4);
+      bottom: calc(var(--space-4) + 64px);
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-full);
+      background: rgba(15, 23, 42, 0.72);
+      color: #fff;
+      font-size: var(--text-xs);
+      font-weight: var(--font-medium);
+      letter-spacing: 0.01em;
+      box-shadow: var(--shadow-md);
+      display: flex;
+      gap: var(--space-2);
+      align-items: center;
+      pointer-events: auto;
+    }
+
+    .map-help kbd {
+      background: rgba(255, 255, 255, 0.16);
+      border-radius: var(--radius-sm);
+      padding: 0 var(--space-1);
+      font-size: 0.75em;
+      letter-spacing: 0.03em;
+    }
+
+    .map-help-close {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font-size: 0.85em;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      margin-left: var(--space-2);
+      cursor: pointer;
+      opacity: 0.75;
+      transition: opacity 0.2s ease;
+    }
+
+    .map-help-close:hover,
+    .map-help-close:focus-visible {
+      opacity: 1;
+    }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      display: none;
+      place-items: center;
+      background: var(--bg-overlay);
+      backdrop-filter: blur(4px);
+      z-index: var(--z-modal-backdrop);
+      padding: var(--space-4);
+    }
+
+    .modal-overlay.show {
+      display: grid;
+    }
+
+    .modal-content {
+      width: min(96vw, 680px);
+      max-height: 88vh;
+      overflow: hidden;
+      background: var(--bg-surface);
+      border-radius: var(--radius-2xl);
+      box-shadow: var(--shadow-2xl);
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-4);
+      padding: var(--space-6);
+    }
+
+    .modal-header h3 {
+      margin: 0 0 var(--space-2);
+      font-size: var(--text-xl);
+      font-weight: var(--font-semibold);
+      color: var(--text-primary);
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      max-height: 60vh;
+    }
+
+    .modal-footer {
+      display: flex;
+      gap: var(--space-3);
+      justify-content: flex-end;
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--border-default);
+    }
+
+    /* Field List */
+    .field-list {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: var(--space-2);
+    }
+
+    /* Progress Bar */
+    .progress-bar {
+      height: 8px;
+      background: var(--color-gray-200);
+      border-radius: var(--radius-full);
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent-primary);
+      transition: width 0.2s linear;
+    }
+
+    .progress-bar.indeterminate .progress-bar-fill {
+      width: 30%;
+      animation: progressIndeterminate 1.2s infinite linear;
+    }
+
+    @keyframes progressIndeterminate {
+      0% { margin-left: -30%; }
+      100% { margin-left: 100%; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .content-section {
+        padding: var(--space-4);
+      }
+
+      .map-container {
+        height: 400px;
+      }
+
+      .control-panel {
+        width: 100%;
+        max-width: none;
+        left: 0;
+        right: 0;
+        top: auto;
+        bottom: 0;
+        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+        max-height: 80vh;
+      }
+    }
   </style>
 </head>
 <body>
   <div id="app">
-    <div id="title">Civic Mapper
-      <div class="tip">Tip: Hold Ctrl and drag to rotate (left/right) and tilt (up/down). Scroll to zoom. Click any parcel to see details.</div>
-    </div>
-    <section id="mainSection" class="section">
-      <h2>Land Value per Square Foot</h2>
-      <p class="muted">By default this map shows land value per square foot. Use Settings to switch to full assessed value or improvements, and to adjust the color ramp and units.</p>
-      <div id="mapHolder-main" class="map-holder">
-        <div id="mapBox" class="map-box">
-          <div id="map"></div>
-          <div class="height-scale"><span class="label">Height:</span><input id="heightScale" type="range" min="0" max="100" step="1" value="100" /></div>
-          <div id="mapBtns" class="map-controls">
-            <button id="settingsBtn">Settings</button>
-            <button id="expandBtn">⤢</button>
+    <!-- App Header -->
+    <header class="app-header">
+      <div class="app-header-content">
+        <div class="app-header-left">
+          <a href="/" class="app-logo">
+            <img src="/logo.svg" alt="Civic Mapper">
+          </a>
+          <div class="app-breadcrumb">
+            <span>Visualization</span>
+            <span class="app-breadcrumb-separator">/</span>
+            <span class="app-city-name" id="cityName">Loading...</span>
           </div>
-          <div id="controls" class="settings-panel">
-            <button id="closeControls">×</button>
-            <fieldset>
-              <label for="basemap">Base map</label>
-              <select id="basemap"></select>
-            </fieldset>
-            <fieldset>
-              <label for="field">Numeric field to visualize</label>
-              <select id="field"></select>
-              <div id="normGroup" style="display:none; gap:6px; margin-top:6px;">
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
-                  <span>as-is</span>
-                </label>
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="normMode" id="norm-land" value="perLand" disabled />
-                  <span>…per land size <em id="normLandUnit">(unit)</em></span>
-                </label>
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" disabled />
-                  <span>…per building size <em id="normBldgUnit">(unit)</em></span>
-                </label>
+        </div>
+        <div style="display: flex; gap: var(--space-2); align-items: center;">
+          <a href="mailto:greg@landeconomics.org" class="btn btn-ghost btn-sm" style="text-decoration: none;">
+            Contact
+          </a>
+          <button class="btn btn-ghost btn-sm" onclick="window.location.href='/'">
+            Change City
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="app-main">
+      <!-- Main Section -->
+      <section id="mainSection" class="content-section">
+        <h2 class="section-title">Land Value per Square Foot</h2>
+        <p class="section-description">
+          By default this map shows land value per square foot. Use Settings to switch to full assessed value or improvements, and to adjust the color ramp and units.
+        </p>
+        
+        <div id="mapHolder-main" class="map-container">
+          <div id="mapBox" class="map-box map-view">
+            <div id="map"></div>
+
+            <div class="height-control">
+              <span class="height-control-label">Height:</span>
+              <input id="heightScale" class="range-slider" type="range" min="0" max="100" step="1" value="100" />
+            </div>
+
+            <div class="map-controls">
+              <button id="settingsBtn" class="btn btn-primary">Settings</button>
+              <button id="expandBtn" class="btn btn-ghost btn-icon">⤢</button>
+            </div>
+
+            <div class="map-help">
+              <span>Tip:</span>
+              <kbd>Ctrl</kbd>
+              <span>+ drag to orbit 3D</span>
+              <button type="button" class="map-help-close" aria-label="Dismiss orbit tip">×</button>
+            </div>
+            
+            <div id="controls" class="control-panel">
+              <div class="control-panel-header">
+                <h3 class="control-panel-title">Settings</h3>
+                <button id="closeControls" class="btn btn-ghost btn-icon">×</button>
               </div>
-            </fieldset>
-            <fieldset class="row">
-              <div>
-                <label for="ramp">Color ramp</label>
-                <select id="ramp"></select>
+
+              <div class="control-group">
+                <label class="label" for="basemap">Base map</label>
+                <select id="basemap" class="input select"></select>
               </div>
-              <div>
-                <label for="opacity">Opacity</label>
-                <div class="inline">
-                  <input id="opacity" type="range" min="0" max="100" step="1" value="100" />
-                  <output id="opacityVal">100%</output>
+
+              <div class="control-group">
+                <label class="label" for="field">Numeric field to visualize</label>
+                <select id="field" class="input select"></select>
+                <div id="normGroup" style="display:none;">
+                  <div class="radio-group">
+                    <label class="radio-item">
+                      <input type="radio" name="normMode" id="norm-asis" value="asis" class="radio" checked />
+                      <span>as-is</span>
+                    </label>
+                    <label class="radio-item">
+                      <input type="radio" name="normMode" id="norm-land" value="perLand" class="radio" disabled />
+                      <span>…per land size <em id="normLandUnit">(unit)</em></span>
+                    </label>
+                    <label class="radio-item">
+                      <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" class="radio" disabled />
+                      <span>…per building size <em id="normBldgUnit">(unit)</em></span>
+                    </label>
+                  </div>
                 </div>
               </div>
-            </fieldset>
-            <fieldset class="row" style="display:none">
-              <div>
-                <label for="mult">Extrusion multiplier</label>
-                <input id="mult" type="number" step=".1" value="1" />
+
+              <div class="control-row">
+                <div class="control-group">
+                  <label class="label" for="ramp">Color ramp</label>
+                  <select id="ramp" class="input select"></select>
+                </div>
+                <div class="control-group">
+                  <label class="label" for="opacity">Opacity</label>
+                  <div style="display: flex; gap: var(--space-2); align-items: center;">
+                    <input id="opacity" class="range-slider" type="range" min="0" max="100" step="1" value="100" style="flex: 1;" />
+                    <output id="opacityVal" style="min-width: 3ch; text-align: right; font-size: var(--text-xs);">100%</output>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label for="units">Units</label>
-                <select id="units">
-                  <option value="centimeters" selected>centimeters</option>
-                  <option value="meters">meters</option>
-                  <option value="inches">inches</option>
-                  <option value="feet">feet</option>
-                  <option value="kilometers">kilometers</option>
-                  <option value="miles">miles</option>
-                  <option value="stories">stories (~3.3m)</option>
-                </select>
-              </div>
-            </fieldset>
-            <fieldset>
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="checkbox" id="invertHeights" />
-                <span>Invert height scale</span>
-              </label>
-            </fieldset>
-            <fieldset>
-              <label>Color scaling</label>
-              <div style="display:grid; gap:6px;">
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="colorMode" id="color-cont" value="continuous">
-                  <span>Linear (min→max, clamped p1–p99)</span>
-                </label>
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
-                  <span>Quantiles (equal-frequency, p1–p99)</span>
+
+              <div class="control-group">
+                <label class="checkbox-item">
+                  <input type="checkbox" id="invertHeights" class="checkbox" />
+                  <span>Invert height scale</span>
                 </label>
               </div>
-            </fieldset>
+
+              <div class="control-group">
+                <p class="control-group-title">Color scaling</p>
+                <div class="radio-group">
+                  <label class="radio-item">
+                    <input type="radio" name="colorMode" id="color-cont" value="continuous" class="radio">
+                    <span>Linear (min→max, clamped p1–p99)</span>
+                  </label>
+                  <label class="radio-item">
+                    <input type="radio" name="colorMode" id="color-quant" value="quantiles" class="radio" checked>
+                    <span>Quantiles (equal-frequency, p1–p99)</span>
+                  </label>
+                </div>
+              </div>
+              
+              <div class="control-group">
+                <label class="label" for="origCategorySelect">Original category filter</label>
+                <select id="origCategorySelect" class="input select"></select>
+              </div>
+
+              <fieldset id="legend" class="legend"></fieldset>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Underutilized Section -->
+      <section id="underSection" class="content-section">
+        <h2 class="section-title">Vacant &amp; Underdeveloped</h2>
+        <p class="section-description">
+          Vacant parcels contain no structures, Parking Lots are surface parking areas, and Underdeveloped parcels have minimal improvements.
+        </p>
+        
+        <div id="underTotals"></div>
+        
+        <div id="mapHolder-under" class="map-container">
+          <div class="map-box map-view">
+            <div id="map-under"></div>
             
-            <fieldset>
-              <label for="origCategorySelect">Original category filter</label>
-              <select id="origCategorySelect"></select>
-            </fieldset>
-            <fieldset id="legend"></fieldset>
+            <div class="height-control">
+              <span class="height-control-label">Height:</span>
+              <input id="underHeightScale" class="range-slider" type="range" min="0" max="100" step="1" value="100" />
+            </div>
+            
+            <div class="map-controls">
+              <button id="underSettingsBtn" class="btn btn-primary">Settings</button>
+              <button id="underExpandBtn" class="btn btn-ghost btn-icon">⤢</button>
+            </div>
+
+            <div class="map-help">
+              <span>Tip:</span>
+              <kbd>Ctrl</kbd>
+              <span>+ drag to orbit 3D</span>
+              <button type="button" class="map-help-close" aria-label="Dismiss orbit tip">×</button>
+            </div>
+            
+            <div id="underControls" class="control-panel">
+              <div class="control-panel-header">
+                <h3 class="control-panel-title">Settings</h3>
+                <button id="underCloseControls" class="btn btn-ghost btn-icon">×</button>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="under-field">Numeric field to visualize</label>
+                <select id="under-field" class="input select"></select>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="under-basemap">Base map</label>
+                <select id="under-basemap" class="input select"></select>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="under-ramp">Color ramp</label>
+                <select id="under-ramp" class="input select"></select>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="under-opacity">Opacity</label>
+                <div style="display: flex; gap: var(--space-2); align-items: center;">
+                  <input id="under-opacity" class="range-slider" type="range" min="0" max="100" step="1" value="100" style="flex: 1;" />
+                  <output id="underOpacityVal" style="min-width: 3ch; text-align: right; font-size: var(--text-xs);">100%</output>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="checkbox-item">
+                  <input type="checkbox" id="underInvertHeights" class="checkbox" />
+                  <span>Invert height scale</span>
+                </label>
+              </div>
+
+              <div class="control-group">
+                <p class="control-group-title">Category filter</p>
+                <div id="underCategoryFilter" class="checkbox-group">
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="Vacant" class="checkbox" checked />
+                    <span>Vacant</span>
+                  </label>
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="Parking Lot" class="checkbox" checked />
+                    <span>Parking Lot</span>
+                  </label>
+                  <label class="checkbox-item">
+                    <input type="checkbox" value="Underdeveloped" class="checkbox" checked />
+                    <span>Underdeveloped</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="underOrigCategorySelect">Original category filter</label>
+                <select id="underOrigCategorySelect" class="input select"></select>
+              </div>
+
+              <fieldset id="underLegend" class="legend"></fieldset>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-    <section id="underSection" class="section">
-      <h2>Vacant &amp; Underdeveloped</h2>
-      <p class="muted">Vacant parcels contain no structures, Parking Lots are surface parking areas, and Underdeveloped parcels have minimal improvements.</p>
-      <div id="underTotals"></div>
-      <div id="mapHolder-under" class="map-holder">
-        <div class="map-box">
-          <div id="map-under"></div>
-          <div class="height-scale"><span class="label">Height:</span><input id="underHeightScale" type="range" min="0" max="100" step="1" value="100" /></div>
-          <div id="mapBtnsUnder" class="map-controls">
-            <button id="underSettingsBtn">Settings</button>
-            <button id="underExpandBtn">⤢</button>
-          </div>
-          <div id="underControls" class="settings-panel" style="position:absolute; top:10px; right:10px;">
-            <button id="underCloseControls" style="position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8; padding:2px 6px; border-radius:6px; cursor:pointer;">×</button>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="under-field">Numeric field to visualize</label>
-              <select id="under-field"></select>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="under-basemap">Base map</label>
-              <select id="under-basemap"></select>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="under-ramp">Color ramp</label>
-              <select id="under-ramp"></select>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="under-opacity">Opacity</label>
-              <div class="inline">
-                <input id="under-opacity" type="range" min="0" max="100" step="1" value="100" />
-                <output id="underOpacityVal">100%</output>
+      </section>
+
+      <!-- Ratio Section -->
+      <section id="ratioSection" class="content-section" style="padding-bottom: var(--space-16);">
+        <h2 class="section-title">Percent Improvement-to-Land Ratio</h2>
+        <p class="section-description">
+          Shows percentage: (REALIMPROV ÷ REALLANDVA) × 100. Use "Invert height scale" to emphasize low percentages if desired.
+        </p>
+        
+        <div id="mapHolder-ratio" class="map-container">
+          <div class="map-box map-view">
+            <div id="map-ratio"></div>
+            
+            <div class="height-control">
+              <span class="height-control-label">Height:</span>
+              <input id="ratioHeightScale" class="range-slider" type="range" min="0" max="100" step="1" value="100" />
+            </div>
+            
+            <div class="map-controls">
+              <button id="ratioSettingsBtn" class="btn btn-primary">Settings</button>
+              <button id="ratioExpandBtn" class="btn btn-ghost btn-icon">⤢</button>
+            </div>
+
+            <div class="map-help">
+              <span>Tip:</span>
+              <kbd>Ctrl</kbd>
+              <span>+ drag to orbit 3D</span>
+              <button type="button" class="map-help-close" aria-label="Dismiss orbit tip">×</button>
+            </div>
+            
+            <div id="ratioControls" class="control-panel">
+              <div class="control-panel-header">
+                <h3 class="control-panel-title">Settings</h3>
+                <button id="ratioCloseControls" class="btn btn-ghost btn-icon">×</button>
               </div>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px; display:none;">
-              <label for="under-mult">Extrusion multiplier</label>
-              <input id="under-mult" type="number" step=".1" value="1" />
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="checkbox" id="underInvertHeights" />
-                <span>Invert height scale</span>
-              </label>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label>Category filter</label>
-              <div id="underCategoryFilter" style="display:grid; gap:6px;">
-                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" value="Vacant" checked /><span>Vacant</span></label>
-                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" value="Parking Lot" checked /><span>Parking Lot</span></label>
-                <label style="display:flex; gap:8px; align-items:center;"><input type="checkbox" value="Underdeveloped" checked /><span>Underdeveloped</span></label>
+
+              <div class="control-group">
+                <label class="label" for="ratio-field">Numeric field to visualize</label>
+                <select id="ratio-field" class="input select"></select>
               </div>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="underOrigCategorySelect">Original category filter</label>
-              <select id="underOrigCategorySelect"></select>
-            </fieldset>
-            <fieldset id="underLegend"></fieldset>
+
+              <div class="control-group">
+                <label class="label" for="ratio-basemap">Base map</label>
+                <select id="ratio-basemap" class="input select"></select>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="ratio-ramp">Color ramp</label>
+                <select id="ratio-ramp" class="input select"></select>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="ratio-opacity">Opacity</label>
+                <div style="display: flex; gap: var(--space-2); align-items: center;">
+                  <input id="ratio-opacity" class="range-slider" type="range" min="0" max="100" step="1" value="100" style="flex: 1;" />
+                  <output id="ratioOpacityVal" style="min-width: 3ch; text-align: right; font-size: var(--text-xs);">100%</output>
+                </div>
+              </div>
+
+              <div class="control-group">
+                <label class="checkbox-item">
+                  <input type="checkbox" id="ratioInvertHeights" class="checkbox" />
+                  <span>Invert height scale</span>
+                </label>
+              </div>
+
+              <div class="control-group">
+                <label class="label" for="ratioOrigCategorySelect">Original category filter</label>
+                <select id="ratioOrigCategorySelect" class="input select"></select>
+              </div>
+
+              <fieldset id="ratioLegend" class="legend"></fieldset>
+            </div>
           </div>
         </div>
-      </div>
-    </section>
-    <section id="ratioSection" class="section">
-      <h2>Percent Improvement-to-Land Ratio</h2>
-      <p class="muted">Shows percentage: (REALIMPROV ÷ REALLANDVA) × 100. Use “Invert height scale” to emphasize low percentages if desired.</p>
-      <div id="mapHolder-ratio" class="map-holder">
-        <div class="map-box">
-          <div id="map-ratio"></div>
-          <div class="height-scale"><span class="label">Height:</span><input id="ratioHeightScale" type="range" min="0" max="100" step="1" value="100" /></div>
-          <div id="mapBtnsRatio" class="map-controls">
-            <button id="ratioSettingsBtn">Settings</button>
-            <button id="ratioExpandBtn">⤢</button>
-          </div>
-          <div id="ratioControls" class="settings-panel" style="position:absolute; top:10px; right:10px;">
-            <button id="ratioCloseControls" style="position:absolute; top:6px; right:6px; border:1px solid #ddd; background:#f8f8f8; padding:2px 6px; border-radius:6px; cursor:pointer;">×</button>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="ratio-field">Numeric field to visualize</label>
-              <select id="ratio-field"></select>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="ratio-basemap">Base map</label>
-              <select id="ratio-basemap"></select>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="ratio-ramp">Color ramp</label>
-              <select id="ratio-ramp"></select>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="ratio-opacity">Opacity</label>
-              <div class="inline">
-                <input id="ratio-opacity" type="range" min="0" max="100" step="1" value="100" />
-                <output id="ratioOpacityVal">100%</output>
-              </div>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px; display:none;">
-              <label for="ratio-mult">Extrusion multiplier</label>
-              <input id="ratio-mult" type="number" step=".1" value="1" />
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="checkbox" id="ratioInvertHeights" />
-                <span>Invert height scale</span>
-              </label>
-            </fieldset>
-            <fieldset style="border:0; padding:0; margin:0; display:grid; gap:6px;">
-              <label for="ratioOrigCategorySelect">Original category filter</label>
-              <select id="ratioOrigCategorySelect"></select>
-            </fieldset>
-            <fieldset id="ratioLegend"></fieldset>
-          </div>
+      </section>
+
+      <!-- Footer -->
+      <footer style="max-width: 1400px; margin: 0 auto; padding: var(--space-12) var(--space-6); text-align: center; border-top: 1px solid var(--border-default); background: var(--bg-surface);">
+        <div style="font-size: var(--text-xs); color: var(--text-tertiary); margin-bottom: var(--space-4);">Created by</div>
+        <a href="https://landeconomics.org" target="_blank" rel="noopener" style="display: inline-block; padding: var(--space-4); background: var(--bg-surface); border: 1px solid var(--border-default); border-radius: var(--radius-lg); text-decoration: none; transition: all var(--transition-fast);">
+          <img src="/CLE-logo.svg" alt="Center for Land Economics" style="height: 48px; display: block;">
+        </a>
+        <div style="margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border-default); font-size: var(--text-xs); color: var(--text-tertiary);">
+          © 2025 Civic Mapper 
         </div>
-      </div>
-    </section>
+      </footer>
+    </main>
   </div>
 
   <!-- Modal 1: Field chooser -->
-  <div id="modalOverlay" class="overlay">
-    <div class="modal">
-      <h3>Select numeric fields to load</h3>
-      <div class="muted">Rows: <span id="rowCount">–</span>. Geometry column: <code id="geomCol">–</code></div>
-      <div class="buttons">
-        <button id="btnAll">Select all</button>
-        <button id="btnNone">Select none</button>
+  <div id="modalOverlay" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Select numeric fields to load</h3>
+        <p style="margin: 0; font-size: var(--text-sm); color: var(--text-secondary);">
+          Rows: <span id="rowCount">–</span>. Geometry column: <code id="geomCol">–</code>
+        </p>
       </div>
-      <div id="fieldList" class="fieldlist"></div>
-      <div class="footer">
-        <button id="btnCancelModal">Cancel</button>
-        <button id="btnConfirmModal">Next</button>
+      <div style="display: flex; gap: var(--space-2);">
+        <button id="btnAll" class="btn btn-ghost btn-sm">Select all</button>
+        <button id="btnNone" class="btn btn-ghost btn-sm">Select none</button>
+      </div>
+      <div id="fieldList" class="modal-body field-list"></div>
+      <div class="modal-footer">
+        <button id="btnCancelModal" class="btn btn-ghost">Cancel</button>
+        <button id="btnConfirmModal" class="btn btn-primary">Next</button>
       </div>
     </div>
   </div>
 
   <!-- Modal 2: Size identification -->
-  <div id="sizeOverlay" class="overlay">
-    <div class="modal">
-      <h3>Identify land &amp; building size fields</h3>
-      <div class="muted">Please identify which of your loaded fields represent: (a) total finished floor area for all buildings, and (b) total land area.</div>
-      <div style="display:grid; gap:8px;">
-        <label>Building size field</label>
-        <select id="bldgField"></select>
-        <label>Building size unit</label>
-        <select id="bldgUnit"></select>
-        <div class="divider"></div>
-        <label>Land size field</label>
-        <select id="landField"></select>
-        <label>Land size unit</label>
-        <select id="landUnit"></select>
+  <div id="sizeOverlay" class="modal-overlay">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Identify land &amp; building size fields</h3>
+        <p style="margin: 0; font-size: var(--text-sm); color: var(--text-secondary);">
+          Please identify which of your loaded fields represent: (a) total finished floor area for all buildings, and (b) total land area.
+        </p>
       </div>
-      <div class="footer">
-        <button id="btnSizeBack">Back</button>
-        <button id="btnSizeSkip">Skip</button>
-        <button id="btnSizeOk">Continue</button>
+      <div style="display: grid; gap: var(--space-3);">
+        <label class="label">Building size field</label>
+        <select id="bldgField" class="input select"></select>
+        <label class="label">Building size unit</label>
+        <select id="bldgUnit" class="input select"></select>
+        <div style="height: 1px; background: var(--border-default);"></div>
+        <label class="label">Land size field</label>
+        <select id="landField" class="input select"></select>
+        <label class="label">Land size unit</label>
+        <select id="landUnit" class="input select"></select>
+      </div>
+      <div class="modal-footer">
+        <button id="btnSizeBack" class="btn btn-ghost">Back</button>
+        <button id="btnSizeSkip" class="btn btn-ghost">Skip</button>
+        <button id="btnSizeOk" class="btn btn-primary">Continue</button>
       </div>
     </div>
   </div>
 
   <!-- Loading / progress -->
-  <div id="loadingOverlay" class="overlay">
-    <div class="modal">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
-        <div>Loading…</div>
-        <button id="btnCancelLoading">Cancel</button>
+  <div id="loadingOverlay" class="modal-overlay">
+    <div class="modal-content" style="max-width: 400px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:var(--space-3)">
+        <div style="font-weight: var(--font-semibold);">Loading…</div>
+        <button id="btnCancelLoading" class="btn btn-ghost btn-sm">Cancel</button>
       </div>
-      <div id="progress" class="progress indeterminate"><div id="progressBar" class="bar"></div></div>
-      <div id="progressMsg" class="muted">Parsing GeoParquet…</div>
+      <div id="progress" class="progress-bar indeterminate">
+        <div id="progressBar" class="progress-bar-fill"></div>
+      </div>
+      <div id="progressMsg" style="font-size: var(--text-sm); color: var(--text-secondary);">
+        Parsing GeoParquet…
+      </div>
     </div>
   </div>
 
+  <!-- Hidden elements for compatibility -->
+  <fieldset id="categoryFieldset" style="display: none;"></fieldset>
+  <div id="categoryFilter" style="display: none;"></div>
+  <input id="scaleFiltered" type="checkbox" style="display: none;" />
+  <input id="under-mult" type="number" value="1" style="display: none;" />
+  <input id="ratio-mult" type="number" value="1" style="display: none;" />
+  <input id="mult" type="number" value="1" style="display: none;" />
+  <select id="units" style="display: none;">
+    <option value="centimeters" selected>centimeters</option>
+    <option value="meters">meters</option>
+    <option value="inches">inches</option>
+    <option value="feet">feet</option>
+    <option value="kilometers">kilometers</option>
+    <option value="miles">miles</option>
+    <option value="stories">stories (~3.3m)</option>
+  </select>
+
   <script type="module" src="/src/main.ts"></script>
+  <script>
+    // Set city name in header
+    const getCityName = () => {
+      const params = new URLSearchParams(window.location.search);
+      const city = params.get('city') || 'southbend';
+      const cityNames = {
+        'southbend': 'South Bend, IN',
+        'syracuse': 'Syracuse, NY',
+        'spokane': 'Spokane, WA'
+      };
+      return cityNames[city] || city;
+    };
+    document.getElementById('cityName').textContent = getCityName();
+  </script>
 </body>
 </html>

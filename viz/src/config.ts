@@ -1,4 +1,8 @@
-import type { Expression } from 'maplibre-gl';
+import { API_BASE as ENV_API_BASE } from './env';
+
+// API and tiles via env (Vite)
+export const API_BASE = ENV_API_BASE;
+export const TILE_URL = (import.meta as any).env?.VITE_TILE_API_URL || 'http://localhost:8000/tiles/{z}/{x}/{y}.pbf';
 
 // Base map styles
 export const OSM_STYLE: any = {
@@ -87,13 +91,14 @@ export const UNIT_TO_METERS = {
 // Data field used for vacancy filtering
 export const UNDERUTILIZED_DEFAULTS = ['Vacant', 'Parking Lot', 'Underdeveloped'];
 
-// City selection via query string (?city=southbend|syracuse). Defaults to southbend.
-function getCityFromUrl(): 'southbend' | 'syracuse' | 'spokane' {
+// City selection via query string (?city=southbend|syracuse|spokane|rochester). Defaults to southbend.
+function getCityFromUrl(): 'southbend' | 'syracuse' | 'spokane' | 'rochester' {
   try {
     const u = new URL(window.location.href);
     const c = (u.searchParams.get('city') || '').toLowerCase();
     if (c === 'syracuse') return 'syracuse';
     if (c === 'spokane') return 'spokane';
+    if (c === 'rochester') return 'rochester';
     return 'southbend';
   } catch {
     return 'southbend';
@@ -103,11 +108,11 @@ function getCityFromUrl(): 'southbend' | 'syracuse' | 'spokane' {
 export const SELECTED_CITY = getCityFromUrl();
 
 // City-specific fields
-export const DEV_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane')
+export const DEV_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane' || SELECTED_CITY === 'rochester')
   ? 'property_land_use_refined'
   : 'property_category_refined';
 
-export const ORIG_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane')
+export const ORIG_CATEGORY_FIELD = (SELECTED_CITY === 'syracuse' || SELECTED_CITY === 'spokane' || SELECTED_CITY === 'rochester')
   ? 'property_land_use_category'
   : 'PROPERTY_CATEGORY';
 
@@ -116,17 +121,26 @@ const CITY_DATASETS = {
   southbend: {
     remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/southbend.parquet',
     local: 'southbend.parquet',
-    proxy: '/data/southbend.parquet'
+    proxy: '/data/southbend.parquet',  // Dev only (Vite proxy)
+    filename: 'southbend.parquet'
   },
   syracuse: {
     remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/syracuse_parcels_refined_20251001.parquet',
     local: 'syracuse.parquet',
-    proxy: '/data/syracuse.parquet'
+    proxy: '/data/syracuse.parquet',  // Dev only (Vite proxy)
+    filename: 'syracuse_parcels_refined_20251001.parquet'
   },
   spokane: {
     remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/spokane.parquet',
     local: 'spokane.parquet',
-    proxy: '/data/spokane.parquet'
+    proxy: '/data/spokane.parquet',  // Dev only (Vite proxy)
+    filename: 'spokane.parquet'
+  },
+  rochester: {
+    remote: 'https://landeconomics.blob.core.windows.net/public-sharing-cle/rochester.parquet',
+    local: 'rochester.parquet',
+    proxy: '/data/rochester.parquet',  // Dev only (Vite proxy)
+    filename: 'rochester.parquet'
   }
 } as const;
 
@@ -134,5 +148,15 @@ export const REMOTE_DATASET_URL = CITY_DATASETS[SELECTED_CITY].remote;
 export const LOCAL_DATASET_URL = CITY_DATASETS[SELECTED_CITY].local;
 export const PROXY_DATASET_URL = CITY_DATASETS[SELECTED_CITY].proxy;
 
-// Always prefer explicit env override; otherwise use the city-specific remote blob.
-export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL || REMOTE_DATASET_URL;
+// Construct API proxy URL dynamically
+export const API_PROXY_DATASET_URL = `${API_BASE}/data/${CITY_DATASETS[SELECTED_CITY].filename}`;
+
+// Use proxy in production to avoid CORS issues, direct remote in dev (if Vite proxy not available)
+// Detect production by checking if we're on a deployed domain (not localhost)
+const isProduction = typeof window !== 'undefined' && 
+  !window.location.hostname.includes('localhost') && 
+  !window.location.hostname.includes('127.0.0.1');
+
+// Always prefer explicit env override; otherwise use proxy in production, remote in dev
+export const DEFAULT_DATASET_URL = (import.meta as any).env?.VITE_DEFAULT_DATASET_URL || 
+  (isProduction ? API_PROXY_DATASET_URL : REMOTE_DATASET_URL);

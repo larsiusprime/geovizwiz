@@ -3,59 +3,312 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Put It On A Map</title>
-  <link rel="icon" href="data:,">
+  <title>Civic Mapper</title>
+  <link rel="icon" type="image/svg+xml" sizes="any" href="favicon.svg" />
+  <link rel="shortcut icon" type="image/svg+xml" href="favicon.svg" />
+  <link rel="mask-icon" href="favicon.svg" color="#0f172a" />
   <style>
-    :root { --bg:#0b1020; --fg:#eaf0ff; --muted:#a8b3d1; --btn:#8ab4ff; --btn2:#2dd4bf; --card:#121a33; }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#182244 0,#0b1020 55%,#0b1020 100%);color:var(--fg)}
-    .wrap{min-height:100%;display:flex;flex-direction:column}
-    header{padding:20px 16px;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;width:100%}
-    header a.logo{font-weight:700;letter-spacing:.2px;text-decoration:none;color:var(--fg)}
-    main{flex:1;display:grid;place-items:center;padding:30px 16px}
-    .hero{max-width:1100px;width:100%;display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center}
-    .hero h1{margin:0 0 10px;font-size:clamp(28px,4.4vw,46px);line-height:1.1}
-    .hero p{margin:0;color:var(--muted);font-size:clamp(14px,1.6vw,18px)}
-    .cta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
-    .cta a{display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:600}
-    .cta a.primary{background:var(--btn);color:#081428}
-    .cta a.secondary{background:var(--btn2);color:#051c17}
-    .card{background:var(--card);border:1px solid #223055aa;border-radius:14px;padding:14px}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
-    .feat h3{margin:0 0 6px;font-size:16px}
-    .feat p{margin:0;color:var(--muted);font-size:14px}
-    footer{padding:18px 16px;color:var(--muted);font-size:12px;text-align:center}
-    @media (max-width:900px){ .hero{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
+    :root {
+      --bg: #0f172a;
+      --bg-card: rgba(15, 23, 42, 0.92);
+      --bg-secondary: rgba(15, 23, 42, 0.78);
+      --text-primary: #f8fafc;
+      --text-secondary: rgba(248, 250, 252, 0.72);
+      --accent-primary: #38bdf8;
+      --accent-secondary: #22d3ee;
+      --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.22), transparent 45%),
+        radial-gradient(circle at bottom right, rgba(34, 211, 238, 0.18), transparent 40%),
+        var(--bg);
+      font-family: var(--font-sans);
+      color: var(--text-primary);
+    }
+
+    main {
+      position: relative;
+      width: min(960px, 92vw);
+      padding: clamp(2.5rem, 4vw, 4rem);
+      background: var(--bg-card);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      border-radius: 32px;
+      box-shadow: 0 40px 120px -50px rgba(15, 23, 42, 0.85);
+      overflow: hidden;
+      isolation: isolate;
+    }
+
+    main::before {
+      content: "";
+      position: absolute;
+      inset: -20% 30% auto -30%;
+      height: 70%;
+      background: conic-gradient(from 120deg, rgba(56, 189, 248, 0.6), rgba(14, 165, 233, 0.1), rgba(56, 189, 248, 0.6));
+      filter: blur(80px);
+      opacity: 0.6;
+      animation: pulse 12s ease-in-out infinite;
+      z-index: -1;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: translate(-10%, -6%) scale(1);
+      }
+      50% {
+        transform: translate(6%, 4%) scale(1.05);
+      }
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 1.5rem;
+      margin-bottom: clamp(2.5rem, 5vw, 3.75rem);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.9rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .brand-mark {
+      width: 44px;
+      height: 44px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(34, 211, 238, 0.7));
+      color: var(--bg);
+      font-weight: 700;
+      font-size: 1.05rem;
+      box-shadow: 0 20px 40px -22px rgba(56, 189, 248, 0.8);
+    }
+
+    .cta-link {
+      color: inherit;
+      text-decoration: none;
+      font-size: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.65rem 1.2rem;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      background: rgba(15, 23, 42, 0.45);
+      transition: transform 0.2s ease, background 0.2s ease, border 0.2s ease;
+    }
+
+    .cta-link:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.45);
+      transform: translateY(-2px);
+    }
+
+    h1 {
+      margin: 0 0 1rem;
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      letter-spacing: -0.03em;
+      font-weight: 700;
+    }
+
+    p {
+      margin: 0;
+      line-height: 1.65;
+      color: var(--text-secondary);
+      font-size: clamp(1rem, 2vw, 1.1rem);
+    }
+
+    .hero-copy {
+      display: grid;
+      gap: 1.75rem;
+    }
+
+    .cta-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.6rem;
+      border-radius: 14px;
+      padding: 0.85rem 1.8rem;
+      font-size: 1rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      border: none;
+      cursor: pointer;
+    }
+
+    .button-primary {
+      background: linear-gradient(135deg, #38bdf8, #22d3ee);
+      color: var(--bg);
+      box-shadow: 0 22px 45px -18px rgba(56, 189, 248, 0.65);
+    }
+
+    .button-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 26px 55px -18px rgba(56, 189, 248, 0.75);
+    }
+
+    .button-secondary {
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--text-primary);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+    }
+
+    .button-secondary:hover {
+      background: rgba(56, 189, 248, 0.14);
+      border-color: rgba(56, 189, 248, 0.45);
+      transform: translateY(-2px);
+    }
+
+    .callout {
+      margin-top: clamp(2rem, 5vw, 3rem);
+      padding: clamp(1.4rem, 3vw, 1.8rem);
+      border-radius: 20px;
+      background: var(--bg-secondary);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .callout strong {
+      font-size: 1.05rem;
+      color: var(--text-primary);
+    }
+
+    footer {
+      margin-top: clamp(3rem, 6vw, 4rem);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.2rem;
+      justify-content: space-between;
+      align-items: center;
+      color: rgba(248, 250, 252, 0.65);
+      font-size: 0.9rem;
+    }
+
+    .footer-links {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      flex-wrap: wrap;
+    }
+
+    .footer-links a {
+      color: inherit;
+      text-decoration: none;
+      transition: color 0.2s ease;
+    }
+
+    .footer-links a:hover {
+      color: var(--accent-primary);
+    }
+
+    .cle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 1rem;
+      border-radius: 16px;
+      background: rgba(148, 163, 184, 0.08);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      transition: transform 0.2s ease, border 0.2s ease;
+      text-decoration: none;
+    }
+
+    .cle img {
+      height: 40px;
+      display: block;
+    }
+
+    .cle:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.45);
+    }
+
+    @media (max-width: 720px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .cta-buttons {
+        width: 100%;
+      }
+
+      .cta-buttons a {
+        flex: 1 1 auto;
+      }
+
+      footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <main>
     <header>
-      <a class="logo" href="/">putitonamap</a>
-      <nav><a href="/viz" class="logo" style="opacity:.8">Launch viz ↗</a></nav>
+      <a class="brand" href="/">
+        <span class="brand-mark">CM</span>
+        Civic Mapper
+      </a>
+      <a class="cta-link" href="mailto:greg@landeconomics.org">Contact us ↗</a>
     </header>
-    <main>
-      <section class="hero">
-        <div>
-          <h1>Turn raw parcel data into 3D insight</h1>
-          <p>Load GeoParquet, GeoPackage, or zipped Shapefiles. Filter fields, pick ramps, extrude by value, and explore — all locally in your browser.</p>
-          <div class="cta">
-            <a class="primary" href="/viz">Open the viz</a>
-            <a class="secondary" href="https://github.com/larsiusprime/geovizwiz" target="_blank" rel="noopener">View source</a>
-          </div>
-          <div class="grid">
-            <div class="feat card"><h3>Local-first</h3><p>No upload: files stay on your machine.</p></div>
-            <div class="feat card"><h3>Flexible formats</h3><p>GeoParquet, GPKG, or SHP (.zip).</p></div>
-            <div class="feat card"><h3>Smart scaling</h3><p>Quantiles / Equal-interval ramps. Auto height clamping.</p></div>
-          </div>
-        </div>
-        <div class="card">
-          <img src="data:image/svg+xml;utf8,<?xml version='1.0' encoding='UTF-8'?><svg xmlns='http://www.w3.org/2000/svg' width='640' height='420'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%238ab4ff'/><stop offset='1' stop-color='%232dd4bf'/></linearGradient></defs><rect width='100%%' height='100%%' fill='%23121a33'/><g transform='translate(40,320)'><rect x='0' y='-50' width='60' height='50' fill='url(%23g)'/><rect x='80' y='-120' width='60' height='120' fill='url(%23g)'/><rect x='160' y='-80' width='60' height='80' fill='url(%23g)'/><rect x='240' y='-180' width='60' height='180' fill='url(%23g)'/><rect x='320' y='-100' width='60' height='100' fill='url(%23g)'/></g><text x='40' y='50' fill='%23eaf0ff' font-family='system-ui' font-size='18'>/viz — local 3D parcel viz</text></svg>" alt="preview" style="max-width:100%;border-radius:10px;border:1px solid #223055aa;">
-        </div>
-      </section>
-    </main>
-    <footer>© <span id="y"></span> Put It On A Map • All local, all client-side</footer>
-  </div>
-  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+
+    <section class="hero-copy">
+      <h1>Modern 3D parcel insights for every city.</h1>
+      <p>
+        Civic Mapper brings parcel-level land data to life with immersive 3D visualizations.
+        Explore existing city models today and reach out if you are ready to onboard a new city.
+      </p>
+      <div class="cta-buttons">
+        <a class="button button-primary" href="/viz/login.html">Get started</a>
+        <a class="button button-secondary" href="mailto:greg@landeconomics.org">Talk to us</a>
+      </div>
+
+      <div class="callout">
+        <strong>Want to add your city?</strong>
+        <p>
+          We are actively expanding our coverage. Drop us a line and we will collaborate with you to bring your city's data online.
+        </p>
+        <a class="button button-secondary" href="mailto:greg@landeconomics.org">Email greg@landeconomics.org</a>
+      </div>
+    </section>
+
+    <footer>
+      <div class="footer-links">
+        <span>Need help? <a href="mailto:greg@landeconomics.org">Contact us</a></span>
+      </div>
+      <a class="cle" href="https://landeconomics.org" target="_blank" rel="noopener">
+        <img src="./CLE-logo.svg" alt="Center for Land Economics" />
+        <span style="font-size: 0.85rem; color: rgba(248, 250, 252, 0.75);">Created by CLE</span>
+      </a>
+    </footer>
+  </main>
 </body>
 </html>

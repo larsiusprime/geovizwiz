@@ -1,0 +1,17 @@
+<svg width="200" height="48" viewBox="0 0 200 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Map Pin Icon -->
+  <g transform="translate(0, 4)">
+    <path d="M20 20C20 28.284 12 36 12 36C12 36 4 28.284 4 20C4 15.582 7.582 12 12 12C16.418 12 20 15.582 20 20Z" fill="#3B82F6"/>
+    <circle cx="12" cy="19" r="4" fill="white"/>
+    <path d="M12 36L8 40H16L12 36Z" fill="#3B82F6" opacity="0.6"/>
+  </g>
+  
+  <!-- Text: Civic Mapper -->
+  <text x="32" y="30" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="600" fill="#0F172A">
+    Civic Mapper
+  </text>
+  
+  <!-- Accent underline -->
+  <rect x="32" y="34" width="80" height="2" fill="#14B8A6" opacity="0.6"/>
+</svg>
+

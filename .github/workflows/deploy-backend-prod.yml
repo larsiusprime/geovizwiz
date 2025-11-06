@@ -1,0 +1,30 @@
+name: Backend (prod) deploy
+on:
+  push:
+    branches: [ "main" ]
+    paths: [ "api/**", ".github/workflows/deploy-backend-prod.yml" ]
+permissions: { id-token: write, contents: read }
+jobs:
+  build-push-deploy:
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR login
+        run: az acr login --name acrcivicmapperprod
+      - name: Build & push image
+        run: |
+          IMAGE=acrcivicmapperprod.azurecr.io/civicmapper-api:${{ github.sha }}
+          docker build -t $IMAGE ./api
+          docker push $IMAGE
+          echo "IMAGE=$IMAGE" >> $GITHUB_ENV
+      - name: Deploy to Container Apps
+        run: |
+          az containerapp update -g rg-civicmapper-prod -n api-civicmapper-prod --image "$IMAGE"
+

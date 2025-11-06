@@ -20,17 +20,12 @@ export default defineConfig(({ mode }) => {
     // Dev server proxies
     server: {
       proxy: {
-        // Optional: post dev logs to Slack via local endpoint
-        ...(slackWebhook
-          ? {
-              '/api/slack': {
-                target: slackWebhook,
-                changeOrigin: true,
-                secure: true,
-                rewrite: () => ''
-              }
-            }
-          : {}),
+        // Proxy API requests to local API server on port 8080
+        '/api': {
+          target: 'http://localhost:8080',
+          changeOrigin: true,
+          secure: false
+        },
 
         // Proxy remote GeoParquet to avoid browser CORS (dev only)
         '/data': {

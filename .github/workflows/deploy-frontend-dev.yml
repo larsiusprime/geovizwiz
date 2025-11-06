@@ -1,0 +1,47 @@
+name: Frontend (dev) deploy
+on:
+  push:
+    branches: [ "develop" ]
+    paths: [ "viz/**", ".github/workflows/deploy-frontend-dev.yml" ]
+permissions: { id-token: write, contents: read }
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build SPA
+        working-directory: viz
+        env:
+          VITE_API_BASE: "https://api.dev.civicmapper.org"     # or "https://dev.civicmapper.org/api" if you route via FD path
+          VITE_TILE_API_URL: "https://tiles.dev.civicmapper.org"
+          VITE_ENV_LABEL: "Dev"
+          VITE_DEPLOY_ENV: "dev"
+        run: |
+          npm ci
+          npm run build
+      - name: Upload to Storage Static Website
+        run: |
+          az storage blob upload-batch --account-name stcivicmapperdev \
+            --auth-mode login \
+            -d '$web' -s viz/dist --overwrite
+          az storage blob upload --account-name stcivicmapperdev \
+            --container-name '$web' \
+            --name favicon.svg \
+            --file viz/dist/favicon.svg \
+            --overwrite \
+            --content-type image/svg+xml
+      - name: Purge Front Door cache
+        continue-on-error: true
+        run: |
+          az afd endpoint purge -g rg-civicmapper-dev --profile-name afd-civicmapper-dev \
+            --endpoint-name ep-civicmapper-dev \
+            --content-paths "/*"

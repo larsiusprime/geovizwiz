@@ -259,6 +259,63 @@ const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement
 const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement;
 const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
 const ratioOrigCategorySelect = document.getElementById('ratioOrigCategorySelect') as HTMLSelectElement | null;
+
+const mapHelpEls = Array.from(document.querySelectorAll<HTMLDivElement>('.map-help'));
+const orbitTipDismissKey = 'gvw_hide_orbit_tip';
+const hideOrbitTips = () => {
+  for (const el of mapHelpEls) {
+    el.style.display = 'none';
+  }
+};
+
+let orbitTipDismissed = false;
+try {
+  orbitTipDismissed = localStorage.getItem(orbitTipDismissKey) === '1';
+} catch {
+  orbitTipDismissed = false;
+}
+
+if (orbitTipDismissed) {
+  hideOrbitTips();
+} else {
+  for (const el of mapHelpEls) {
+    const closeBtn = el.querySelector<HTMLButtonElement>('.map-help-close');
+    if (!closeBtn) continue;
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideOrbitTips();
+      try { localStorage.setItem(orbitTipDismissKey, '1'); } catch {}
+    });
+  }
+}
+
+const panelSizeWatchers: Array<{ panel: HTMLDivElement; mapBox: HTMLDivElement }> = [];
+const activeFullScreens = new Set<HTMLDivElement>();
+const expandRegistry: Array<{ mapBox: HTMLDivElement; toggle: (expanded: boolean) => void }> = [];
+
+function updateBodyScrollLock() {
+  if (activeFullScreens.size > 0) {
+    document.body.style.overflow = 'hidden';
+  } else {
+    document.body.style.overflow = '';
+  }
+}
+
+function updatePanelMaxHeight(panel: HTMLDivElement, mapBoxEl: HTMLDivElement) {
+  const { height } = mapBoxEl.getBoundingClientRect();
+  if (!height) return;
+  const target = Math.max(240, Math.round(height * 0.75));
+  panel.style.maxHeight = `${target}px`;
+}
+
+window.addEventListener('resize', () => {
+  for (const watcher of panelSizeWatchers) {
+    if (watcher.panel.style.display !== 'none') {
+      updatePanelMaxHeight(watcher.panel, watcher.mapBox);
+    }
+  }
+});
 function categoryInputs() {
   return Array.from((categoryContainer || document.createElement('div')).querySelectorAll<HTMLInputElement>('input[type="checkbox"]'));
 }
@@ -294,14 +351,22 @@ function initMapControls(opts: {
   closeBtn: HTMLButtonElement,
   expandBtn?: HTMLButtonElement,
   mapBoxEl: HTMLDivElement,
-  map: maplibregl.Map
+  map: maplibregl.Map,
+  getParent?: () => HTMLElement
 }) {
   const { settingsBtn, panelEl, closeBtn, expandBtn, mapBoxEl, map } = opts;
   const parent = mapBoxEl.parentElement as HTMLElement;
+  const parentGetter = opts.getParent ?? (() => parent);
+
+  panelSizeWatchers.push({ panel: panelEl, mapBox: mapBoxEl });
+
   settingsBtn.onclick = () => {
+    updatePanelMaxHeight(panelEl, mapBoxEl);
     panelEl.style.display = 'grid';
     settingsBtn.style.display = 'none';
-    if (expandBtn) expandBtn.style.display = 'none';
+    if (expandBtn && !mapBoxEl.classList.contains('map-box-expanded')) {
+      expandBtn.style.display = 'none';
+    }
   };
   closeBtn.onclick = () => {
     panelEl.style.display = 'none';
@@ -309,36 +374,49 @@ function initMapControls(opts: {
     if (expandBtn) expandBtn.style.display = 'block';
   };
   if (expandBtn) {
-    expandBtn.onclick = () => {
-      const expanded = mapBoxEl.classList.toggle('expanded');
+    let expanded = false;
+    const updateExpandButton = () => {
+      expandBtn.textContent = expanded ? '⤡' : '⤢';
+      expandBtn.setAttribute('aria-label', expanded ? 'Exit full screen' : 'Enter full screen');
+      expandBtn.title = expanded ? 'Exit full screen (Esc)' : 'Full screen';
+      expandBtn.dataset.expanded = expanded ? 'true' : 'false';
+      expandBtn.style.display = 'block';
+    };
+    const applyExpandedState = (next: boolean) => {
+      if (expanded === next) return;
+      expanded = next;
+      mapBoxEl.classList.toggle('map-box-expanded', expanded);
       if (expanded) {
         document.body.appendChild(mapBoxEl);
-        document.body.style.overflow = 'hidden';
+        activeFullScreens.add(mapBoxEl);
       } else {
-        parent.appendChild(mapBoxEl);
-        document.body.style.overflow = '';
+        parentGetter().appendChild(mapBoxEl);
+        activeFullScreens.delete(mapBoxEl);
       }
+      updateBodyScrollLock();
+      updateExpandButton();
+      updatePanelMaxHeight(panelEl, mapBoxEl);
       map.resize();
     };
+    expandBtn.onclick = () => {
+      applyExpandedState(!expanded);
+    };
+    updateExpandButton();
+    expandRegistry.push({ mapBox: mapBoxEl, toggle: applyExpandedState });
   }
 }
 
 // Initialize map control components for each map
-initMapControls({ settingsBtn, panelEl: controlsEl, closeBtn: closeControls, expandBtn, mapBoxEl: mapBox, map });
+initMapControls({ settingsBtn, panelEl: controlsEl, closeBtn: closeControls, expandBtn, mapBoxEl: mapBox, map, getParent: () => holderForTab(currentTab) });
 initMapControls({ settingsBtn: underSettingsBtn, panelEl: underControlsEl, closeBtn: underCloseControls, expandBtn: underExpandBtn, mapBoxEl: underHolder.querySelector('.map-box') as HTMLDivElement, map: mapUnder });
 initMapControls({ settingsBtn: ratioSettingsBtn, panelEl: ratioControlsEl, closeBtn: ratioCloseControls, expandBtn: ratioExpandBtn, mapBoxEl: ratioHolder.querySelector('.map-box') as HTMLDivElement, map: mapRatio });
 
-expandBtn.onclick = () => {
-  const expanded = mapBox.classList.toggle('expanded');
-  if (expanded) {
-    document.body.appendChild(mapBox);
-    document.body.style.overflow = 'hidden';
-  } else {
-    holderForTab(currentTab).appendChild(mapBox);
-    document.body.style.overflow = '';
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const expandedEntry = expandRegistry.find(({ mapBox }) => mapBox.classList.contains('map-box-expanded'));
+    expandedEntry?.toggle(false);
   }
-  map.resize();
-};
+});
 
 type TabKey = 'main' | 'under' | 'ratio';
 let currentTab: TabKey = 'main';

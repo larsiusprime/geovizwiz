@@ -260,6 +260,36 @@ const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElem
 const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
 const ratioOrigCategorySelect = document.getElementById('ratioOrigCategorySelect') as HTMLSelectElement | null;
 
+const mapHelpEls = Array.from(document.querySelectorAll<HTMLDivElement>('.map-help'));
+const orbitTipDismissKey = 'gvw_hide_orbit_tip';
+const hideOrbitTips = () => {
+  for (const el of mapHelpEls) {
+    el.style.display = 'none';
+  }
+};
+
+let orbitTipDismissed = false;
+try {
+  orbitTipDismissed = localStorage.getItem(orbitTipDismissKey) === '1';
+} catch {
+  orbitTipDismissed = false;
+}
+
+if (orbitTipDismissed) {
+  hideOrbitTips();
+} else {
+  for (const el of mapHelpEls) {
+    const closeBtn = el.querySelector<HTMLButtonElement>('.map-help-close');
+    if (!closeBtn) continue;
+    closeBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      hideOrbitTips();
+      try { localStorage.setItem(orbitTipDismissKey, '1'); } catch {}
+    });
+  }
+}
+
 const panelSizeWatchers: Array<{ panel: HTMLDivElement; mapBox: HTMLDivElement }> = [];
 const activeFullScreens = new Set<HTMLDivElement>();
 const expandRegistry: Array<{ mapBox: HTMLDivElement; toggle: (expanded: boolean) => void }> = [];

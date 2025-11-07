@@ -4,8 +4,9 @@
     { "route": "/login.html", "serve": "/login.html" },
     { "route": "/favicon.svg", "serve": "/favicon.svg" },
     { "route": "/logo.svg", "serve": "/logo.svg" },
-    { "route": "/CLE-logo.svg", "serve": "/CLE-logo.svg" },
-    { "route": "/cle-logo.svg", "serve": "/CLE-logo.svg" }
+    { "route": "/CLE-Logo.svg", "serve": "/CLE-Logo.svg" },
+    { "route": "/CLE-logo.svg", "serve": "/CLE-Logo.svg" },
+    { "route": "/cle-logo.svg", "serve": "/CLE-Logo.svg" }
   ],
   "navigationFallback": {
     "rewrite": "/index.html",

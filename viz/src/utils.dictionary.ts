@@ -3,6 +3,7 @@ import southbendLabels from './dictionaries/southbend.json';
 import syracuseLabels from './dictionaries/syracuse.json';
 import spokaneLabels from './dictionaries/spokane.json';
 import rochesterLabels from './dictionaries/rochester.json';
+import bellinghamLabels from './dictionaries/bellingham.json';
 
 // Core fields required for app functionality
 const CORE_FIELD_LABELS: Record<string, string> = {
@@ -29,6 +30,7 @@ export async function loadDataDictionary() {
     if (SELECTED_CITY === 'syracuse') extra = syracuseLabels as any;
     else if (SELECTED_CITY === 'spokane') extra = spokaneLabels as any;
     else if (SELECTED_CITY === 'rochester') extra = rochesterLabels as any;
+    else if (SELECTED_CITY === 'bellingham') extra = bellinghamLabels as any;
     else extra = southbendLabels as any;
     FIELD_LABELS = { ...FIELD_LABELS, ...extra };
     ALL_FIELDS = Object.keys(FIELD_LABELS);

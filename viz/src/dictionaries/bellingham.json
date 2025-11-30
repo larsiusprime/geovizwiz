@@ -1,0 +1,11 @@
+{
+  "exemption_flag": "Exemption Flag",
+  "property_land_use_category": "Property Category (Original)",
+  "property_land_use_refined": "Property Category (Refined)",
+  "current_tax": "Current Tax",
+  "current_tax_per_sqft": "Current Tax per Sqft",
+  "land_value": "Land Assessed Value",
+  "land_value_per_sqft": "Land Value per Sqft",
+  "improvement_value": "Improvements Assessed Value",
+  "improvement_value_per_sqft": "Improvements Value per Sqft"
+}

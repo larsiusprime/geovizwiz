@@ -740,21 +740,24 @@ async function loadSelectedColumns() {
     if (features.length === 0) throw new Error('No Polygon-like features found (expect Polygon/MultiPolygon).');
 
     // Normalize field names across cities before validations
-    // Map Syracuse fields to expected South Bend-style keys if needed
+    // Map Syracuse/Bellingham fields to expected South Bend-style keys if needed
     try {
       const hasRealImprov = features[0]?.properties?.hasOwnProperty('REALIMPROV');
       const hasRealLand = features[0]?.properties?.hasOwnProperty('REALLANDVA');
-      const hasSyrImprov = features[0]?.properties?.hasOwnProperty('improvement_value');
-      const hasSyrLand = features[0]?.properties?.hasOwnProperty('current_full_land_value');
-      const hasSyrImprovSqft = features[0]?.properties?.hasOwnProperty('improvement_value_per_sqft');
-      const hasSyrLandSqft = features[0]?.properties?.hasOwnProperty('land_value_per_sqft');
-      if ((!hasRealImprov || !hasRealLand) && (hasSyrImprov || hasSyrLand)) {
+      const hasImprov = features[0]?.properties?.hasOwnProperty('improvement_value');
+      const hasLand = features[0]?.properties?.hasOwnProperty('current_full_land_value') || features[0]?.properties?.hasOwnProperty('land_value');
+      const hasImprovSqft = features[0]?.properties?.hasOwnProperty('improvement_value_per_sqft');
+      const hasLandSqft = features[0]?.properties?.hasOwnProperty('land_value_per_sqft');
+      if ((!hasRealImprov && hasImprov) || (!hasRealLand && hasLand)) {
         for (const f of features) {
           const p = (f.properties || {}) as Record<string, any>;
-          if (hasSyrImprov && !p.hasOwnProperty('REALIMPROV')) p.REALIMPROV = p.improvement_value;
-          if (hasSyrLand && !p.hasOwnProperty('REALLANDVA')) p.REALLANDVA = p.current_full_land_value;
-          if (hasSyrImprovSqft && !p.hasOwnProperty('REALIMPROV_per_sqft')) p.REALIMPROV_per_sqft = p.improvement_value_per_sqft;
-          if (hasSyrLandSqft && !p.hasOwnProperty('REALLANDVA_per_sqft')) p.REALLANDVA_per_sqft = p.land_value_per_sqft;
+          if (hasImprov && !p.hasOwnProperty('REALIMPROV') && p.improvement_value !== undefined) p.REALIMPROV = p.improvement_value;
+
+          const landVal = p.current_full_land_value ?? p.land_value;
+          if (hasLand && !p.hasOwnProperty('REALLANDVA') && landVal !== undefined) p.REALLANDVA = landVal;
+
+          if (hasImprovSqft && !p.hasOwnProperty('REALIMPROV_per_sqft') && p.improvement_value_per_sqft !== undefined) p.REALIMPROV_per_sqft = p.improvement_value_per_sqft;
+          if (hasLandSqft && !p.hasOwnProperty('REALLANDVA_per_sqft') && p.land_value_per_sqft !== undefined) p.REALLANDVA_per_sqft = p.land_value_per_sqft;
         }
       }
     } catch {}

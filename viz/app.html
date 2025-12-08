@@ -9,7 +9,7 @@
   <link rel="mask-icon" href="favicon.svg" color="#0f172a">
   <link rel="stylesheet" href="/src/design-system.css">
   <link rel="stylesheet" href="/src/components.css">
-  <script src="https://js.givebutter.com/latest.umd.js" defer></script>
+  <script async src="https://js.givebutter.com/latest.umd.js"></script>
   <script>
     try {
       const authed = !!sessionStorage.getItem('gvw_session_authed');
@@ -54,33 +54,6 @@
       display: flex;
       align-items: center;
       gap: var(--space-2);
-    }
-
-    .support-chip {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--space-2);
-      border: 1px solid var(--border-default);
-      background: var(--bg-subtle);
-      color: var(--text-primary);
-      border-radius: var(--radius-full);
-      padding: 6px 10px;
-      font-size: var(--text-sm);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .support-chip:hover,
-    .support-chip:focus-visible {
-      border-color: var(--border-accent);
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-md);
-    }
-
-    .support-chip span {
-      color: var(--text-secondary);
-      font-weight: var(--font-medium);
     }
 
     .app-logo img {
@@ -214,34 +187,6 @@
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: var(--space-3);
-    }
-
-    .donation-card {
-      width: min(520px, 96vw);
-      background: var(--bg-surface);
-      border-radius: var(--radius-2xl);
-      border: 1px solid var(--border-default);
-      padding: var(--space-5);
-      box-shadow: var(--shadow-2xl);
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-3);
-    }
-
-    .donation-card h3 {
-      margin: 0;
-      font-size: var(--text-xl);
-      font-weight: var(--font-semibold);
-      color: var(--text-primary);
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-    }
-
-    .donation-card p {
-      margin: 0;
-      color: var(--text-secondary);
-      line-height: var(--line-relaxed);
     }
 
     /* Height Slider */
@@ -535,9 +480,9 @@
           </div>
         </div>
         <div class="app-header-actions">
-          <button id="supportBtn" type="button" class="support-chip">
-            <span>Support the Project</span>
-          </button>
+          <div style="display: inline-flex; align-items: center;">
+            <givebutter-widget id="gVxZmj"></givebutter-widget>
+          </div>
           <a href="mailto:greg@landeconomics.org" class="btn btn-ghost btn-sm" style="text-decoration: none;">
             Contact
           </a>
@@ -839,19 +784,6 @@
     </main>
   </div>
 
-  <div id="donationOverlay" class="modal-overlay" aria-hidden="true">
-    <div class="donation-card" role="dialog" aria-modal="true" aria-labelledby="donationTitle">
-      <div style="display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);">
-        <h3 id="donationTitle">Support Civic Mapper</h3>
-        <button id="closeDonation" type="button" class="btn btn-ghost btn-sm" aria-label="Close donation dialog">×</button>
-      </div>
-      <p>
-        Your gift keeps Civic Mapper free for local governments and helps us add more cities.
-      </p>
-      <givebutter-widget id="gK3JRg"></givebutter-widget>
-    </div>
-  </div>
-
   <!-- Modal 1: Field chooser -->
   <div id="modalOverlay" class="modal-overlay">
     <div class="modal-content">
@@ -951,34 +883,6 @@
     };
     document.getElementById('cityName').textContent = getCityName();
 
-    // Donation modal controls
-    const donationOverlay = document.getElementById('donationOverlay');
-    const supportBtn = document.getElementById('supportBtn');
-    const closeDonation = document.getElementById('closeDonation');
-
-    const closeDonationModal = () => {
-      donationOverlay?.classList.remove('show');
-      donationOverlay?.setAttribute('aria-hidden', 'true');
-    };
-
-    supportBtn?.addEventListener('click', () => {
-      donationOverlay?.classList.add('show');
-      donationOverlay?.setAttribute('aria-hidden', 'false');
-    });
-
-    closeDonation?.addEventListener('click', closeDonationModal);
-
-    donationOverlay?.addEventListener('click', (event) => {
-      if (event.target === donationOverlay) {
-        closeDonationModal();
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        closeDonationModal();
-      }
-    });
   </script>
 </body>
 </html>

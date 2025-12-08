@@ -222,6 +222,7 @@ const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFiel
 const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement | null;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement | null;
 const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
+const smoothLandPsfInput = document.getElementById('smoothLandPsf') as HTMLInputElement | null;
 const underTotals = document.getElementById('underTotals') as HTMLDivElement;
 // Height sliders (bottom-right)
 const heightScaleMain = document.getElementById('heightScale') as HTMLInputElement | null;
@@ -290,6 +291,8 @@ if (orbitTipDismissed) {
   }
 }
 
+smoothLandPsf = !!smoothLandPsfInput?.checked;
+
 const panelSizeWatchers: Array<{ panel: HTMLDivElement; mapBox: HTMLDivElement }> = [];
 const activeFullScreens = new Set<HTMLDivElement>();
 const expandRegistry: Array<{ mapBox: HTMLDivElement; toggle: (expanded: boolean) => void }> = [];
@@ -342,6 +345,11 @@ scaleFiltered?.addEventListener('change', () => { applyFilterAndScaling(); saveS
 invertHeights.addEventListener('change', () => {
   if (currentTab === 'under') applyFilterAndScaling();
   else computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
+  saveSettings(currentTab);
+});
+smoothLandPsfInput?.addEventListener('change', () => {
+  smoothLandPsf = smoothLandPsfInput.checked;
+  applyFilterAndScaling();
   saveSettings(currentTab);
 });
 
@@ -421,6 +429,8 @@ document.addEventListener('keydown', (event) => {
 type TabKey = 'main' | 'under' | 'ratio';
 let currentTab: TabKey = 'main';
 let reverseColors = false; // ratio tab uses reversed colors so darkest = tallest
+let smoothLandPsf = false;
+let landPsfClamp: number | null = null;
 
 function holderForTab(tab: TabKey): HTMLDivElement {
   return tab === 'main' ? mainHolder : (tab === 'under' ? underHolder : ratioHolder);
@@ -435,6 +445,7 @@ function saveSettings(tab: TabKey) {
     units: unitsSelect.value,
     opacity: opacityInput.value,
     invert: invertHeights.checked,
+    smoothLandPsf: !!smoothLandPsfInput?.checked,
     colorMode: (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value,
     scaleFiltered: !!scaleFiltered?.checked,
     categories: categoryInputs().filter(i => i.checked).map(i => i.value)
@@ -462,6 +473,10 @@ function loadSettings(tab: TabKey) {
       if (opacityOut) opacityOut.value = `${opacityInput.value}%`;
     }
     invertHeights.checked = !!obj.invert;
+    if (smoothLandPsfInput) {
+      smoothLandPsfInput.checked = !!obj.smoothLandPsf;
+      smoothLandPsf = smoothLandPsfInput.checked;
+    }
     if (obj.colorMode) {
       const radio = document.querySelector<HTMLInputElement>(`input[name="colorMode"][value="${obj.colorMode}"]`);
       if (radio) radio.checked = true;
@@ -977,6 +992,13 @@ function showPopup(m: maplibregl.Map, props: Record<string, any>, lngLat: maplib
 }
 
 /* --- value expression builder (handles normalization) --- */
+function applySmoothing(field: string, expr: Expression): Expression {
+  if (smoothLandPsf && field === 'REALLANDVA_per_sqft' && landPsfClamp != null) {
+    return ['min', expr, landPsfClamp] as any;
+  }
+  return expr;
+}
+
 function buildValueExpression(): Expression {
   if (!currentField) return ['literal', 0] as any;
   let base: Expression;
@@ -1019,7 +1041,7 @@ function buildValueExpression(): Expression {
     ] as any;
   }
 
-  return base;
+  return applySmoothing(currentField, base);
 }
 
 function buildValueExpressionFor(field: string, mode: 'asis'|'perLand'|'perBuilding'): Expression {
@@ -1048,7 +1070,7 @@ function buildValueExpressionFor(field: string, mode: 'asis'|'perLand'|'perBuild
     const den: Expression = ['to-number', ['get', bldgSizeField]] as any;
     return ['case', ['<', den, 0], 0, ['==', den, 0], 0, ['/', base, den]] as any;
   }
-  return base;
+  return applySmoothing(field, base);
 }
 
 
@@ -1500,6 +1522,9 @@ function computeDisplayedMetricFromProps(props: Record<string, any>): number | n
     if (d == null || d <= 0) return null;
     base = base / d;
   }
+  if (smoothLandPsf && currentField === 'REALLANDVA_per_sqft' && landPsfClamp != null) {
+    base = Math.min(base, landPsfClamp);
+  }
   return base;
 }
 
@@ -1614,6 +1639,12 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
     }
     vals.push(base);
   }
+  if (smoothLandPsf && field === 'REALLANDVA_per_sqft') {
+    const cap = percentile(vals, 97);
+    landPsfClamp = Number.isFinite(cap) ? cap : null;
+    return (landPsfClamp != null) ? vals.map(v => Math.min(v, landPsfClamp as number)) : vals;
+  }
+  landPsfClamp = null;
   return vals;
 }
 

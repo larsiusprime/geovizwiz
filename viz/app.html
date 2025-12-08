@@ -462,11 +462,6 @@
         max-height: 80vh;
       }
     }
-
-    /* Hide the improvement-to-land ratio map on city pages */
-    #ratioSection {
-      display: none;
-    }
   </style>
 </head>
 <body>
@@ -579,16 +574,6 @@
                   <input type="checkbox" id="invertHeights" class="checkbox" />
                   <span>Invert height scale</span>
                 </label>
-              </div>
-
-              <div class="control-group">
-                <label class="checkbox-item">
-                  <input type="checkbox" id="smoothLandPsf" class="checkbox" />
-                  <span>Smooth high land value per sq ft</span>
-                </label>
-                <p style="margin: var(--space-2) 0 0; color: var(--text-secondary); font-size: var(--text-xs);">
-                  Clamps the tallest 3% of parcels for land value per square foot so the rest of the map is easier to read.
-                </p>
               </div>
 
               <div class="control-group">

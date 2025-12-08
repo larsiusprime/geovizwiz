@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" sizes="any" href="favicon.svg" />
   <link rel="shortcut icon" type="image/svg+xml" href="favicon.svg" />
   <link rel="mask-icon" href="favicon.svg" color="#0f172a" />
+  <script async src="https://widgets.givebutter.com/latest.umd.js"></script>
   <style>
     :root {
       --bg: #0f172a;
@@ -77,27 +78,14 @@
       margin-bottom: clamp(2.5rem, 5vw, 3.75rem);
     }
 
-    .brand {
-      display: flex;
+    .givebutter-button-shell {
+      display: inline-flex;
       align-items: center;
-      gap: 0.9rem;
-      font-weight: 600;
-      letter-spacing: -0.02em;
-      color: inherit;
-      text-decoration: none;
-    }
-
-    .brand-mark {
-      width: 44px;
-      height: 44px;
-      display: grid;
-      place-items: center;
-      border-radius: 16px;
-      background: linear-gradient(135deg, rgba(56, 189, 248, 0.9), rgba(34, 211, 238, 0.7));
-      color: var(--bg);
-      font-weight: 700;
-      font-size: 1.05rem;
-      box-shadow: 0 20px 40px -22px rgba(56, 189, 248, 0.8);
+      padding: 0.3rem 0.4rem;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.3);
+      box-shadow: 0 14px 30px -18px rgba(56, 189, 248, 0.65);
     }
 
     .cta-link {
@@ -194,6 +182,26 @@
       gap: 0.9rem;
     }
 
+    .donate-form {
+      margin-top: clamp(1.5rem, 4vw, 2rem);
+      padding: clamp(1.2rem, 3vw, 1.6rem);
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.18);
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .donate-form h2 {
+      margin: 0;
+      font-size: clamp(1.2rem, 3vw, 1.4rem);
+    }
+
+    givebutter-widget {
+      display: inline-flex;
+    }
+
     .callout strong {
       font-size: 1.05rem;
       color: var(--text-primary);
@@ -270,15 +278,14 @@
     }
   </style>
 </head>
-<body>
-  <main>
-    <header>
-      <a class="brand" href="/">
-        <span class="brand-mark">CM</span>
-        Civic Mapper
-      </a>
-      <a class="cta-link" href="mailto:greg@landeconomics.org">Contact us ↗</a>
-    </header>
+  <body>
+    <main>
+      <header>
+        <div class="givebutter-button-shell">
+          <givebutter-widget id="gVxZmj"></givebutter-widget>
+        </div>
+        <a class="cta-link" href="mailto:greg@landeconomics.org">Contact us ↗</a>
+      </header>
 
     <section class="hero-copy">
       <h1>Modern 3D parcel insights for every city.</h1>
@@ -297,6 +304,15 @@
           We are actively expanding our coverage. Drop us a line and we will collaborate with you to bring your city's data online.
         </p>
         <a class="button button-secondary" href="mailto:greg@landeconomics.org">Email greg@landeconomics.org</a>
+      </div>
+
+      <div class="donate-form">
+        <h2>Support Civic Mapper</h2>
+        <p>
+          Keep our parcel visualizations free for communities and help us expand coverage by contributing through the Givebutter
+          form below.
+        </p>
+        <givebutter-widget id="gVxZmj" align="left"></givebutter-widget>
       </div>
     </section>
 

@@ -227,6 +227,7 @@ const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFiel
 const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement | null;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement | null;
 const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
+const smoothHeights = document.getElementById('smoothHeights') as HTMLInputElement | null;
 const underTotals = document.getElementById('underTotals') as HTMLDivElement;
 // Height sliders (bottom-right)
 const heightScaleMain = document.getElementById('heightScale') as HTMLInputElement | null;
@@ -349,6 +350,13 @@ invertHeights.addEventListener('change', () => {
   else computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
   saveSettings(currentTab);
 });
+smoothHeights?.addEventListener('change', () => {
+  heightSmoothingEnabled = !!smoothHeights.checked;
+  computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
+  renderUnderNow();
+  renderRatioNow();
+  saveSettings(currentTab);
+});
 
 function initMapControls(opts: {
   settingsBtn: HTMLButtonElement,
@@ -444,6 +452,7 @@ function saveSettings(tab: TabKey) {
     units: unitsSelect.value,
     opacity: opacityInput.value,
     invert: invertHeights.checked,
+    smoothHeights: !!smoothHeights?.checked,
     colorMode: (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value,
     scaleFiltered: !!scaleFiltered?.checked,
     categories: categoryInputs().filter(i => i.checked).map(i => i.value)
@@ -471,6 +480,7 @@ function loadSettings(tab: TabKey) {
       if (opacityOut) opacityOut.value = `${opacityInput.value}%`;
     }
     invertHeights.checked = !!obj.invert;
+    if (smoothHeights) smoothHeights.checked = !!obj.smoothHeights;
     if (obj.colorMode) {
       const radio = document.querySelector<HTMLInputElement>(`input[name="colorMode"][value="${obj.colorMode}"]`);
       if (radio) radio.checked = true;
@@ -479,6 +489,7 @@ function loadSettings(tab: TabKey) {
     if (obj.categories && categoryContainer && categoryContainer.childElementCount) {
       categoryInputs().forEach(i => { i.checked = obj.categories.includes(i.value); });
     }
+    heightSmoothingEnabled = smoothHeights?.checked || false;
   } catch {}
 }
 
@@ -561,6 +572,7 @@ let colorBreaks: number[] | null = null;
 // For inverted heights: ranking (quintile) breaks on the raw metric
 let heightRankBreaks: number[] | null = null;
 const HEIGHT_RANK_BINS = 5; // quintiles for inverted-height ranking
+const HEIGHT_SMOOTH_PCTL = 99.5; // cap rare spikes when smoothing is enabled
 
 // staged loading
 let lastAsyncBuffer: AsyncBuffer | null = null;
@@ -596,6 +608,8 @@ type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 let heightFactorMain = 1;
 let heightFactorUnder = 1;
 let heightFactorRatio = 1;
+let heightSmoothingEnabled = smoothHeights?.checked || false;
+let heightSmoothingCap: number | null = null;
 
 /* ---------------- FUNCTIONS ----------------- */
 
@@ -1068,6 +1082,9 @@ function applyExtrusion() {
   let ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
   if (reverseColors && ramp) ramp = ramp.slice().reverse();
   const valueExpr = buildValueExpression();
+  const cappedHeightExpr = (heightSmoothingEnabled && heightSmoothingCap != null)
+    ? (['min', heightSmoothingCap, valueExpr] as Expression)
+    : valueExpr;
   
   let colorExpr: Expression;
   if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
@@ -1084,21 +1101,21 @@ function applyExtrusion() {
   const rawMult = Number(multInput.value);
   const multiplier = (Number.isFinite(rawMult) ? rawMult : 0) * heightFactorMain;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-  let heightBase: Expression = valueExpr;
+  let heightBase: Expression = cappedHeightExpr;
   let heightExpr: Expression;
   if (invertHeights.checked && currentField === 'IMPR_PCT_TOTAL') {
     // simple invert within 0..100 domain
-    heightExpr = ['*', ['-', 100, valueExpr] as any, multiplier * unitFactor] as any;
+    heightExpr = ['*', ['-', 100, cappedHeightExpr] as any, multiplier * unitFactor] as any;
   } else if (invertHeights.checked && heightRankBreaks && heightRankBreaks.length) {
     // Use inverted rank (quintiles): highest values => smallest height
     const k = Math.max(2, HEIGHT_RANK_BINS);
-    const idxExpr = makeStepIndexExpression(valueExpr, heightRankBreaks);
+    const idxExpr = makeStepIndexExpression(cappedHeightExpr, heightRankBreaks);
     const denom = (k - 1);
     const rankInv: Expression = ['/', ['-', denom, idxExpr as any], denom] as any; // (k-1 - idx)/(k-1)
     heightExpr = ['*', rankInv, multiplier * unitFactor] as any;
   } else if (invertHeights.checked && currentStats) {
     // Fallback: linear invert when rank breaks not available
-    heightBase = ['-', currentStats.max, valueExpr] as any;
+    heightBase = ['-', currentStats.max, cappedHeightExpr] as any;
     heightExpr = ['*', heightBase, multiplier * unitFactor] as any;
   } else {
     heightExpr = ['*', heightBase, multiplier * unitFactor] as any;
@@ -1133,6 +1150,7 @@ function renderMapFor(
   if (!m.getLayer(LAYER_ID)) return;
   const src = filteredFc || currentGeoJSON;
   const vals = getNumericValuesNormalized(src, field, mode);
+  const { heightVals, cap } = applyHeightSmoothing(vals);
   if (!vals.length) return;
   let min = Infinity, max = -Infinity;
   for (const v of vals) { if (v < min) min = v; if (v > max) max = v; }
@@ -1140,7 +1158,7 @@ function renderMapFor(
 
   // For inverted heights, use rank (quintiles) on raw values
   const usePctInvert = invert && field === 'IMPR_PCT_TOTAL';
-  const rankBreaks = invert && !usePctInvert ? quantileBreaks(vals, HEIGHT_RANK_BINS, 1, 99) : [];
+  const rankBreaks = invert && !usePctInvert ? quantileBreaks(heightVals, HEIGHT_RANK_BINS, 1, 99) : [];
   const k = Math.max(2, HEIGHT_RANK_BINS);
   const denom = (k - 1);
   const toIdx = (v: number) => {
@@ -1150,12 +1168,12 @@ function renderMapFor(
   };
   // Height autoscale uses simple invert for percentage, rank-based otherwise
   const scaleValsForHeight = invert
-    ? (usePctInvert ? vals.map(v => 100 - v) : vals.map(v => (denom - toIdx(v)) / denom))
-    : vals;
+    ? (usePctInvert ? heightVals.map(v => 100 - v) : heightVals.map(v => (denom - toIdx(v)) / denom))
+    : heightVals;
   let pVal = percentile(scaleValsForHeight, HEIGHT_PCTL);
   if (!Number.isFinite(pVal) || pVal <= 0) {
     // Fallback: try non-inverted values; if still invalid, use 1
-    const alt = percentile(vals, HEIGHT_PCTL);
+    const alt = percentile(heightVals, HEIGHT_PCTL);
     pVal = (Number.isFinite(alt) && alt > 0) ? alt : 1;
   }
   const heightScale = (capMeters / pVal) * (Number.isFinite(multiplierFactor) ? multiplierFactor : 1);
@@ -1164,6 +1182,9 @@ function renderMapFor(
   if (reverse && ramp) ramp = ramp.slice().reverse();
 
   const valueExpr = buildValueExpressionFor(field, mode);
+  const cappedHeightExpr = (heightSmoothingEnabled && cap != null)
+    ? (['min', cap, valueExpr] as Expression)
+    : valueExpr;
   let colorExpr: Expression;
   let legendText = '';
   const colorBaseExpr: Expression = invert ? (['-', max, valueExpr] as any) : valueExpr;
@@ -1192,14 +1213,14 @@ function renderMapFor(
   let heightExpr: Expression;
   if (invert) {
     if (usePctInvert) {
-      heightExpr = ['*', ['-', 100, valueExpr] as any, heightScale] as any;
+      heightExpr = ['*', ['-', 100, cappedHeightExpr] as any, heightScale] as any;
     } else {
-      const idxExpr = makeStepIndexExpression(valueExpr, rankBreaks);
+      const idxExpr = makeStepIndexExpression(cappedHeightExpr, rankBreaks);
       const rankInv: Expression = ['/', ['-', denom, idxExpr as any], denom] as any; // (k-1 - idx)/(k-1)
       heightExpr = ['*', rankInv, heightScale] as any;
     }
   } else {
-    const heightBase: Expression = valueExpr;
+    const heightBase: Expression = cappedHeightExpr;
     heightExpr = ['*', heightBase, heightScale] as any;
   }
 
@@ -1513,21 +1534,24 @@ function computeDisplayedMetricFromProps(props: Record<string, any>): number | n
 }
 
 function computeExtrusionHeightMeters(metricValue: number): number {
+  const capped = (heightSmoothingEnabled && heightSmoothingCap != null)
+    ? Math.min(metricValue, heightSmoothingCap)
+    : metricValue;
   const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
   const mult = Number(multInput.value);
   const multiplier = (Number.isFinite(mult) ? mult : 0) * heightFactorMain;
   if (invertHeights.checked && currentField === 'IMPR_PCT_TOTAL') {
-    return (100 - metricValue) * multiplier * unitFactor;
+    return (100 - capped) * multiplier * unitFactor;
   }
   if (invertHeights.checked && heightRankBreaks && heightRankBreaks.length) {
     const k = Math.max(2, HEIGHT_RANK_BINS);
     let i = 0;
-    while (i < heightRankBreaks.length && metricValue >= heightRankBreaks[i]) i++;
+    while (i < heightRankBreaks.length && capped >= heightRankBreaks[i]) i++;
     const denom = (k - 1);
     const rankInv = (denom - i) / denom;
     return rankInv * multiplier * unitFactor;
   }
-  return metricValue * multiplier * unitFactor;
+  return capped * multiplier * unitFactor;
 }
 
 // Queue an update; newer calls replace older ones.
@@ -1626,6 +1650,13 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
   return vals;
 }
 
+function applyHeightSmoothing(vals: number[]): { heightVals: number[]; cap: number | null } {
+  if (!heightSmoothingEnabled) return { heightVals: vals, cap: null };
+  const cap = percentile(vals, HEIGHT_SMOOTH_PCTL);
+  if (!Number.isFinite(cap)) return { heightVals: vals, cap: null };
+  return { heightVals: vals.map(v => Math.min(v, cap)), cap };
+}
+
 function computeStatsNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding') {
   const vals = getNumericValuesNormalized(fc, field, mode);
   let min = Infinity, max = -Infinity;
@@ -1671,14 +1702,16 @@ function computeAndApplyAutoMultiplier(
 
   // values for the CURRENT normalization mode
   const vals = getNumericValuesNormalized(src, currentField, normalizationMode);
-  let scaleVals = vals;
+  const { heightVals, cap } = applyHeightSmoothing(vals);
+  heightSmoothingCap = cap;
+  let scaleVals = heightVals;
   // For inverted heights, prefer simple invert for percentage metric; otherwise use rank-based fallback
   if (invertHeights.checked) {
     if (currentField === 'IMPR_PCT_TOTAL') {
       heightRankBreaks = null;
-      scaleVals = vals.map(v => 100 - v);
+      scaleVals = heightVals.map(v => 100 - v);
     } else {
-      heightRankBreaks = quantileBreaks(vals, HEIGHT_RANK_BINS, 1, 99);
+      heightRankBreaks = quantileBreaks(heightVals, HEIGHT_RANK_BINS, 1, 99);
       const k = Math.max(2, HEIGHT_RANK_BINS);
       const denom = (k - 1);
       const toIdx = (v: number) => {
@@ -1686,7 +1719,7 @@ function computeAndApplyAutoMultiplier(
         while (i < (heightRankBreaks?.length || 0) && heightRankBreaks && v >= heightRankBreaks[i]) i++;
         return i;
       };
-      scaleVals = vals.map(v => (denom - toIdx(v)) / denom);
+      scaleVals = heightVals.map(v => (denom - toIdx(v)) / denom);
     }
   } else {
     heightRankBreaks = null;
@@ -1694,7 +1727,7 @@ function computeAndApplyAutoMultiplier(
   // Use p-th percentile of the active values; fallback to non-inverted; final fallback to 1
   let pVal = percentile(scaleVals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) {
-    const alt = percentile(vals, p);
+    const alt = percentile(heightVals, p);
     pVal = (Number.isFinite(alt) && alt > 0) ? alt : 1;
   }
 

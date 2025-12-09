@@ -1623,7 +1623,7 @@ function applyHeightSmoothing(vals: number[]): { heightVals: number[]; cap: numb
   // If scale is zero or invalid, nothing to smooth.
   if (!(scale > 0)) return { heightVals: vals, cap: null };
 
-  const threshold = 6; // |z| > 4 => outlier
+  const threshold = 15; // |z| > 4 => outlier
   const nonOutliers = vals.filter(v => Math.abs(v - median) / scale <= threshold);
   if (!nonOutliers.length) return { heightVals: vals, cap: null };
 

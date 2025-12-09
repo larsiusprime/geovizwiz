@@ -151,6 +151,8 @@ function postSlackReliable(text: string, maxAttempts = 5): void {
 
 const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good “HQ” target
 
+const ratioContainer = document.getElementById('map-ratio') as HTMLElement | null;
+
 const map = new maplibregl.Map({
   container: 'map',
   // Default to OpenStreetMap; fallback style handled elsewhere
@@ -181,18 +183,21 @@ const mapUnder = new maplibregl.Map({
 mapUnder.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
 mapUnder.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-const mapRatio = new maplibregl.Map({
-  container: 'map-ratio',
-  style: BASEMAP_STYLES['OpenStreetMap'],
-  center: [-95.3698, 29.7604],
-  zoom: 10,
-  pitch: 45,
-  bearing: -20,
-  hash: false,
-  pixelRatio: HQ_PR
-});
-mapRatio.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
-mapRatio.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+let mapRatio: maplibregl.Map | null = null;
+if (ratioContainer) {
+  mapRatio = new maplibregl.Map({
+    container: ratioContainer,
+    style: BASEMAP_STYLES['OpenStreetMap'],
+    center: [-95.3698, 29.7604],
+    zoom: 10,
+    pitch: 45,
+    bearing: -20,
+    hash: false,
+    pixelRatio: HQ_PR
+  });
+  mapRatio.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-left');
+  mapRatio.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+}
 
 
 /* ---------------- UI elements ---------------- */
@@ -214,10 +219,10 @@ const expandBtn = document.getElementById('expandBtn') as HTMLButtonElement;
 const mapBox = document.getElementById('mapBox') as HTMLDivElement;
 const mainHolder = document.getElementById('mapHolder-main') as HTMLDivElement;
 const underHolder = document.getElementById('mapHolder-under') as HTMLDivElement;
-const ratioHolder = document.getElementById('mapHolder-ratio') as HTMLDivElement;
+const ratioHolder = document.getElementById('mapHolder-ratio') as HTMLDivElement | null;
 const mainSection = document.getElementById('mainSection') as HTMLElement;
 const underSection = document.getElementById('underSection') as HTMLElement;
-const ratioSection = document.getElementById('ratioSection') as HTMLElement;
+const ratioSection = document.getElementById('ratioSection') as HTMLElement | null;
 const categoryFieldset = document.getElementById('categoryFieldset') as HTMLFieldSetElement | null;
 const categoryContainer = document.getElementById('categoryFilter') as HTMLDivElement | null;
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement | null;
@@ -246,18 +251,18 @@ const origCategorySelect = document.getElementById('origCategorySelect') as HTML
 const underOrigCategorySelect = document.getElementById('underOrigCategorySelect') as HTMLSelectElement | null;
 
 // Ratio map controls
-const ratioSettingsBtn = document.getElementById('ratioSettingsBtn') as HTMLButtonElement;
-const ratioControlsEl = document.getElementById('ratioControls') as HTMLDivElement;
-const ratioCloseControls = document.getElementById('ratioCloseControls') as HTMLButtonElement;
-const ratioExpandBtn = document.getElementById('ratioExpandBtn') as HTMLButtonElement;
-const ratioRampSelect = document.getElementById('ratio-ramp') as HTMLSelectElement;
-const ratioOpacityInput = document.getElementById('ratio-opacity') as HTMLInputElement;
-const ratioOpacityOut = document.getElementById('ratioOpacityVal') as HTMLOutputElement;
-const ratioInvertHeights = document.getElementById('ratioInvertHeights') as HTMLInputElement;
-const ratioBasemapSelect = document.getElementById('ratio-basemap') as HTMLSelectElement;
-const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement;
-const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement;
-const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement;
+const ratioSettingsBtn = document.getElementById('ratioSettingsBtn') as HTMLButtonElement | null;
+const ratioControlsEl = document.getElementById('ratioControls') as HTMLDivElement | null;
+const ratioCloseControls = document.getElementById('ratioCloseControls') as HTMLButtonElement | null;
+const ratioExpandBtn = document.getElementById('ratioExpandBtn') as HTMLButtonElement | null;
+const ratioRampSelect = document.getElementById('ratio-ramp') as HTMLSelectElement | null;
+const ratioOpacityInput = document.getElementById('ratio-opacity') as HTMLInputElement | null;
+const ratioOpacityOut = document.getElementById('ratioOpacityVal') as HTMLOutputElement | null;
+const ratioInvertHeights = document.getElementById('ratioInvertHeights') as HTMLInputElement | null;
+const ratioBasemapSelect = document.getElementById('ratio-basemap') as HTMLSelectElement | null;
+const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement | null;
+const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement | null;
+const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement | null;
 const ratioOrigCategorySelect = document.getElementById('ratioOrigCategorySelect') as HTMLSelectElement | null;
 
 const mapHelpEls = Array.from(document.querySelectorAll<HTMLDivElement>('.map-help'));
@@ -409,7 +414,9 @@ function initMapControls(opts: {
 // Initialize map control components for each map
 initMapControls({ settingsBtn, panelEl: controlsEl, closeBtn: closeControls, expandBtn, mapBoxEl: mapBox, map, getParent: () => holderForTab(currentTab) });
 initMapControls({ settingsBtn: underSettingsBtn, panelEl: underControlsEl, closeBtn: underCloseControls, expandBtn: underExpandBtn, mapBoxEl: underHolder.querySelector('.map-box') as HTMLDivElement, map: mapUnder });
-initMapControls({ settingsBtn: ratioSettingsBtn, panelEl: ratioControlsEl, closeBtn: ratioCloseControls, expandBtn: ratioExpandBtn, mapBoxEl: ratioHolder.querySelector('.map-box') as HTMLDivElement, map: mapRatio });
+if (ratioSettingsBtn && ratioControlsEl && ratioCloseControls && ratioExpandBtn && ratioHolder && mapRatio) {
+  initMapControls({ settingsBtn: ratioSettingsBtn, panelEl: ratioControlsEl, closeBtn: ratioCloseControls, expandBtn: ratioExpandBtn, mapBoxEl: ratioHolder.querySelector('.map-box') as HTMLDivElement, map: mapRatio });
+}
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
@@ -423,7 +430,9 @@ let currentTab: TabKey = 'main';
 let reverseColors = false; // ratio tab uses reversed colors so darkest = tallest
 
 function holderForTab(tab: TabKey): HTMLDivElement {
-  return tab === 'main' ? mainHolder : (tab === 'under' ? underHolder : ratioHolder);
+  if (tab === 'main') return mainHolder;
+  if (tab === 'under') return underHolder;
+  return ratioHolder ?? mainHolder;
 }
 
 function saveSettings(tab: TabKey) {
@@ -849,7 +858,7 @@ async function loadSelectedColumns() {
 
     addOrUpdateSourceFor(map, /*withClick*/ true);
     addOrUpdateSourceWhenReady(mapUnder, /*withClick*/ true);
-    addOrUpdateSourceWhenReady(mapRatio, /*withClick*/ true);
+    if (mapRatio) addOrUpdateSourceWhenReady(mapRatio, /*withClick*/ true);
 
     // auto-multiplier for current normalization mode → p99 = 2km (centimeters)
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
@@ -1413,15 +1422,15 @@ function renderUnderNow() {
 }
 
 function renderRatioNow() {
-  if (!currentGeoJSON || !mapRatio.getLayer(LAYER_ID)) return;
+  if (!currentGeoJSON || !mapRatio?.getLayer(LAYER_ID)) return;
   const ratioField = (ratioFieldSelect?.value || 'IMPR_LAND_RATIO');
   // Apply original category filter to the ratio map
   let filter: any = null;
   const origVal = ratioOrigCategorySelect?.value || '';
   if (origVal) filter = ['==', ['get', ORIG_CATEGORY_FIELD], origVal] as any;
-  mapRatio.setFilter(LAYER_ID, filter);
+  mapRatio?.setFilter(LAYER_ID, filter);
   renderMapFor(
-    mapRatio,
+    mapRatio!,
     ratioField,
     'asis',
     /*invert*/ !!(ratioInvertHeights?.checked),
@@ -1446,7 +1455,7 @@ function fitToDataAll(fc: GeoJSON.FeatureCollection) {
   const bounds: [[number, number], [number, number]] = [[b[0], b[1]], [b[2], b[3]]];
   map.fitBounds(bounds, { padding: 40, duration: 800 });
   mapUnder.fitBounds(bounds, { padding: 40, duration: 800 });
-  mapRatio.fitBounds(bounds, { padding: 40, duration: 800 });
+  mapRatio?.fitBounds(bounds, { padding: 40, duration: 800 });
 }
 
 // ---- Quality toggle (runtime supersampling) ----
@@ -1926,7 +1935,7 @@ ratioRampSelect?.addEventListener('change', () => { renderRatioNow(); });
 ratioOpacityInput?.addEventListener('input', () => { if (ratioOpacityOut) ratioOpacityOut.value = `${parseInt(ratioOpacityInput.value).toFixed(0)}%`; renderRatioNow(); });
 ratioInvertHeights?.addEventListener('change', () => { renderRatioNow(); });
 ratioMultInput?.addEventListener('input', () => { renderRatioNow(); });
-ratioBasemapSelect?.addEventListener('change', () => { setBasemapFor(mapRatio, ratioBasemapSelect.value); });
+ratioBasemapSelect?.addEventListener('change', () => { if (mapRatio) setBasemapFor(mapRatio, ratioBasemapSelect.value); });
 ratioFieldSelect?.addEventListener('change', () => { renderRatioNow(); });
 
 // Height slider listeners (bottom-right)

@@ -110,7 +110,7 @@
       inset: 0;
     }
 
-    #map, #map-under, #map-ratio {
+    #map, #map-under {
       width: 100%;
       height: 100%;
     }
@@ -688,81 +688,6 @@
         </div>
       </section>
 
-      <!-- Ratio Section -->
-      <section id="ratioSection" class="content-section" style="padding-bottom: var(--space-16);">
-        <h2 class="section-title">Percent Improvement-to-Land Ratio</h2>
-        <p class="section-description">
-          Shows percentage: (REALIMPROV ÷ REALLANDVA) × 100. Use "Invert height scale" to emphasize low percentages if desired.
-        </p>
-        
-        <div id="mapHolder-ratio" class="map-container">
-          <div class="map-box map-view">
-            <div id="map-ratio"></div>
-            
-            <div class="height-control">
-              <span class="height-control-label">Height:</span>
-              <input id="ratioHeightScale" class="range-slider" type="range" min="0" max="100" step="1" value="100" />
-            </div>
-            
-            <div class="map-controls">
-              <button id="ratioSettingsBtn" class="btn btn-primary">Settings</button>
-              <button id="ratioExpandBtn" class="btn btn-ghost btn-icon">⤢</button>
-            </div>
-
-            <div class="map-help">
-              <span>Tip:</span>
-              <kbd>Ctrl</kbd>
-              <span>+ drag to orbit 3D</span>
-              <button type="button" class="map-help-close" aria-label="Dismiss orbit tip">×</button>
-            </div>
-            
-            <div id="ratioControls" class="control-panel">
-              <div class="control-panel-header">
-                <h3 class="control-panel-title">Settings</h3>
-                <button id="ratioCloseControls" class="btn btn-ghost btn-icon">×</button>
-              </div>
-
-              <div class="control-group">
-                <label class="label" for="ratio-field">Numeric field to visualize</label>
-                <select id="ratio-field" class="input select"></select>
-              </div>
-
-              <div class="control-group">
-                <label class="label" for="ratio-basemap">Base map</label>
-                <select id="ratio-basemap" class="input select"></select>
-              </div>
-
-              <div class="control-group">
-                <label class="label" for="ratio-ramp">Color ramp</label>
-                <select id="ratio-ramp" class="input select"></select>
-              </div>
-
-              <div class="control-group">
-                <label class="label" for="ratio-opacity">Opacity</label>
-                <div style="display: flex; gap: var(--space-2); align-items: center;">
-                  <input id="ratio-opacity" class="range-slider" type="range" min="0" max="100" step="1" value="100" style="flex: 1;" />
-                  <output id="ratioOpacityVal" style="min-width: 3ch; text-align: right; font-size: var(--text-xs);">100%</output>
-                </div>
-              </div>
-
-              <div class="control-group">
-                <label class="checkbox-item">
-                  <input type="checkbox" id="ratioInvertHeights" class="checkbox" />
-                  <span>Invert height scale</span>
-                </label>
-              </div>
-
-              <div class="control-group">
-                <label class="label" for="ratioOrigCategorySelect">Original category filter</label>
-                <select id="ratioOrigCategorySelect" class="input select"></select>
-              </div>
-
-              <fieldset id="ratioLegend" class="legend"></fieldset>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <!-- Footer -->
       <footer style="max-width: 1400px; margin: 0 auto; padding: var(--space-12) var(--space-6); text-align: center; border-top: 1px solid var(--border-default); background: var(--bg-surface);">
         <div style="font-size: var(--text-xs); color: var(--text-tertiary); margin-bottom: var(--space-4);">Created by</div>
@@ -846,7 +771,6 @@
   <div id="categoryFilter" style="display: none;"></div>
   <input id="scaleFiltered" type="checkbox" style="display: none;" />
   <input id="under-mult" type="number" value="1" style="display: none;" />
-  <input id="ratio-mult" type="number" value="1" style="display: none;" />
   <input id="mult" type="number" value="1" style="display: none;" />
   <select id="units" style="display: none;">
     <option value="centimeters" selected>centimeters</option>

@@ -587,7 +587,11 @@
                   <input type="checkbox" id="smoothHeights" class="checkbox" />
                   <span>Smooth extreme heights</span>
                 </label>
-                <p class="muted" style="margin:0;">Ignore rare spikes when scaling bars and cap them to the highest non-outlier value.</p>
+                <div id="smoothHeightsScaleGroup" style="display:none; align-items: center; gap: var(--space-2);">
+                  <span class="muted" style="font-size: var(--text-xs);">Gentler</span>
+                  <input id="smoothHeightsStrictness" class="range-slider" type="range" min="2" max="15" step="1" value="6" style="flex:1;" />
+                  <span class="muted" style="font-size: var(--text-xs);">Stricter</span>
+                </div>
               </div>
 
               <div class="control-group">

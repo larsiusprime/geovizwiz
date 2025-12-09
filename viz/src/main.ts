@@ -227,6 +227,8 @@ const categoryContainer = document.getElementById('categoryFilter') as HTMLDivEl
 const scaleFiltered = document.getElementById('scaleFiltered') as HTMLInputElement | null;
 const invertHeights = document.getElementById('invertHeights') as HTMLInputElement;
 const smoothHeights = document.getElementById('smoothHeights') as HTMLInputElement | null;
+const smoothHeightsScaleGroup = document.getElementById('smoothHeightsScaleGroup') as HTMLDivElement | null;
+const smoothHeightsStrictness = document.getElementById('smoothHeightsStrictness') as HTMLInputElement | null;
 const underTotals = document.getElementById('underTotals') as HTMLDivElement;
 // Height sliders (bottom-right)
 const heightScaleMain = document.getElementById('heightScale') as HTMLInputElement | null;
@@ -347,13 +349,34 @@ invertHeights.addEventListener('change', () => {
   else computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
   saveSettings(currentTab);
 });
+function updateSmoothHeightsUI() {
+  const enabled = !!smoothHeights?.checked;
+  if (smoothHeightsScaleGroup) smoothHeightsScaleGroup.style.display = enabled ? 'flex' : 'none';
+  if (smoothHeightsStrictness) smoothHeightsStrictness.disabled = !enabled;
+}
+function handleSmoothThresholdChange() {
+  const raw = Number(smoothHeightsStrictness?.value ?? heightSmoothingThreshold);
+  const clamped = clampSmoothingThreshold(raw);
+  heightSmoothingThreshold = clamped;
+  if (smoothHeightsStrictness) smoothHeightsStrictness.value = String(clamped);
+  if (heightSmoothingEnabled) {
+    computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
+    renderUnderNow();
+    renderRatioNow();
+  }
+  saveSettings(currentTab);
+}
 smoothHeights?.addEventListener('change', () => {
   heightSmoothingEnabled = !!smoothHeights.checked;
+  updateSmoothHeightsUI();
   computeAndApplyAutoMultiplier('auto', HEIGHT_CAPS.main, HEIGHT_PCTL);
   renderUnderNow();
   renderRatioNow();
   saveSettings(currentTab);
 });
+smoothHeightsStrictness?.addEventListener('input', handleSmoothThresholdChange);
+smoothHeightsStrictness?.addEventListener('change', handleSmoothThresholdChange);
+updateSmoothHeightsUI();
 
 function initMapControls(opts: {
   settingsBtn: HTMLButtonElement,
@@ -449,6 +472,7 @@ function saveSettings(tab: TabKey) {
     opacity: opacityInput.value,
     invert: invertHeights.checked,
     smoothHeights: !!smoothHeights?.checked,
+    smoothThreshold: heightSmoothingThreshold,
     colorMode: (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value,
     scaleFiltered: !!scaleFiltered?.checked,
     categories: categoryInputs().filter(i => i.checked).map(i => i.value)
@@ -473,6 +497,11 @@ function loadSettings(tab: TabKey) {
     }
     invertHeights.checked = !!obj.invert;
     if (smoothHeights) smoothHeights.checked = !!obj.smoothHeights;
+    if (obj.smoothThreshold != null && smoothHeightsStrictness) {
+      const clamped = clampSmoothingThreshold(Number(obj.smoothThreshold));
+      heightSmoothingThreshold = clamped;
+      smoothHeightsStrictness.value = String(clamped);
+    }
     if (obj.colorMode) {
       const radio = document.querySelector<HTMLInputElement>(`input[name="colorMode"][value="${obj.colorMode}"]`);
       if (radio) radio.checked = true;
@@ -482,6 +511,7 @@ function loadSettings(tab: TabKey) {
       categoryInputs().forEach(i => { i.checked = obj.categories.includes(i.value); });
     }
     heightSmoothingEnabled = smoothHeights?.checked || false;
+    updateSmoothHeightsUI();
   } catch {}
 }
 
@@ -576,11 +606,18 @@ type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 // moved above with TabKey declaration
 
 // Additional height scale factors (0..1), controlled by sliders
+const SMOOTH_THRESHOLD_MIN = 2;
+const SMOOTH_THRESHOLD_MAX = 15;
+const SMOOTH_THRESHOLD_DEFAULT = 6;
+
 let heightFactorMain = 1;
 let heightFactorUnder = 1;
 let heightFactorRatio = 1;
 let heightSmoothingEnabled = smoothHeights?.checked || false;
+let heightSmoothingThreshold = clampSmoothingThreshold(Number(smoothHeightsStrictness?.value ?? SMOOTH_THRESHOLD_DEFAULT));
 let heightSmoothingCap: number | null = null;
+
+if (smoothHeightsStrictness) smoothHeightsStrictness.value = String(heightSmoothingThreshold);
 
 /* ---------------- FUNCTIONS ----------------- */
 
@@ -1463,6 +1500,12 @@ function setQuality(mode: QualityMode) {
 }
 
 /* ---------------- Helpers ---------------- */
+function clampSmoothingThreshold(value: number | null | undefined): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return SMOOTH_THRESHOLD_DEFAULT;
+  return Math.min(SMOOTH_THRESHOLD_MAX, Math.max(SMOOTH_THRESHOLD_MIN, num));
+}
+
 function computeDisplayedMetricFromProps(props: Record<string, any>): number | null {
   if (!currentField) return null;
   let base: number | null;
@@ -1626,7 +1669,9 @@ function applyHeightSmoothing(vals: number[]): { heightVals: number[]; cap: numb
   // If scale is zero or invalid, nothing to smooth.
   if (!(scale > 0)) return { heightVals: vals, cap: null };
 
-  const threshold = 5; // large robust z-score => outlier (in log domain)
+  const threshold = clampSmoothingThreshold(heightSmoothingThreshold);
+  heightSmoothingThreshold = threshold;
+  if (smoothHeightsStrictness) smoothHeightsStrictness.value = String(threshold);
 
   // Determine non-outliers based on log-space robust z-score,
   // but keep the values themselves in the original domain.

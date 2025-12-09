@@ -828,12 +828,17 @@ async function loadSelectedColumns() {
     loadSettings(currentTab);
 
     // dropdown = predetermined numeric fields (ensure they exist)
-    const available = NUMERIC_FIELDS.filter(k => features[0]?.properties?.hasOwnProperty(k));
-    if (features[0]?.properties?.hasOwnProperty('REALIMPROV') && features[0]?.properties?.hasOwnProperty('REALLANDVA')) {
-      available.push('IMPR_LAND_RATIO');
-      available.push('IMPR_LAND_PCT');
-      available.push('IMPR_PCT_TOTAL');
+    // Build the available list with de-duplication so derived fields are not added twice
+    const availableSet = new Set<string>();
+    for (const k of NUMERIC_FIELDS) {
+      if (features[0]?.properties?.hasOwnProperty(k)) availableSet.add(k);
     }
+    if (features[0]?.properties?.hasOwnProperty('REALIMPROV') && features[0]?.properties?.hasOwnProperty('REALLANDVA')) {
+      availableSet.add('IMPR_LAND_RATIO');
+      availableSet.add('IMPR_LAND_PCT');
+      availableSet.add('IMPR_PCT_TOTAL');
+    }
+    const available = Array.from(availableSet);
     populateFieldDropdownFromList(available);
     // Populate per-map field selects with the same list
     if (underFieldSelect) {

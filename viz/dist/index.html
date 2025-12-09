@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" sizes="any" href="favicon.svg">
   <link rel="shortcut icon" type="image/svg+xml" href="favicon.svg">
   <link rel="mask-icon" href="favicon.svg" color="#0f172a">
+  <script async src="https://js.givebutter.com/latest.umd.js"></script>
   <script>
     // Strict authentication check - redirect to login if not authenticated
     try {
@@ -224,6 +225,39 @@
       gap: var(--space-2);
     }
 
+    /* Donation Banner */
+    .donation-banner {
+      margin: var(--space-8) auto 0;
+      padding: var(--space-4) var(--space-5);
+      max-width: 900px;
+      border-radius: var(--radius-2xl);
+      border: 1px solid var(--border-default);
+      background: linear-gradient(120deg, #f8fafc, #eef2ff);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-4);
+      box-shadow: var(--shadow-md);
+    }
+
+    .donation-banner strong {
+      color: var(--text-primary);
+    }
+
+    .donation-banner p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: var(--text-sm);
+      line-height: var(--line-relaxed);
+    }
+
+    .donation-banner-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-3);
+      flex-shrink: 0;
+    }
+
     /* Footer */
     .footer {
       background: var(--color-gray-900);
@@ -298,6 +332,12 @@
         font-size: var(--text-3xl);
       }
 
+      .donation-banner {
+        flex-direction: column;
+        text-align: center;
+        align-items: center;
+      }
+
       .footer-content {
         grid-template-columns: 1fr;
         gap: var(--space-6);
@@ -332,6 +372,14 @@
         <p style="margin-bottom: var(--space-8);">
           Choose a city below to explore 3D maps of land values across the United States.
         </p>
+      </div>
+    </div>
+    <div class="donation-banner">
+      <p>
+        <strong>Civic Mapper is free thanks to donors.</strong> Support hosting and help us add more cities.
+      </p>
+      <div class="donation-banner-actions">
+        <givebutter-widget id="gVxZmj"></givebutter-widget>
       </div>
     </div>
   </section>

@@ -7,6 +7,7 @@
   <link rel="icon" type="image/svg+xml" sizes="any" href="favicon.svg">
   <link rel="shortcut icon" type="image/svg+xml" href="favicon.svg">
   <link rel="mask-icon" href="favicon.svg" color="#0f172a">
+  <script async src="https://js.givebutter.com/latest.umd.js"></script>
   <script>
     try {
       const authed = !!sessionStorage.getItem('gvw_session_authed');
@@ -45,6 +46,12 @@
       display: flex;
       align-items: center;
       gap: var(--space-4);
+    }
+
+    .app-header-actions {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
     }
 
     .app-logo img {
@@ -454,7 +461,7 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/assets/app-DQsYsV2X.js"></script>
+  <script type="module" crossorigin src="/assets/app-CoOUHqEa.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/slack-signin-DTE1B_Sl.js">
   <link rel="stylesheet" crossorigin href="/assets/app-DAnDW25F.css">
   <link rel="stylesheet" crossorigin href="/assets/components-BvolGV5c.css">
@@ -474,7 +481,10 @@
             <span class="app-city-name" id="cityName">Loading...</span>
           </div>
         </div>
-        <div style="display: flex; gap: var(--space-2); align-items: center;">
+        <div class="app-header-actions">
+          <div style="display: inline-flex; align-items: center;">
+            <givebutter-widget id="gVxZmj"></givebutter-widget>
+          </div>
           <a href="mailto:greg@landeconomics.org" class="btn btn-ghost btn-sm" style="text-decoration: none;">
             Contact
           </a>
@@ -566,6 +576,14 @@
                   <input type="checkbox" id="invertHeights" class="checkbox" />
                   <span>Invert height scale</span>
                 </label>
+              </div>
+
+              <div class="control-group">
+                <label class="checkbox-item">
+                  <input type="checkbox" id="smoothHeights" class="checkbox" />
+                  <span>Smooth extreme heights</span>
+                </label>
+                <p class="muted" style="margin:0;">Ignore rare spikes when scaling bars and cap them to the highest non-outlier value.</p>
               </div>
 
               <div class="control-group">
@@ -695,7 +713,7 @@
           <img src="/CLE-logo.svg" alt="Center for Land Economics" style="height: 48px; display: block;">
         </a>
         <div style="margin-top: var(--space-6); padding-top: var(--space-4); border-top: 1px solid var(--border-default); font-size: var(--text-xs); color: var(--text-tertiary);">
-          © 2025 Civic Mapper 
+          © 2025 Civic Mapper
         </div>
       </footer>
     </main>
@@ -797,6 +815,7 @@
       return cityNames[city] || city;
     };
     document.getElementById('cityName').textContent = getCityName();
+
   </script>
 </body>
 </html>

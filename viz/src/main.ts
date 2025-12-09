@@ -1609,29 +1609,42 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
   }
   return vals;
 }
-
 function applyHeightSmoothing(vals: number[]): { heightVals: number[]; cap: number | null } {
   if (!heightSmoothingEnabled) return { heightVals: vals, cap: null };
   if (!vals.length) return { heightVals: vals, cap: null };
 
-  // Robust z-score using median and MAD (scaled by 1.4826).
-  const median = percentile(vals, 50);
-  const deviations = vals.map(v => Math.abs(v - median));
-  const mad = percentile(deviations, 50);
-  const scale = mad * 1.4826;
+  // Work in log space for robust outlier detection, but keep heights linear.
+  // Use log1p so zeros are safe: log1p(v) = log(1 + v).
+  const logVals = vals.map(v => Math.log1p(Math.max(v, 0)));
+
+  // Robust z-score using median and MAD (scaled by 1.4826) in log space.
+  const medianLog = percentile(logVals, 50);
+  const deviationsLog = logVals.map(v => Math.abs(v - medianLog));
+  const madLog = percentile(deviationsLog, 50);
+  const scale = madLog * 1.4826;
 
   // If scale is zero or invalid, nothing to smooth.
   if (!(scale > 0)) return { heightVals: vals, cap: null };
 
-  const threshold = 15; // |z| > 4 => outlier
-  const nonOutliers = vals.filter(v => Math.abs(v - median) / scale <= threshold);
+  const threshold = 15; // large robust z-score => outlier (in log domain)
+
+  // Determine non-outliers based on log-space robust z-score,
+  // but keep the values themselves in the original domain.
+  const nonOutliers: number[] = [];
+  for (let i = 0; i < vals.length; i++) {
+    const z = Math.abs(logVals[i] - medianLog) / scale;
+    if (z <= threshold) nonOutliers.push(vals[i]);
+  }
+
   if (!nonOutliers.length) return { heightVals: vals, cap: null };
 
   const cap = Math.max(...nonOutliers);
   if (!Number.isFinite(cap)) return { heightVals: vals, cap: null };
 
+  // Apply capping in the original (non-log) scale.
   return { heightVals: vals.map(v => Math.min(v, cap)), cap };
 }
+
 
 function computeStatsNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding') {
   const vals = getNumericValuesNormalized(fc, field, mode);

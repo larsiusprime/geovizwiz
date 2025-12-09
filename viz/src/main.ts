@@ -1626,7 +1626,7 @@ function applyHeightSmoothing(vals: number[]): { heightVals: number[]; cap: numb
   // If scale is zero or invalid, nothing to smooth.
   if (!(scale > 0)) return { heightVals: vals, cap: null };
 
-  const threshold = 15; // large robust z-score => outlier (in log domain)
+  const threshold = 5; // large robust z-score => outlier (in log domain)
 
   // Determine non-outliers based on log-space robust z-score,
   // but keep the values themselves in the original domain.

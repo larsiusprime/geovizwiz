@@ -1612,8 +1612,24 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
 
 function applyHeightSmoothing(vals: number[]): { heightVals: number[]; cap: number | null } {
   if (!heightSmoothingEnabled) return { heightVals: vals, cap: null };
-  const cap = percentile(vals, HEIGHT_SMOOTH_PCTL);
+  if (!vals.length) return { heightVals: vals, cap: null };
+
+  // Robust z-score using median and MAD (scaled by 1.4826).
+  const median = percentile(vals, 50);
+  const deviations = vals.map(v => Math.abs(v - median));
+  const mad = percentile(deviations, 50);
+  const scale = mad * 1.4826;
+
+  // If scale is zero or invalid, nothing to smooth.
+  if (!(scale > 0)) return { heightVals: vals, cap: null };
+
+  const threshold = 4; // |z| > 4 => outlier
+  const nonOutliers = vals.filter(v => Math.abs(v - median) / scale <= threshold);
+  if (!nonOutliers.length) return { heightVals: vals, cap: null };
+
+  const cap = Math.max(...nonOutliers);
   if (!Number.isFinite(cap)) return { heightVals: vals, cap: null };
+
   return { heightVals: vals.map(v => Math.min(v, cap)), cap };
 }
 

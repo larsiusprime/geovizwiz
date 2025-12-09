@@ -1334,9 +1334,12 @@ function updateUnderTotals(fc: GeoJSON.FeatureCollection) {
 
 function applyFilterAndScaling() {
   if (!currentGeoJSON) return;
-  const selected = categoryInputs().filter(i => i.checked).map(i => i.value);
+  const inputs = categoryInputs();
+  const selected = inputs.filter(i => i.checked).map(i => i.value);
+  const hasCategoryFilter = inputs.length > 0 && selected.length > 0 && selected.length < inputs.length;
+
   let filter: Expression | null = null;
-  const refinedFilter = selected.length ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
+  const refinedFilter = hasCategoryFilter ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
   const origVal = origCategorySelect?.value || '';
   const origFilter = origVal ? (['==', ['get', ORIG_CATEGORY_FIELD], origVal] as any) : null;
   if (refinedFilter && origFilter) filter = ['all', refinedFilter, origFilter] as any;
@@ -1344,10 +1347,11 @@ function applyFilterAndScaling() {
   else if (origFilter) filter = origFilter;
   map.setFilter(LAYER_ID, filter as any);
 
-  if (scaleFiltered && scaleFiltered.checked && (selected.length || (origCategorySelect && origCategorySelect.value))) {
+  const shouldScaleFiltered = scaleFiltered && scaleFiltered.checked && (hasCategoryFilter || !!origCategorySelect?.value);
+  if (shouldScaleFiltered) {
     const filtered: GeoJSON.Feature[] = currentGeoJSON.features.filter(f => {
       const p = (f.properties as any) || {};
-      const catOk = !selected.length || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
+      const catOk = !hasCategoryFilter || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
       const origOk = !origCategorySelect?.value || String(p?.[ORIG_CATEGORY_FIELD] ?? '') === origCategorySelect.value;
       return catOk && origOk;
     });
@@ -1361,9 +1365,11 @@ function applyFilterAndScaling() {
 
 function renderUnderNow() {
   if (!currentGeoJSON || !mapUnder.getLayer(LAYER_ID)) return;
-  const selected = categoryInputsUnder().filter(i => i.checked).map(i => i.value);
+  const inputs = categoryInputsUnder();
+  const selected = inputs.filter(i => i.checked).map(i => i.value);
+  const hasCategoryFilter = inputs.length > 0 && selected.length > 0 && selected.length < inputs.length;
   let filter: any = null;
-  const refinedFilter = selected.length ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
+  const refinedFilter = hasCategoryFilter ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
   const origVal = underOrigCategorySelect?.value || '';
   const origFilter = origVal ? (['==', ['get', ORIG_CATEGORY_FIELD], origVal] as any) : null;
   if (refinedFilter && origFilter) filter = ['all', refinedFilter, origFilter] as any;
@@ -1371,10 +1377,10 @@ function renderUnderNow() {
   else if (origFilter) filter = origFilter;
   mapUnder.setFilter(LAYER_ID, filter);
 
-  const filteredFc = (scaleFiltered && scaleFiltered.checked && (selected.length || (underOrigCategorySelect && underOrigCategorySelect.value)))
+  const filteredFc = (scaleFiltered && scaleFiltered.checked && (hasCategoryFilter || (underOrigCategorySelect && underOrigCategorySelect.value)))
     ? { type: 'FeatureCollection', features: currentGeoJSON.features.filter(f => {
         const p = (f.properties as any) || {};
-        const catOk = !selected.length || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
+        const catOk = !hasCategoryFilter || selected.includes(String(p?.[DEV_CATEGORY_FIELD] ?? ''));
         const origOk = !underOrigCategorySelect?.value || String(p?.[ORIG_CATEGORY_FIELD] ?? '') === underOrigCategorySelect.value;
         return catOk && origOk;
       }) } as GeoJSON.FeatureCollection

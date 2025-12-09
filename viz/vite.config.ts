@@ -1,13 +1,13 @@
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig } from 'vite';
 import { resolve } from 'path';
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, __dirname, '');
-  const slackWebhook = env.VITE_SLACK_WEBHOOK_URL;
+export default defineConfig(() => {
   return {
     // Serve from domain root in production deployments (Azure SWA)
     // If you later host under a subpath, set base accordingly
     base: '/',
+    // Point env loading at a sandbox-safe folder to avoid .env permission issues
+    envDir: resolve(__dirname, 'env'),
     build: {
       rollupOptions: {
         input: {

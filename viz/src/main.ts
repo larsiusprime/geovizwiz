@@ -213,7 +213,6 @@ const legendEl = document.getElementById('legend') as HTMLFieldSetElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 const settingsBtn = document.getElementById('settingsBtn') as HTMLButtonElement;
 const closeControls = document.getElementById('closeControls') as HTMLButtonElement;
-const basemapSelect = document.getElementById('basemap') as HTMLSelectElement;
 
 const expandBtn = document.getElementById('expandBtn') as HTMLButtonElement;
 const mapBox = document.getElementById('mapBox') as HTMLDivElement;
@@ -243,7 +242,6 @@ const underRampSelect = document.getElementById('under-ramp') as HTMLSelectEleme
 const underOpacityInput = document.getElementById('under-opacity') as HTMLInputElement;
 const underOpacityOut = document.getElementById('underOpacityVal') as HTMLOutputElement;
 const underInvertHeights = document.getElementById('underInvertHeights') as HTMLInputElement;
-const underBasemapSelect = document.getElementById('under-basemap') as HTMLSelectElement;
 const underMultInput = document.getElementById('under-mult') as HTMLInputElement;
 const underLegendEl = document.getElementById('underLegend') as HTMLFieldSetElement;
 const underCategoryContainer = document.getElementById('underCategoryFilter') as HTMLDivElement;
@@ -260,7 +258,6 @@ const ratioRampSelect = document.getElementById('ratio-ramp') as HTMLSelectEleme
 const ratioOpacityInput = document.getElementById('ratio-opacity') as HTMLInputElement | null;
 const ratioOpacityOut = document.getElementById('ratioOpacityVal') as HTMLOutputElement | null;
 const ratioInvertHeights = document.getElementById('ratioInvertHeights') as HTMLInputElement | null;
-const ratioBasemapSelect = document.getElementById('ratio-basemap') as HTMLSelectElement | null;
 const ratioMultInput = document.getElementById('ratio-mult') as HTMLInputElement | null;
 const ratioLegendEl = document.getElementById('ratioLegend') as HTMLFieldSetElement | null;
 const ratioFieldSelect = document.getElementById('ratio-field') as HTMLSelectElement | null;
@@ -445,7 +442,6 @@ function holderForTab(tab: TabKey): HTMLDivElement {
 
 function saveSettings(tab: TabKey) {
   const obj: any = {
-    basemap: basemapSelect.value,
     field: fieldSelect.value,
     ramp: rampSelect.value,
     mult: multInput.value,
@@ -465,10 +461,6 @@ function loadSettings(tab: TabKey) {
   if (!raw) return;
   try {
     const obj = JSON.parse(raw);
-    if (obj.basemap) {
-      // Fallback if a previously saved basemap no longer exists
-      setBasemapFor(map, BASEMAP_STYLES[obj.basemap] ? obj.basemap : 'OpenStreetMap');
-    }
     if (obj.field) { fieldSelect.value = obj.field; currentField = obj.field; }
     if (obj.ramp) rampSelect.value = obj.ramp;
     if (obj.mult) multInput.value = obj.mult;
@@ -524,27 +516,6 @@ if (ratioRampSelect) {
   }
   ratioRampSelect.value = COLOR_RAMPS['Reds'] ? 'Reds' : 'Magma';
 }
-
-// Populate basemap selects for under/ratio
-if (underBasemapSelect) {
-  for (const key of Object.keys(BASEMAP_STYLES)) {
-    const opt = document.createElement('option'); opt.value = key; opt.textContent = key; underBasemapSelect.appendChild(opt);
-  }
-  underBasemapSelect.value = 'OpenStreetMap';
-}
-if (ratioBasemapSelect) {
-  for (const key of Object.keys(BASEMAP_STYLES)) {
-    const opt = document.createElement('option'); opt.value = key; opt.textContent = key; ratioBasemapSelect.appendChild(opt);
-  }
-  ratioBasemapSelect.value = 'OpenStreetMap';
-}
-
-for (const key of Object.keys(BASEMAP_STYLES)) {
-  const opt = document.createElement('option'); opt.value = key; opt.textContent = key; basemapSelect.appendChild(opt);
-}
-// Default to OpenStreetMap; other styles available in dropdown
-basemapSelect.value = 'OpenStreetMap';
-basemapSelect.onchange = () => { setBasemapFor(map, basemapSelect.value); saveSettings(currentTab); };
 
 
 /* ---------------- Constants ---------------- */
@@ -1361,28 +1332,6 @@ function updateUnderTotals(fc: GeoJSON.FeatureCollection) {
     </div>`;
 }
 
-function setBasemapFor(m: maplibregl.Map, name: string) {
-  const style = BASEMAP_STYLES[name] || BASEMAP_STYLES['OpenStreetMap'];
-  const onError = (e: any) => {
-    if (e?.sourceId !== 'ofm-tiles') return;
-    console.warn('Basemap load failed, reverting to OpenStreetMap', e);
-    m.off('error', onError);
-    m.setStyle(BASEMAP_STYLES['OpenStreetMap']);
-  };
-  if (name === 'OpenFreeMap') m.on('error', onError);
-  m.setStyle(style);
-  m.once('styledata', () => {
-    m.off('error', onError);
-    if (currentGeoJSON) {
-      addOrUpdateSourceFor(m, /*withClick*/ true);
-      // trigger re-render for under/ratio after style change
-      if (m === mapUnder) renderUnderNow();
-      if (m === mapRatio) renderRatioNow();
-    }
-  });
-}
-
-
 function applyFilterAndScaling() {
   if (!currentGeoJSON) return;
   const selected = categoryInputs().filter(i => i.checked).map(i => i.value);
@@ -1965,7 +1914,6 @@ underRampSelect?.addEventListener('change', () => { renderUnderNow(); });
 underOpacityInput?.addEventListener('input', () => { if (underOpacityOut) underOpacityOut.value = `${parseInt(underOpacityInput.value).toFixed(0)}%`; renderUnderNow(); });
 underInvertHeights?.addEventListener('change', () => { renderUnderNow(); });
 underMultInput?.addEventListener('input', () => { renderUnderNow(); });
-underBasemapSelect?.addEventListener('change', () => { setBasemapFor(mapUnder, underBasemapSelect.value); });
 underFieldSelect?.addEventListener('change', () => { renderUnderNow(); });
 
 // Ratio map listeners
@@ -1973,7 +1921,6 @@ ratioRampSelect?.addEventListener('change', () => { renderRatioNow(); });
 ratioOpacityInput?.addEventListener('input', () => { if (ratioOpacityOut) ratioOpacityOut.value = `${parseInt(ratioOpacityInput.value).toFixed(0)}%`; renderRatioNow(); });
 ratioInvertHeights?.addEventListener('change', () => { renderRatioNow(); });
 ratioMultInput?.addEventListener('input', () => { renderRatioNow(); });
-ratioBasemapSelect?.addEventListener('change', () => { if (mapRatio) setBasemapFor(mapRatio, ratioBasemapSelect.value); });
 ratioFieldSelect?.addEventListener('change', () => { renderRatioNow(); });
 
 // Height slider listeners (bottom-right)
@@ -2036,7 +1983,7 @@ async function init() {
   // Defer all map-mutating actions until the style is fully loaded.
   map.once('load', async () => {
     setQuality('high');
-    // Apply any saved basemap/style; re-add data after style switches.
+    // Apply any saved settings before loading data.
     loadSettings('main');
     await loadDefaultDataset();
   });

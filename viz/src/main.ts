@@ -1404,7 +1404,10 @@ function renderUnderNow() {
   if (!currentGeoJSON || !mapUnder.getLayer(LAYER_ID)) return;
   const inputs = categoryInputsUnder();
   const selected = inputs.filter(i => i.checked).map(i => i.value);
-  const hasCategoryFilter = inputs.length > 0 && selected.length > 0 && selected.length < inputs.length;
+  // Always treat the underutilized category checkboxes as a filter so the
+  // view defaults to only Vacant/Parking Lot/Underdeveloped parcels instead
+  // of all parcels when everything is checked.
+  const hasCategoryFilter = inputs.length > 0 && selected.length > 0;
   let filter: any = null;
   const refinedFilter = hasCategoryFilter ? (['in', ['get', DEV_CATEGORY_FIELD], ['literal', selected]] as any) : null;
   const origVal = underOrigCategorySelect?.value || '';

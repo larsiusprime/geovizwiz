@@ -1328,7 +1328,9 @@ function populateOriginalCategoryOptions(fc: GeoJSON.FeatureCollection) {
 }
 
 function fmtCurrencyRounded(n: number): string {
-  if (n >= 1_000_000) return `~$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} million`;
+  const magnitude = Math.abs(n);
+  if (magnitude >= 1_000_000_000) return `~$${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')} billion`;
+  if (magnitude >= 1_000_000) return `~$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')} million`;
   const v = Math.round(n / 1000) * 1000;
   return `~$${v.toLocaleString()}`;
 }

@@ -3,7 +3,10 @@ import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { resolve } from 'path';
 
 const cesiumSource = 'node_modules/cesium/Build/Cesium';
-const cesiumBaseUrl = '/earth/cesium';
+// Serve Cesium static assets from the root-level copied folder so dev and build
+// both resolve correctly. Using an absolute "/cesium" avoids index.html being
+// returned (and parsed as JSON) when Cesium requests its asset JSON files.
+const cesiumBaseUrl = '/cesium';
 
 export default defineConfig({
   base: '',

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ArcGIS to GeoParquet Loader</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232d4f8b'/%3E%3Cpath d='M9 17.5l4.5 4.5 9-11' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f6fa; color: #1f2d3d; }
+    header { background: #2d4f8b; color: #fff; padding: 1.5rem; text-align: center; }
+    main { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
+    .container { max-width: 960px; margin: 0 auto; }
+    section { background: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 1rem 1.25rem; margin-bottom: 1rem; }
+    label { display: block; margin-bottom: 0.15rem; margin-top: 0.15rem; font-weight: 600; }
+    input[type="text"] { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d0d7de; border-radius: 6px; font-size: 1rem; }
+    button { padding: 0.65rem 1rem; background: #2d4f8b; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+    button[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .hidden { display: none; }
+    .status { margin-top: 0.75rem; color: #2d4f8b; font-weight: 600; }
+    ul.tree { list-style: none; padding-left: 1rem; }
+    ul.tree li { margin: 0.25rem 0; }
+    .layer-row { display: flex; align-items: center; gap: 0.5rem; }
+    details { margin-top: 0.25rem; margin-bottom: 0; margin-left: 1.0rem }
+    .muted { color: #6c7a89; }
+    .progress { background: #e5e9f2; border-radius: 6px; overflow: hidden; height: 12px; margin: 0.5rem 0; }
+    .progress span { display: block; height: 100%; background: #2d4f8b; width: 0%; transition: width 0.2s ease-out; }
+    .badge { background: #eef2ff; color: #2d4f8b; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .log { background: #0b1b33; color: #dce6ff; border-radius: 6px; padding: 0.75rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; max-height: 280px; overflow: auto; }
+    .step-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+    .preview-panel { margin-top: 1rem; border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem 1rem; background: #f9fafc; }
+    .preview-panel h3 { margin-top: 0; }
+    .preview-summary { background: #fff; border: 1px solid #e5e9f2; border-radius: 6px; overflow: hidden; }
+    .preview-summary table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .preview-summary th, .preview-summary td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eef2ff; text-align: left; }
+    .preview-summary th { background: #eef2ff; color: #2d4f8b; font-weight: 600; }
+    .preview-summary tr:last-child td { border-bottom: none; }
+    .preview-fields { margin-top: 1rem; background: #fff; border: 1px solid #e5e9f2; border-radius: 6px; overflow: hidden; }
+    .preview-fields table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .preview-fields th, .preview-fields td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eef2ff; text-align: left; }
+    .preview-fields th { background: #eef2ff; color: #2d4f8b; font-weight: 600; }
+    .preview-fields tr:last-child td { border-bottom: none; }
+    .preview-fields .empty { padding: 0.75rem; color: #6c7a89; }
+    .queue-list { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
+    .queue-item { border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem 1rem; background: #fff; }
+    .queue-item header { display: flex; justify-content: space-between; align-items: center; background: none; color: inherit; padding: 0; }
+    .queue-item h4 { margin: 0; font-size: 1rem; }
+    .queue-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .queue-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .queue-status { font-weight: 600; color: #2d4f8b; }
+    .queue-disabled { opacity: 0.6; }
+    .queue-badge { background: #eef2ff; color: #2d4f8b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .queue-badge.done { background: #e6f4ea; color: #1b5e20; }
+    .queue-badge.error { background: #fdecea; color: #b71c1c; }
+    .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .breadcrumb { border: 1px solid #d0d7de; background: #fff; color: #2d4f8b; padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.9rem; cursor: pointer; }
+    .breadcrumb[disabled] { opacity: 0.5; cursor: not-allowed; }
+    .breadcrumb.current { background: #2d4f8b; color: #fff; border-color: #2d4f8b; }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .panel-header h3 { margin: 0; }
+    .panel-close { background: transparent; color: #2d4f8b; border: none; font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 6px; line-height: 1; }
+    .panel-close:hover { background: rgba(45,79,139,0.1); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>ArcGIS Layer to GeoParquet</h1>
+      <p>Load an ArcGIS endpoint, browse layers, and export a single layer as GeoParquet entirely in your browser.</p>
+    </div>
+  </header>
+  <main>
+    <nav class="breadcrumbs" id="breadcrumbNav" aria-label="Workflow steps">
+      <button class="breadcrumb current" type="button" data-step="1">Step 1: Endpoint</button>
+      <button class="breadcrumb" type="button" data-step="2" disabled>Step 2: Layers</button>
+      <button class="breadcrumb" type="button" data-step="3" disabled>Step 3: Export</button>
+    </nav>
+    <section id="page1">
+      <h2>Step 1: Provide ArcGIS Server Endpoint</h2>
+      <label for="endpoint">ArcGIS REST Service URL</label>
+      <input type="text" id="endpoint" placeholder="https://sampleserver6.arcgisonline.com/arcgis/rest/services/Census/MapServer">
+      <button id="endpointLoadBtn">Load</button>
+      <div id="endpointStatus" class="status"></div>
+    </section>
+
+    <section id="page2" class="hidden">
+      <h2>Step 2: Choose a Layer</h2>
+      <p class="muted">Expand services and pick one or more layers or tables to download.</p>
+      <div id="layerTree"></div>
+      <div class="step-actions">
+        <button id="layerSelectBtn" disabled>Load selected layers</button>
+        <button id="previewLayerBtn" disabled>Preview layers</button>
+      </div>
+      <div id="layerStatus" class="status"></div>
+      <div id="previewPanel" class="preview-panel hidden">
+        <h3>Layer preview</h3>
+        <div id="previewContent" class="preview-grid"></div>
+      </div>
+    </section>
+
+    <section id="page3" class="hidden">
+      <h2>Step 3: Download &amp; Export</h2>
+      <p id="downloadHeadline" class="status"></p>
+      <div class="step-actions">
+        <button id="startDownloadBtn" disabled>Load selected layers</button>
+        <button id="downloadAllBtn" disabled>Save all (zip)</button>
+      </div>
+      <div id="queueList" class="queue-list"></div>
+      <div class="progress"><span id="downloadProgress"></span></div>
+      <div id="downloadDetail" class="muted"></div>
+      <div id="metadataPanel" class="preview-panel hidden">
+        <div class="panel-header">
+          <h3>Layer metadata preview</h3>
+          <button id="metadataCloseBtn" class="panel-close" type="button" aria-label="Dismiss layer metadata preview">×</button>
+        </div>
+        <div id="metadataContent" class="preview-grid"></div>
+      </div>
+      <div id="exportStatus" class="status"></div>
+      <div class="log" id="log"></div>
+    </section>
+  </main>
+<script src="./vendor/wkx/dist/wkx.js"></script>
+<script src="./vendor/apache-arrow.js"></script>
+<script type="module">
+    import startArcgisToGeoparquetApp from "/src/apps/arcgisToGeoparquetApp.js";
+    startArcgisToGeoparquetApp();
+</script>
+
+</body>
+</html>

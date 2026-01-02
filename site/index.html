@@ -43,6 +43,11 @@
       gap: 12px;
       font-weight: 600;
     }
+    .brand div {
+      font-size: 40pt;
+      position: relative;
+      top: 12pt;
+    }
     .brand img { width: 150px; height: auto; }
     .nav-links {
       display: flex;
@@ -111,12 +116,13 @@
     <header>
       <div class="container header-row">
         <a class="brand" href="/" aria-label="Put It On A Map home">
-          <img src="/logo/logo.svg" alt="putitonamap logo">
+          <img src="/images/logo.svg" alt="putitonamap logo">
+          <div>PutItOnAMap.com</div>
         </a>
         <nav class="nav-links" aria-label="Primary">
-          <a href="/viz">Launch viz</a>
-          <a href="/util/fetch.html">Open fetch</a>
-          <a href="https://github.com/larsiusprime/geovizwiz">View source</a>
+          <a href="/viz">3D Viz</a>
+          <a href="/util/fetch.html">Data Fetcher</a>
+          <a href="https://github.com/larsiusprime/geovizwiz">Source Code</a>
         </nav>
       </div>
     </header>
@@ -130,12 +136,12 @@
           </p>
           <div class="app-grid">
             <article class="card">
-              <h2>Viz — 3D parcel explorer</h2>
+              <h2>3D Viz — Interactive 3D parcel explorer</h2>
               <p>Open GeoParquet or shapefiles, choose attributes, and visualize parcels in 3D.</p>
               <a class="button" href="/viz">Open /viz</a>
             </article>
             <article class="card">
-              <h2>Fetch — ArcGIS to GeoParquet</h2>
+              <h2>Data Fetcher — Easy ArcGIS endpoint downloader</h2>
               <p>Connect to ArcGIS REST services, browse layers, and export GeoParquet locally.</p>
               <a class="button secondary" href="/util/fetch.html">Open /util/fetch</a>
             </article>

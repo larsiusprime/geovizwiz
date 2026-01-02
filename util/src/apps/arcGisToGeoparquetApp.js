@@ -18,7 +18,7 @@ import initParquetWasm, {
   writeParquet,
   WriterPropertiesBuilder,
   Compression
-} from '/vendor/parquet-wasm/esm/parquet_wasm.js';
+} from '../../vendor/parquet-wasm/esm/parquet_wasm.js';
 
 export default async function startArcgisToGeoparquetApp() {
     await initParquetWasm();

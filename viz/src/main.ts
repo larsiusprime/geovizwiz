@@ -4254,18 +4254,19 @@ const HOTKEYS = {
 
 // Icon mappings for different selection modes
 const selectionModeIcons: Record<string, string> = {
-  'select-one': 'src/svg/select_cursor.svg',
-  'select-rectangle': 'src/svg/select_rectangle.svg',
-  'select-lasso': 'src/svg/select_lasso.svg',
-  'select-polygon': 'src/svg/select_polygon.svg'
+  'select-one': new URL('./svg/select_cursor.svg', import.meta.url).href,
+  'select-rectangle': new URL('./svg/select_rectangle.svg', import.meta.url).href,
+  'select-lasso': new URL('./svg/select_lasso.svg', import.meta.url).href,
+  'select-polygon': new URL('./svg/select_polygon.svg', import.meta.url).href
 };
+const cornerTriangleIcon = new URL('./svg/corner_triangle.svg', import.meta.url).href;
 
 // Update the main toolbar button icon based on current selection mode
 function updateToolbarIcon() {
   const iconPath = selectionModeIcons[currentSelectionMode];
   selectToolButton.innerHTML = `<img src="${iconPath}" alt="Select" />
           <span class="hotkey">V</span>
-          <img src="src/svg/corner_triangle.svg" alt="" class="corner-triangle" />`;
+          <img src="${cornerTriangleIcon}" alt="" class="corner-triangle" />`;
 }
 
 // Update submenu active states
@@ -5211,5 +5212,4 @@ function closePolygon() {
   // Restore cursor
   updateCursor();
 }
-
 

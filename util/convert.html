@@ -41,6 +41,23 @@
     .preview-fields th { background: #eef2ff; color: var(--accent); font-weight: 600; }
     .preview-fields tr:last-child td { border-bottom: none; }
     .preview-fields .empty { padding: 0.75rem; color: #6c7a89; }
+    .progress-panel { margin-top: 1rem; }
+    .progress-bar { background: #e5e9f2; border-radius: 999px; overflow: hidden; height: 10px; margin-top: 0.5rem; }
+    .progress-bar span { display: block; height: 100%; background: var(--accent); width: 0%; transition: width 0.2s ease-out; }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 3px solid #e5e9f2;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    .spinner.paused {
+      animation: none;
+      border-top-color: #e5e9f2;
+    }
+    .progress-row { display: flex; align-items: center; gap: 0.75rem; }
+    @keyframes spin { to { transform: rotate(360deg); } }
     .queue-list { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
     .queue-item { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; background: #fff; }
     .queue-item header { display: flex; justify-content: space-between; align-items: center; background: none; color: inherit; padding: 0; }
@@ -75,6 +92,14 @@
     .drop-zone p {
       margin: 0 0 0.75rem;
     }
+    .button-secondary {
+      background: #fff;
+      color: var(--accent);
+      border: 1px solid var(--border);
+    }
+    .metadata-collapsed #metadataContent {
+      display: none;
+    }
     @media (max-width: 700px) {
       .page-intro h1 { font-size: 1.6rem; }
     }
@@ -102,6 +127,7 @@
     <nav class="breadcrumbs" id="breadcrumbNav" aria-label="Workflow steps">
       <button class="breadcrumb current" type="button" data-step="1">Step 1: Upload</button>
       <button class="breadcrumb" type="button" data-step="2" disabled>Step 2: Identify</button>
+      <button class="breadcrumb" type="button" data-step="3" disabled>Step 3: Convert</button>
     </nav>
     <section id="page1">
       <h2>Step 1: Upload your file</h2>
@@ -109,9 +135,7 @@
       <div class="preview-panel">
         <h3>Supported input formats</h3>
         <ul class="tree">
-          <li>ESRI Shapefile (must be supplied as a zip file with the extension <strong>.shp.zip</strong>)</li>
-          <li>Geoparquet (must be supplied with the extension <strong>.parquet</strong> or <strong>.geoparquet</strong>)</li>
-          <li>Geopackage (must be supplied with the extension <strong>.gpkg</strong>)</li>
+          <li>ESRI Shapefile (must be supplied as a zip file containing .shp + .dbf + .shx)</li>
         </ul>
       </div>
       <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="File upload drop zone">
@@ -143,6 +167,41 @@
         </div>
       </div>
       <div id="fileValidation" class="status"></div>
+      <div id="progressPanel" class="preview-panel progress-panel hidden" aria-live="polite">
+        <div class="progress-row">
+          <div class="spinner" id="progressSpinner" aria-hidden="true"></div>
+          <div>
+            <div id="progressText" class="muted">Inspecting file contents...</div>
+            <div id="progressPercent" class="badge">0%</div>
+          </div>
+        </div>
+        <div class="progress-bar" aria-hidden="true">
+          <span id="progressBar"></span>
+        </div>
+      </div>
+      <div class="step-actions">
+        <button id="continueBtn" type="button" disabled>Continue to conversion</button>
+        <button id="cancelBtn" type="button" class="button-secondary">Cancel</button>
+      </div>
+      <div id="metadataPanel" class="preview-panel hidden">
+        <div class="panel-header">
+          <h3>Layer metadata</h3>
+          <button id="metadataToggle" type="button" class="panel-close" aria-expanded="true" aria-controls="metadataContent">−</button>
+        </div>
+        <div id="metadataContent"></div>
+      </div>
+    </section>
+    <section id="page3" class="hidden">
+      <h2>Step 3: Choose an output format</h2>
+      <p class="muted">Select the format you want to convert to. Conversion will be available in the next iteration.</p>
+      <div class="preview-panel">
+        <h3>Available output formats</h3>
+        <label>
+          <input type="radio" name="outputFormat" value="geoparquet">
+          GeoParquet (.parquet)
+        </label>
+      </div>
+      <div id="outputStatus" class="status muted">Conversion options are ready once you select a format.</div>
     </section>
   </main>
 <script type="module">

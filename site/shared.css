@@ -1,0 +1,85 @@
+:root {
+  --bg: #f5f7fb;
+  --card: #ffffff;
+  --border: #d9e2ef;
+  --text: #1c2333;
+  --muted: #5a667d;
+  --accent: #2d4f8b;
+  --accent-soft: rgba(45, 79, 139, 0.12);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  height: 100%;
+  margin: 0;
+  font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+a {
+  color: inherit;
+  text-decoration: none;
+}
+.wrap {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+header {
+  padding: 28px 20px;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+}
+.container {
+  max-width: 1080px;
+  margin: 0 auto;
+  width: 100%;
+}
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+}
+.brand div {
+  font-size: 40pt;
+  position: relative;
+  top: 12pt;
+}
+.brand img {
+  width: 150px;
+  height: auto;
+}
+.nav-links {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  font-weight: 600;
+  color: var(--muted);
+}
+.nav-links a {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+.nav-links a:hover {
+  border-color: var(--border);
+  color: var(--accent);
+}
+@media (max-width: 720px) {
+  .header-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .brand img {
+    width: 130px;
+  }
+}

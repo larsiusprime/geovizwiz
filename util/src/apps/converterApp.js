@@ -445,12 +445,31 @@ export default function startConverterApp() {
       }
     };
 
-    worker.onerror = () => {
+    worker.onerror = (event) => {
       if (worker !== conversionWorker) {
         return;
       }
+      const details = [];
+      if (event?.message) {
+        details.push(`Message: ${event.message}`);
+      }
+      if (event?.filename) {
+        details.push(`File: ${event.filename}`);
+      }
+      if (Number.isFinite(event?.lineno)) {
+        details.push(`Line: ${event.lineno}`);
+      }
+      if (Number.isFinite(event?.colno)) {
+        details.push(`Column: ${event.colno}`);
+      }
+      if (event?.error?.stack) {
+        details.push(`Stack: ${event.error.stack}`);
+      }
+      const detailText = details.length
+        ? `Conversion error details:\n${details.join('\n')}`
+        : 'Conversion failed with an unknown worker error.';
       conversionInProgress = false;
-      outputStatus.textContent = 'An unexpected error occurred while converting the file.';
+      outputStatus.textContent = detailText;
       updateOutputProgress({ percent: 100, detail: 'Conversion failed.' });
       updateOutputControls();
       stopConversionWorker();

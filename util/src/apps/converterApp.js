@@ -1,3 +1,5 @@
+import { triggerDownload } from "../export/download.js";
+
 export default function startConverterApp() {
   const page1 = document.getElementById('page1');
   const page2 = document.getElementById('page2');
@@ -20,14 +22,27 @@ export default function startConverterApp() {
   const continueBtn = document.getElementById('continueBtn');
   const cancelBtn = document.getElementById('cancelBtn');
   const outputStatus = document.getElementById('outputStatus');
+  const convertBtn = document.getElementById('convertBtn');
+  const convertCancelBtn = document.getElementById('convertCancelBtn');
+  const saveBtn = document.getElementById('saveBtn');
+  const outputProgressPanel = document.getElementById('outputProgressPanel');
+  const outputProgressText = document.getElementById('outputProgressText');
+  const outputProgressPercent = document.getElementById('outputProgressPercent');
+  const outputProgressBar = document.getElementById('outputProgressBar');
+  const outputProgressSpinner = document.getElementById('outputProgressSpinner');
   const outputFormatInputs = Array.from(document.querySelectorAll('input[name="outputFormat"]'));
   const breadcrumbNav = document.getElementById('breadcrumbNav');
   const breadcrumbButtons = Array.from(breadcrumbNav.querySelectorAll('.breadcrumb'));
 
   let currentStep = 1;
   let maxVisitedStep = 1;
+  let currentFile = null;
   let selectedOutputFormat = null;
   let activeWorker = null;
+  let conversionWorker = null;
+  let conversionInProgress = false;
+  let convertedBlob = null;
+  let convertedFileName = null;
 
   const setCurrentStep = (step) => {
     currentStep = step;
@@ -43,6 +58,23 @@ export default function startConverterApp() {
         button.removeAttribute('disabled');
       }
     });
+  };
+
+  const resetOutputProgressPanel = () => {
+    outputProgressPanel.classList.add('hidden');
+    outputProgressText.textContent = 'Preparing conversion...';
+    outputProgressPercent.textContent = '0%';
+    outputProgressBar.style.width = '0%';
+    outputProgressSpinner.classList.remove('paused');
+  };
+
+  const updateOutputProgress = ({ percent = 0, detail = '' }) => {
+    const clamped = Math.max(0, Math.min(100, percent));
+    outputProgressPanel.classList.remove('hidden');
+    outputProgressText.textContent = detail || 'Preparing conversion...';
+    outputProgressPercent.textContent = `${clamped}%`;
+    outputProgressBar.style.width = `${clamped}%`;
+    outputProgressSpinner.classList.toggle('paused', clamped >= 100);
   };
 
   const resetMetadataPanel = () => {
@@ -71,11 +103,12 @@ export default function startConverterApp() {
     progressSpinner.classList.toggle('paused', clamped >= 100);
   };
 
-  const renderMetadata = ({ layers, crs }) => {
+  const renderMetadata = ({ layers, crs, formatLabel }) => {
     metadataContent.innerHTML = '';
 
     if (!layers.length) {
-      metadataContent.textContent = 'No layers found in this shapefile.';
+      const label = formatLabel || 'this file';
+      metadataContent.textContent = `Metadata preview is not available for ${label}.`;
       metadataPanel.classList.remove('hidden');
       metadataPanel.classList.remove('metadata-collapsed');
       metadataToggle.setAttribute('aria-expanded', 'true');
@@ -168,6 +201,40 @@ export default function startConverterApp() {
     }
   };
 
+  const stopConversionWorker = () => {
+    if (conversionWorker) {
+      conversionWorker.terminate();
+      conversionWorker = null;
+    }
+    conversionInProgress = false;
+  };
+
+  const updateOutputControls = () => {
+    const hasOutputSelection = Boolean(selectedOutputFormat);
+    const canConvert = hasOutputSelection && maxVisitedStep >= 3 && currentFile && !conversionInProgress;
+    convertBtn.disabled = !canConvert;
+    convertCancelBtn.disabled = !conversionInProgress;
+    saveBtn.disabled = !(convertedBlob && !conversionInProgress);
+  };
+
+  const updateOutputStatus = () => {
+    if (selectedOutputFormat) {
+      outputStatus.textContent = 'Output format selected: GeoParquet (.geoparquet). Ready to convert.';
+      return;
+    }
+    outputStatus.textContent = 'Conversion options are ready once you select a format.';
+  };
+
+  const resetOutputState = () => {
+    convertedBlob = null;
+    convertedFileName = null;
+    conversionInProgress = false;
+    stopConversionWorker();
+    updateOutputStatus();
+    resetOutputProgressPanel();
+    updateOutputControls();
+  };
+
   const resetToInitialState = () => {
     stopActiveWorker();
     resetProgressPanel();
@@ -176,9 +243,18 @@ export default function startConverterApp() {
     fileStatus.textContent = '';
     fileName.textContent = '—';
     fileFormat.textContent = '—';
+    currentFile = null;
     fileInput.value = '';
+    convertedBlob = null;
+    convertedFileName = null;
+    selectedOutputFormat = null;
+    outputFormatInputs.forEach((input) => {
+      input.checked = false;
+    });
+    resetOutputState();
     maxVisitedStep = 1;
     setCurrentStep(1);
+    updateOutputControls();
   };
 
   const handleFile = async (file) => {
@@ -191,11 +267,16 @@ export default function startConverterApp() {
     fileName.textContent = file.name;
     fileFormat.textContent = 'Inspecting contents...';
     fileValidation.textContent = '';
+    currentFile = file;
+    convertedBlob = null;
+    convertedFileName = null;
     resetMetadataPanel();
     resetProgressPanel();
+    resetOutputState();
     updateProgress({ percent: 5, detail: 'Preparing to inspect file contents...' });
     maxVisitedStep = 2;
     setCurrentStep(2);
+    updateOutputControls();
 
     const worker = new Worker(new URL('./converterWorker.js', import.meta.url));
     activeWorker = worker;
@@ -213,6 +294,9 @@ export default function startConverterApp() {
         updateProgress({ percent: 100, detail: 'Inspection complete.' });
         fileFormat.textContent = payload.label;
         fileValidation.textContent = payload.message;
+        maxVisitedStep = 2;
+        continueBtn.disabled = true;
+        updateOutputControls();
         stopActiveWorker();
         return;
       }
@@ -220,6 +304,9 @@ export default function startConverterApp() {
         updateProgress({ percent: 100, detail: 'Inspection failed.' });
         fileFormat.textContent = 'Unknown';
         fileValidation.textContent = payload.message;
+        maxVisitedStep = 2;
+        continueBtn.disabled = true;
+        updateOutputControls();
         stopActiveWorker();
         return;
       }
@@ -227,9 +314,10 @@ export default function startConverterApp() {
         updateProgress({ percent: 100, detail: 'Inspection complete.' });
         fileFormat.textContent = payload.label;
         fileValidation.textContent = payload.message;
-        renderMetadata({ layers: payload.layers, crs: payload.crs });
+        renderMetadata({ layers: payload.layers, crs: payload.crs, formatLabel: payload.label });
         maxVisitedStep = 3;
         continueBtn.disabled = false;
+        updateOutputControls();
         stopActiveWorker();
         return;
       }
@@ -293,8 +381,102 @@ export default function startConverterApp() {
   outputFormatInputs.forEach((input) => {
     input.addEventListener('change', () => {
       selectedOutputFormat = input.value;
-      outputStatus.textContent = `Output format selected: ${selectedOutputFormat}. Conversion will be available soon.`;
+      updateOutputStatus();
+      updateOutputControls();
     });
+  });
+
+  const buildOutputName = (fileNameValue) => {
+    const lower = fileNameValue.toLowerCase();
+    if (lower.endsWith('.shp.zip')) {
+      return `${fileNameValue.slice(0, -8)}.geoparquet`;
+    }
+    if (lower.endsWith('.zip')) {
+      return `${fileNameValue.slice(0, -4)}.geoparquet`;
+    }
+    if (lower.endsWith('.parquet')) {
+      return `${fileNameValue.slice(0, -8)}.geoparquet`;
+    }
+    if (lower.endsWith('.geoparquet')) {
+      return fileNameValue;
+    }
+    return `${fileNameValue}.geoparquet`;
+  };
+
+  const beginConversion = () => {
+    if (!currentFile || !selectedOutputFormat || conversionInProgress) {
+      return;
+    }
+    stopConversionWorker();
+    convertedBlob = null;
+    convertedFileName = buildOutputName(currentFile.name);
+    conversionInProgress = true;
+    outputStatus.textContent = 'Starting conversion...';
+    updateOutputProgress({ percent: 5, detail: 'Preparing conversion...' });
+    updateOutputControls();
+
+    const worker = new Worker(new URL('./converterExportWorker.js', import.meta.url));
+    conversionWorker = worker;
+
+    worker.onmessage = (event) => {
+      if (worker !== conversionWorker) {
+        return;
+      }
+      const { type, payload } = event.data || {};
+      if (type === 'progress') {
+        updateOutputProgress(payload);
+        return;
+      }
+      if (type === 'error') {
+        conversionInProgress = false;
+        outputStatus.textContent = payload.message || 'Conversion failed.';
+        updateOutputProgress({ percent: 100, detail: 'Conversion failed.' });
+        updateOutputControls();
+        stopConversionWorker();
+        return;
+      }
+      if (type === 'success') {
+        conversionInProgress = false;
+        convertedBlob = payload.blob;
+        outputStatus.textContent = 'Conversion complete. Your file is ready to save.';
+        updateOutputProgress({ percent: 100, detail: 'Conversion complete.' });
+        updateOutputControls();
+        stopConversionWorker();
+      }
+    };
+
+    worker.onerror = () => {
+      if (worker !== conversionWorker) {
+        return;
+      }
+      conversionInProgress = false;
+      outputStatus.textContent = 'An unexpected error occurred while converting the file.';
+      updateOutputProgress({ percent: 100, detail: 'Conversion failed.' });
+      updateOutputControls();
+      stopConversionWorker();
+    };
+
+    worker.postMessage({ file: currentFile });
+  };
+
+  convertBtn.addEventListener('click', beginConversion);
+
+  convertCancelBtn.addEventListener('click', () => {
+    if (!conversionInProgress) {
+      return;
+    }
+    stopConversionWorker();
+    outputStatus.textContent = 'Conversion canceled. You can adjust options and try again.';
+    updateOutputProgress({ percent: 0, detail: 'Conversion canceled.' });
+    resetOutputProgressPanel();
+    updateOutputControls();
+  });
+
+  saveBtn.addEventListener('click', () => {
+    if (!convertedBlob) {
+      return;
+    }
+    triggerDownload(convertedBlob, convertedFileName || 'converted.geoparquet');
   });
 
   cancelBtn.addEventListener('click', () => {
@@ -317,4 +499,5 @@ export default function startConverterApp() {
   });
 
   setCurrentStep(currentStep);
+  updateOutputControls();
 }

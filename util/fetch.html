@@ -6,72 +6,88 @@
   <title>ArcGIS to GeoParquet Loader</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232d4f8b'/%3E%3Cpath d='M9 17.5l4.5 4.5 9-11' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f6fa; color: #1f2d3d; }
-    header { background: #2d4f8b; color: #fff; padding: 1.5rem; text-align: center; position: relative; }
-    main { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
-    .container { max-width: 960px; margin: 0 auto; }
-    .header-nav { position: absolute; top: 1rem; left: 1.5rem; }
-    .home-link { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.7rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); color: #fff; font-size: 0.85rem; font-weight: 600; text-decoration: none; transition: background 0.2s ease, border-color 0.2s ease; }
-    .home-link:hover { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.8); }
-    section { background: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 1rem 1.25rem; margin-bottom: 1rem; }
-    label { display: block; margin-bottom: 0.15rem; margin-top: 0.15rem; font-weight: 600; }
-    input[type="text"] { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d0d7de; border-radius: 6px; font-size: 1rem; }
-    button { padding: 0.65rem 1rem; background: #2d4f8b; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 1rem; }
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --border: #d9e2ef;
+      --text: #1c2333;
+      --muted: #5a667d;
+      --accent: #2d4f8b;
+      --accent-soft: rgba(45, 79, 139, 0.12);
+    }
+    body { font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif; margin: 0; padding: 0; background: var(--bg); color: var(--text); }
+    header { background: #fff; border-bottom: 1px solid var(--border); padding: 1.5rem 0; }
+    main { padding: 1.5rem; max-width: 980px; margin: 0 auto; }
+    .container { max-width: 980px; margin: 0 auto; padding: 0 1.5rem; }
+    .header-top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1.25rem; }
+    .brand { display: inline-flex; align-items: center; gap: 0.85rem; font-weight: 600; }
+    .brand img { width: 130px; height: auto; }
+    .home-link { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.4rem 0.85rem; border-radius: 999px; border: 1px solid var(--border); background: #fff; color: var(--accent); font-size: 0.85rem; font-weight: 600; text-decoration: none; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+    .home-link:hover { border-color: var(--accent); box-shadow: 0 6px 16px rgba(45, 79, 139, 0.15); }
+    header h1 { margin: 0 0 0.35rem; font-size: 1.9rem; }
+    header p { margin: 0; color: var(--muted); }
+    section { background: var(--card); border-radius: 16px; border: 1px solid var(--border); padding: 1.2rem 1.4rem; margin-bottom: 1rem; box-shadow: 0 10px 24px rgba(21, 30, 50, 0.05); }
+    label { display: block; margin-bottom: 0.2rem; margin-top: 0.2rem; font-weight: 600; }
+    input[type="text"] { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
+    button { padding: 0.65rem 1rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; }
     button[disabled] { opacity: 0.6; cursor: not-allowed; }
     .hidden { display: none; }
-    .status { margin-top: 0.75rem; color: #2d4f8b; font-weight: 600; }
+    .status { margin-top: 0.75rem; color: var(--accent); font-weight: 600; }
     ul.tree { list-style: none; padding-left: 1rem; }
     ul.tree li { margin: 0.25rem 0; }
     .layer-row { display: flex; align-items: center; gap: 0.5rem; }
     details { margin-top: 0.25rem; margin-bottom: 0; margin-left: 1.0rem }
-    .muted { color: #6c7a89; }
-    .progress { background: #e5e9f2; border-radius: 6px; overflow: hidden; height: 12px; margin: 0.5rem 0; }
-    .progress span { display: block; height: 100%; background: #2d4f8b; width: 0%; transition: width 0.2s ease-out; }
-    .badge { background: #eef2ff; color: #2d4f8b; padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
-    .log { background: #0b1b33; color: #dce6ff; border-radius: 6px; padding: 0.75rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; max-height: 280px; overflow: auto; }
+    .muted { color: var(--muted); }
+    .progress { background: #e5e9f2; border-radius: 999px; overflow: hidden; height: 10px; margin: 0.5rem 0; }
+    .progress span { display: block; height: 100%; background: var(--accent); width: 0%; transition: width 0.2s ease-out; }
+    .badge { background: var(--accent-soft); color: var(--accent); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .log { background: #0d1a2b; color: #dce6ff; border-radius: 10px; padding: 0.75rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; max-height: 280px; overflow: auto; }
     .step-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
-    .preview-panel { margin-top: 1rem; border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem 1rem; background: #f9fafc; }
+    .preview-panel { margin-top: 1rem; border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; background: #f9fafc; }
     .preview-panel h3 { margin-top: 0; }
-    .preview-summary { background: #fff; border: 1px solid #e5e9f2; border-radius: 6px; overflow: hidden; }
+    .preview-summary { background: #fff; border: 1px solid #e5e9f2; border-radius: 10px; overflow: hidden; }
     .preview-summary table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
     .preview-summary th, .preview-summary td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eef2ff; text-align: left; }
-    .preview-summary th { background: #eef2ff; color: #2d4f8b; font-weight: 600; }
+    .preview-summary th { background: #eef2ff; color: var(--accent); font-weight: 600; }
     .preview-summary tr:last-child td { border-bottom: none; }
-    .preview-fields { margin-top: 1rem; background: #fff; border: 1px solid #e5e9f2; border-radius: 6px; overflow: hidden; }
+    .preview-fields { margin-top: 1rem; background: #fff; border: 1px solid #e5e9f2; border-radius: 10px; overflow: hidden; }
     .preview-fields table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
     .preview-fields th, .preview-fields td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eef2ff; text-align: left; }
-    .preview-fields th { background: #eef2ff; color: #2d4f8b; font-weight: 600; }
+    .preview-fields th { background: #eef2ff; color: var(--accent); font-weight: 600; }
     .preview-fields tr:last-child td { border-bottom: none; }
     .preview-fields .empty { padding: 0.75rem; color: #6c7a89; }
     .queue-list { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
-    .queue-item { border: 1px solid #d0d7de; border-radius: 8px; padding: 0.75rem 1rem; background: #fff; }
+    .queue-item { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; background: #fff; }
     .queue-item header { display: flex; justify-content: space-between; align-items: center; background: none; color: inherit; padding: 0; }
     .queue-item h4 { margin: 0; font-size: 1rem; }
     .queue-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
     .queue-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
-    .queue-status { font-weight: 600; color: #2d4f8b; }
+    .queue-status { font-weight: 600; color: var(--accent); }
     .queue-disabled { opacity: 0.6; }
-    .queue-badge { background: #eef2ff; color: #2d4f8b; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .queue-badge { background: #eef2ff; color: var(--accent); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
     .queue-badge.done { background: #e6f4ea; color: #1b5e20; }
     .queue-badge.error { background: #fdecea; color: #b71c1c; }
     .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
-    .breadcrumb { border: 1px solid #d0d7de; background: #fff; color: #2d4f8b; padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.9rem; cursor: pointer; }
+    .breadcrumb { border: 1px solid var(--border); background: #fff; color: var(--accent); padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.9rem; cursor: pointer; }
     .breadcrumb[disabled] { opacity: 0.5; cursor: not-allowed; }
-    .breadcrumb.current { background: #2d4f8b; color: #fff; border-color: #2d4f8b; }
+    .breadcrumb.current { background: var(--accent); color: #fff; border-color: var(--accent); }
     .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
     .panel-header h3 { margin: 0; }
-    .panel-close { background: transparent; color: #2d4f8b; border: none; font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 6px; line-height: 1; }
-    .panel-close:hover { background: rgba(45,79,139,0.1); }
+    .panel-close { background: transparent; color: var(--accent); border: none; font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 6px; line-height: 1; }
+    .panel-close:hover { background: var(--accent-soft); }
     @media (max-width: 700px) {
-      header { text-align: left; }
-      .header-nav { position: static; margin-bottom: 0.75rem; }
+      .header-top { flex-direction: column; align-items: flex-start; }
+      header h1 { font-size: 1.6rem; }
     }
   </style>
 </head>
 <body>
   <header>
     <div class="container">
-      <div class="header-nav">
+      <div class="header-top">
+        <a class="brand" href="/" aria-label="Put It On A Map home">
+          <img src="/logo/logo.svg" alt="putitonamap logo">
+        </a>
         <a class="home-link" href="/" aria-label="Return to home">← Home</a>
       </div>
       <h1>ArcGIS Layer to GeoParquet</h1>

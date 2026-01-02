@@ -138,7 +138,7 @@ const ensureParquetModule = async () => {
   if (!parquetModulePromise) {
     parquetModulePromise = import('../../vendor/parquet-wasm/esm/parquet_wasm.js').then(async (mod) => {
       if (!parquetInitialized) {
-        const wasmUrl = new URL('../../vendor/parquet-wasm/esm/parquet_wasm_bg.wasm', import.meta.url);
+        const wasmUrl = new URL('../../vendor/parquet-wasm/esm/parquet_wasm_bg.wasm', self.location.href);
         const response = await fetch(wasmUrl);
         const bytes = await response.arrayBuffer();
         await mod.default(bytes);

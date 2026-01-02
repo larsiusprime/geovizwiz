@@ -3,5 +3,5 @@ site/viz
 site/geoconverter
 *.code-workspace
 geoconverter/browser/
-
 geoconverter/lib/
+local-deploy/*

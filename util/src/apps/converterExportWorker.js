@@ -14,6 +14,15 @@ const sendProgress = (percent, detail) => {
   self.postMessage({ type: 'progress', payload: { percent, detail } });
 };
 
+const formatError = (context, err) => {
+  if (!err) {
+    return `${context}: Unknown error.`;
+  }
+  const message = err?.message ? String(err.message) : String(err);
+  const stack = err?.stack ? `\n${err.stack}` : '';
+  return `${context}: ${message}${stack}`;
+};
+
 const readZipEntries = (buffer) => {
   const signature = new Uint8Array(buffer.slice(0, 4));
   const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
@@ -167,7 +176,7 @@ self.onmessage = async (event) => {
   } catch (err) {
     self.postMessage({
       type: 'error',
-      payload: { message: 'Unable to read the file contents. Please try again.' }
+      payload: { message: formatError('Unable to read the file contents', err) }
     });
     return;
   }
@@ -189,7 +198,7 @@ self.onmessage = async (event) => {
   } catch (err) {
     self.postMessage({
       type: 'error',
-      payload: { message: 'We could not read this shapefile. Please try another file.' }
+      payload: { message: formatError('We could not read this shapefile', err) }
     });
     return;
   }
@@ -221,7 +230,15 @@ self.onmessage = async (event) => {
   try {
     geoMetadata = await createGeoMetadata(prjText ? { wkt: prjText } : null, geometryType);
   } catch (err) {
-    geoMetadata = await createGeoMetadata(null, geometryType);
+    try {
+      geoMetadata = await createGeoMetadata(null, geometryType);
+    } catch (fallbackErr) {
+      self.postMessage({
+        type: 'error',
+        payload: { message: formatError('Failed to build GeoParquet metadata', fallbackErr) }
+      });
+      return;
+    }
   }
 
   const schemaFields = [
@@ -282,7 +299,7 @@ self.onmessage = async (event) => {
   } catch (err) {
     self.postMessage({
       type: 'error',
-      payload: { message: 'We could not build the GeoParquet file. Please try again.' }
+      payload: { message: formatError('We could not build the GeoParquet file', err) }
     });
     return;
   }

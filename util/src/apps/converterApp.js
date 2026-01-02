@@ -61,7 +61,15 @@ export default function startConverterApp() {
       return {
         label: 'Unknown',
         valid: false,
-        message: 'Not a valid format. ESRI Shapefiles must be supplied as a .shp.zip archive. Go back and try uploading a different file.'
+        message: 'Not a valid format. ESRI Shapefiles must be supplied as a .shp.zip archive. If this is a zipped ESRI Shapefile, change the extension to .shp.zip and try again. Otherwise, try uploading a different file.'
+      };
+    }
+
+    if (lowerName.endsWith('.shp')) {
+      return {
+        label: 'Unzipped partial ESRI Shapefile (.shp)',
+        valid: true,
+        message: 'Not a valid format. ESRI Shapefiles consist of not just the .shp file but also a bundle of associated files. Make sure you gather ALL those files together in one single ZIP file, and give that zip file the ".shp.zip" extension. Then try again.'
       };
     }
 

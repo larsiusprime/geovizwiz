@@ -102,6 +102,7 @@
     <nav class="breadcrumbs" id="breadcrumbNav" aria-label="Workflow steps">
       <button class="breadcrumb current" type="button" data-step="1">Step 1: Upload</button>
       <button class="breadcrumb" type="button" data-step="2" disabled>Step 2: Identify</button>
+      <button class="breadcrumb" type="button" data-step="3" disabled>Step 3: Convert</button>
     </nav>
     <section id="page1">
       <h2>Step 1: Upload your file</h2>
@@ -109,9 +110,7 @@
       <div class="preview-panel">
         <h3>Supported input formats</h3>
         <ul class="tree">
-          <li>ESRI Shapefile (must be supplied as a zip file with the extension <strong>.shp.zip</strong>)</li>
-          <li>Geoparquet (must be supplied with the extension <strong>.parquet</strong> or <strong>.geoparquet</strong>)</li>
-          <li>Geopackage (must be supplied with the extension <strong>.gpkg</strong>)</li>
+          <li>ESRI Shapefile (must be supplied as a zip file containing .shp + .dbf + .shx)</li>
         </ul>
       </div>
       <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="File upload drop zone">
@@ -143,6 +142,25 @@
         </div>
       </div>
       <div id="fileValidation" class="status"></div>
+      <div id="metadataPanel" class="preview-panel hidden">
+        <h3>Layer metadata</h3>
+        <div id="metadataContent"></div>
+      </div>
+      <div class="step-actions">
+        <button id="continueBtn" type="button" disabled>Continue to conversion</button>
+      </div>
+    </section>
+    <section id="page3" class="hidden">
+      <h2>Step 3: Choose an output format</h2>
+      <p class="muted">Select the format you want to convert to. Conversion will be available in the next iteration.</p>
+      <div class="preview-panel">
+        <h3>Available output formats</h3>
+        <label>
+          <input type="radio" name="outputFormat" value="geoparquet">
+          GeoParquet (.parquet)
+        </label>
+      </div>
+      <div id="outputStatus" class="status muted">Conversion options are ready once you select a format.</div>
     </section>
   </main>
 <script type="module">

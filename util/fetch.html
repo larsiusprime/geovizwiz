@@ -7,9 +7,12 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232d4f8b'/%3E%3Cpath d='M9 17.5l4.5 4.5 9-11' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <style>
     body { font-family: Arial, sans-serif; margin: 0; padding: 0; background: #f5f6fa; color: #1f2d3d; }
-    header { background: #2d4f8b; color: #fff; padding: 1.5rem; text-align: center; }
+    header { background: #2d4f8b; color: #fff; padding: 1.5rem; text-align: center; position: relative; }
     main { padding: 1.5rem; max-width: 960px; margin: 0 auto; }
     .container { max-width: 960px; margin: 0 auto; }
+    .header-nav { position: absolute; top: 1rem; left: 1.5rem; }
+    .home-link { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.7rem; border-radius: 999px; border: 1px solid rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); color: #fff; font-size: 0.85rem; font-weight: 600; text-decoration: none; transition: background 0.2s ease, border-color 0.2s ease; }
+    .home-link:hover { background: rgba(255,255,255,0.25); border-color: rgba(255,255,255,0.8); }
     section { background: #fff; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); padding: 1rem 1.25rem; margin-bottom: 1rem; }
     label { display: block; margin-bottom: 0.15rem; margin-top: 0.15rem; font-weight: 600; }
     input[type="text"] { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid #d0d7de; border-radius: 6px; font-size: 1rem; }
@@ -59,11 +62,18 @@
     .panel-header h3 { margin: 0; }
     .panel-close { background: transparent; color: #2d4f8b; border: none; font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 6px; line-height: 1; }
     .panel-close:hover { background: rgba(45,79,139,0.1); }
+    @media (max-width: 700px) {
+      header { text-align: left; }
+      .header-nav { position: static; margin-bottom: 0.75rem; }
+    }
   </style>
 </head>
 <body>
   <header>
     <div class="container">
+      <div class="header-nav">
+        <a class="home-link" href="/" aria-label="Return to home">← Home</a>
+      </div>
       <h1>ArcGIS Layer to GeoParquet</h1>
       <p>Load an ArcGIS endpoint, browse layers, and export a single layer as GeoParquet entirely in your browser.</p>
     </div>

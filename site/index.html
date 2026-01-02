@@ -6,60 +6,144 @@
   <title>Put It On A Map</title>
   <link rel="shortcut icon" type="image/x-icon" href="images/favicon.ico"/>
   <style>
-    :root { --bg:#0b1020; --fg:#eaf0ff; --muted:#a8b3d1; --btn:#8ab4ff; --btn2:#2dd4bf; --card:#121a33; }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;background:radial-gradient(1200px 600px at 20% -10%,#182244 0,#0b1020 55%,#0b1020 100%);color:var(--fg)}
-    .wrap{min-height:100%;display:flex;flex-direction:column}
-    header{padding:20px 16px;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;width:100%}
-    header a.logo{font-weight:700;letter-spacing:.2px;text-decoration:none;color:var(--fg)}
-    main{flex:1;display:grid;place-items:center;padding:30px 16px}
-    .hero{max-width:1100px;width:100%;display:grid;grid-template-columns:1.2fr 1fr;gap:26px;align-items:center}
-    .hero h1{margin:0 0 10px;font-size:clamp(28px,4.4vw,46px);line-height:1.1}
-    .hero p{margin:0;color:var(--muted);font-size:clamp(14px,1.6vw,18px)}
-    .cta{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
-    .cta a{display:inline-block;padding:10px 14px;border-radius:10px;text-decoration:none;font-weight:600}
-    .cta a.primary{background:var(--btn);color:#081428}
-    .cta a.secondary{background:var(--btn2);color:#051c17}
-    .card{background:var(--card);border:1px solid #223055aa;border-radius:14px;padding:14px}
-    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:22px}
-    .feat h3{margin:0 0 6px;font-size:16px}
-    .feat p{margin:0;color:var(--muted);font-size:14px}
-    footer{padding:18px 16px;color:var(--muted);font-size:12px;text-align:center}
-    @media (max-width:900px){ .hero{grid-template-columns:1fr} .grid{grid-template-columns:1fr} }
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --border: #d9e2ef;
+      --text: #1c2333;
+      --muted: #5a667d;
+      --accent: #2d4f8b;
+      --accent-soft: rgba(45, 79, 139, 0.12);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { min-height: 100%; display: flex; flex-direction: column; }
+    header {
+      padding: 28px 20px;
+      border-bottom: 1px solid var(--border);
+      background: #fff;
+    }
+    .container { max-width: 1080px; margin: 0 auto; width: 100%; }
+    .header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 600;
+    }
+    .brand img { width: 150px; height: auto; }
+    .nav-links {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .nav-links a { padding: 6px 10px; border-radius: 999px; border: 1px solid transparent; }
+    .nav-links a:hover { border-color: var(--border); color: var(--accent); }
+    main { flex: 1; padding: 48px 20px 60px; }
+    .hero {
+      display: grid;
+      gap: 32px;
+      align-items: center;
+    }
+    .hero h1 { margin: 0 0 12px; font-size: clamp(28px, 4vw, 40px); }
+    .hero p { margin: 0; color: var(--muted); font-size: 1.05rem; max-width: 620px; }
+    .app-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      margin-top: 28px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 10px 24px rgba(21, 30, 50, 0.05);
+    }
+    .card h2 { margin: 0 0 8px; font-size: 1.1rem; }
+    .card p { margin: 0 0 18px; color: var(--muted); }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 600;
+      border: 1px solid var(--accent);
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .button.secondary {
+      background: var(--accent-soft);
+      color: var(--accent);
+      border-color: var(--accent-soft);
+    }
+    .button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(45, 79, 139, 0.2); }
+    footer {
+      padding: 24px 20px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    @media (max-width: 720px) {
+      .header-row { flex-direction: column; align-items: flex-start; }
+      .brand img { width: 130px; }
+    }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <a class="logo" href="/">putitonamap</a>
-      <nav>
-        <a href="/viz" class="logo" style="opacity:.8">Launch viz ↗</a>
-        <span style="opacity:.4;padding:0 6px">•</span>
-        <a href="/util/fetch.html" class="logo" style="opacity:.8">Open fetch ↗</a>
-      </nav>
+      <div class="container header-row">
+        <a class="brand" href="/" aria-label="Put It On A Map home">
+          <img src="/logo/logo.svg" alt="putitonamap logo">
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="/viz">Launch viz</a>
+          <a href="/util/fetch.html">Open fetch</a>
+          <a href="https://github.com/larsiusprime/geovizwiz">View source</a>
+        </nav>
+      </div>
     </header>
     <main>
-      <section class="hero">
+      <section class="container hero">
         <div>
-          <h1>Turn raw parcel data into 3D insight</h1>
-          <p>Load GeoParquet. Filter fields, pick ramps, extrude by value, and explore — all locally in your browser.</p>
-          <div class="cta">
-            <a class="primary" href="/viz">Open the viz</a>
-            <a class="secondary" href="/util/fetch.html">Open fetch</a>
-            <a class="secondary" href="https://github.com/larsiusprime/geovizwiz">View source</a>
+          <h1>Put GIS essentials on a map in minutes.</h1>
+          <p>
+            Put It On A Map makes it easy to do basic GIS operations in the browser. Load data,
+            explore layers, and run simple workflows without heavyweight desktop tooling.
+          </p>
+          <div class="app-grid">
+            <article class="card">
+              <h2>Viz — 3D parcel explorer</h2>
+              <p>Open GeoParquet or shapefiles, choose attributes, and visualize parcels in 3D.</p>
+              <a class="button" href="/viz">Open /viz</a>
+            </article>
+            <article class="card">
+              <h2>Fetch — ArcGIS to GeoParquet</h2>
+              <p>Connect to ArcGIS REST services, browse layers, and export GeoParquet locally.</p>
+              <a class="button secondary" href="/util/fetch.html">Open /util/fetch</a>
+            </article>
           </div>
-          <div class="grid">
-            <div class="feat card"><h3>Local-first</h3><p>No upload: files stay on your machine.</p></div>
-            <div class="feat card"><h3>Flexible formats</h3><p>GeoParquet, GPKG, or SHP (.zip).</p></div>
-            <div class="feat card"><h3>Smart scaling</h3><p>Quantiles / Equal-interval ramps. Auto height clamping.</p></div>
-          </div>
-        </div>
-        <div class="card">
-          <img src="data:image/svg+xml;utf8,<?xml version='1.0' encoding='UTF-8'?><svg xmlns='http://www.w3.org/2000/svg' width='640' height='420'><defs><linearGradient id='g' x1='0' x2='1'><stop offset='0' stop-color='%238ab4ff'/><stop offset='1' stop-color='%232dd4bf'/></linearGradient></defs><rect width='100%%' height='100%%' fill='%23121a33'/><g transform='translate(40,320)'><rect x='0' y='-50' width='60' height='50' fill='url(%23g)'/><rect x='80' y='-120' width='60' height='120' fill='url(%23g)'/><rect x='160' y='-80' width='60' height='80' fill='url(%23g)'/><rect x='240' y='-180' width='60' height='180' fill='url(%23g)'/><rect x='320' y='-100' width='60' height='100' fill='url(%23g)'/></g><text x='40' y='50' fill='%23eaf0ff' font-family='system-ui' font-size='18'>/viz — local 3D parcel viz</text></svg>" alt="preview" style="max-width:100%;border-radius:10px;border:1px solid #223055aa;">
         </div>
       </section>
     </main>
-    <footer>© <span id="y"></span> Put It On A Map • All local, all client-side</footer>
+    <footer>© <span id="y"></span> Put It On A Map • Fast, local GIS workflows</footer>
   </div>
   <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
 </body>

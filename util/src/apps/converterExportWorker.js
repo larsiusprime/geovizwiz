@@ -52,21 +52,34 @@ const ensureGdal = async () => {
 const getShapefileEntries = (entries) => {
   if (!entries) return null;
   const names = Object.keys(entries);
-  const shpName = names.find((name) => name.toLowerCase().endsWith('.shp'));
-  if (!shpName) return null;
-  const baseName = shpName.replace(/\.shp$/i, '');
-  const findMatch = (ext) => names.find((name) => name.toLowerCase() === `${baseName}.${ext}`);
-  const dbfName = findMatch('dbf');
-  const shxName = findMatch('shx');
-  const prjName = findMatch('prj');
-  if (!dbfName || !shxName) return null;
-  return {
-    baseName,
-    shpName,
-    dbfName,
-    shxName,
-    prjName
-  };
+  const grouped = new Map();
+  names.forEach((name) => {
+    const lower = name.toLowerCase();
+    const extMatch = lower.match(/\.([a-z0-9]+)$/);
+    if (!extMatch) return;
+    const ext = extMatch[1];
+    if (!['shp', 'dbf', 'shx', 'prj'].includes(ext)) return;
+    const base = lower.replace(/\.([a-z0-9]+)$/, '');
+    const baseName = base.split('/').pop();
+    if (!grouped.has(baseName)) {
+      grouped.set(baseName, {});
+    }
+    grouped.get(baseName)[ext] = name;
+  });
+
+  for (const [baseName, fileSet] of grouped.entries()) {
+    if (fileSet.shp && fileSet.dbf && fileSet.shx) {
+      return {
+        baseName,
+        shpName: fileSet.shp,
+        dbfName: fileSet.dbf,
+        shxName: fileSet.shx,
+        prjName: fileSet.prj || null
+      };
+    }
+  }
+
+  return null;
 };
 
 const getGdalApi = (Module) => ({
@@ -109,19 +122,19 @@ const writeShapefileToFs = (Module, entries, fileNames) => {
     // ignore if exists
   }
 
-  const writeEntry = (name) => {
+  const writeEntry = (name, ext) => {
     if (!name || !entries[name]) return null;
     const data = entries[name];
-    const targetPath = `${inputDir}/${name.split('/').pop()}`;
+    const targetPath = `${inputDir}/${fileNames.baseName}.${ext}`;
     Module.FS.writeFile(targetPath, data);
     return targetPath;
   };
 
   return {
-    shpPath: writeEntry(fileNames.shpName),
-    dbfPath: writeEntry(fileNames.dbfName),
-    shxPath: writeEntry(fileNames.shxName),
-    prjPath: fileNames.prjName ? writeEntry(fileNames.prjName) : null
+    shpPath: writeEntry(fileNames.shpName, 'shp'),
+    dbfPath: writeEntry(fileNames.dbfName, 'dbf'),
+    shxPath: writeEntry(fileNames.shxName, 'shx'),
+    prjPath: fileNames.prjName ? writeEntry(fileNames.prjName, 'prj') : null
   };
 };
 

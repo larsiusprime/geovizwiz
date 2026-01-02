@@ -106,6 +106,14 @@
     <section id="page1">
       <h2>Step 1: Upload your file</h2>
       <p class="muted">Drag and drop a file below or browse to select one from your device.</p>
+      <div class="preview-panel">
+        <h3>Supported input formats</h3>
+        <ul class="tree">
+          <li>ESRI Shapefile (must be supplied as a zip file with the extension <strong>.shp.zip</strong>)</li>
+          <li>Geoparquet (must be supplied with the extension <strong>.parquet</strong> or <strong>.geoparquet</strong>)</li>
+          <li>Geopackage (must be supplied with the extension <strong>.gpkg</strong>)</li>
+        </ul>
+      </div>
       <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="File upload drop zone">
         <p>Drag &amp; drop your file here</p>
         <button id="browseBtn" type="button">Browse</button>
@@ -134,6 +142,7 @@
           </table>
         </div>
       </div>
+      <div id="fileValidation" class="status"></div>
     </section>
   </main>
 <script type="module">

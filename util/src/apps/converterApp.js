@@ -7,6 +7,7 @@ export default function startConverterApp() {
   const fileStatus = document.getElementById('fileStatus');
   const fileName = document.getElementById('fileName');
   const fileFormat = document.getElementById('fileFormat');
+  const fileValidation = document.getElementById('fileValidation');
   const breadcrumbNav = document.getElementById('breadcrumbNav');
   const breadcrumbButtons = Array.from(breadcrumbNav.querySelectorAll('.breadcrumb'));
 
@@ -28,25 +29,59 @@ export default function startConverterApp() {
     });
   };
 
-  const normalizeFormat = (file) => {
+  const identifyFormat = (file) => {
     const name = file?.name || '';
-    const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
-    if (extension) {
-      return extension.toUpperCase();
+    const lowerName = name.toLowerCase();
+
+    if (lowerName.endsWith('.shp.zip')) {
+      return {
+        label: 'ESRI Shapefile (.shp.zip)',
+        valid: true,
+        message: 'Valid format. You may proceed to the next step (convert).'
+      };
     }
-    if (file?.type) {
-      return file.type;
+
+    if (lowerName.endsWith('.parquet') || lowerName.endsWith('.geoparquet')) {
+      return {
+        label: 'Geoparquet',
+        valid: true,
+        message: 'Valid format. You may proceed to the next step (convert).'
+      };
     }
-    return 'Unknown';
+
+    if (lowerName.endsWith('.gpkg')) {
+      return {
+        label: 'Geopackage',
+        valid: true,
+        message: 'Valid format. You may proceed to the next step (convert).'
+      };
+    }
+
+    if (lowerName.endsWith('.zip')) {
+      return {
+        label: 'Unknown',
+        valid: false,
+        message: 'Not a valid format. ESRI Shapefiles must be supplied as a .shp.zip archive. Go back and try uploading a different file.'
+      };
+    }
+
+    return {
+      label: 'Unknown',
+      valid: false,
+      message: 'Not a valid format. Supported extensions are .shp.zip, .parquet, .geoparquet, or .gpkg. Go back and try uploading a different file.'
+    };
   };
 
   const handleFile = (file) => {
     if (!file) {
       return;
     }
+    fileValidation.textContent = '';
     fileStatus.textContent = `Selected: ${file.name}`;
     fileName.textContent = file.name;
-    fileFormat.textContent = normalizeFormat(file);
+    const formatInfo = identifyFormat(file);
+    fileFormat.textContent = formatInfo.label;
+    fileValidation.textContent = formatInfo.message;
     maxVisitedStep = Math.max(maxVisitedStep, 2);
     setCurrentStep(2);
   };

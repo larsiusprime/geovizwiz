@@ -43,6 +43,14 @@ const getPrjText = (entries) => {
   return textDecoder.decode(entries[prjName]);
 };
 
+const parseEpsgFromWkt = (wkt) => {
+  if (!wkt) return null;
+  const match = wkt.match(/AUTHORITY\["EPSG","(\d+)"\]/i);
+  if (!match) return null;
+  const code = Number.parseInt(match[1], 10);
+  return Number.isFinite(code) ? code : null;
+};
+
 const inferFieldType = (value) => {
   if (value === null || value === undefined) {
     return null;
@@ -212,6 +220,7 @@ self.onmessage = async (event) => {
   const fieldEntries = Array.from(fieldTypes.entries());
   const geometryType = collectGeometryTypes(features);
   const prjText = getPrjText(entries);
+  const epsgFromWkt = parseEpsgFromWkt(prjText);
 
   const Arrow = self.Arrow;
   if (!Arrow) {
@@ -228,7 +237,10 @@ self.onmessage = async (event) => {
 
   let geoMetadata;
   try {
-    geoMetadata = await createGeoMetadata(prjText ? { wkt: prjText } : null, geometryType);
+    const spatialRef = prjText
+      ? { wkt: prjText, wkid: epsgFromWkt, latestWkid: epsgFromWkt }
+      : null;
+    geoMetadata = await createGeoMetadata(spatialRef, geometryType);
   } catch (err) {
     try {
       geoMetadata = await createGeoMetadata(null, geometryType);

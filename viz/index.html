@@ -88,7 +88,6 @@
     }
 
     .home-link {
-      margin-top: auto;
       text-decoration: none;
       font-size: 12px;
       font-weight: 600;
@@ -256,49 +255,50 @@
       <!-- Vertical Toolbar -->
       <div id="verticalToolbar">
         
+        <a class="home-link" href="/" title="Return home">← Home</a>
+
         <button id="panToolButton" class="toolbar-button" title="Pan tool (H)">
-          <img src="src/svg/pan.svg" alt="Pan" />
+          <img src="./src/svg/pan.svg" alt="Pan" />
           <span class="hotkey">H</span>
         </button>
         
         <button id="selectToolButton" class="toolbar-button has-submenu" title="Select Tool (V)">
-          <img src="src/svg/select_cursor.svg" alt="Select" />
+          <img src="./src/svg/select_cursor.svg" alt="Select" />
           <span class="hotkey">V</span>
-          <img src="src/svg/corner_triangle.svg" alt="" class="corner-triangle" />
+          <img src="./src/svg/corner_triangle.svg" alt="" class="corner-triangle" />
         </button>
         
         <button id="infoToolButton" class="toolbar-button" title="Inspect tool (I)">
-          <img src="src/svg/info.svg" alt="Info" />
+          <img src="./src/svg/info.svg" alt="Info" />
           <span class="hotkey">I</span>
         </button>
 
         <button id="settingsToolButton" class="toolbar-button" title="Show/hide settings">
-          <img src="src/svg/settings.svg" alt="Settings" />
+          <img src="./src/svg/settings.svg" alt="Settings" />
         </button>
                
         <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
-          <img src="src/svg/legend.svg" alt="Legend" />
+          <img src="./src/svg/legend.svg" alt="Legend" />
         </button>
         
         <div id="selectSubmenu" class="toolbar-submenu">
           <button class="submenu-button" data-mode="select-one" title="Select individual parcels by clicking">
-            <img src="src/svg/select_cursor.svg" alt="Select One" />
+            <img src="./src/svg/select_cursor.svg" alt="Select One" />
             One
           </button>
           <button class="submenu-button" data-mode="select-rectangle" title="Select parcels by drawing a rectangle (Shift+click+drag)">
-            <img src="src/svg/select_rectangle.svg" alt="Select Rectangle" />
+            <img src="./src/svg/select_rectangle.svg" alt="Select Rectangle" />
             Rectangle
           </button>
           <button class="submenu-button" data-mode="select-lasso" title="Select parcels by drawing a freeform lasso (not implemented)">
-            <img src="src/svg/select_lasso.svg" alt="Select Lasso" />
+            <img src="./src/svg/select_lasso.svg" alt="Select Lasso" />
             Lasso
           </button>
           <button class="submenu-button" data-mode="select-polygon" title="Select parcels by drawing a polygon">
-            <img src="src/svg/select_polygon.svg" alt="Select Polygon" />
+            <img src="./src/svg/select_polygon.svg" alt="Select Polygon" />
             Polygon
           </button>
         </div>
-        <a class="home-link" href="/" title="Return home">← Home</a>
       </div>
       
 
@@ -593,6 +593,6 @@
 
 
 
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="./src/main.ts"></script>
 </body>
 </html>

@@ -1,6 +1,3 @@
-import "../../vendor/fflate/index.min.js";
-import "../../vendor/shpjs/shp.min.js";
-
 export default function startConverterApp() {
   const page1 = document.getElementById('page1');
   const page2 = document.getElementById('page2');
@@ -12,18 +9,23 @@ export default function startConverterApp() {
   const fileName = document.getElementById('fileName');
   const fileFormat = document.getElementById('fileFormat');
   const fileValidation = document.getElementById('fileValidation');
+  const progressPanel = document.getElementById('progressPanel');
+  const progressText = document.getElementById('progressText');
+  const progressPercent = document.getElementById('progressPercent');
+  const progressBar = document.getElementById('progressBar');
   const metadataPanel = document.getElementById('metadataPanel');
   const metadataContent = document.getElementById('metadataContent');
   const continueBtn = document.getElementById('continueBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
   const outputStatus = document.getElementById('outputStatus');
   const outputFormatInputs = Array.from(document.querySelectorAll('input[name="outputFormat"]'));
   const breadcrumbNav = document.getElementById('breadcrumbNav');
   const breadcrumbButtons = Array.from(breadcrumbNav.querySelectorAll('.breadcrumb'));
-  const textDecoder = new TextDecoder();
 
   let currentStep = 1;
   let maxVisitedStep = 1;
   let selectedOutputFormat = null;
+  let activeWorker = null;
 
   const setCurrentStep = (step) => {
     currentStep = step;
@@ -47,120 +49,19 @@ export default function startConverterApp() {
     continueBtn.disabled = true;
   };
 
-  const readZipEntries = (buffer) => {
-    const signature = new Uint8Array(buffer.slice(0, 4));
-    const isZip = signature[0] === 0x50 && signature[1] === 0x4b;
-    if (!isZip || !globalThis.fflate?.unzipSync) {
-      return null;
-    }
-    try {
-      return globalThis.fflate.unzipSync(new Uint8Array(buffer));
-    } catch (err) {
-      return null;
-    }
+  const resetProgressPanel = () => {
+    progressPanel.classList.add('hidden');
+    progressText.textContent = 'Inspecting file contents...';
+    progressPercent.textContent = '0%';
+    progressBar.style.width = '0%';
   };
 
-  const identifyFormatFromContents = (buffer) => {
-    const entries = readZipEntries(buffer);
-    if (!entries) {
-      return {
-        label: 'Unknown',
-        valid: false,
-        message: 'Not a supported format. Upload a zipped ESRI Shapefile (.zip containing .shp + .dbf + .shx).'
-      };
-    }
-
-    const entryNames = Object.keys(entries).map((name) => name.toLowerCase());
-    const hasShp = entryNames.some((name) => name.endsWith('.shp'));
-    const hasDbf = entryNames.some((name) => name.endsWith('.dbf'));
-    const hasShx = entryNames.some((name) => name.endsWith('.shx'));
-
-    if (!hasShp || !hasDbf) {
-      return {
-        label: 'ZIP archive',
-        valid: false,
-        message: 'Not a supported format. This zip archive does not contain the required .shp and .dbf files for a valid ESRI Shapefile.'
-      };
-    }
-
-    if (!hasShx) {
-      return {
-        label: 'Partial ESRI Shapefile (missing .shx)',
-        valid: false,
-        message: 'Not a supported format. The zip archive is missing the .shx index file required for a complete ESRI Shapefile.'
-      };
-    }
-
-    return {
-      label: 'ESRI Shapefile (zipped)',
-      valid: true,
-      message: 'Valid format. Metadata extracted below. You may proceed to the conversion step.',
-      entries
-    };
-  };
-
-  const getCrsLabel = (entries) => {
-    if (!entries) {
-      return 'Unknown';
-    }
-    const prjName = Object.keys(entries).find((name) => name.toLowerCase().endsWith('.prj'));
-    if (!prjName) {
-      return 'Unknown';
-    }
-    const prjText = textDecoder.decode(entries[prjName]);
-    const match = prjText.match(/^(?:PROJCS|GEOGCS|LOCAL_CS|COMPD_CS)\s*\["([^"]+)"/i);
-    return match?.[1] || prjText.split(/\r?\n/)[0]?.trim() || 'Unknown';
-  };
-
-  const getGeometryType = (features) => {
-    const types = new Set();
-    features.forEach((feature) => {
-      const type = feature?.geometry?.type;
-      if (type) {
-        types.add(type);
-      }
-    });
-    if (!types.size) {
-      return 'Unknown';
-    }
-    if (types.size === 1) {
-      return Array.from(types)[0];
-    }
-    return `Mixed (${Array.from(types).join(', ')})`;
-  };
-
-  const getFieldInfo = (features) => {
-    const fieldTypes = new Map();
-    const inferType = (value) => {
-      if (value === null || value === undefined) {
-        return null;
-      }
-      if (Array.isArray(value)) {
-        return 'array';
-      }
-      if (value instanceof Date) {
-        return 'date';
-      }
-      return typeof value;
-    };
-
-    features.forEach((feature) => {
-      const properties = feature?.properties || {};
-      Object.entries(properties).forEach(([key, value]) => {
-        if (!fieldTypes.has(key)) {
-          fieldTypes.set(key, 'unknown');
-        }
-        const currentType = fieldTypes.get(key);
-        if (currentType === 'unknown') {
-          const inferred = inferType(value);
-          if (inferred) {
-            fieldTypes.set(key, inferred);
-          }
-        }
-      });
-    });
-
-    return Array.from(fieldTypes.entries()).map(([name, type]) => ({ name, type }));
+  const updateProgress = ({ percent = 0, detail = '' }) => {
+    const clamped = Math.max(0, Math.min(100, percent));
+    progressPanel.classList.remove('hidden');
+    progressText.textContent = detail || 'Inspecting file contents...';
+    progressPercent.textContent = `${clamped}%`;
+    progressBar.style.width = `${clamped}%`;
   };
 
   const renderMetadata = ({ layers, crs }) => {
@@ -176,16 +77,16 @@ export default function startConverterApp() {
       const wrapper = document.createElement('div');
       wrapper.className = 'preview-summary';
       const layerName = layer.fileName || `Layer ${index + 1}`;
-      const features = layer.features || [];
-      const geometryType = getGeometryType(features);
-      const fieldInfo = getFieldInfo(features);
+      const geometryType = layer.geometryType || 'Unknown';
+      const fieldInfo = layer.fields || [];
+      const rowCount = Number.isFinite(layer.rowCount) ? layer.rowCount : 0;
 
       const table = document.createElement('table');
       const tbody = document.createElement('tbody');
       const rows = [
         ['Layer name', layerName],
         ['Layer type', 'Shapefile layer'],
-        ['Number of rows', features.length.toLocaleString()],
+        ['Number of rows', rowCount.toLocaleString()],
         ['Geometry field', 'geometry'],
         ['Geometry type', geometryType],
         ['CRS', crs]
@@ -247,48 +148,90 @@ export default function startConverterApp() {
     metadataPanel.classList.remove('hidden');
   };
 
+  const stopActiveWorker = () => {
+    if (activeWorker) {
+      activeWorker.terminate();
+      activeWorker = null;
+    }
+  };
+
+  const resetToInitialState = () => {
+    stopActiveWorker();
+    resetProgressPanel();
+    resetMetadataPanel();
+    fileValidation.textContent = '';
+    fileStatus.textContent = '';
+    fileName.textContent = '—';
+    fileFormat.textContent = '—';
+    fileInput.value = '';
+    maxVisitedStep = 1;
+    setCurrentStep(1);
+  };
+
   const handleFile = async (file) => {
     if (!file) {
       return;
     }
+    stopActiveWorker();
     fileValidation.textContent = '';
     fileStatus.textContent = `Selected: ${file.name}`;
     fileName.textContent = file.name;
-    fileFormat.textContent = 'Checking file contents...';
-    fileValidation.textContent = 'Inspecting file contents...';
+    fileFormat.textContent = 'Inspecting contents...';
+    fileValidation.textContent = '';
     resetMetadataPanel();
+    resetProgressPanel();
+    updateProgress({ percent: 5, detail: 'Preparing to inspect file contents...' });
     maxVisitedStep = 2;
     setCurrentStep(2);
 
-    let buffer;
-    try {
-      buffer = await file.arrayBuffer();
-    } catch (err) {
+    const worker = new Worker(new URL('./converterWorker.js', import.meta.url));
+    activeWorker = worker;
+
+    worker.onmessage = (event) => {
+      if (worker !== activeWorker) {
+        return;
+      }
+      const { type, payload } = event.data || {};
+      if (type === 'progress') {
+        updateProgress(payload);
+        return;
+      }
+      if (type === 'invalid') {
+        updateProgress({ percent: 100, detail: 'Inspection complete.' });
+        fileFormat.textContent = payload.label;
+        fileValidation.textContent = payload.message;
+        stopActiveWorker();
+        return;
+      }
+      if (type === 'error') {
+        updateProgress({ percent: 100, detail: 'Inspection failed.' });
+        fileFormat.textContent = 'Unknown';
+        fileValidation.textContent = payload.message;
+        stopActiveWorker();
+        return;
+      }
+      if (type === 'success') {
+        updateProgress({ percent: 100, detail: 'Inspection complete.' });
+        fileFormat.textContent = payload.label;
+        fileValidation.textContent = payload.message;
+        renderMetadata({ layers: payload.layers, crs: payload.crs });
+        maxVisitedStep = 3;
+        continueBtn.disabled = false;
+        stopActiveWorker();
+        return;
+      }
+    };
+
+    worker.onerror = () => {
+      if (worker !== activeWorker) {
+        return;
+      }
+      updateProgress({ percent: 100, detail: 'Inspection failed.' });
       fileFormat.textContent = 'Unknown';
-      fileValidation.textContent = 'Unable to read the file contents. Please try again.';
-      return;
-    }
+      fileValidation.textContent = 'An unexpected error occurred while inspecting the file.';
+    };
 
-    const formatInfo = identifyFormatFromContents(buffer);
-    fileFormat.textContent = formatInfo.label;
-    fileValidation.textContent = formatInfo.message;
-
-    if (!formatInfo.valid) {
-      return;
-    }
-
-    try {
-      const layerData = await globalThis.shp(buffer);
-      const layers = Array.isArray(layerData) ? layerData : [layerData];
-      const crs = getCrsLabel(formatInfo.entries);
-      renderMetadata({ layers, crs });
-      maxVisitedStep = 3;
-      continueBtn.disabled = false;
-      fileValidation.textContent = 'Metadata loaded. You may proceed to the conversion step.';
-    } catch (err) {
-      const errorMessage = err?.message ? ` ${err.message}` : '';
-      fileValidation.textContent = `We found a valid zipped shapefile, but could not read its metadata.${errorMessage}`;
-    }
+    worker.postMessage({ file });
   };
 
   const handleDragOver = (event) => {
@@ -339,6 +282,10 @@ export default function startConverterApp() {
       selectedOutputFormat = input.value;
       outputStatus.textContent = `Output format selected: ${selectedOutputFormat}. Conversion will be available soon.`;
     });
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    resetToInitialState();
   });
 
   breadcrumbButtons.forEach((button) => {

@@ -6,12 +6,18 @@
 export function mapGeometryType(type) {
   switch ((type || '').toLowerCase()) {
     case 'esrigeometrypoint':
+    case 'point':
       return 'Point';
     case 'esrigeometrymultipoint':
+    case 'multipoint':
       return 'MultiPoint';
     case 'esrigeometrypolyline':
+    case 'linestring':
+    case 'multilinestring':
       return 'MultiLineString';
     case 'esrigeometrypolygon':
+    case 'polygon':
+    case 'multipolygon':
       return 'Polygon';
     default:
       return 'Unknown';

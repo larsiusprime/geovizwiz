@@ -193,15 +193,32 @@
     </section>
     <section id="page3" class="hidden">
       <h2>Step 3: Choose an output format</h2>
-      <p class="muted">Select the format you want to convert to. Conversion will be available in the next iteration.</p>
+      <p class="muted">Select the format you want to convert to, then start the conversion.</p>
       <div class="preview-panel">
         <h3>Available output formats</h3>
         <label>
           <input type="radio" name="outputFormat" value="geoparquet">
-          GeoParquet (.parquet)
+          GeoParquet (.geoparquet)
         </label>
       </div>
+      <div class="step-actions">
+        <button id="convertBtn" type="button" disabled>Convert</button>
+        <button id="convertCancelBtn" type="button" class="button-secondary" disabled>Cancel conversion</button>
+        <button id="saveBtn" type="button" disabled>Save file</button>
+      </div>
       <div id="outputStatus" class="status muted">Conversion options are ready once you select a format.</div>
+      <div id="outputProgressPanel" class="preview-panel progress-panel hidden" aria-live="polite">
+        <div class="progress-row">
+          <div class="spinner" id="outputProgressSpinner" aria-hidden="true"></div>
+          <div>
+            <div id="outputProgressText" class="muted">Preparing conversion...</div>
+            <div id="outputProgressPercent" class="badge">0%</div>
+          </div>
+        </div>
+        <div class="progress-bar" aria-hidden="true">
+          <span id="outputProgressBar"></span>
+        </div>
+      </div>
     </section>
   </main>
 <script type="module">

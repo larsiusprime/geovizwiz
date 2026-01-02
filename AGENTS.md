@@ -50,4 +50,17 @@ The app has a list of supported input formats. It is exactly this:
 If the user uploads one of these, the app notes that it is a valid format and they may proceed to Step 3 (convert).
 If the user uploads anything else, the app notes that it is not a valid format, why, and tells them to go back and try uploading a different file.
 
+The app reads the supplied file, shows progress information while its loading (with an option to gracefully cancel), and, once loaded, displays the file metadata.
+Once the file is read and inspected, the user may proceed to step 3, convert.
+
+Step 3: The file is ready for conversion. The user selects a file format.
+
+The app has a list of supported output formats. It is exactly this:
+
+- GeoParquet (.geoparquet)
+
+Once the user selects the format, a "convert" button becomes live. They can click it and it will start the conversion process.
+The conversion process will show progress information (with an option to gracefully cancel), exactly as was done in step 2. When processing is done, a "save file" button will become live, and the user will be prompted to save the file they have processed.
+
+When the user clicks "save file", the processed file will be saved to their computer.
 

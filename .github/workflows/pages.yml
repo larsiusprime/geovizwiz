@@ -41,6 +41,8 @@ jobs:
         run: |
           mkdir -p site/viz
           cp -r viz/dist/* site/viz/
+          mkdir -p site/util
+          cp -r util/* site/util/
           # Optional: ensure CNAME here so the custom domain is baked into the artifact
           echo "www.putitonamap.com" > site/CNAME
           # (site/index.html is already in your repo)

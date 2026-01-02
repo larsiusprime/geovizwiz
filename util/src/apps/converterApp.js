@@ -13,8 +13,10 @@ export default function startConverterApp() {
   const progressText = document.getElementById('progressText');
   const progressPercent = document.getElementById('progressPercent');
   const progressBar = document.getElementById('progressBar');
+  const progressSpinner = document.getElementById('progressSpinner');
   const metadataPanel = document.getElementById('metadataPanel');
   const metadataContent = document.getElementById('metadataContent');
+  const metadataToggle = document.getElementById('metadataToggle');
   const continueBtn = document.getElementById('continueBtn');
   const cancelBtn = document.getElementById('cancelBtn');
   const outputStatus = document.getElementById('outputStatus');
@@ -45,8 +47,11 @@ export default function startConverterApp() {
 
   const resetMetadataPanel = () => {
     metadataPanel.classList.add('hidden');
+    metadataPanel.classList.remove('metadata-collapsed');
     metadataContent.innerHTML = '';
     continueBtn.disabled = true;
+    metadataToggle.setAttribute('aria-expanded', 'true');
+    metadataToggle.textContent = '−';
   };
 
   const resetProgressPanel = () => {
@@ -54,6 +59,7 @@ export default function startConverterApp() {
     progressText.textContent = 'Inspecting file contents...';
     progressPercent.textContent = '0%';
     progressBar.style.width = '0%';
+    progressSpinner.classList.remove('paused');
   };
 
   const updateProgress = ({ percent = 0, detail = '' }) => {
@@ -62,6 +68,7 @@ export default function startConverterApp() {
     progressText.textContent = detail || 'Inspecting file contents...';
     progressPercent.textContent = `${clamped}%`;
     progressBar.style.width = `${clamped}%`;
+    progressSpinner.classList.toggle('paused', clamped >= 100);
   };
 
   const renderMetadata = ({ layers, crs }) => {
@@ -70,6 +77,9 @@ export default function startConverterApp() {
     if (!layers.length) {
       metadataContent.textContent = 'No layers found in this shapefile.';
       metadataPanel.classList.remove('hidden');
+      metadataPanel.classList.remove('metadata-collapsed');
+      metadataToggle.setAttribute('aria-expanded', 'true');
+      metadataToggle.textContent = '−';
       return;
     }
 
@@ -146,6 +156,9 @@ export default function startConverterApp() {
     });
 
     metadataPanel.classList.remove('hidden');
+    metadataPanel.classList.remove('metadata-collapsed');
+    metadataToggle.setAttribute('aria-expanded', 'true');
+    metadataToggle.textContent = '−';
   };
 
   const stopActiveWorker = () => {
@@ -286,6 +299,12 @@ export default function startConverterApp() {
 
   cancelBtn.addEventListener('click', () => {
     resetToInitialState();
+  });
+
+  metadataToggle.addEventListener('click', () => {
+    const isCollapsed = metadataPanel.classList.toggle('metadata-collapsed');
+    metadataToggle.setAttribute('aria-expanded', String(!isCollapsed));
+    metadataToggle.textContent = isCollapsed ? '+' : '−';
   });
 
   breadcrumbButtons.forEach((button) => {

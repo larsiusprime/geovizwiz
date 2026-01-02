@@ -52,6 +52,10 @@
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
+    .spinner.paused {
+      animation: none;
+      border-top-color: #e5e9f2;
+    }
     .progress-row { display: flex; align-items: center; gap: 0.75rem; }
     @keyframes spin { to { transform: rotate(360deg); } }
     .queue-list { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
@@ -92,6 +96,9 @@
       background: #fff;
       color: var(--accent);
       border: 1px solid var(--border);
+    }
+    .metadata-collapsed #metadataContent {
+      display: none;
     }
     @media (max-width: 700px) {
       .page-intro h1 { font-size: 1.6rem; }
@@ -162,7 +169,7 @@
       <div id="fileValidation" class="status"></div>
       <div id="progressPanel" class="preview-panel progress-panel hidden" aria-live="polite">
         <div class="progress-row">
-          <div class="spinner" aria-hidden="true"></div>
+          <div class="spinner" id="progressSpinner" aria-hidden="true"></div>
           <div>
             <div id="progressText" class="muted">Inspecting file contents...</div>
             <div id="progressPercent" class="badge">0%</div>
@@ -172,13 +179,16 @@
           <span id="progressBar"></span>
         </div>
       </div>
-      <div id="metadataPanel" class="preview-panel hidden">
-        <h3>Layer metadata</h3>
-        <div id="metadataContent"></div>
-      </div>
       <div class="step-actions">
         <button id="continueBtn" type="button" disabled>Continue to conversion</button>
         <button id="cancelBtn" type="button" class="button-secondary">Cancel</button>
+      </div>
+      <div id="metadataPanel" class="preview-panel hidden">
+        <div class="panel-header">
+          <h3>Layer metadata</h3>
+          <button id="metadataToggle" type="button" class="panel-close" aria-expanded="true" aria-controls="metadataContent">−</button>
+        </div>
+        <div id="metadataContent"></div>
       </div>
     </section>
     <section id="page3" class="hidden">

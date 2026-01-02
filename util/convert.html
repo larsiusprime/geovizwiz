@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Converter</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%232d4f8b'/%3E%3Cpath d='M9 17.5l4.5 4.5 9-11' stroke='%23fff' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/shared.css" />
+  <style>
+    main { padding: 32px 20px 60px; }
+    .fetch-main { display: flex; flex-direction: column; gap: 1.5rem; }
+    .page-intro h1 { margin: 0 0 0.35rem; font-size: 1.9rem; }
+    .page-intro p { margin: 0; color: var(--muted); max-width: 720px; }
+    section { background: var(--card); border-radius: 16px; border: 1px solid var(--border); padding: 1.2rem 1.4rem; margin-bottom: 1rem; box-shadow: 0 10px 24px rgba(21, 30, 50, 0.05); }
+    label { display: block; margin-bottom: 0.2rem; margin-top: 0.2rem; font-weight: 600; }
+    input[type="text"] { width: 100%; padding: 0.65rem 0.75rem; border: 1px solid var(--border); border-radius: 8px; font-size: 1rem; }
+    button { padding: 0.65rem 1rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: 600; }
+    button[disabled] { opacity: 0.6; cursor: not-allowed; }
+    .hidden { display: none; }
+    .status { margin-top: 0.75rem; color: var(--accent); font-weight: 600; }
+    ul.tree { list-style: none; padding-left: 1rem; }
+    ul.tree li { margin: 0.25rem 0; }
+    .layer-row { display: flex; align-items: center; gap: 0.5rem; }
+    details { margin-top: 0.25rem; margin-bottom: 0; margin-left: 1.0rem }
+    .muted { color: var(--muted); }
+    .progress { background: #e5e9f2; border-radius: 999px; overflow: hidden; height: 10px; margin: 0.5rem 0; }
+    .progress span { display: block; height: 100%; background: var(--accent); width: 0%; transition: width 0.2s ease-out; }
+    .badge { background: var(--accent-soft); color: var(--accent); padding: 0.1rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .log { background: #0d1a2b; color: #dce6ff; border-radius: 10px; padding: 0.75rem; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; max-height: 280px; overflow: auto; }
+    .step-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+    .preview-panel { margin-top: 1rem; border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; background: #f9fafc; }
+    .preview-panel h3 { margin-top: 0; }
+    .preview-summary { background: #fff; border: 1px solid #e5e9f2; border-radius: 10px; overflow: hidden; }
+    .preview-summary table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .preview-summary th, .preview-summary td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eef2ff; text-align: left; }
+    .preview-summary th { background: #eef2ff; color: var(--accent); font-weight: 600; }
+    .preview-summary tr:last-child td { border-bottom: none; }
+    .preview-fields { margin-top: 1rem; background: #fff; border: 1px solid #e5e9f2; border-radius: 10px; overflow: hidden; }
+    .preview-fields table { width: 100%; border-collapse: collapse; font-size: 0.95rem; }
+    .preview-fields th, .preview-fields td { padding: 0.5rem 0.75rem; border-bottom: 1px solid #eef2ff; text-align: left; }
+    .preview-fields th { background: #eef2ff; color: var(--accent); font-weight: 600; }
+    .preview-fields tr:last-child td { border-bottom: none; }
+    .preview-fields .empty { padding: 0.75rem; color: #6c7a89; }
+    .queue-list { display: grid; gap: 0.75rem; margin-top: 0.5rem; }
+    .queue-item { border: 1px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; background: #fff; }
+    .queue-item header { display: flex; justify-content: space-between; align-items: center; background: none; color: inherit; padding: 0; }
+    .queue-item h4 { margin: 0; font-size: 1rem; }
+    .queue-meta { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .queue-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.5rem; }
+    .queue-status { font-weight: 600; color: var(--accent); }
+    .queue-disabled { opacity: 0.6; }
+    .queue-badge { background: #eef2ff; color: var(--accent); padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.8rem; }
+    .queue-badge.done { background: #e6f4ea; color: #1b5e20; }
+    .queue-badge.error { background: #fdecea; color: #b71c1c; }
+    .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .breadcrumb { border: 1px solid var(--border); background: #fff; color: var(--accent); padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.9rem; cursor: pointer; }
+    .breadcrumb[disabled] { opacity: 0.5; cursor: not-allowed; }
+    .breadcrumb.current { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .panel-header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+    .panel-header h3 { margin: 0; }
+    .panel-close { background: transparent; color: var(--accent); border: none; font-size: 1.2rem; cursor: pointer; padding: 0.2rem 0.5rem; border-radius: 6px; line-height: 1; }
+    .panel-close:hover { background: var(--accent-soft); }
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 1.5rem;
+      text-align: center;
+      background: #f9fafc;
+      transition: border-color 0.2s ease, background 0.2s ease;
+    }
+    .drop-zone.drag-over {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .drop-zone p {
+      margin: 0 0 0.75rem;
+    }
+    @media (max-width: 700px) {
+      .page-intro h1 { font-size: 1.6rem; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container header-row">
+      <a class="brand" href="/" aria-label="Put It On A Map home">
+        <img src="/images/logo.svg" alt="putitonamap logo">
+        <div>PutItOnAMap.com</div>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a href="/viz">3D Viz</a>
+        <a href="/util/fetch.html">Data Fetcher</a>
+        <a href="https://github.com/larsiusprime/geovizwiz">Source Code</a>
+      </nav>
+    </div>
+  </header>
+  <main class="container fetch-main">
+    <div class="page-intro">
+      <h1>File Converter</h1>
+      <p>Upload a file and prepare it for conversion. We will identify its name and format before continuing.</p>
+    </div>
+    <nav class="breadcrumbs" id="breadcrumbNav" aria-label="Workflow steps">
+      <button class="breadcrumb current" type="button" data-step="1">Step 1: Upload</button>
+      <button class="breadcrumb" type="button" data-step="2" disabled>Step 2: Identify</button>
+    </nav>
+    <section id="page1">
+      <h2>Step 1: Upload your file</h2>
+      <p class="muted">Drag and drop a file below or browse to select one from your device.</p>
+      <div id="dropZone" class="drop-zone" role="button" tabindex="0" aria-label="File upload drop zone">
+        <p>Drag &amp; drop your file here</p>
+        <button id="browseBtn" type="button">Browse</button>
+        <input type="file" id="fileInput" class="hidden">
+      </div>
+      <div id="fileStatus" class="status"></div>
+    </section>
+
+    <section id="page2" class="hidden">
+      <h2>Step 2: Identify file details</h2>
+      <p class="muted">We inspected your file and captured the basics.</p>
+      <div class="preview-panel">
+        <h3>File summary</h3>
+        <div class="preview-summary">
+          <table aria-label="File summary">
+            <tbody>
+              <tr>
+                <th scope="row">File name</th>
+                <td id="fileName">—</td>
+              </tr>
+              <tr>
+                <th scope="row">Format</th>
+                <td id="fileFormat">—</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+<script type="module">
+    import startConverterApp from "./src/apps/converterApp.js";
+    startConverterApp();
+</script>
+
+</body>
+</html>

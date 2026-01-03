@@ -1,6 +1,45 @@
-importScripts('../../vendor/fflate/index.min.js', '../../vendor/shpjs/shp.min.js');
+importScripts('../../vendor/fflate/index.min.js', '../../vendor/gdal/gdal3.js');
 
 const textDecoder = new TextDecoder();
+const GDAL_BASE = new URL('../../vendor/gdal/', self.location).toString();
+
+const gdalPromise = self.initGdalJs({
+  useWorker: false,
+  path: GDAL_BASE
+});
+
+const toFilesFromZipEntries = (entries) => Object.entries(entries).map(([name, bytes]) => {
+  // WORKERFS expects File objects in the browser worker environment.
+  return new File([bytes], name);
+});
+
+const loadShapefileAsGeoJson = async (zipBuffer) => {
+  const entries = readZipEntries(zipBuffer);
+  const files = toFilesFromZipEntries(entries);
+
+  const gdal = await gdalPromise;
+
+  // Open dataset(s) from the provided files (WORKERFS mount).
+  const { datasets, errors } = await gdal.open(files);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this shapefile.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+
+  // Convert to GeoJSON WITHOUT reprojecting (keeps native CRS coordinates).
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const text = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(text);
+
+  // Cleanup GDAL datasets (best-effort).
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, entries };
+};
+
 
 const sendProgress = (percent, detail) => {
   self.postMessage({ type: 'progress', payload: { percent, detail } });
@@ -98,7 +137,7 @@ self.onmessage = async (event) => {
   }
 
   sendProgress(30, 'Inspecting archive contents...');
-  const entries = readZipEntries(buffer);
+  let entries = readZipEntries(buffer);
   if (!entries) {
     self.postMessage({
       type: 'invalid',
@@ -140,7 +179,9 @@ self.onmessage = async (event) => {
   sendProgress(55, 'Reading shapefile metadata...');
   let layerData;
   try {
-    layerData = await self.shp(buffer);
+    const { geojson, entries: zipEntries } = await loadShapefileAsGeoJson(buffer);
+    layerData = geojson;
+    entries = zipEntries;
   } catch (err) {
     const message = err?.message
       ? `We found a valid zipped shapefile, but could not read its metadata. ${err.message}`

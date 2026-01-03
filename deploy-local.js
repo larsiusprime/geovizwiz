@@ -61,6 +61,8 @@ function contentType(filePath) {
     ".gif": "image/gif",
     ".ico": "image/x-icon",
     ".map": "application/json; charset=utf-8",
+    ".wasm": "application/wasm",
+    ".data": "application/octet-stream",
   }[ext] || "application/octet-stream";
 }
 

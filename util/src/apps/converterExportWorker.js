@@ -1,11 +1,45 @@
 importScripts(
   '../../vendor/fflate/index.min.js',
-  '../../vendor/shpjs/shp.min.js',
+  '../../vendor/gdal/gdal3.js',
   '../../vendor/wkx/dist/wkx.js',
   '../../vendor/apache-arrow.js'
 );
 
+
 const textDecoder = new TextDecoder();
+const GDAL_BASE = new URL('../../vendor/gdal/', self.location).toString();
+
+const gdalPromise = self.initGdalJs({
+  useWorker: false,
+  path: GDAL_BASE
+});
+
+const toFilesFromZipEntries = (entries) => Object.entries(entries).map(([name, bytes]) => new File([bytes], name));
+
+const loadShapefileGeoJsonWithEntries = async (zipBuffer) => {
+  const entries = readZipEntries(zipBuffer);
+  const gdal = await gdalPromise;
+  const files = toFilesFromZipEntries(entries);
+
+  const { datasets, errors } = await gdal.open(files);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this shapefile.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+
+  // Keep native CRS coordinates: do NOT pass -t_srs / -s_srs.
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const geojsonText = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(geojsonText);
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, entries };
+};
+
 let parquetModulePromise = null;
 let arrowHelpersPromise = null;
 let parquetInitialized = false;
@@ -202,7 +236,8 @@ self.onmessage = async (event) => {
   sendProgress(40, 'Parsing shapefile features...');
   let layerData;
   try {
-    layerData = await self.shp(buffer);
+    const { geojson } = await loadShapefileGeoJsonWithEntries(buffer);
+    layerData = geojson;
   } catch (err) {
     self.postMessage({
       type: 'error',

@@ -220,7 +220,10 @@ export default function startConverterApp() {
 
   const updateOutputStatus = () => {
     if (selectedOutputFormat) {
-      outputStatus.textContent = 'Output format selected: GeoParquet (.geoparquet). Ready to convert.';
+      const label = selectedOutputFormat === 'geopackage'
+        ? 'GeoPackage (.gpkg)'
+        : 'GeoParquet (.geoparquet)';
+      outputStatus.textContent = `Output format selected: ${label}. Ready to convert.`;
       return;
     }
     outputStatus.textContent = 'Conversion options are ready once you select a format.';
@@ -387,30 +390,34 @@ export default function startConverterApp() {
     });
   });
 
-  const buildOutputName = (fileNameValue) => {
+  const buildOutputName = (fileNameValue, outputFormat) => {
     const lower = fileNameValue.toLowerCase();
+    const extension = outputFormat === 'geopackage' ? 'gpkg' : 'geoparquet';
     if (lower.endsWith('.shp.zip')) {
-      return `${fileNameValue.slice(0, -8)}.geoparquet`;
+      return `${fileNameValue.slice(0, -8)}.${extension}`;
     }
     if (lower.endsWith('.zip')) {
-      return `${fileNameValue.slice(0, -4)}.geoparquet`;
+      return `${fileNameValue.slice(0, -4)}.${extension}`;
     }
     if (lower.endsWith('.geojson')) {
-      return `${fileNameValue.slice(0, -8)}.geoparquet`;
+      return `${fileNameValue.slice(0, -8)}.${extension}`;
     }
     if (lower.endsWith('.json')) {
-      return `${fileNameValue.slice(0, -5)}.geoparquet`;
+      return `${fileNameValue.slice(0, -5)}.${extension}`;
     }
     if (lower.endsWith('.parquet')) {
-      return `${fileNameValue.slice(0, -8)}.geoparquet`;
+      return `${fileNameValue.slice(0, -8)}.${extension}`;
     }
     if (lower.endsWith('.gpkg')) {
-      return `${fileNameValue.slice(0, -5)}.geoparquet`;
+      return `${fileNameValue.slice(0, -5)}.${extension}`;
     }
-    if (lower.endsWith('.geoparquet')) {
+    if (lower.endsWith('.geoparquet') && extension === 'geoparquet') {
       return fileNameValue;
     }
-    return `${fileNameValue}.geoparquet`;
+    if (lower.endsWith('.gpkg') && extension === 'gpkg') {
+      return fileNameValue;
+    }
+    return `${fileNameValue}.${extension}`;
   };
 
   const beginConversion = () => {
@@ -419,7 +426,7 @@ export default function startConverterApp() {
     }
     stopConversionWorker();
     convertedBlob = null;
-    convertedFileName = buildOutputName(currentFile.name);
+    convertedFileName = buildOutputName(currentFile.name, selectedOutputFormat);
     conversionInProgress = true;
     outputStatus.textContent = 'Starting conversion...';
     updateOutputProgress({ percent: 5, detail: 'Preparing conversion...' });
@@ -485,7 +492,7 @@ export default function startConverterApp() {
       stopConversionWorker();
     };
 
-    worker.postMessage({ file: currentFile });
+    worker.postMessage({ file: currentFile, outputFormat: selectedOutputFormat });
   };
 
   convertBtn.addEventListener('click', beginConversion);
@@ -505,7 +512,10 @@ export default function startConverterApp() {
     if (!convertedBlob) {
       return;
     }
-    triggerDownload(convertedBlob, convertedFileName || 'converted.geoparquet');
+    const fallbackName = selectedOutputFormat === 'geopackage'
+      ? 'converted.gpkg'
+      : 'converted.geoparquet';
+    triggerDownload(convertedBlob, convertedFileName || fallbackName);
   });
 
   cancelBtn.addEventListener('click', () => {

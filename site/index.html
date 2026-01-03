@@ -42,11 +42,6 @@
       border: 1px solid var(--accent);
       transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .button.secondary {
-      background: var(--accent-soft);
-      color: var(--accent);
-      border-color: var(--accent-soft);
-    }
     .button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(45, 79, 139, 0.2); }
     footer {
       padding: 24px 20px;
@@ -88,7 +83,12 @@
             <article class="card">
               <h2>Data Fetcher — Easy ArcGIS endpoint downloader</h2>
               <p>Connect to ArcGIS REST services, browse layers, and export GeoParquet locally.</p>
-              <a class="button secondary" href="/util/fetch.html">Open /util/fetch</a>
+              <a class="button" href="/util/fetch.html">Open /util/fetch</a>
+            </article>
+            <article class="card">
+              <h2>Convert — Simple GIS format converter</h2>
+              <p>Upload GIS files, inspect metadata, and convert them to GeoParquet or GeoPackage.</p>
+              <a class="button" href="/util/convert.html">Open /util/convert</a>
             </article>
           </div>
         </div>

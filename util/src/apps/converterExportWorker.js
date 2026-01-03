@@ -60,6 +60,26 @@ const loadGpkgGeoJsonWithInfo = async (file) => {
   return { geojson, info };
 };
 
+const loadGeoJsonWithInfo = async (file) => {
+  const gdal = await gdalPromise;
+  const { datasets, errors } = await gdal.open(file);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this GeoJSON.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const geojsonText = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(geojsonText);
+  const info = dataset.info || null;
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, info };
+};
+
 let parquetModulePromise = null;
 let arrowHelpersPromise = null;
 let parquetInitialized = false;
@@ -252,28 +272,41 @@ self.onmessage = async (event) => {
 
   const lowerName = file.name?.toLowerCase() || '';
   const isGeoPackage = lowerName.endsWith('.gpkg');
+  const isGeoJson = lowerName.endsWith('.geojson') || lowerName.endsWith('.json');
   let entries = null;
   let info = null;
 
   if (isGeoPackage) {
     sendProgress(25, 'Opening GeoPackage...');
+  } else if (isGeoJson) {
+    sendProgress(25, 'Opening GeoJSON...');
   } else {
     sendProgress(25, 'Opening archive...');
     entries = readZipEntries(buffer);
     if (!entries) {
       self.postMessage({
         type: 'error',
-        payload: { message: 'This file is not a supported shapefile zip or GeoPackage. Please try another file.' }
+        payload: { message: 'This file is not a supported shapefile zip, GeoPackage, or GeoJSON file. Please try another file.' }
       });
       return;
     }
   }
 
-  sendProgress(40, isGeoPackage ? 'Parsing GeoPackage features...' : 'Parsing shapefile features...');
+  let parsingLabel = 'Parsing shapefile features...';
+  if (isGeoPackage) {
+    parsingLabel = 'Parsing GeoPackage features...';
+  } else if (isGeoJson) {
+    parsingLabel = 'Parsing GeoJSON features...';
+  }
+  sendProgress(40, parsingLabel);
   let layerData;
   try {
     if (isGeoPackage) {
       const result = await loadGpkgGeoJsonWithInfo(file);
+      layerData = result.geojson;
+      info = result.info;
+    } else if (isGeoJson) {
+      const result = await loadGeoJsonWithInfo(file);
       layerData = result.geojson;
       info = result.info;
     } else {
@@ -281,7 +314,12 @@ self.onmessage = async (event) => {
       layerData = geojson;
     }
   } catch (err) {
-    const context = isGeoPackage ? 'We could not read this GeoPackage' : 'We could not read this shapefile';
+    let context = 'We could not read this shapefile';
+    if (isGeoPackage) {
+      context = 'We could not read this GeoPackage';
+    } else if (isGeoJson) {
+      context = 'We could not read this GeoJSON file';
+    }
     self.postMessage({
       type: 'error',
       payload: { message: formatError(context, err) }

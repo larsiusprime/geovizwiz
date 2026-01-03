@@ -166,14 +166,18 @@ const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle, prjText) => {
   if (!spatialRefHandle) {
     return { spatialRef: null, epsgCode: null, wkt: null };
   }
-  const authorityName =
-    gdal.OSRGetAuthorityName(spatialRefHandle, 'PROJCS') ||
-    gdal.OSRGetAuthorityName(spatialRefHandle, 'GEOGCS') ||
-    gdal.OSRGetAuthorityName(spatialRefHandle, null);
-  const authorityCode =
-    gdal.OSRGetAuthorityCode(spatialRefHandle, 'PROJCS') ||
-    gdal.OSRGetAuthorityCode(spatialRefHandle, 'GEOGCS') ||
-    gdal.OSRGetAuthorityCode(spatialRefHandle, null);
+  const canReadAuthority =
+    typeof gdal.OSRGetAuthorityName === 'function' && typeof gdal.OSRGetAuthorityCode === 'function';
+  const authorityName = canReadAuthority
+    ? gdal.OSRGetAuthorityName(spatialRefHandle, 'PROJCS') ||
+      gdal.OSRGetAuthorityName(spatialRefHandle, 'GEOGCS') ||
+      gdal.OSRGetAuthorityName(spatialRefHandle, null)
+    : null;
+  const authorityCode = canReadAuthority
+    ? gdal.OSRGetAuthorityCode(spatialRefHandle, 'PROJCS') ||
+      gdal.OSRGetAuthorityCode(spatialRefHandle, 'GEOGCS') ||
+      gdal.OSRGetAuthorityCode(spatialRefHandle, null)
+    : null;
 
   let wkt = null;
   const wktPtrPtr = Module._malloc(4);

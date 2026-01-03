@@ -15,6 +15,15 @@ const gdalPromise = self.initGdalJs({
 let parquetModulePromise = null;
 let parquetInitialized = false;
 
+const formatGdalErrors = (errors, fallback) => {
+  if (!errors?.length) return fallback;
+  return errors.map(e => {
+    if (typeof e === 'string') return e;
+    if (e?.message) return e.message;
+    try { return JSON.stringify(e); } catch { return String(e); }
+  }).join('\n');
+};
+
 const ensureParquetModule = async () => {
   if (!parquetModulePromise) {
     parquetModulePromise = import('../../vendor/parquet-wasm/esm/parquet_wasm.js').then(async (mod) => {
@@ -109,8 +118,7 @@ const loadShapefileAsGeoJson = async (zipBuffer) => {
   // Open dataset(s) from the provided files (WORKERFS mount).
   const { datasets, errors } = await gdal.open(files);
   if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this shapefile.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+    throw new Error(formatGdalErrors(errors, 'GDAL could not open this Shapefile.'));
   }
 
   const dataset = datasets[0];
@@ -131,8 +139,7 @@ const loadGpkgAsGeoJson = async (file) => {
   const gdal = await gdalPromise;
   const { datasets, errors } = await gdal.open(file);
   if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this GeoPackage.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+    throw new Error(formatGdalErrors(errors, 'GDAL could not open this GeoPackage.'));
   }
 
   const dataset = datasets[0];
@@ -151,8 +158,7 @@ const loadGeoJsonAsGeoJson = async (file) => {
   const gdal = await gdalPromise;
   const { datasets, errors } = await gdal.open(file);
   if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this GeoJSON.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+    throw new Error(formatGdalErrors(errors, 'GDAL could not open this GeoJSON.'));
   }
 
   const dataset = datasets[0];

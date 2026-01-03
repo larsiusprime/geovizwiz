@@ -1,11 +1,11 @@
 importScripts(
   '../../vendor/fflate/index.min.js',
-  '../../vendor/shpjs/shp.min.js',
   '../../vendor/wkx/dist/wkx.js',
-  '../../vendor/apache-arrow.js'
+  '../../vendor/apache-arrow.js',
+  '../../vendor/gdal3/gdal3.js'
 );
 
-const textDecoder = new TextDecoder();
+let gdalModulePromise = null;
 let parquetModulePromise = null;
 let arrowHelpersPromise = null;
 let parquetInitialized = false;
@@ -36,19 +36,252 @@ const readZipEntries = (buffer) => {
   }
 };
 
-const getPrjText = (entries) => {
-  if (!entries) return null;
-  const prjName = Object.keys(entries).find((name) => name.toLowerCase().endsWith('.prj'));
-  if (!prjName) return null;
-  return textDecoder.decode(entries[prjName]);
+const ensureGdal = async () => {
+  if (!gdalModulePromise) {
+    gdalModulePromise = initGdalJs({
+      paths: {
+        wasm: '/util/vendor/gdal3/gdal3WebAssembly.wasm',
+        data: '/util/vendor/gdal3/gdal3WebAssembly.data'
+      },
+      useWorker: false
+    });
+  }
+  return gdalModulePromise;
 };
 
-const parseEpsgFromWkt = (wkt) => {
-  if (!wkt) return null;
-  const match = wkt.match(/AUTHORITY\["EPSG","(\d+)"\]/i);
-  if (!match) return null;
-  const code = Number.parseInt(match[1], 10);
-  return Number.isFinite(code) ? code : null;
+const getShapefileEntries = (entries) => {
+  if (!entries) return null;
+  const names = Object.keys(entries);
+  const grouped = new Map();
+  names.forEach((name) => {
+    const lower = name.toLowerCase();
+    const extMatch = lower.match(/\.([a-z0-9]+)$/);
+    if (!extMatch) return;
+    const ext = extMatch[1];
+    if (!['shp', 'dbf', 'shx', 'prj'].includes(ext)) return;
+    const base = lower.replace(/\.([a-z0-9]+)$/, '');
+    const baseName = base.split('/').pop();
+    if (!grouped.has(baseName)) {
+      grouped.set(baseName, {});
+    }
+    grouped.get(baseName)[ext] = name;
+  });
+
+  for (const [baseName, fileSet] of grouped.entries()) {
+    if (fileSet.shp && fileSet.dbf && fileSet.shx) {
+      return {
+        baseName,
+        shpName: fileSet.shp,
+        dbfName: fileSet.dbf,
+        shxName: fileSet.shx,
+        prjName: fileSet.prj || null
+      };
+    }
+  }
+
+  return null;
+};
+
+const getGdalApi = (Module) => ({
+  GDALOpenEx: Module.cwrap('GDALOpenEx', 'number', ['string', 'number', 'number', 'number', 'number']),
+  GDALClose: Module.cwrap('GDALClose', null, ['number']),
+  GDALGetSpatialRef: Module.cwrap('GDALGetSpatialRef', 'number', ['number']),
+  GDALDatasetGetLayerCount: Module.cwrap('GDALDatasetGetLayerCount', 'number', ['number']),
+  GDALDatasetGetLayer: Module.cwrap('GDALDatasetGetLayer', 'number', ['number', 'number']),
+  OGR_L_ResetReading: Module.cwrap('OGR_L_ResetReading', null, ['number']),
+  OGR_L_GetNextFeature: Module.cwrap('OGR_L_GetNextFeature', 'number', ['number']),
+  OGR_L_GetSpatialRef: Module.cwrap('OGR_L_GetSpatialRef', 'number', ['number']),
+  OGR_F_GetFieldCount: Module.cwrap('OGR_F_GetFieldCount', 'number', ['number']),
+  OGR_F_GetFieldDefnRef: Module.cwrap('OGR_F_GetFieldDefnRef', 'number', ['number', 'number']),
+  OGR_Fld_GetNameRef: Module.cwrap('OGR_Fld_GetNameRef', 'string', ['number']),
+  OGR_Fld_GetType: Module.cwrap('OGR_Fld_GetType', 'number', ['number']),
+  OGR_F_IsFieldSetAndNotNull: Module.cwrap('OGR_F_IsFieldSetAndNotNull', 'number', ['number', 'number']),
+  OGR_F_GetFieldAsInteger64: Module.cwrap('OGR_F_GetFieldAsInteger64', 'number', ['number', 'number']),
+  OGR_F_GetFieldAsDouble: Module.cwrap('OGR_F_GetFieldAsDouble', 'number', ['number', 'number']),
+  OGR_F_GetFieldAsString: Module.cwrap('OGR_F_GetFieldAsString', 'string', ['number', 'number']),
+  OGR_F_Destroy: Module.cwrap('OGR_F_Destroy', null, ['number']),
+  OGR_F_GetGeometryRef: Module.cwrap('OGR_F_GetGeometryRef', 'number', ['number']),
+  OGR_G_WkbSize: Module.cwrap('OGR_G_WkbSize', 'number', ['number']),
+  OGR_G_ExportToWkb: Module.cwrap('OGR_G_ExportToWkb', 'number', ['number', 'number', 'number']),
+  OSRExportToWkt: Module.cwrap('OSRExportToWkt', 'number', ['number', 'number']),
+  OSRGetAuthorityName: Module.cwrap('OSRGetAuthorityName', 'string', ['number', 'string']),
+  OSRGetAuthorityCode: Module.cwrap('OSRGetAuthorityCode', 'string', ['number', 'string']),
+  CPLFree: Module.cwrap('CPLFree', null, ['number'])
+});
+
+const writeShapefileToFs = (Module, entries, fileNames) => {
+  const rootDir = '/work';
+  const inputDir = `${rootDir}/in`;
+  try {
+    Module.FS.mkdir(rootDir);
+  } catch (err) {
+    // ignore if exists
+  }
+  try {
+    Module.FS.mkdir(inputDir);
+  } catch (err) {
+    // ignore if exists
+  }
+
+  const writeEntry = (name, ext) => {
+    if (!name || !entries[name]) return null;
+    const data = entries[name];
+    const targetPath = `${inputDir}/${fileNames.baseName}.${ext}`;
+    Module.FS.writeFile(targetPath, data);
+    return targetPath;
+  };
+
+  return {
+    shpPath: writeEntry(fileNames.shpName, 'shp'),
+    dbfPath: writeEntry(fileNames.dbfName, 'dbf'),
+    shxPath: writeEntry(fileNames.shxName, 'shx'),
+    prjPath: fileNames.prjName ? writeEntry(fileNames.prjName, 'prj') : null
+  };
+};
+
+const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle) => {
+  let spatialRefHandle = null;
+  if (typeof gdal.OGR_L_GetSpatialRef === 'function') {
+    spatialRefHandle = gdal.OGR_L_GetSpatialRef(layerHandle);
+  }
+  if (!spatialRefHandle && typeof gdal.GDALGetSpatialRef === 'function') {
+    spatialRefHandle = gdal.GDALGetSpatialRef(dataSetHandle);
+  }
+  if (!spatialRefHandle) {
+    return { spatialRef: null, epsgCode: null, wkt: null };
+  }
+  const authorityName =
+    gdal.OSRGetAuthorityName(spatialRefHandle, 'PROJCS') ||
+    gdal.OSRGetAuthorityName(spatialRefHandle, 'GEOGCS') ||
+    gdal.OSRGetAuthorityName(spatialRefHandle, null);
+  const authorityCode =
+    gdal.OSRGetAuthorityCode(spatialRefHandle, 'PROJCS') ||
+    gdal.OSRGetAuthorityCode(spatialRefHandle, 'GEOGCS') ||
+    gdal.OSRGetAuthorityCode(spatialRefHandle, null);
+
+  let wkt = null;
+  const wktPtrPtr = Module._malloc(4);
+  try {
+    const exportResult = gdal.OSRExportToWkt(spatialRefHandle, wktPtrPtr);
+    if (exportResult === 0) {
+      const wktPtr = Module.getValue(wktPtrPtr, 'i32');
+      if (wktPtr) {
+        wkt = Module.UTF8ToString(wktPtr);
+        gdal.CPLFree(wktPtr);
+      }
+    }
+  } finally {
+    Module._free(wktPtrPtr);
+  }
+
+  let epsgCode = null;
+  if (authorityName && authorityCode && authorityName.toUpperCase() === 'EPSG') {
+    const parsed = Number.parseInt(authorityCode, 10);
+    if (Number.isFinite(parsed)) {
+      epsgCode = parsed;
+    }
+  }
+
+  return {
+    spatialRef: wkt || epsgCode ? { wkt, wkid: epsgCode, latestWkid: epsgCode } : null,
+    epsgCode,
+    wkt
+  };
+};
+
+const readShapefileWithGdal = async (entries) => {
+  const gdalInstance = await ensureGdal();
+  const { Module } = gdalInstance;
+  const gdal = getGdalApi(Module);
+  const fileNames = getShapefileEntries(entries);
+  if (!fileNames) {
+    throw new Error('We could not find the required .shp, .dbf, and .shx files in this zip archive.');
+  }
+
+  const { shpPath } = writeShapefileToFs(Module, entries, fileNames);
+  const dataSetHandle = gdal.GDALOpenEx(shpPath, 0, 0, 0, 0);
+  if (!dataSetHandle) {
+    throw new Error('GDAL was unable to open the shapefile data.');
+  }
+
+  let features = [];
+  let geometryType = 'Unknown';
+  let spatialRef = null;
+
+  try {
+    const layerCount = gdal.GDALDatasetGetLayerCount(dataSetHandle);
+    if (!layerCount) {
+      throw new Error('No layers were found in this shapefile.');
+    }
+    const layerHandle = gdal.GDALDatasetGetLayer(dataSetHandle, 0);
+    if (!layerHandle) {
+      throw new Error('Could not open the shapefile layer.');
+    }
+
+    const spatialRefInfo = readSpatialRef(Module, gdal, dataSetHandle, layerHandle);
+    spatialRef = spatialRefInfo.spatialRef;
+    if (!spatialRef) {
+      throw new Error('This shapefile does not include a readable CRS. Please provide a .prj file.');
+    }
+
+    gdal.OGR_L_ResetReading(layerHandle);
+    let featureHandle = gdal.OGR_L_GetNextFeature(layerHandle);
+    let geometryTypes = new Set();
+
+    while (featureHandle) {
+      const properties = {};
+      const fieldCount = gdal.OGR_F_GetFieldCount(featureHandle);
+      for (let i = 0; i < fieldCount; i += 1) {
+        if (!gdal.OGR_F_IsFieldSetAndNotNull(featureHandle, i)) {
+          const fieldDefn = gdal.OGR_F_GetFieldDefnRef(featureHandle, i);
+          const name = gdal.OGR_Fld_GetNameRef(fieldDefn);
+          properties[name] = null;
+          continue;
+        }
+        const fieldDefn = gdal.OGR_F_GetFieldDefnRef(featureHandle, i);
+        const name = gdal.OGR_Fld_GetNameRef(fieldDefn);
+        const type = gdal.OGR_Fld_GetType(fieldDefn);
+        let value = null;
+        if (type === 0 || type === 12) {
+          value = gdal.OGR_F_GetFieldAsInteger64(featureHandle, i);
+        } else if (type === 2) {
+          value = gdal.OGR_F_GetFieldAsDouble(featureHandle, i);
+        } else {
+          value = gdal.OGR_F_GetFieldAsString(featureHandle, i);
+        }
+        properties[name] = value;
+      }
+
+      const geometryHandle = gdal.OGR_F_GetGeometryRef(featureHandle);
+      let wkb = null;
+      if (geometryHandle) {
+        const size = gdal.OGR_G_WkbSize(geometryHandle);
+        const wkbPtr = Module._malloc(size);
+        try {
+          gdal.OGR_G_ExportToWkb(geometryHandle, 1, wkbPtr);
+          wkb = Module.HEAPU8.slice(wkbPtr, wkbPtr + size);
+          const geojsonType = self.wkx.Geometry.parse(wkb).toGeoJSON().type;
+          if (geojsonType) {
+            geometryTypes.add(geojsonType);
+          }
+        } finally {
+          Module._free(wkbPtr);
+        }
+      }
+
+      features.push({ geometry: wkb, properties });
+      gdal.OGR_F_Destroy(featureHandle);
+      featureHandle = gdal.OGR_L_GetNextFeature(layerHandle);
+    }
+
+    if (geometryTypes.size === 1) {
+      geometryType = Array.from(geometryTypes)[0];
+    }
+  } finally {
+    gdal.GDALClose(dataSetHandle);
+  }
+
+  return { features, geometryType, spatialRef };
 };
 
 const inferFieldType = (value) => {
@@ -128,7 +361,14 @@ const arrowTypeFor = (Arrow, type) => {
 const collectGeometryTypes = (features) => {
   const types = new Set();
   features.forEach((feature) => {
-    const type = feature?.geometry?.type;
+    let type = feature?.geometry?.type;
+    if (!type && feature?.geometry instanceof Uint8Array) {
+      try {
+        type = self.wkx.Geometry.parse(feature.geometry).toGeoJSON().type;
+      } catch (err) {
+        type = null;
+      }
+    }
     if (type) {
       types.add(type);
     }
@@ -200,9 +440,14 @@ self.onmessage = async (event) => {
   }
 
   sendProgress(40, 'Parsing shapefile features...');
-  let layerData;
+  let features;
+  let geometryType;
+  let spatialRef;
   try {
-    layerData = await self.shp(buffer);
+    const gdalResult = await readShapefileWithGdal(entries);
+    features = gdalResult.features;
+    geometryType = gdalResult.geometryType;
+    spatialRef = gdalResult.spatialRef;
   } catch (err) {
     self.postMessage({
       type: 'error',
@@ -211,16 +456,10 @@ self.onmessage = async (event) => {
     return;
   }
 
-  const collections = Array.isArray(layerData) ? layerData : [layerData];
-  const primaryCollection = collections[0] || { features: [] };
-  const features = primaryCollection.features || [];
-
   sendProgress(55, 'Preparing GeoParquet schema...');
   const fieldTypes = collectFieldTypes(features);
   const fieldEntries = Array.from(fieldTypes.entries());
-  const geometryType = collectGeometryTypes(features);
-  const prjText = getPrjText(entries);
-  const epsgFromWkt = parseEpsgFromWkt(prjText);
+  const resolvedGeometryType = geometryType || collectGeometryTypes(features);
 
   const Arrow = self.Arrow;
   if (!Arrow) {
@@ -237,13 +476,10 @@ self.onmessage = async (event) => {
 
   let geoMetadata;
   try {
-    const spatialRef = prjText
-      ? { wkt: prjText, wkid: epsgFromWkt, latestWkid: epsgFromWkt }
-      : null;
-    geoMetadata = await createGeoMetadata(spatialRef, geometryType);
+    geoMetadata = await createGeoMetadata(spatialRef, resolvedGeometryType);
   } catch (err) {
     try {
-      geoMetadata = await createGeoMetadata(null, geometryType);
+      geoMetadata = await createGeoMetadata(null, resolvedGeometryType);
     } catch (fallbackErr) {
       self.postMessage({
         type: 'error',
@@ -268,7 +504,12 @@ self.onmessage = async (event) => {
   sendProgress(70, 'Encoding rows...');
   features.forEach((feature) => {
     const geometry = feature?.geometry;
-    const wkb = geometry ? self.wkx.Geometry.parseGeoJSON(geometry).toWkb() : null;
+    let wkb = null;
+    if (geometry instanceof Uint8Array) {
+      wkb = geometry;
+    } else if (geometry) {
+      wkb = self.wkx.Geometry.parseGeoJSON(geometry).toWkb();
+    }
     geomBuilder.append(wkb && wkb.length ? wkb : null);
     const properties = feature?.properties || {};
     fieldEntries.forEach(([name, type]) => {

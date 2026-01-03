@@ -40,6 +40,26 @@ const loadShapefileAsGeoJson = async (zipBuffer) => {
   return { geojson, entries };
 };
 
+const loadGpkgAsGeoJson = async (file) => {
+  const gdal = await gdalPromise;
+  const { datasets, errors } = await gdal.open(file);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this GeoPackage.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const text = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(text);
+  const info = dataset.info || null;
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, info };
+};
+
 
 const sendProgress = (percent, detail) => {
   self.postMessage({ type: 'progress', payload: { percent, detail } });
@@ -95,14 +115,29 @@ const getFieldInfo = (features) => {
   return Array.from(fieldTypes.entries()).map(([name, type]) => ({ name, type }));
 };
 
-const getCrsLabel = (entries) => {
+const getCrsLabelFromWkt = (wkt) => {
+  if (!wkt) {
+    return 'Unknown';
+  }
+  const match = wkt.match(/^(?:PROJCS|GEOGCS|LOCAL_CS|COMPD_CS)\s*\["([^"]+)"/i);
+  return match?.[1] || wkt.split(/\r?\n/)[0]?.trim() || 'Unknown';
+};
+
+const getCrsLabelFromEntries = (entries) => {
   const prjName = Object.keys(entries).find((name) => name.toLowerCase().endsWith('.prj'));
   if (!prjName) {
     return 'Unknown';
   }
   const prjText = textDecoder.decode(entries[prjName]);
-  const match = prjText.match(/^(?:PROJCS|GEOGCS|LOCAL_CS|COMPD_CS)\s*\["([^"]+)"/i);
-  return match?.[1] || prjText.split(/\r?\n/)[0]?.trim() || 'Unknown';
+  return getCrsLabelFromWkt(prjText);
+};
+
+const getCrsLabelFromInfo = (info) => {
+  const layer = info?.layers?.[0];
+  const geometryField = layer?.geometryFields?.[0];
+  const coordinateSystem = geometryField?.coordinateSystem || layer?.coordinateSystem;
+  const wkt = coordinateSystem?.wkt || coordinateSystem?.wkt2_2019 || coordinateSystem?.wkt2_2018;
+  return getCrsLabelFromWkt(wkt);
 };
 
 const readZipEntries = (buffer) => {
@@ -136,78 +171,93 @@ self.onmessage = async (event) => {
     return;
   }
 
-  sendProgress(30, 'Inspecting archive contents...');
-  let entries = readZipEntries(buffer);
-  if (!entries) {
-    self.postMessage({
-      type: 'invalid',
-      payload: {
-        label: 'Unknown',
-        message: 'Not a supported format. Upload a zipped ESRI Shapefile (.zip containing .shp + .dbf + .shx).'
-      }
-    });
-    return;
+  const lowerName = file.name?.toLowerCase() || '';
+  const isGeoPackage = lowerName.endsWith('.gpkg');
+  let entries = null;
+  let info = null;
+
+  if (!isGeoPackage) {
+    sendProgress(30, 'Inspecting archive contents...');
+    entries = readZipEntries(buffer);
+    if (!entries) {
+      self.postMessage({
+        type: 'invalid',
+        payload: {
+          label: 'Unknown',
+          message: 'Not a supported format. Upload a zipped ESRI Shapefile (.shp.zip) or a GeoPackage (.gpkg).'
+        }
+      });
+      return;
+    }
+
+    const entryNames = Object.keys(entries).map((name) => name.toLowerCase());
+    const hasShp = entryNames.some((name) => name.endsWith('.shp'));
+    const hasDbf = entryNames.some((name) => name.endsWith('.dbf'));
+    const hasShx = entryNames.some((name) => name.endsWith('.shx'));
+
+    if (!hasShp || !hasDbf) {
+      self.postMessage({
+        type: 'invalid',
+        payload: {
+          label: 'ZIP archive',
+          message: 'Not a supported format. This zip archive does not contain the required .shp and .dbf files for a valid ESRI Shapefile.'
+        }
+      });
+      return;
+    }
+
+    if (!hasShx) {
+      self.postMessage({
+        type: 'invalid',
+        payload: {
+          label: 'Partial ESRI Shapefile (missing .shx)',
+          message: 'Not a supported format. The zip archive is missing the .shx index file required for a complete ESRI Shapefile.'
+        }
+      });
+      return;
+    }
   }
 
-  const entryNames = Object.keys(entries).map((name) => name.toLowerCase());
-  const hasShp = entryNames.some((name) => name.endsWith('.shp'));
-  const hasDbf = entryNames.some((name) => name.endsWith('.dbf'));
-  const hasShx = entryNames.some((name) => name.endsWith('.shx'));
-
-  if (!hasShp || !hasDbf) {
-    self.postMessage({
-      type: 'invalid',
-      payload: {
-        label: 'ZIP archive',
-        message: 'Not a supported format. This zip archive does not contain the required .shp and .dbf files for a valid ESRI Shapefile.'
-      }
-    });
-    return;
-  }
-
-  if (!hasShx) {
-    self.postMessage({
-      type: 'invalid',
-      payload: {
-        label: 'Partial ESRI Shapefile (missing .shx)',
-        message: 'Not a supported format. The zip archive is missing the .shx index file required for a complete ESRI Shapefile.'
-      }
-    });
-    return;
-  }
-
-  sendProgress(55, 'Reading shapefile metadata...');
+  sendProgress(55, isGeoPackage ? 'Reading GeoPackage metadata...' : 'Reading shapefile metadata...');
   let layerData;
   try {
-    const { geojson, entries: zipEntries } = await loadShapefileAsGeoJson(buffer);
-    layerData = geojson;
-    entries = zipEntries;
+    if (isGeoPackage) {
+      const result = await loadGpkgAsGeoJson(file);
+      layerData = result.geojson;
+      info = result.info;
+    } else {
+      const { geojson, entries: zipEntries } = await loadShapefileAsGeoJson(buffer);
+      layerData = geojson;
+      entries = zipEntries;
+    }
   } catch (err) {
     const message = err?.message
-      ? `We found a valid zipped shapefile, but could not read its metadata. ${err.message}`
-      : 'We found a valid zipped shapefile, but could not read its metadata.';
+      ? `We found a valid ${isGeoPackage ? 'GeoPackage' : 'zipped shapefile'}, but could not read its metadata. ${err.message}`
+      : `We found a valid ${isGeoPackage ? 'GeoPackage' : 'zipped shapefile'}, but could not read its metadata.`;
     self.postMessage({ type: 'error', payload: { message } });
     return;
   }
 
   sendProgress(80, 'Summarizing layers...');
+  const layerTypeLabel = isGeoPackage ? 'GeoPackage layer' : 'Shapefile layer';
   const layers = (Array.isArray(layerData) ? layerData : [layerData]).map((layer) => {
     const features = layer?.features || [];
     return {
       fileName: layer?.fileName || 'Layer',
       rowCount: features.length,
       geometryType: getGeometryType(features),
-      fields: getFieldInfo(features)
+      fields: getFieldInfo(features),
+      layerTypeLabel
     };
   });
 
-  const crs = getCrsLabel(entries);
+  const crs = isGeoPackage ? getCrsLabelFromInfo(info) : getCrsLabelFromEntries(entries);
   sendProgress(95, 'Finalizing metadata...');
 
   self.postMessage({
     type: 'success',
     payload: {
-      label: 'ESRI Shapefile (zipped)',
+      label: isGeoPackage ? 'GeoPackage (.gpkg)' : 'ESRI Shapefile (zipped)',
       message: 'Metadata loaded. You may proceed to the conversion step.',
       layers,
       crs

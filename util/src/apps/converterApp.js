@@ -121,6 +121,7 @@ export default function startConverterApp() {
       wrapper.className = 'preview-summary';
       const layerName = layer.fileName || `Layer ${index + 1}`;
       const geometryType = layer.geometryType || 'Unknown';
+      const layerTypeLabel = layer.layerTypeLabel || 'Layer';
       const fieldInfo = layer.fields || [];
       const rowCount = Number.isFinite(layer.rowCount) ? layer.rowCount : 0;
 
@@ -128,7 +129,7 @@ export default function startConverterApp() {
       const tbody = document.createElement('tbody');
       const rows = [
         ['Layer name', layerName],
-        ['Layer type', 'Shapefile layer'],
+        ['Layer type', layerTypeLabel],
         ['Number of rows', rowCount.toLocaleString()],
         ['Geometry field', 'geometry'],
         ['Geometry type', geometryType],
@@ -396,6 +397,9 @@ export default function startConverterApp() {
     }
     if (lower.endsWith('.parquet')) {
       return `${fileNameValue.slice(0, -8)}.geoparquet`;
+    }
+    if (lower.endsWith('.gpkg')) {
+      return `${fileNameValue.slice(0, -5)}.geoparquet`;
     }
     if (lower.endsWith('.geoparquet')) {
       return fileNameValue;

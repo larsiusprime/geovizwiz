@@ -5,3 +5,5 @@ site/geoconverter
 geoconverter/browser/
 geoconverter/lib/
 local-deploy/*
+
+util/util.zip

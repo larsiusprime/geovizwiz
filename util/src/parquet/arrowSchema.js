@@ -11,6 +11,9 @@ export function arrowTypeFromEsriField(Arrow, field) {
     case "esriFieldTypeOID":
       return new Arrow.Int32();
 
+    case "esriFieldTypeBigInteger":
+      return new Arrow.Int64();
+
     case "esriFieldTypeDouble":
       return new Arrow.Float64();
 

@@ -2387,7 +2387,7 @@ function installWelcome() {
   card.innerHTML = `
     <div style="font-size:16px;font-weight:600;">Load a GeoParquet file</div>
     <div style="color:#666;font-size:13px;">Choose a <code>.parquet</code> to visualize.</div>
-	<div style="color:#666;font-size:13px;">TIP: make sure it has polygon geometry; lines/points won't work.</div>
+    <div style="color:#666;font-size:13px;">TIP: make sure it has polygon geometry; lines/points won't work.</div>
   `;
   const row = document.createElement('div');
   row.style.cssText='display:flex;gap:10px;justify-content:center;flex-wrap:wrap';

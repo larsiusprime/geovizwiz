@@ -45,7 +45,8 @@ The app has a list of supported input formats. It is exactly this:
 
 - ESRI Shapefile (which MUST be supplied as a zip file with the extension shp.zip)
 - Geoparquet (which MUST be supplied with the extension .parquet or .geoparquet)
-- Geopackage (which MUST be supplied with the extenstion .gpkg)
+- Geopackage (which MUST be supplied with the extension .gpkg)
+- GeoJSON (which MUST be supplied with the extension .geojson, .json, or .geo.json)
 
 If the user uploads one of these, the app notes that it is a valid format and they may proceed to Step 3 (convert).
 If the user uploads anything else, the app notes that it is not a valid format, why, and tells them to go back and try uploading a different file.

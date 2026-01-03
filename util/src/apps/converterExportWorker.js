@@ -80,26 +80,6 @@ const loadGeoJsonWithInfo = async (file) => {
   return { geojson, info };
 };
 
-const loadGeoParquetWithInfo = async (file) => {
-  const gdal = await gdalPromise;
-  const { datasets, errors } = await gdal.open(file);
-  if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this GeoParquet file.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
-  }
-
-  const dataset = datasets[0];
-  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
-  const bytes = await gdal.getFileBytes(out);
-  const geojsonText = new TextDecoder().decode(bytes);
-  const geojson = JSON.parse(geojsonText);
-  const info = dataset.info || null;
-
-  try { await gdal.close(dataset); } catch (_) {}
-
-  return { geojson, info };
-};
-
 let parquetModulePromise = null;
 let arrowHelpersPromise = null;
 let parquetInitialized = false;
@@ -259,6 +239,72 @@ const ensureParquetModule = async () => {
   return parquetModulePromise;
 };
 
+const parseGeoMetadata = (metadata) => {
+  if (!metadata || typeof metadata.get !== 'function') {
+    return null;
+  }
+  const geoValue = metadata.get('geo');
+  if (!geoValue || typeof geoValue !== 'string') {
+    return null;
+  }
+  try {
+    return JSON.parse(geoValue);
+  } catch (_) {
+    return null;
+  }
+};
+
+const loadGeoParquetWithInfo = async (buffer, file) => {
+  const parquetModule = await ensureParquetModule();
+  const Arrow = self.Arrow;
+  if (!Arrow) {
+    throw new Error('Arrow library failed to load.');
+  }
+
+  const parquetFile = await parquetModule.ParquetFile.fromFile(file);
+  const metadata = parquetFile.metadata();
+  const fileMetadata = metadata.fileMetadata();
+  const geoMetadata = parseGeoMetadata(fileMetadata.keyValueMetadata());
+  const geometryColumn = geoMetadata?.primary_column || 'geometry';
+  const geometryEncoding = geoMetadata?.columns?.[geometryColumn]?.encoding;
+  if (typeof geometryEncoding === 'string' && geometryEncoding.toUpperCase() !== 'WKB') {
+    throw new Error(`GeoParquet geometry encoding "${geometryEncoding}" is not supported.`);
+  }
+
+  const wasmTable = parquetModule.readParquet(new Uint8Array(buffer));
+  const ipc = wasmTable.intoIPCStream();
+  const table = Arrow.tableFromIPC(ipc);
+  const geometryVector = table.getChild(geometryColumn);
+  if (!geometryVector) {
+    throw new Error(`GeoParquet geometry column "${geometryColumn}" was not found.`);
+  }
+
+  const fieldNames = table.schema.fields
+    .map((field) => field.name)
+    .filter((name) => name !== geometryColumn);
+  const fieldVectors = fieldNames.map((name) => table.getChild(name));
+
+  const features = [];
+  for (let i = 0; i < table.numRows; i += 1) {
+    const wkb = geometryVector.get(i);
+    const geometry = wkb
+      ? self.wkx.Geometry.parse(wkb instanceof Uint8Array ? wkb : new Uint8Array(wkb)).toGeoJSON()
+      : null;
+    const properties = {};
+    fieldNames.forEach((name, index) => {
+      const vector = fieldVectors[index];
+      properties[name] = vector ? vector.get(i) : null;
+    });
+    features.push({ type: 'Feature', geometry, properties });
+  }
+
+  return {
+    geojson: { type: 'FeatureCollection', features },
+    geoMetadata,
+    geometryColumn
+  };
+};
+
 const ensureArrowHelpers = async () => {
   if (!arrowHelpersPromise) {
     arrowHelpersPromise = Promise.all([
@@ -296,6 +342,8 @@ self.onmessage = async (event) => {
   const isGeoParquet = lowerName.endsWith('.geoparquet') || lowerName.endsWith('.parquet');
   let entries = null;
   let info = null;
+  let existingGeoMetadata = null;
+  let geometryColumn = 'geometry';
 
   if (isGeoPackage) {
     sendProgress(25, 'Opening GeoPackage...');
@@ -335,9 +383,10 @@ self.onmessage = async (event) => {
       layerData = result.geojson;
       info = result.info;
     } else if (isGeoParquet) {
-      const result = await loadGeoParquetWithInfo(file);
+      const result = await loadGeoParquetWithInfo(buffer, file);
       layerData = result.geojson;
-      info = result.info;
+      existingGeoMetadata = result.geoMetadata;
+      geometryColumn = result.geometryColumn || geometryColumn;
     } else {
       const { geojson } = await loadShapefileGeoJsonWithEntries(buffer);
       layerData = geojson;
@@ -383,26 +432,31 @@ self.onmessage = async (event) => {
   const { makeArrowTable, tableToIPC } = arrowSchema;
   const { createGeoMetadata } = geoMeta;
 
-  let geoMetadata;
-  try {
-    const spatialRef = wktText
-      ? { wkt: wktText, wkid: epsgFromWkt, latestWkid: epsgFromWkt }
-      : null;
-    geoMetadata = await createGeoMetadata(spatialRef, geometryType);
-  } catch (err) {
+  let geoMetadata = existingGeoMetadata;
+  if (geoMetadata && !geoMetadata.primary_column) {
+    geoMetadata.primary_column = geometryColumn;
+  }
+  if (!geoMetadata) {
     try {
-      geoMetadata = await createGeoMetadata(null, geometryType);
-    } catch (fallbackErr) {
-      self.postMessage({
-        type: 'error',
-        payload: { message: formatError('Failed to build GeoParquet metadata', fallbackErr) }
-      });
-      return;
+      const spatialRef = wktText
+        ? { wkt: wktText, wkid: epsgFromWkt, latestWkid: epsgFromWkt }
+        : null;
+      geoMetadata = await createGeoMetadata(spatialRef, geometryType);
+    } catch (err) {
+      try {
+        geoMetadata = await createGeoMetadata(null, geometryType);
+      } catch (fallbackErr) {
+        self.postMessage({
+          type: 'error',
+          payload: { message: formatError('Failed to build GeoParquet metadata', fallbackErr) }
+        });
+        return;
+      }
     }
   }
 
   const schemaFields = [
-    new Arrow.Field('geometry', new Arrow.Binary(), true),
+    new Arrow.Field(geometryColumn, new Arrow.Binary(), true),
     ...fieldEntries.map(([name, type]) => new Arrow.Field(name, arrowTypeFor(Arrow, type), true))
   ];
   const schema = new Arrow.Schema(schemaFields, new Map([['geo', JSON.stringify(geoMetadata)]]));
@@ -429,7 +483,7 @@ self.onmessage = async (event) => {
   geomBuilder.finish();
   const geomVector = geomBuilder.toVector();
   const vectors = schema.fields.map((field) => {
-    if (field.name === 'geometry') {
+    if (field.name === geometryColumn) {
       return geomVector;
     }
     const builder = fieldBuilders.get(field.name);

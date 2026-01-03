@@ -1,4 +1,8 @@
-importScripts('../../vendor/fflate/index.min.js', '../../vendor/gdal/gdal3.js');
+importScripts(
+  '../../vendor/fflate/index.min.js',
+  '../../vendor/gdal/gdal3.js',
+  '../../vendor/apache-arrow.js'
+);
 
 const textDecoder = new TextDecoder();
 const GDAL_BASE = new URL('../../vendor/gdal/', self.location).toString();
@@ -7,6 +11,89 @@ const gdalPromise = self.initGdalJs({
   useWorker: false,
   path: GDAL_BASE
 });
+
+let parquetModulePromise = null;
+let parquetInitialized = false;
+
+const ensureParquetModule = async () => {
+  if (!parquetModulePromise) {
+    parquetModulePromise = import('../../vendor/parquet-wasm/esm/parquet_wasm.js').then(async (mod) => {
+      if (!parquetInitialized) {
+        const wasmUrl = new URL('../../vendor/parquet-wasm/esm/parquet_wasm_bg.wasm', self.location.href);
+        const response = await fetch(wasmUrl);
+        const bytes = await response.arrayBuffer();
+        await mod.default(bytes);
+        parquetInitialized = true;
+      }
+      return mod;
+    });
+  }
+  return parquetModulePromise;
+};
+
+const normalizeArrowType = (type) => {
+  if (!type) {
+    return 'unknown';
+  }
+  if (typeof type.toString === 'function') {
+    return type.toString();
+  }
+  return type.typeId ? String(type.typeId) : 'unknown';
+};
+
+const parseGeoMetadata = (metadata) => {
+  if (!metadata || typeof metadata.get !== 'function') {
+    return null;
+  }
+  const geoValue = metadata.get('geo');
+  if (!geoValue || typeof geoValue !== 'string') {
+    return null;
+  }
+  try {
+    return JSON.parse(geoValue);
+  } catch (_) {
+    return null;
+  }
+};
+
+const formatGeoCrsLabel = (crs) => {
+  if (!crs) {
+    return 'Unknown';
+  }
+  if (typeof crs === 'string') {
+    return crs;
+  }
+  if (typeof crs === 'object') {
+    if (typeof crs.name === 'string') {
+      return crs.name;
+    }
+    if (typeof crs.name?.name === 'string') {
+      return crs.name.name;
+    }
+    if (crs.id?.authority && crs.id?.code) {
+      return `${crs.id.authority}:${crs.id.code}`;
+    }
+    if (crs.id?.code) {
+      return `EPSG:${crs.id.code}`;
+    }
+  }
+  try {
+    return JSON.stringify(crs);
+  } catch (_) {
+    return 'Unknown';
+  }
+};
+
+const getGeometryTypeFromGeoMetadata = (geoMetadata, geometryColumn) => {
+  const types = geoMetadata?.columns?.[geometryColumn]?.geometry_types;
+  if (!Array.isArray(types) || types.length === 0) {
+    return 'Unknown';
+  }
+  if (types.length === 1) {
+    return types[0];
+  }
+  return `Mixed (${types.join(', ')})`;
+};
 
 const toFilesFromZipEntries = (entries) => Object.entries(entries).map(([name, bytes]) => {
   // WORKERFS expects File objects in the browser worker environment.
@@ -80,24 +167,39 @@ const loadGeoJsonAsGeoJson = async (file) => {
   return { geojson, info };
 };
 
-const loadGeoParquetAsGeoJson = async (file) => {
-  const gdal = await gdalPromise;
-  const { datasets, errors } = await gdal.open(file);
-  if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this GeoParquet file.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+const loadGeoParquetMetadata = async (buffer, file) => {
+  const parquetModule = await ensureParquetModule();
+  const Arrow = self.Arrow;
+  if (!Arrow) {
+    throw new Error('Arrow library failed to load.');
   }
 
-  const dataset = datasets[0];
-  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
-  const bytes = await gdal.getFileBytes(out);
-  const text = new TextDecoder().decode(bytes);
-  const geojson = JSON.parse(text);
-  const info = dataset.info || null;
+  const parquetFile = await parquetModule.ParquetFile.fromFile(file);
+  const metadata = parquetFile.metadata();
+  const fileMetadata = metadata.fileMetadata();
+  const geoMetadata = parseGeoMetadata(fileMetadata.keyValueMetadata());
+  const geometryColumn = geoMetadata?.primary_column || 'geometry';
+  const geometryEncoding = geoMetadata?.columns?.[geometryColumn]?.encoding;
+  if (typeof geometryEncoding === 'string' && geometryEncoding.toUpperCase() !== 'WKB') {
+    throw new Error(`GeoParquet geometry encoding "${geometryEncoding}" is not supported.`);
+  }
+  const geometryType = getGeometryTypeFromGeoMetadata(geoMetadata, geometryColumn);
+  const crsLabel = formatGeoCrsLabel(geoMetadata?.columns?.[geometryColumn]?.crs);
 
-  try { await gdal.close(dataset); } catch (_) {}
+  const wasmTable = parquetModule.readParquet(new Uint8Array(buffer));
+  const ipc = wasmTable.intoIPCStream();
+  const table = Arrow.tableFromIPC(ipc);
+  const fields = table.schema.fields
+    .filter((field) => field.name !== geometryColumn)
+    .map((field) => ({ name: field.name, type: normalizeArrowType(field.type) }));
 
-  return { geojson, info };
+  return {
+    rowCount: table.numRows ?? fileMetadata.numRows(),
+    geometryType,
+    fields,
+    crsLabel,
+    geometryColumn
+  };
 };
 
 
@@ -270,6 +372,7 @@ self.onmessage = async (event) => {
   }
   sendProgress(55, metadataLabel);
   let layerData;
+  let parquetMetadata = null;
   try {
     if (isGeoPackage) {
       const result = await loadGpkgAsGeoJson(file);
@@ -280,9 +383,11 @@ self.onmessage = async (event) => {
       layerData = result.geojson;
       info = result.info;
     } else if (isGeoParquet) {
-      const result = await loadGeoParquetAsGeoJson(file);
-      layerData = result.geojson;
-      info = result.info;
+      parquetMetadata = await loadGeoParquetMetadata(buffer, file);
+      layerData = {
+        type: 'FeatureCollection',
+        features: []
+      };
     } else {
       const { geojson, entries: zipEntries } = await loadShapefileAsGeoJson(buffer);
       layerData = geojson;
@@ -314,6 +419,15 @@ self.onmessage = async (event) => {
     layerTypeLabel = 'GeoParquet layer';
   }
   const layers = (Array.isArray(layerData) ? layerData : [layerData]).map((layer) => {
+    if (isGeoParquet && parquetMetadata) {
+      return {
+        fileName: layer?.fileName || 'Layer',
+        rowCount: parquetMetadata.rowCount ?? 0,
+        geometryType: parquetMetadata.geometryType,
+        fields: parquetMetadata.fields || [],
+        layerTypeLabel
+      };
+    }
     const features = layer?.features || [];
     return {
       fileName: layer?.fileName || 'Layer',
@@ -324,9 +438,11 @@ self.onmessage = async (event) => {
     };
   });
 
-  const crs = isGeoPackage || isGeoJson || isGeoParquet
-    ? getCrsLabelFromInfo(info)
-    : getCrsLabelFromEntries(entries);
+  const crs = isGeoParquet
+    ? parquetMetadata?.crsLabel || 'Unknown'
+    : isGeoPackage || isGeoJson
+      ? getCrsLabelFromInfo(info)
+      : getCrsLabelFromEntries(entries);
   sendProgress(95, 'Finalizing metadata...');
 
   self.postMessage({

@@ -80,6 +80,25 @@ const loadGeoJsonWithInfo = async (file) => {
   return { geojson, info };
 };
 
+const convertGeoJsonToGpkg = async (geojson) => {
+  const gdal = await gdalPromise;
+  const geojsonText = JSON.stringify(geojson);
+  const geojsonFile = new File([geojsonText], 'source.geojson', { type: 'application/geo+json' });
+  const { datasets, errors } = await gdal.open(geojsonFile);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this GeoJSON for GeoPackage export.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GPKG']);
+  const bytes = await gdal.getFileBytes(out);
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return bytes;
+};
+
 let parquetModulePromise = null;
 let arrowHelpersPromise = null;
 let parquetInitialized = false;
@@ -454,10 +473,11 @@ const ensureArrowHelpers = async () => {
 };
 
 self.onmessage = async (event) => {
-  const { file } = event.data || {};
+  const { file, outputFormat } = event.data || {};
   if (!file) {
     return;
   }
+  const targetFormat = outputFormat === 'geopackage' ? 'geopackage' : 'geoparquet';
 
   sendProgress(10, 'Reading file contents...');
   let buffer;
@@ -545,6 +565,28 @@ self.onmessage = async (event) => {
   const collections = Array.isArray(layerData) ? layerData : [layerData];
   const primaryCollection = collections[0] || { features: [] };
   const features = primaryCollection.features || [];
+
+  if (targetFormat === 'geopackage') {
+    sendProgress(55, 'Preparing GeoPackage export...');
+    let gpkgBytes;
+    try {
+      gpkgBytes = await convertGeoJsonToGpkg(primaryCollection);
+    } catch (err) {
+      self.postMessage({
+        type: 'error',
+        payload: { message: formatError('We could not build the GeoPackage file', err) }
+      });
+      return;
+    }
+
+    sendProgress(100, 'Conversion complete.');
+    const blob = new Blob([gpkgBytes], { type: 'application/geopackage+sqlite3' });
+    self.postMessage({
+      type: 'success',
+      payload: { blob }
+    });
+    return;
+  }
 
   sendProgress(55, 'Preparing GeoParquet schema...');
   const fieldTypes = collectFieldTypes(features);

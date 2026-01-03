@@ -106,8 +106,6 @@ const getGdalApi = (Module) => ({
   OSRNewSpatialReference: Module.cwrap('OSRNewSpatialReference', 'number', ['string']),
   OSRSetFromUserInput: Module.cwrap('OSRSetFromUserInput', 'number', ['number', 'string']),
   OSRExportToWkt: Module.cwrap('OSRExportToWkt', 'number', ['number', 'number']),
-  OSRGetAuthorityName: Module.cwrap('OSRGetAuthorityName', 'string', ['number', 'string']),
-  OSRGetAuthorityCode: Module.cwrap('OSRGetAuthorityCode', 'string', ['number', 'string']),
   OSRDestroySpatialReference: Module.cwrap('OSRDestroySpatialReference', null, ['number']),
   CPLFree: Module.cwrap('CPLFree', null, ['number'])
 });
@@ -166,19 +164,6 @@ const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle, prjText) => {
   if (!spatialRefHandle) {
     return { spatialRef: null, epsgCode: null, wkt: null };
   }
-  const canReadAuthority =
-    typeof gdal.OSRGetAuthorityName === 'function' && typeof gdal.OSRGetAuthorityCode === 'function';
-  const authorityName = canReadAuthority
-    ? gdal.OSRGetAuthorityName(spatialRefHandle, 'PROJCS') ||
-      gdal.OSRGetAuthorityName(spatialRefHandle, 'GEOGCS') ||
-      gdal.OSRGetAuthorityName(spatialRefHandle, null)
-    : null;
-  const authorityCode = canReadAuthority
-    ? gdal.OSRGetAuthorityCode(spatialRefHandle, 'PROJCS') ||
-      gdal.OSRGetAuthorityCode(spatialRefHandle, 'GEOGCS') ||
-      gdal.OSRGetAuthorityCode(spatialRefHandle, null)
-    : null;
-
   let wkt = null;
   const wktPtrPtr = Module._malloc(4);
   try {
@@ -194,14 +179,7 @@ const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle, prjText) => {
     Module._free(wktPtrPtr);
   }
 
-  let epsgCode = null;
-  if (authorityName && authorityCode && authorityName.toUpperCase() === 'EPSG') {
-    const parsed = Number.parseInt(authorityCode, 10);
-    if (Number.isFinite(parsed)) {
-      epsgCode = parsed;
-    }
-  }
-
+  const epsgCode = null;
   const result = {
     spatialRef: wkt || epsgCode ? { wkt, wkid: epsgCode, latestWkid: epsgCode } : null,
     epsgCode,

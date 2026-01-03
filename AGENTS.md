@@ -43,8 +43,8 @@ Step 2: The file is processed. The app does the following:
 
 The app has a list of supported input formats. It is exactly this:
 
-- ESRI Shapefile (which MUST be supplied as a zip file with the extension shp.zip)
 - Geoparquet (which MUST be supplied with the extension .parquet or .geoparquet)
+- ESRI Shapefile (which MUST be supplied as a zip file with the extension shp.zip)
 - Geopackage (which MUST be supplied with the extension .gpkg)
 - GeoJSON (which MUST be supplied with the extension .geojson, .json, or .geo.json)
 
@@ -59,6 +59,7 @@ Step 3: The file is ready for conversion. The user selects a file format.
 The app has a list of supported output formats. It is exactly this:
 
 - GeoParquet (.geoparquet)
+- Geopackage (.gpkg)
 
 Once the user selects the format, a "convert" button becomes live. They can click it and it will start the conversion process.
 The conversion process will show progress information (with an option to gracefully cancel), exactly as was done in step 2. When processing is done, a "save file" button will become live, and the user will be prompted to save the file they have processed.

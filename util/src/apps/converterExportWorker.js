@@ -16,15 +16,23 @@ const gdalPromise = self.initGdalJs({
 
 const toFilesFromZipEntries = (entries) => Object.entries(entries).map(([name, bytes]) => new File([bytes], name));
 
+const formatGdalErrors = (errors, fallback) => {
+  if (!errors?.length) return fallback;
+  return errors.map(e => {
+    if (typeof e === 'string') return e;
+    if (e?.message) return e.message;
+    try { return JSON.stringify(e); } catch { return String(e); }
+  }).join('\n');
+};
+
 const loadShapefileGeoJsonWithEntries = async (zipBuffer) => {
   const entries = readZipEntries(zipBuffer);
   const gdal = await gdalPromise;
   const files = toFilesFromZipEntries(entries);
-
+  
   const { datasets, errors } = await gdal.open(files);
   if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this shapefile.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+    throw new Error(formatGdalErrors(errors, 'GDAL could not open this Shapefile.'));
   }
 
   const dataset = datasets[0];
@@ -44,8 +52,7 @@ const loadGpkgGeoJsonWithInfo = async (file) => {
   const gdal = await gdalPromise;
   const { datasets, errors } = await gdal.open(file);
   if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this GeoPackage.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+    throw new Error(formatGdalErrors(errors, 'GDAL could not open this Geopackage.'));
   }
 
   const dataset = datasets[0];
@@ -64,8 +71,7 @@ const loadGeoJsonWithInfo = async (file) => {
   const gdal = await gdalPromise;
   const { datasets, errors } = await gdal.open(file);
   if (!datasets?.length) {
-    const err = errors?.[0] || 'GDAL could not open this GeoJSON.';
-    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+    throw new Error(formatGdalErrors(errors, 'GDAL could not open this GeoJSON.'));
   }
 
   const dataset = datasets[0];
@@ -107,11 +113,21 @@ const sendProgress = (percent, detail) => {
   self.postMessage({ type: 'progress', payload: { percent, detail } });
 };
 
+const stringifyUnknownError = (err) => {
+  if (err == null) return 'Unknown error.';
+  if (typeof err === 'string') return err;
+  if (err instanceof Error && typeof err.message === 'string' && err.message) return err.message;
+
+  // Try common shapes
+  if (typeof err?.message === 'string' && err.message) return err.message;
+  if (typeof err?.error === 'string' && err.error) return err.error;
+
+  // Last resort: JSON
+  try { return JSON.stringify(err); } catch (_) { return String(err); }
+};
+
 const formatError = (context, err) => {
-  if (!err) {
-    return `${context}: Unknown error.`;
-  }
-  const message = err?.message ? String(err.message) : String(err);
+  const message = stringifyUnknownError(err);
   const stack = err?.stack ? `\n${err.stack}` : '';
   return `${context}: ${message}${stack}`;
 };
@@ -449,7 +465,12 @@ const loadGeoParquetWithInfo = async (buffer, file) => {
       const vector = fieldVectors[index];
       properties[name] = vector ? vector.get(i) : null;
     });
-    features.push({ type: 'Feature', geometry, properties });
+    features.push({
+      type: 'Feature',
+      geometry,           // keep decoded GeoJSON for UI/type inference
+      properties,
+      __wkb: wkb          // ✅ preserve original bytes for exact re-write
+    });
   }
 
   return {
@@ -538,6 +559,8 @@ self.onmessage = async (event) => {
       layerData = result.geojson;
       info = result.info;
     } else if (isGeoParquet) {
+      // GeoParquet ingestion uses parquet-wasm (GDAL build can't open GeoParquet here).
+      // This path preserves original WKB bytes for exact re-write (no reprojection).
       const result = await loadGeoParquetWithInfo(buffer, file);
       layerData = result.geojson;
       existingGeoMetadata = result.geoMetadata;
@@ -647,8 +670,16 @@ self.onmessage = async (event) => {
   sendProgress(70, 'Encoding rows...');
   features.forEach((feature) => {
     const geometry = feature?.geometry;
-    const wkb = geometry ? self.wkx.Geometry.parseGeoJSON(geometry).toWkb() : null;
+    let wkb = feature?.__wkb;
+
+    // If we don’t have original WKB (non-GeoParquet inputs), fall back to encoding
+    if (!wkb) {
+      const geometry = feature?.geometry;
+      wkb = geometry ? self.wkx.Geometry.parseGeoJSON(geometry).toWkb() : null;
+    }
+
     geomBuilder.append(wkb && wkb.length ? wkb : null);
+
     const properties = feature?.properties || {};
     fieldEntries.forEach(([name, type]) => {
       const builder = fieldBuilders.get(name);

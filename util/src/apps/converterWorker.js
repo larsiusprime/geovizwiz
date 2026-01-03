@@ -60,6 +60,26 @@ const loadGpkgAsGeoJson = async (file) => {
   return { geojson, info };
 };
 
+const loadGeoJsonAsGeoJson = async (file) => {
+  const gdal = await gdalPromise;
+  const { datasets, errors } = await gdal.open(file);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this GeoJSON.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const text = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(text);
+  const info = dataset.info || null;
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, info };
+};
+
 
 const sendProgress = (percent, detail) => {
   self.postMessage({ type: 'progress', payload: { percent, detail } });
@@ -173,10 +193,11 @@ self.onmessage = async (event) => {
 
   const lowerName = file.name?.toLowerCase() || '';
   const isGeoPackage = lowerName.endsWith('.gpkg');
+  const isGeoJson = lowerName.endsWith('.geojson') || lowerName.endsWith('.json');
   let entries = null;
   let info = null;
 
-  if (!isGeoPackage) {
+  if (!isGeoPackage && !isGeoJson) {
     sendProgress(30, 'Inspecting archive contents...');
     entries = readZipEntries(buffer);
     if (!entries) {
@@ -184,7 +205,7 @@ self.onmessage = async (event) => {
         type: 'invalid',
         payload: {
           label: 'Unknown',
-          message: 'Not a supported format. Upload a zipped ESRI Shapefile (.shp.zip) or a GeoPackage (.gpkg).'
+          message: 'Not a supported format. Upload a zipped ESRI Shapefile (.shp.zip), GeoPackage (.gpkg), or GeoJSON (.geojson or .json).'
         }
       });
       return;
@@ -218,11 +239,21 @@ self.onmessage = async (event) => {
     }
   }
 
-  sendProgress(55, isGeoPackage ? 'Reading GeoPackage metadata...' : 'Reading shapefile metadata...');
+  let metadataLabel = 'Reading shapefile metadata...';
+  if (isGeoPackage) {
+    metadataLabel = 'Reading GeoPackage metadata...';
+  } else if (isGeoJson) {
+    metadataLabel = 'Reading GeoJSON metadata...';
+  }
+  sendProgress(55, metadataLabel);
   let layerData;
   try {
     if (isGeoPackage) {
       const result = await loadGpkgAsGeoJson(file);
+      layerData = result.geojson;
+      info = result.info;
+    } else if (isGeoJson) {
+      const result = await loadGeoJsonAsGeoJson(file);
       layerData = result.geojson;
       info = result.info;
     } else {
@@ -231,15 +262,26 @@ self.onmessage = async (event) => {
       entries = zipEntries;
     }
   } catch (err) {
+    let formatLabel = 'zipped shapefile';
+    if (isGeoPackage) {
+      formatLabel = 'GeoPackage';
+    } else if (isGeoJson) {
+      formatLabel = 'GeoJSON file';
+    }
     const message = err?.message
-      ? `We found a valid ${isGeoPackage ? 'GeoPackage' : 'zipped shapefile'}, but could not read its metadata. ${err.message}`
-      : `We found a valid ${isGeoPackage ? 'GeoPackage' : 'zipped shapefile'}, but could not read its metadata.`;
+      ? `We found a valid ${formatLabel}, but could not read its metadata. ${err.message}`
+      : `We found a valid ${formatLabel}, but could not read its metadata.`;
     self.postMessage({ type: 'error', payload: { message } });
     return;
   }
 
   sendProgress(80, 'Summarizing layers...');
-  const layerTypeLabel = isGeoPackage ? 'GeoPackage layer' : 'Shapefile layer';
+  let layerTypeLabel = 'Shapefile layer';
+  if (isGeoPackage) {
+    layerTypeLabel = 'GeoPackage layer';
+  } else if (isGeoJson) {
+    layerTypeLabel = 'GeoJSON layer';
+  }
   const layers = (Array.isArray(layerData) ? layerData : [layerData]).map((layer) => {
     const features = layer?.features || [];
     return {
@@ -251,13 +293,17 @@ self.onmessage = async (event) => {
     };
   });
 
-  const crs = isGeoPackage ? getCrsLabelFromInfo(info) : getCrsLabelFromEntries(entries);
+  const crs = isGeoPackage || isGeoJson ? getCrsLabelFromInfo(info) : getCrsLabelFromEntries(entries);
   sendProgress(95, 'Finalizing metadata...');
 
   self.postMessage({
     type: 'success',
     payload: {
-      label: isGeoPackage ? 'GeoPackage (.gpkg)' : 'ESRI Shapefile (zipped)',
+      label: isGeoPackage
+        ? 'GeoPackage (.gpkg)'
+        : isGeoJson
+          ? 'GeoJSON (.geojson)'
+          : 'ESRI Shapefile (zipped)',
       message: 'Metadata loaded. You may proceed to the conversion step.',
       layers,
       crs

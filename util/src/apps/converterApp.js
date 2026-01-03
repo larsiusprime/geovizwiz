@@ -395,6 +395,12 @@ export default function startConverterApp() {
     if (lower.endsWith('.zip')) {
       return `${fileNameValue.slice(0, -4)}.geoparquet`;
     }
+    if (lower.endsWith('.geojson')) {
+      return `${fileNameValue.slice(0, -8)}.geoparquet`;
+    }
+    if (lower.endsWith('.json')) {
+      return `${fileNameValue.slice(0, -5)}.geoparquet`;
+    }
     if (lower.endsWith('.parquet')) {
       return `${fileNameValue.slice(0, -8)}.geoparquet`;
     }

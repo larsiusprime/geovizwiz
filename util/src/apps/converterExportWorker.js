@@ -103,9 +103,12 @@ const getGdalApi = (Module) => ({
   OGR_F_GetGeometryRef: Module.cwrap('OGR_F_GetGeometryRef', 'number', ['number']),
   OGR_G_WkbSize: Module.cwrap('OGR_G_WkbSize', 'number', ['number']),
   OGR_G_ExportToWkb: Module.cwrap('OGR_G_ExportToWkb', 'number', ['number', 'number', 'number']),
+  OSRNewSpatialReference: Module.cwrap('OSRNewSpatialReference', 'number', ['string']),
+  OSRSetFromUserInput: Module.cwrap('OSRSetFromUserInput', 'number', ['number', 'string']),
   OSRExportToWkt: Module.cwrap('OSRExportToWkt', 'number', ['number', 'number']),
   OSRGetAuthorityName: Module.cwrap('OSRGetAuthorityName', 'string', ['number', 'string']),
   OSRGetAuthorityCode: Module.cwrap('OSRGetAuthorityCode', 'string', ['number', 'string']),
+  OSRDestroySpatialReference: Module.cwrap('OSRDestroySpatialReference', null, ['number']),
   CPLFree: Module.cwrap('CPLFree', null, ['number'])
 });
 
@@ -139,13 +142,26 @@ const writeShapefileToFs = (Module, entries, fileNames) => {
   };
 };
 
-const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle) => {
+const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle, prjText) => {
   let spatialRefHandle = null;
   if (typeof gdal.OGR_L_GetSpatialRef === 'function') {
     spatialRefHandle = gdal.OGR_L_GetSpatialRef(layerHandle);
   }
   if (!spatialRefHandle && typeof gdal.GDALGetSpatialRef === 'function') {
     spatialRefHandle = gdal.GDALGetSpatialRef(dataSetHandle);
+  }
+  let createdSpatialRef = false;
+  if (!spatialRefHandle && prjText) {
+    const tempSrs = gdal.OSRNewSpatialReference(null);
+    if (tempSrs) {
+      const setResult = gdal.OSRSetFromUserInput(tempSrs, prjText);
+      if (setResult === 0) {
+        spatialRefHandle = tempSrs;
+        createdSpatialRef = true;
+      } else {
+        gdal.OSRDestroySpatialReference(tempSrs);
+      }
+    }
   }
   if (!spatialRefHandle) {
     return { spatialRef: null, epsgCode: null, wkt: null };
@@ -182,11 +198,15 @@ const readSpatialRef = (Module, gdal, dataSetHandle, layerHandle) => {
     }
   }
 
-  return {
+  const result = {
     spatialRef: wkt || epsgCode ? { wkt, wkid: epsgCode, latestWkid: epsgCode } : null,
     epsgCode,
     wkt
   };
+  if (createdSpatialRef && spatialRefHandle) {
+    gdal.OSRDestroySpatialReference(spatialRefHandle);
+  }
+  return result;
 };
 
 const readShapefileWithGdal = async (entries) => {
@@ -198,7 +218,7 @@ const readShapefileWithGdal = async (entries) => {
     throw new Error('We could not find the required .shp, .dbf, and .shx files in this zip archive.');
   }
 
-  const { shpPath } = writeShapefileToFs(Module, entries, fileNames);
+  const { shpPath, prjPath } = writeShapefileToFs(Module, entries, fileNames);
   const dataSetHandle = gdal.GDALOpenEx(shpPath, 0, 0, 0, 0);
   if (!dataSetHandle) {
     throw new Error('GDAL was unable to open the shapefile data.');
@@ -218,7 +238,17 @@ const readShapefileWithGdal = async (entries) => {
       throw new Error('Could not open the shapefile layer.');
     }
 
-    const spatialRefInfo = readSpatialRef(Module, gdal, dataSetHandle, layerHandle);
+    let prjText = null;
+    if (prjPath) {
+      try {
+        const prjBytes = Module.FS.readFile(prjPath);
+        prjText = new TextDecoder().decode(prjBytes);
+      } catch (err) {
+        prjText = null;
+      }
+    }
+
+    const spatialRefInfo = readSpatialRef(Module, gdal, dataSetHandle, layerHandle, prjText);
     spatialRef = spatialRefInfo.spatialRef;
     if (!spatialRef) {
       throw new Error('This shapefile does not include a readable CRS. Please provide a .prj file.');

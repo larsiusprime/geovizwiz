@@ -80,6 +80,26 @@ const loadGeoJsonAsGeoJson = async (file) => {
   return { geojson, info };
 };
 
+const loadGeoParquetAsGeoJson = async (file) => {
+  const gdal = await gdalPromise;
+  const { datasets, errors } = await gdal.open(file);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this GeoParquet file.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const text = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(text);
+  const info = dataset.info || null;
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, info };
+};
+
 
 const sendProgress = (percent, detail) => {
   self.postMessage({ type: 'progress', payload: { percent, detail } });
@@ -194,10 +214,11 @@ self.onmessage = async (event) => {
   const lowerName = file.name?.toLowerCase() || '';
   const isGeoPackage = lowerName.endsWith('.gpkg');
   const isGeoJson = lowerName.endsWith('.geojson') || lowerName.endsWith('.json');
+  const isGeoParquet = lowerName.endsWith('.geoparquet') || lowerName.endsWith('.parquet');
   let entries = null;
   let info = null;
 
-  if (!isGeoPackage && !isGeoJson) {
+  if (!isGeoPackage && !isGeoJson && !isGeoParquet) {
     sendProgress(30, 'Inspecting archive contents...');
     entries = readZipEntries(buffer);
     if (!entries) {
@@ -205,7 +226,7 @@ self.onmessage = async (event) => {
         type: 'invalid',
         payload: {
           label: 'Unknown',
-          message: 'Not a supported format. Upload a zipped ESRI Shapefile (.shp.zip), GeoPackage (.gpkg), or GeoJSON (.geojson or .json).'
+          message: 'Not a supported format. Upload a zipped ESRI Shapefile (.shp.zip), GeoPackage (.gpkg), GeoJSON (.geojson or .json), or GeoParquet (.geoparquet or .parquet).'
         }
       });
       return;
@@ -244,6 +265,8 @@ self.onmessage = async (event) => {
     metadataLabel = 'Reading GeoPackage metadata...';
   } else if (isGeoJson) {
     metadataLabel = 'Reading GeoJSON metadata...';
+  } else if (isGeoParquet) {
+    metadataLabel = 'Reading GeoParquet metadata...';
   }
   sendProgress(55, metadataLabel);
   let layerData;
@@ -254,6 +277,10 @@ self.onmessage = async (event) => {
       info = result.info;
     } else if (isGeoJson) {
       const result = await loadGeoJsonAsGeoJson(file);
+      layerData = result.geojson;
+      info = result.info;
+    } else if (isGeoParquet) {
+      const result = await loadGeoParquetAsGeoJson(file);
       layerData = result.geojson;
       info = result.info;
     } else {
@@ -267,6 +294,8 @@ self.onmessage = async (event) => {
       formatLabel = 'GeoPackage';
     } else if (isGeoJson) {
       formatLabel = 'GeoJSON file';
+    } else if (isGeoParquet) {
+      formatLabel = 'GeoParquet file';
     }
     const message = err?.message
       ? `We found a valid ${formatLabel}, but could not read its metadata. ${err.message}`
@@ -281,6 +310,8 @@ self.onmessage = async (event) => {
     layerTypeLabel = 'GeoPackage layer';
   } else if (isGeoJson) {
     layerTypeLabel = 'GeoJSON layer';
+  } else if (isGeoParquet) {
+    layerTypeLabel = 'GeoParquet layer';
   }
   const layers = (Array.isArray(layerData) ? layerData : [layerData]).map((layer) => {
     const features = layer?.features || [];
@@ -293,7 +324,9 @@ self.onmessage = async (event) => {
     };
   });
 
-  const crs = isGeoPackage || isGeoJson ? getCrsLabelFromInfo(info) : getCrsLabelFromEntries(entries);
+  const crs = isGeoPackage || isGeoJson || isGeoParquet
+    ? getCrsLabelFromInfo(info)
+    : getCrsLabelFromEntries(entries);
   sendProgress(95, 'Finalizing metadata...');
 
   self.postMessage({
@@ -303,7 +336,9 @@ self.onmessage = async (event) => {
         ? 'GeoPackage (.gpkg)'
         : isGeoJson
           ? 'GeoJSON (.geojson)'
-          : 'ESRI Shapefile (zipped)',
+          : isGeoParquet
+            ? 'GeoParquet (.geoparquet)'
+            : 'ESRI Shapefile (zipped)',
       message: 'Metadata loaded. You may proceed to the conversion step.',
       layers,
       crs

@@ -189,6 +189,143 @@ const normalizeValue = (value, type) => {
   return value;
 };
 
+const normalizeWkbType = (type) => {
+  let hasZ = false;
+  let baseType = type;
+
+  if (type & 0x80000000) {
+    hasZ = true;
+    baseType = type & 0xffff;
+  }
+  if (type & 0x40000000) {
+    baseType = type & 0xffff;
+  }
+
+  if (baseType >= 1000 && baseType < 2000) {
+    hasZ = true;
+    baseType -= 1000;
+  } else if (baseType >= 2000 && baseType < 3000) {
+    baseType -= 2000;
+  } else if (baseType >= 3000 && baseType < 4000) {
+    hasZ = true;
+    baseType -= 3000;
+  }
+
+  return { baseType, hasZ };
+};
+
+const readPoint = (view, offset, littleEndian, hasZ) => {
+  const x = view.getFloat64(offset, littleEndian);
+  const y = view.getFloat64(offset + 8, littleEndian);
+  offset += 16;
+  if (hasZ) {
+    offset += 8;
+  }
+  return { point: [x, y], offset };
+};
+
+const parseWkbGeometry = (view, offset = 0) => {
+  const byteOrder = view.getUint8(offset);
+  const littleEndian = byteOrder === 1;
+  offset += 1;
+  const type = view.getUint32(offset, littleEndian);
+  offset += 4;
+
+  if (type & 0x20000000) {
+    offset += 4;
+  }
+
+  const { baseType, hasZ } = normalizeWkbType(type);
+
+  if (baseType === 1) {
+    const { point, offset: next } = readPoint(view, offset, littleEndian, hasZ);
+    return { geometry: { type: 'Point', coordinates: point }, offset: next };
+  }
+
+  if (baseType === 2) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const coords = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = readPoint(view, offset, littleEndian, hasZ);
+      coords.push(result.point);
+      offset = result.offset;
+    }
+    return { geometry: { type: 'LineString', coordinates: coords }, offset };
+  }
+
+  if (baseType === 3) {
+    const ringCount = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const rings = [];
+    for (let i = 0; i < ringCount; i += 1) {
+      const pointCount = view.getUint32(offset, littleEndian);
+      offset += 4;
+      const ring = [];
+      for (let j = 0; j < pointCount; j += 1) {
+        const result = readPoint(view, offset, littleEndian, hasZ);
+        ring.push(result.point);
+        offset = result.offset;
+      }
+      rings.push(ring);
+    }
+    return { geometry: { type: 'Polygon', coordinates: rings }, offset };
+  }
+
+  if (baseType === 4) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const points = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = parseWkbGeometry(view, offset);
+      offset = result.offset;
+      if (result.geometry?.type === 'Point') {
+        points.push(result.geometry.coordinates);
+      }
+    }
+    return { geometry: { type: 'MultiPoint', coordinates: points }, offset };
+  }
+
+  if (baseType === 5) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const lines = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = parseWkbGeometry(view, offset);
+      offset = result.offset;
+      if (result.geometry?.type === 'LineString') {
+        lines.push(result.geometry.coordinates);
+      }
+    }
+    return { geometry: { type: 'MultiLineString', coordinates: lines }, offset };
+  }
+
+  if (baseType === 6) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const polygons = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = parseWkbGeometry(view, offset);
+      offset = result.offset;
+      if (result.geometry?.type === 'Polygon') {
+        polygons.push(result.geometry.coordinates);
+      }
+    }
+    return { geometry: { type: 'MultiPolygon', coordinates: polygons }, offset };
+  }
+
+  throw new Error(`Unsupported WKB geometry type: ${baseType}`);
+};
+
+const decodeWkbGeometry = (wkb) => {
+  if (!wkb) {
+    return null;
+  }
+  const bytes = wkb instanceof Uint8Array ? wkb : new Uint8Array(wkb);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return parseWkbGeometry(view, 0).geometry;
+};
+
 const arrowTypeFor = (Arrow, type) => {
   switch (type) {
     case 'int':
@@ -287,9 +424,7 @@ const loadGeoParquetWithInfo = async (buffer, file) => {
   const features = [];
   for (let i = 0; i < table.numRows; i += 1) {
     const wkb = geometryVector.get(i);
-    const geometry = wkb
-      ? self.wkx.Geometry.parse(wkb instanceof Uint8Array ? wkb : new Uint8Array(wkb)).toGeoJSON()
-      : null;
+    const geometry = decodeWkbGeometry(wkb);
     const properties = {};
     fieldNames.forEach((name, index) => {
       const vector = fieldVectors[index];

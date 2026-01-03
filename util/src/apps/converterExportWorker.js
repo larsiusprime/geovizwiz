@@ -40,6 +40,26 @@ const loadShapefileGeoJsonWithEntries = async (zipBuffer) => {
   return { geojson, entries };
 };
 
+const loadGpkgGeoJsonWithInfo = async (file) => {
+  const gdal = await gdalPromise;
+  const { datasets, errors } = await gdal.open(file);
+  if (!datasets?.length) {
+    const err = errors?.[0] || 'GDAL could not open this GeoPackage.';
+    throw new Error(Array.isArray(err) ? err.join('\n') : String(err));
+  }
+
+  const dataset = datasets[0];
+  const out = await gdal.ogr2ogr(dataset, ['-f', 'GeoJSON']);
+  const bytes = await gdal.getFileBytes(out);
+  const geojsonText = new TextDecoder().decode(bytes);
+  const geojson = JSON.parse(geojsonText);
+  const info = dataset.info || null;
+
+  try { await gdal.close(dataset); } catch (_) {}
+
+  return { geojson, info };
+};
+
 let parquetModulePromise = null;
 let arrowHelpersPromise = null;
 let parquetInitialized = false;
@@ -75,6 +95,13 @@ const getPrjText = (entries) => {
   const prjName = Object.keys(entries).find((name) => name.toLowerCase().endsWith('.prj'));
   if (!prjName) return null;
   return textDecoder.decode(entries[prjName]);
+};
+
+const getCrsWktFromInfo = (info) => {
+  const layer = info?.layers?.[0];
+  const geometryField = layer?.geometryFields?.[0];
+  const coordinateSystem = geometryField?.coordinateSystem || layer?.coordinateSystem;
+  return coordinateSystem?.wkt || coordinateSystem?.wkt2_2019 || coordinateSystem?.wkt2_2018 || null;
 };
 
 const parseEpsgFromWkt = (wkt) => {
@@ -223,25 +250,41 @@ self.onmessage = async (event) => {
     return;
   }
 
-  sendProgress(25, 'Opening archive...');
-  const entries = readZipEntries(buffer);
-  if (!entries) {
-    self.postMessage({
-      type: 'error',
-      payload: { message: 'This file is not a supported shapefile zip. Please try another file.' }
-    });
-    return;
+  const lowerName = file.name?.toLowerCase() || '';
+  const isGeoPackage = lowerName.endsWith('.gpkg');
+  let entries = null;
+  let info = null;
+
+  if (isGeoPackage) {
+    sendProgress(25, 'Opening GeoPackage...');
+  } else {
+    sendProgress(25, 'Opening archive...');
+    entries = readZipEntries(buffer);
+    if (!entries) {
+      self.postMessage({
+        type: 'error',
+        payload: { message: 'This file is not a supported shapefile zip or GeoPackage. Please try another file.' }
+      });
+      return;
+    }
   }
 
-  sendProgress(40, 'Parsing shapefile features...');
+  sendProgress(40, isGeoPackage ? 'Parsing GeoPackage features...' : 'Parsing shapefile features...');
   let layerData;
   try {
-    const { geojson } = await loadShapefileGeoJsonWithEntries(buffer);
-    layerData = geojson;
+    if (isGeoPackage) {
+      const result = await loadGpkgGeoJsonWithInfo(file);
+      layerData = result.geojson;
+      info = result.info;
+    } else {
+      const { geojson } = await loadShapefileGeoJsonWithEntries(buffer);
+      layerData = geojson;
+    }
   } catch (err) {
+    const context = isGeoPackage ? 'We could not read this GeoPackage' : 'We could not read this shapefile';
     self.postMessage({
       type: 'error',
-      payload: { message: formatError('We could not read this shapefile', err) }
+      payload: { message: formatError(context, err) }
     });
     return;
   }
@@ -255,7 +298,8 @@ self.onmessage = async (event) => {
   const fieldEntries = Array.from(fieldTypes.entries());
   const geometryType = collectGeometryTypes(features);
   const prjText = getPrjText(entries);
-  const epsgFromWkt = parseEpsgFromWkt(prjText);
+  const wktText = prjText || getCrsWktFromInfo(info);
+  const epsgFromWkt = parseEpsgFromWkt(wktText);
 
   const Arrow = self.Arrow;
   if (!Arrow) {
@@ -272,8 +316,8 @@ self.onmessage = async (event) => {
 
   let geoMetadata;
   try {
-    const spatialRef = prjText
-      ? { wkt: prjText, wkid: epsgFromWkt, latestWkid: epsgFromWkt }
+    const spatialRef = wktText
+      ? { wkt: wktText, wkid: epsgFromWkt, latestWkid: epsgFromWkt }
       : null;
     geoMetadata = await createGeoMetadata(spatialRef, geometryType);
   } catch (err) {

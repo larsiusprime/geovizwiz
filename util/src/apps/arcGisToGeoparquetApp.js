@@ -479,7 +479,7 @@ export default async function startArcgisToGeoparquetApp() {
         downloadDetail.textContent = `Fetched ${fetched} of ${total} records for ${info.name}...`;
       });
 
-      const hasGeometry = Boolean(info.geometryType) || features.some(feature => feature.geometry != null);
+      const hasGeometry = features.some(feature => feature?.geometry?.length);
       item.fileExtension = hasGeometry ? 'geoparquet' : 'parquet';
       
       const deps = {

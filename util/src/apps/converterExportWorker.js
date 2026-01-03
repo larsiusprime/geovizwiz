@@ -86,7 +86,7 @@ const loadGeoJsonWithInfo = async (file) => {
   return { geojson, info };
 };
 
-const convertGeoJsonToGpkg = async (geojson) => {
+const convertGeoJsonToGpkg = async (geojson, assignSrsText = null) => {
   const gdal = await gdalPromise;
   const geojsonText = JSON.stringify(geojson);
   const geojsonFile = new File([geojsonText], 'source.geojson', { type: 'application/geo+json' });
@@ -97,7 +97,11 @@ const convertGeoJsonToGpkg = async (geojson) => {
   }
 
   const dataset = datasets[0];
-  const out = await gdal.ogr2ogr(dataset, ['-f', 'GPKG']);
+  const args = ['-f', 'GPKG'];
+  if (assignSrsText) {
+    args.push('-a_srs', assignSrsText);
+  }
+  const out = await gdal.ogr2ogr(dataset, args);
   const bytes = await gdal.getFileBytes(out);
 
   try { await gdal.close(dataset); } catch (_) {}
@@ -591,9 +595,22 @@ self.onmessage = async (event) => {
 
   if (targetFormat === 'geopackage') {
     sendProgress(55, 'Preparing GeoPackage export...');
+  
+    // GeoJSON has no CRS. If the input was GeoParquet and its coordinates are projected,
+    // GDAL will assume EPSG:4326 unless we assign the correct CRS here.
+    let assignSrsText = null;
+    if (existingGeoMetadata) {
+      const crs = existingGeoMetadata?.columns?.[geometryColumn]?.crs;
+      if (typeof crs === 'string') {
+        assignSrsText = crs;
+      } else if (crs && typeof crs === 'object') {
+        try { assignSrsText = JSON.stringify(crs); } catch (_) { assignSrsText = null; }
+      }
+    }
+  
     let gpkgBytes;
     try {
-      gpkgBytes = await convertGeoJsonToGpkg(primaryCollection);
+      gpkgBytes = await convertGeoJsonToGpkg(primaryCollection, assignSrsText);
     } catch (err) {
       self.postMessage({
         type: 'error',
@@ -601,7 +618,7 @@ self.onmessage = async (event) => {
       });
       return;
     }
-
+  
     sendProgress(100, 'Conversion complete.');
     const blob = new Blob([gpkgBytes], { type: 'application/geopackage+sqlite3' });
     self.postMessage({
@@ -610,6 +627,7 @@ self.onmessage = async (event) => {
     });
     return;
   }
+
 
   sendProgress(55, 'Preparing GeoParquet schema...');
   const fieldTypes = collectFieldTypes(features);

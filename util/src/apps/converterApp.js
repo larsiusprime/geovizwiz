@@ -405,17 +405,14 @@ export default function startConverterApp() {
     if (lower.endsWith('.json')) {
       return `${fileNameValue.slice(0, -5)}.${extension}`;
     }
+    if (lower.endsWith('.geoparquet')) {
+      return `${fileNameValue.slice(0, -11)}.${extension}`;
+    }
     if (lower.endsWith('.parquet')) {
       return `${fileNameValue.slice(0, -8)}.${extension}`;
     }
     if (lower.endsWith('.gpkg')) {
       return `${fileNameValue.slice(0, -5)}.${extension}`;
-    }
-    if (lower.endsWith('.geoparquet') && extension === 'geoparquet') {
-      return fileNameValue;
-    }
-    if (lower.endsWith('.gpkg') && extension === 'gpkg') {
-      return fileNameValue;
     }
     return `${fileNameValue}.${extension}`;
   };

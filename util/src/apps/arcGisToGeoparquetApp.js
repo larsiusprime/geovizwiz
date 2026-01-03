@@ -478,6 +478,9 @@ export default async function startArcgisToGeoparquetApp() {
       const { features, spatialRef } = await fetchAllFeatures(url, info, ({ fetched, total }) => {
         downloadDetail.textContent = `Fetched ${fetched} of ${total} records for ${info.name}...`;
       });
+
+      const hasGeometry = Boolean(info.geometryType) || features.some(feature => feature.geometry != null);
+      item.fileExtension = hasGeometry ? 'geoparquet' : 'parquet';
       
       const deps = {
         Arrow: window.Arrow,
@@ -564,7 +567,7 @@ export default async function startArcgisToGeoparquetApp() {
         downloadBtn.disabled = !item.blob;
         downloadBtn.addEventListener('click', () => {
           if (!item.blob) return;
-          triggerDownload(item.blob, `${item.slug}.geoparquet`);
+          triggerDownload(item.blob, `${item.slug}.${item.fileExtension ?? 'geoparquet'}`);
         });
         actions.appendChild(downloadBtn);
   
@@ -662,7 +665,8 @@ export default async function startArcgisToGeoparquetApp() {
         const files = [];
         for (const item of readyItems) {
           const data = new Uint8Array(await item.blob.arrayBuffer());
-          files.push({ name: `${item.slug}.geoparquet`, data });
+          const extension = item.fileExtension ?? 'geoparquet';
+          files.push({ name: `${item.slug}.${extension}`, data });
         }
         const zipBlob = buildZipBlob(files);
         triggerDownload(zipBlob, 'layers.zip');

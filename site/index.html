@@ -6,54 +6,7 @@
   <title>Put It On A Map</title>
   <link rel="shortcut icon" type="image/x-icon" href="images/favicon.ico"/>
   <link rel="stylesheet" href="/shared.css" />
-  <style>
-    main { flex: 1; padding: 48px 20px 60px; }
-    .hero {
-      display: grid;
-      gap: 32px;
-      align-items: center;
-    }
-    .hero h1 { margin: 0 0 12px; font-size: clamp(28px, 4vw, 40px); }
-    .hero p { margin: 0; color: var(--muted); font-size: 1.05rem; max-width: 620px; }
-    .app-grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-      margin-top: 28px;
-    }
-    .card {
-      display: flex;
-      flex-direction: column;
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 10px 24px rgba(21, 30, 50, 0.05);
-    }
-    .card h2 { margin: 0 0 8px; font-size: 1.1rem; }
-    .card p { margin: 0; color: var(--muted); }
-    .card .button {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 16px;
-      margin-top: auto;
-      align-self: center;
-      border-radius: 10px;
-      background: var(--accent);
-      color: #fff;
-      font-weight: 600;
-      border: 1px solid var(--accent);
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
-    }
-    .button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(45, 79, 139, 0.2); }
-    footer {
-      padding: 24px 20px;
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.85rem;
-    }
-  </style>
+  <link rel="stylesheet" href="/main.css" />
 </head>
 <body>
   <div class="wrap">
@@ -72,9 +25,9 @@
     <main>
       <section class="container hero">
         <div>
-          <h1>GIS visualization made simple.</h1>
+          <h1>GIS visualization made simple</h1>
           <p>
-            Download, convert, and visualize GIS data in 3D, without having to install anything.
+            Download, convert, and visualize GIS data in 3D, without having to install anything
           </p>
           <div class="app-grid">
             <article class="card">
@@ -84,13 +37,13 @@
               <a class="button" href="/viz">3D Viz</a>
             </article>
             <article class="card">
-              <h2>ArcGIS endpoint downloader</h2>
+              <h2>Data Fetcher</h2>
               <p>Connect to ArcGIS REST services, browse layers, and export GeoParquet locally.</p>
               <p>&nbsp;</p>
               <a class="button" href="/util/fetch.html">Fetch</a>
             </article>
             <article class="card">
-              <h2>GIS format converter</h2>
+              <h2>GIS Format Converter</h2>
               <p>Upload GIS files, inspect metadata, and convert between formats.</p>
               <p>&nbsp;</p>
               <a class="button" href="/util/convert.html">Convert</a>
@@ -98,9 +51,20 @@
           </div>
         </div>
       </section>
+      <section class="container">
+        <div>
+          <h1>Simple & Privacy-Preserving</h1>
+          <ul>
+            <li>Collects no data, never touches our servers.</li>
+            <li>Completely free and Open source.</li>
+            <li>Learn more <a href="about.html">here</a>.</li>
+          </p>
+      </section>
     </main>
-    <footer>© <span id="y"></span> Lars Doucet • Fast, local GIS workflows<br>
-    Brought to you by the <a href="https://www.landeconomics.org"><b>Center for Land Economics</b></a> </footer>
+    <footer>
+    © <span id="y"></span> Lars Doucet<br>
+    Brought to you by the <a href="https://www.landeconomics.org">Center for Land Economics</a>
+    </footer>
   </div>
   <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
 </body>

@@ -22,6 +22,10 @@ a {
   color: inherit;
   text-decoration: none;
 }
+section a {
+  color: revert;
+  text-decoration: underline;
+}
 .wrap {
   min-height: 100%;
   display: flex;

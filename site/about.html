@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Put It On A Map</title>
+  <link rel="shortcut icon" type="image/x-icon" href="images/favicon.ico"/>
+  <link rel="stylesheet" href="/shared.css" />
+  <link rel="stylesheet" href="/main.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="container header-row">
+        <a class="brand" href="/" aria-label="Put It On A Map home">
+          <img src="/images/logo.svg" alt="putitonamap logo">
+          <div>PutItOnAMap.com</div>
+        </a>
+        <nav class="nav-links" aria-label="Primary">
+          <a href="about.html">About</a>
+          <a href="https://github.com/larsiusprime/geovizwiz">Source</a>
+        </nav>
+      </div>
+    </header>
+    <main>
+      <section class="container hero">
+        <div>
+          <h1>About PutItOnAMap.com</h1>
+          <p>
+            This site is a collection of easy-to-use tools for everyday GIS tasks. 
+            I initially created it for my own use out of frustration with existing GIS tooling.
+          </p>
+
+          <h2>Q: How do I save my visualizer maps or share them with other people?</h2>
+          <p>
+            For now, you can't. Everything runs locally on your own computer, and nothing is "saved" to our servers. We do maintain a separate site <a href="https://www.civicmapper.org">CivicMapper.org</a>, which uses the 3D visualizer logic for a curated selection of cities, but at the moment we don't have a way for you to upload, customize, and share your own visualizations.
+          <p>
+
+          <h2>Q: Do you collect any data?</h2>
+          <p>
+            No. None of your files are sent to our servers. All the operations are done locally on your own computer using Javascript that runs locally in your browser on your own computer.
+          </p>
+
+          <h2>Q: What about the Data Fetcher? Doesn't that connect to remote servers?</h2>
+          <p>
+            Yes, the Data Fetcher connects to remote servers--remote servers that <i>you</i> specify and connect to directly. The network requests are sent directly from your own browser, and the results are returned to your local machine. We don't see anything, don't monitor anything, and don't collect anything.
+          </p>
+
+          <h2>Q: What if I don't believe you? I'm dealing with sensitive information and have to be careful.</h2>
+          <p>
+            I understand. First, if you ask your IT specialist to inspect all the network requests, they will see that nothing is being transmitted to any remote servers. Second, this app is entirely <a href="https://github.com/larsiusprime/geovizwiz">open source</a>, so you can inspect the source code directly, and more importantly, download and host it yourself. For maximum safety, you can host this entire web app on your organization's intranet behind your own firewall.
+          </p>
+
+          <h2>Q: I found a bug, or want to request a feature.</h2>
+          <p>
+            Please go to <a href="https://github.com/larsiusprime/geovizwiz">my Github repository</a> and create an issue! Or send me an <a href="mailto:lars@landeconomics.org">email</a>.
+          </p>
+        </div>
+      </section>
+    </main>
+    <footer>
+    © <span id="y"></span> Lars Doucet<br>
+    Brought to you by the <a href="https://www.landeconomics.org">Center for Land Economics</a>
+    </footer>
+  </div>
+  <script>document.getElementById('y').textContent = new Date().getFullYear()</script>
+</body>
+</html>

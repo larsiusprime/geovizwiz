@@ -475,6 +475,7 @@ export default async function startArcgisToGeoparquetApp() {
       downloadDetail.textContent = `Fetching ${item.fullName}...`;
       const { info, url } = await fetchLayerMetadata(item.serviceUrl, item.id);
       item.info = info;
+      item.sourceUrl = url;
       const { features, spatialRef } = await fetchAllFeatures(url, info, ({ fetched, total }) => {
         downloadDetail.textContent = `Fetched ${fetched} of ${total} records for ${info.name}...`;
       });
@@ -663,11 +664,19 @@ export default async function startArcgisToGeoparquetApp() {
         const readyItems = queuedLayers.filter(item => item.enabled && item.status === 'ready' && item.blob);
         if (!readyItems.length) return;
         const files = [];
+        const manifestEntries = [];
         for (const item of readyItems) {
           const data = new Uint8Array(await item.blob.arrayBuffer());
           const extension = item.fileExtension ?? 'geoparquet';
-          files.push({ name: `${item.slug}.${extension}`, data });
+          const filename = `${item.slug}.${extension}`;
+          files.push({ name: filename, data });
+          manifestEntries.push({
+            filename,
+            url: item.sourceUrl || item.layerUrl || item.serviceUrl || ''
+          });
         }
+        const manifestData = new TextEncoder().encode(JSON.stringify({ files: manifestEntries }, null, 2));
+        files.push({ name: 'download_manifest.json', data: manifestData });
         const zipBlob = buildZipBlob(files);
         triggerDownload(zipBlob, 'layers.zip');
       });

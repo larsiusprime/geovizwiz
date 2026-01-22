@@ -7,3 +7,7 @@ geoconverter/lib/
 local-deploy/*
 
 util/util.zip
+
+viz/package-lock.json
+
+viz/package.json

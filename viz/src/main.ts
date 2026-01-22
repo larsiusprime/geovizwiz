@@ -471,6 +471,8 @@ function selectParcelsInBoundingBox(bbox: [number, number, number, number]) {
     console.log('No data loaded to select from');
     return;
   }
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   
   const [minLng, minLat, maxLng, maxLat] = bbox;
   let selectedCount = 0;
@@ -486,7 +488,7 @@ function selectParcelsInBoundingBox(bbox: [number, number, number, number]) {
       
       // Set feature state for highlighting
       map.setFeatureState(
-        { source: SOURCE_ID, id: feature.id },
+        { source: sourceId, id: feature.id },
         { selected: true }
       );
       
@@ -506,6 +508,8 @@ function unselectParcelsInBoundingBox(bbox: [number, number, number, number]) {
     console.log('No data loaded to unselect from');
     return;
   }
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   
   const [minLng, minLat, maxLng, maxLat] = bbox;
   let unselectedCount = 0;
@@ -524,7 +528,7 @@ function unselectParcelsInBoundingBox(bbox: [number, number, number, number]) {
         
         // Set feature state to remove highlighting
         map.setFeatureState(
-          { source: SOURCE_ID, id: feature.id },
+          { source: sourceId, id: feature.id },
           { selected: false }
         );
         
@@ -618,8 +622,10 @@ const enable3DCheckbox = document.getElementById('enable3D') as HTMLInputElement
 const extrusionOptions = document.getElementById('extrusionOptions') as HTMLFieldSetElement;
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
+const layerList = document.getElementById('layerList') as HTMLDivElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
+const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
 const normLand = document.getElementById('norm-land') as HTMLInputElement;
 const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
@@ -738,6 +744,46 @@ const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ
 
 /* ---------------- State ---------------- */
 
+type LayerState = {
+  id: string;
+  name: string;
+  sourceId: string;
+  layerId: string;
+  errorLayerId: string;
+  visible: boolean;
+  geojson: GeoJSON.FeatureCollection | null;
+  field: string | null;
+  fieldType: 'numeric' | 'categorical' | null;
+  stats: { min: number; max: number } | null;
+  normalizationMode: 'asis' | 'perLand' | 'perBuilding';
+  colorMode: ColorMode;
+  categoricalColorMode: CategoricalColorMode;
+  singleColorValue: string;
+  ramp: string;
+  colorDomain: { lo: number; hi: number; label: string } | null;
+  colorBreaks: number[] | null;
+  cachedExtrusionSettings: { multiplier: number; unit: string } | null;
+  chosenNumericFields: string[];
+  chosenCategoricalFields: string[];
+  landSizeField: string | null;
+  landSizeUnitLabel: string | null;
+  bldgSizeField: string | null;
+  bldgSizeUnitLabel: string | null;
+  hiddenLegendItems: Set<string>;
+  selectedLegendItems: Set<string>;
+  selectedParcels: Set<string>;
+  highlightColor: string;
+  legendSortField: 'name' | 'count' | null;
+  legendSortDirection: 'asc' | 'desc';
+  customColors: Map<string, string>;
+  is3DMode: boolean;
+};
+
+const layers = new Map<string, LayerState>();
+const layerOrder: string[] = [];
+let currentLayerId: string | null = null;
+let layerCounter = 0;
+
 
 let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
 let currentField: string | null = null;
@@ -825,6 +871,243 @@ let dragTarget: HTMLElement | null = null;
 let dragOffset = { x: 0, y: 0 };
 
 /* ---------------- FUNCTIONS ----------------- */
+
+function getCurrentLayer(): LayerState | null {
+  return currentLayerId ? layers.get(currentLayerId) ?? null : null;
+}
+
+function getCurrentLayerIds() {
+  const layer = getCurrentLayer();
+  if (!layer) return null;
+  return { sourceId: layer.sourceId, layerId: layer.layerId, errorLayerId: layer.errorLayerId };
+}
+
+function getCurrentSourceId() {
+  return getCurrentLayerIds()?.sourceId ?? null;
+}
+
+function createLayerState(name: string): LayerState {
+  layerCounter += 1;
+  const suffix = `layer-${layerCounter}`;
+  return {
+    id: suffix,
+    name,
+    sourceId: `${SOURCE_ID}-${suffix}`,
+    layerId: `${LAYER_ID}-${suffix}`,
+    errorLayerId: `${ERROR_LAYER_ID}-${suffix}`,
+    visible: true,
+    geojson: null,
+    field: null,
+    fieldType: null,
+    stats: null,
+    normalizationMode: 'asis',
+    colorMode: 'quantiles',
+    categoricalColorMode: 'random',
+    singleColorValue: '#3b82f6',
+    ramp: rampSelect?.value ?? 'Viridis',
+    colorDomain: null,
+    colorBreaks: null,
+    cachedExtrusionSettings: null,
+    chosenNumericFields: [],
+    chosenCategoricalFields: [],
+    landSizeField: null,
+    landSizeUnitLabel: null,
+    bldgSizeField: null,
+    bldgSizeUnitLabel: null,
+    hiddenLegendItems: new Set(),
+    selectedLegendItems: new Set(),
+    selectedParcels: new Set(),
+    highlightColor: '#FFFF00',
+    legendSortField: 'count',
+    legendSortDirection: 'desc',
+    customColors: new Map(),
+    is3DMode: false
+  };
+}
+
+function persistCurrentLayerState() {
+  const layer = getCurrentLayer();
+  if (!layer) return;
+  layer.geojson = currentGeoJSON;
+  layer.field = currentField;
+  layer.fieldType = currentFieldType;
+  layer.stats = currentStats;
+  layer.normalizationMode = normalizationMode;
+  layer.colorMode = colorMode;
+  layer.categoricalColorMode = categoricalColorMode;
+  layer.singleColorValue = singleColorValue;
+  layer.ramp = rampSelect?.value ?? layer.ramp;
+  layer.colorDomain = colorDomain;
+  layer.colorBreaks = colorBreaks;
+  layer.cachedExtrusionSettings = cachedExtrusionSettings;
+  layer.chosenNumericFields = [...chosenNumericFields];
+  layer.chosenCategoricalFields = [...chosenCategoricalFields];
+  layer.landSizeField = landSizeField;
+  layer.landSizeUnitLabel = landSizeUnitLabel;
+  layer.bldgSizeField = bldgSizeField;
+  layer.bldgSizeUnitLabel = bldgSizeUnitLabel;
+  layer.hiddenLegendItems = hiddenLegendItems;
+  layer.selectedLegendItems = selectedLegendItems;
+  layer.selectedParcels = selectedParcels;
+  layer.highlightColor = highlightColor;
+  layer.legendSortField = legendSortField;
+  layer.legendSortDirection = legendSortDirection;
+  layer.customColors = customColors;
+  layer.is3DMode = is3DMode;
+}
+
+function applyLayerState(layer: LayerState) {
+  currentGeoJSON = layer.geojson;
+  currentField = layer.field;
+  currentFieldType = layer.fieldType;
+  currentStats = layer.stats;
+  normalizationMode = layer.normalizationMode;
+  colorMode = layer.colorMode;
+  categoricalColorMode = layer.categoricalColorMode;
+  singleColorValue = layer.singleColorValue;
+  colorDomain = layer.colorDomain;
+  colorBreaks = layer.colorBreaks;
+  cachedExtrusionSettings = layer.cachedExtrusionSettings;
+  chosenNumericFields = [...layer.chosenNumericFields];
+  chosenCategoricalFields = [...layer.chosenCategoricalFields];
+  landSizeField = layer.landSizeField;
+  landSizeUnitLabel = layer.landSizeUnitLabel;
+  bldgSizeField = layer.bldgSizeField;
+  bldgSizeUnitLabel = layer.bldgSizeUnitLabel;
+  hiddenLegendItems = layer.hiddenLegendItems;
+  selectedLegendItems = layer.selectedLegendItems;
+  selectedParcels = layer.selectedParcels;
+  highlightColor = layer.highlightColor;
+  legendSortField = layer.legendSortField;
+  legendSortDirection = layer.legendSortDirection;
+  customColors = layer.customColors;
+  is3DMode = layer.is3DMode;
+
+  setSizeState(bldgSizeField, bldgSizeUnitLabel, landSizeField, landSizeUnitLabel);
+
+  if (fieldSelect) {
+    if (!currentGeoJSON) {
+      fieldSelect.replaceChildren(new Option('— load a file first —', ''));
+      fieldSelect.value = '';
+    } else {
+      const allAvailableFields = [
+        ...chosenNumericFields.filter(k => currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))),
+        ...chosenCategoricalFields.filter(k => currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k)))
+      ];
+      populateFieldDropdownFromList(allAvailableFields);
+      fieldSelect.value = currentField ?? '';
+    }
+  }
+
+  if (normAsIs && normLand && normBldg) {
+    normAsIs.checked = normalizationMode === 'asis';
+    normLand.checked = normalizationMode === 'perLand';
+    normBldg.checked = normalizationMode === 'perBuilding';
+  }
+
+  if (colorCont && colorQuant) {
+    colorCont.checked = colorMode === 'continuous';
+    colorQuant.checked = colorMode === 'quantiles';
+  }
+
+  document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(radio => {
+    radio.checked = radio.value === categoricalColorMode;
+  });
+
+  if (rampSelect && layer.ramp) {
+    rampSelect.value = layer.ramp;
+  }
+
+  if (colorPicker) {
+    colorPicker.value = singleColorValue;
+  }
+
+  enable3DCheckbox.checked = is3DMode;
+  updateFieldTypeUI();
+  update3DUI();
+  updateFloatingLegend();
+  updateSelectionControls();
+
+  if (map.getLayer(layer.layerId)) {
+    setLayerVisibility(layer, layer.visible);
+  }
+
+  if (selectionControlsPanel) {
+    const picker = selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement | null;
+    if (picker) picker.value = highlightColor;
+  }
+}
+
+function registerLayer(layer: LayerState) {
+  layers.set(layer.id, layer);
+  layerOrder.push(layer.id);
+  currentLayerId = layer.id;
+  applyLayerState(layer);
+  renderLayerList();
+}
+
+function setCurrentLayer(layerId: string) {
+  if (currentLayerId === layerId) return;
+  persistCurrentLayerState();
+  const layer = layers.get(layerId);
+  if (!layer) return;
+  currentLayerId = layerId;
+  applyLayerState(layer);
+  renderLayerList();
+  if (currentGeoJSON && currentField) {
+    applyExtrusionWithVisibility();
+  } else if (currentGeoJSON) {
+    applyGrayRendering();
+  }
+}
+
+function setLayerVisibility(layer: LayerState, visible: boolean) {
+  layer.visible = visible;
+  const visibility = visible ? 'visible' : 'none';
+  if (map.getLayer(layer.layerId)) {
+    map.setLayoutProperty(layer.layerId, 'visibility', visibility);
+  }
+  if (map.getLayer(layer.errorLayerId)) {
+    map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
+  }
+}
+
+function removeLayer(layerId: string) {
+  const layer = layers.get(layerId);
+  if (!layer) return;
+  if (map.getLayer(layer.layerId)) map.removeLayer(layer.layerId);
+  if (map.getLayer(layer.errorLayerId)) map.removeLayer(layer.errorLayerId);
+  if (map.getSource(layer.sourceId)) map.removeSource(layer.sourceId);
+  layers.delete(layerId);
+  const idx = layerOrder.indexOf(layerId);
+  if (idx >= 0) layerOrder.splice(idx, 1);
+
+  if (currentLayerId === layerId) {
+    currentLayerId = layerOrder.length ? layerOrder[layerOrder.length - 1] : null;
+    if (currentLayerId) {
+      applyLayerState(layers.get(currentLayerId)!);
+    } else {
+      currentGeoJSON = null;
+      currentField = null;
+      currentFieldType = null;
+      currentStats = null;
+      colorBreaks = null;
+      colorDomain = null;
+      customColors = new Map();
+      hiddenLegendItems = new Set();
+      selectedLegendItems = new Set();
+      selectedParcels = new Set();
+      highlightColor = '#FFFF00';
+      fieldSelect.replaceChildren(new Option('— load a file first —', ''));
+      updateFieldTypeUI();
+      updateFloatingLegend();
+      if (selectionControlsPanel) {
+        selectionControlsPanel.style.display = 'none';
+      }
+    }
+  }
+  renderLayerList();
+}
 
 // Window management functions
 function minimizeSettings() {
@@ -924,6 +1207,54 @@ function handleMouseUp() {
   document.body.style.userSelect = '';
 }
 
+function renderLayerList() {
+  if (!layerList) return;
+  layerList.replaceChildren();
+
+  if (layerOrder.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = 'No layers loaded yet.';
+    layerList.appendChild(empty);
+    return;
+  }
+
+  layerOrder.forEach(layerId => {
+    const layer = layers.get(layerId);
+    if (!layer) return;
+
+    const row = document.createElement('div');
+    row.className = `layer-row${layerId === currentLayerId ? ' current' : ''}`;
+
+    const visibilityToggle = document.createElement('input');
+    visibilityToggle.type = 'checkbox';
+    visibilityToggle.checked = layer.visible;
+    visibilityToggle.title = layer.visible ? 'Hide layer' : 'Show layer';
+    visibilityToggle.addEventListener('change', () => {
+      setLayerVisibility(layer, visibilityToggle.checked);
+      visibilityToggle.title = visibilityToggle.checked ? 'Hide layer' : 'Show layer';
+    });
+
+    const currentRadio = document.createElement('input');
+    currentRadio.type = 'radio';
+    currentRadio.name = 'currentLayer';
+    currentRadio.checked = layerId === currentLayerId;
+    currentRadio.title = 'Set as current layer';
+    currentRadio.addEventListener('change', () => {
+      if (currentRadio.checked) setCurrentLayer(layerId);
+    });
+
+    const nameButton = document.createElement('button');
+    nameButton.type = 'button';
+    nameButton.className = 'layer-name';
+    nameButton.textContent = layer.name || `Layer ${layerId}`;
+    nameButton.addEventListener('click', () => setCurrentLayer(layerId));
+
+    row.append(visibilityToggle, currentRadio, nameButton);
+    layerList.appendChild(row);
+  });
+}
+
 // Floating legend functions
 function hideFloatingLegend() {
   isLegendVisible = false;
@@ -952,6 +1283,7 @@ function clearLegendVisibility() {
     applyExtrusion();
   }
   updateMarkupLayer();
+  persistCurrentLayerState();
 }
 
 function updateFloatingLegend() {
@@ -1234,6 +1566,7 @@ function updateFloatingLegend() {
               legendSortDirection = 'asc';
             }
             updateFloatingLegend();
+            persistCurrentLayerState();
           };
 
           countHeader.onclick = () => {
@@ -1244,6 +1577,7 @@ function updateFloatingLegend() {
               legendSortDirection = 'asc';
             }
             updateFloatingLegend();
+            persistCurrentLayerState();
           };
 
           // Add hover effects
@@ -1457,6 +1791,8 @@ function updateCategoricalFloatingLegend() {
      `;
      
      checkbox.onchange = () => {
+       const sourceId = getCurrentSourceId();
+       if (!sourceId) return;
        if (checkbox.checked) {
          selectedLegendItems.add(category);
          // Add all parcels in this category to selection
@@ -1469,7 +1805,7 @@ function updateCategoricalFloatingLegend() {
                  const parcelId = getParcelId(feature);
                  selectedParcels.add(parcelId);
                  map.setFeatureState(
-                   { source: SOURCE_ID, id: feature.id },
+                   { source: sourceId, id: feature.id },
                    { selected: true }
                  );
                }
@@ -1488,7 +1824,7 @@ function updateCategoricalFloatingLegend() {
                  const parcelId = getParcelId(feature);
                  selectedParcels.delete(parcelId);
                  map.setFeatureState(
-                   { source: SOURCE_ID, id: feature.id },
+                   { source: sourceId, id: feature.id },
                    { selected: false }
                  );
                }
@@ -1713,6 +2049,8 @@ function updateNumericFloatingLegend() {
      `;
      
      checkbox.onchange = () => {
+       const sourceId = getCurrentSourceId();
+       if (!sourceId) return;
        if (checkbox.checked) {
          selectedLegendItems.add(rangeKey);
          // Add all parcels in this range to selection
@@ -1724,7 +2062,7 @@ function updateNumericFloatingLegend() {
                  const parcelId = getParcelId(feature);
                  selectedParcels.add(parcelId);
                  map.setFeatureState(
-                   { source: SOURCE_ID, id: feature.id },
+                   { source: sourceId, id: feature.id },
                    { selected: true }
                  );
                }
@@ -1742,7 +2080,7 @@ function updateNumericFloatingLegend() {
                  const parcelId = getParcelId(feature);
                  selectedParcels.delete(parcelId);
                  map.setFeatureState(
-                   { source: SOURCE_ID, id: feature.id },
+                   { source: sourceId, id: feature.id },
                    { selected: false }
                  );
                }
@@ -1840,6 +2178,8 @@ function openSwatchColorPicker(itemKey: string, currentColor: string, swatchElem
 
 function applyExtrusionWithCustomColors() {
   if (!currentGeoJSON || !currentField) return;
+  const ids = getCurrentLayerIds();
+  if (!ids) return;
   
   // If we have custom colors, we need to rebuild the color expression
   if (customColors.size > 0) {
@@ -1851,7 +2191,7 @@ function applyExtrusionWithCustomColors() {
       colorExpr = buildNumericColorExpression();
     }
     
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     
     // Apply height and opacity for numeric fields
     if (currentFieldType === 'numeric') {
@@ -1861,12 +2201,12 @@ function applyExtrusionWithCustomColors() {
       const valueExpr = buildValueExpression();
       const heightExpr: any = is3DMode ? ['*', valueExpr, multiplier * unitFactor] : 0;
       
-      map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
+      map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
     } else {
-      map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
+      map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
     }
     
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   } else {
     // No custom colors, use normal extrusion
     applyExtrusion();
@@ -1878,6 +2218,8 @@ function applyExtrusionWithCustomColors() {
 
 
 function applyVisibilityFilters() {
+  const ids = getCurrentLayerIds();
+  if (!ids) return;
   // Apply visibility filters if any items are hidden
   if (hiddenLegendItems.size > 0) {
     let filter: any[] = ['all'];
@@ -1925,11 +2267,11 @@ function applyVisibilityFilters() {
     
     // Apply the filter to the layer
     if (filter.length > 1) {
-      map.setFilter(LAYER_ID, filter as any);
+      map.setFilter(ids.layerId, filter as any);
     }
   } else {
     // Clear any filters
-    map.setFilter(LAYER_ID, null);
+    map.setFilter(ids.layerId, null);
   }
 }
 
@@ -2181,17 +2523,19 @@ function getParcelId(feature: any): string {
 }
 
 function toggleParcelSelection(feature: any) {
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   const parcelId = getParcelId(feature);
   if (selectedParcels.has(parcelId)) {
     selectedParcels.delete(parcelId);
     map.setFeatureState(
-      { source: SOURCE_ID, id: feature.id },
+      { source: sourceId, id: feature.id },
       { selected: false }
     );
   } else {
     selectedParcels.add(parcelId);
     map.setFeatureState(
-      { source: SOURCE_ID, id: feature.id },
+      { source: sourceId, id: feature.id },
       { selected: true }
     );
   }
@@ -2199,32 +2543,38 @@ function toggleParcelSelection(feature: any) {
 }
 
 function addParcelToSelection(feature: any) {
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   const parcelId = getParcelId(feature);
   selectedParcels.add(parcelId);
   map.setFeatureState(
-    { source: SOURCE_ID, id: feature.id },
+    { source: sourceId, id: feature.id },
     { selected: true }
   );
   updateSelectionControls();
 }
 
 function removeParcelFromSelection(feature: any) {
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   const parcelId = getParcelId(feature);
   selectedParcels.delete(parcelId);
   map.setFeatureState(
-    { source: SOURCE_ID, id: feature.id },
+    { source: sourceId, id: feature.id },
     { selected: false }
   );
   updateSelectionControls();
 }
 
 function clearAllSelections() {
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   // Clear all feature states
   if (currentGeoJSON) {
     for (const feature of currentGeoJSON.features) {
       if (feature.id !== undefined) {
         map.setFeatureState(
-          { source: SOURCE_ID, id: feature.id },
+          { source: sourceId, id: feature.id },
           { selected: false }
         );
       }
@@ -2330,6 +2680,7 @@ function createSelectionControlsPanel() {
     const target = e.target as HTMLInputElement;
     highlightColor = target.value;
     updateHighlightColors();
+    persistCurrentLayerState();
   });
 
   // Add to document
@@ -2344,10 +2695,12 @@ function createSelectionControlsPanel() {
 
 function updateHighlightColors() {
   // Update the fill color expression to include highlighting
+  const ids = getCurrentLayerIds();
+  if (!ids) return;
   if (currentFieldType === 'categorical') {
     // For categorical fields, rebuild the color expression with highlighting
     const colorExpr = buildCategoricalColorExpression();
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
   } else {
     applyExtrusion();
   }
@@ -2437,14 +2790,14 @@ function hideRenderingToast() {
   if (renderToastEl) renderToastEl.style.opacity = '0';
 }
 
-function awaitFirstRenderedFeature() {
+function awaitFirstRenderedFeature(layerId: string) {
   // poll one frame at a time; hide toast when the first extrusion is visible
   let tries = 0;
   const maxTries = 600; // ~10s at 60fps
   const tick = () => {
     tries++;
-    if (!map.getLayer(LAYER_ID)) { if (tries < maxTries) return requestAnimationFrame(tick); else return hideRenderingToast(); }
-    const feats = map.queryRenderedFeatures({ layers: [LAYER_ID] });
+    if (!map.getLayer(layerId)) { if (tries < maxTries) return requestAnimationFrame(tick); else return hideRenderingToast(); }
+    const feats = map.queryRenderedFeatures({ layers: [layerId] });
     if (feats && feats.length > 0) {
       hideRenderingToast();
     } else if (tries < maxTries) {
@@ -2855,6 +3208,13 @@ function setSizeState(bField: string | null, bUnit: string | null, lField: strin
   bldgSizeUnitLabel = bUnit || null;
   landSizeField = lField || null;
   landSizeUnitLabel = lUnit || null;
+  const activeLayer = getCurrentLayer();
+  if (activeLayer) {
+    activeLayer.bldgSizeField = bldgSizeField;
+    activeLayer.bldgSizeUnitLabel = bldgSizeUnitLabel;
+    activeLayer.landSizeField = landSizeField;
+    activeLayer.landSizeUnitLabel = landSizeUnitLabel;
+  }
   // enable/disable normalization radios
   normLand.disabled = !landSizeField;
   normBldg.disabled = !bldgSizeField;
@@ -2915,6 +3275,16 @@ async function loadSelectedColumns() {
 
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
+    const activeLayer = getCurrentLayer();
+    if (activeLayer) {
+      activeLayer.geojson = currentGeoJSON;
+      activeLayer.chosenNumericFields = [...chosenNumericFields];
+      activeLayer.chosenCategoricalFields = [...chosenCategoricalFields];
+      activeLayer.landSizeField = landSizeField;
+      activeLayer.landSizeUnitLabel = landSizeUnitLabel;
+      activeLayer.bldgSizeField = bldgSizeField;
+      activeLayer.bldgSizeUnitLabel = bldgSizeUnitLabel;
+    }
 
     // Check which fields actually exist in the data
     const availableNumeric = chosenNumericFields.filter(k => {
@@ -2942,6 +3312,7 @@ async function loadSelectedColumns() {
     applyGrayRendering();
 
     fitToData(currentGeoJSON);
+    persistCurrentLayerState();
   } catch (err: any) {
     console.error('GeoParquet load failed:', err);
     if (!cancelRequested) alert(`GeoParquet load failed: ${err?.message ?? err}`);
@@ -2951,12 +3322,12 @@ async function loadSelectedColumns() {
 }
 
 /* ---------------- Map helpers ---------------- */
-function ensureErrorLayer() {
-  if (map.getLayer(ERROR_LAYER_ID)) return;
+function ensureErrorLayer(layer: LayerState) {
+  if (map.getLayer(layer.errorLayerId)) return;
   map.addLayer({
-    id: ERROR_LAYER_ID,
+    id: layer.errorLayerId,
     type: 'line',
-    source: SOURCE_ID,
+    source: layer.sourceId,
     paint: {
       'line-color': '#ff3b30',          // red outline
       'line-width': 1.5,
@@ -2965,12 +3336,14 @@ function ensureErrorLayer() {
     }
   });
   // keep it above extrusions for visibility
-  try { map.moveLayer(ERROR_LAYER_ID); } catch {}
+  try { map.moveLayer(layer.errorLayerId); } catch {}
+  setLayerVisibility(layer, layer.visible);
 }
 
 function updateErrorLayer() {
-  if (!map.getSource(SOURCE_ID)) return;
-  ensureErrorLayer();
+  const layer = getCurrentLayer();
+  if (!layer || !map.getSource(layer.sourceId)) return;
+  ensureErrorLayer(layer);
 
   let filter: any = ['==', ['literal', 1], 2]; // matches nothing by default
 
@@ -2982,44 +3355,37 @@ function updateErrorLayer() {
     filter = ['<', ['to-number', ['get', bldgSizeField]], 0];
   }
 
-  map.setFilter(ERROR_LAYER_ID, filter);
+  map.setFilter(layer.errorLayerId, filter);
 }
 function clearData() {
-  if (map.getLayer(LAYER_ID)) map.removeLayer(LAYER_ID);
-  if (map.getSource(SOURCE_ID)) map.removeSource(SOURCE_ID);
+  if (currentLayerId) {
+    removeLayer(currentLayerId);
+  }
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
   if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
   if (map.getSource('markup-source')) map.removeSource('markup-source');
-  currentGeoJSON = null; currentField = null; currentStats = null;
-  fieldSelect.replaceChildren(new Option('— load a file first —', ''));
-  // Clear cached extrusion settings when data is cleared
-  cachedExtrusionSettings = null;
-  
-  // Clear selection state
-  selectedParcels.clear();
-  selectedLegendItems.clear();
-  if (selectionControlsPanel) {
-    selectionControlsPanel.style.display = 'none';
-  }
-  
   hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
+  const layer = getCurrentLayer();
+  if (!layer) return;
   showRenderingToast('Geometry is rendering');
-  const existing = map.getSource(SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  const existing = map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
   if (existing) {
     existing.setData(fc);
   } else {
-    map.addSource(SOURCE_ID, { type: 'geojson', data: fc });
-    addExtrusionLayer();
+    map.addSource(layer.sourceId, { type: 'geojson', data: fc });
+    addExtrusionLayer(layer);
   }
-  awaitFirstRenderedFeature();
+  awaitFirstRenderedFeature(layer.layerId);
 }
 
-function addExtrusionLayer() {
-  if (map.getLayer(LAYER_ID)) return;
+let keyHandlersInstalled = false;
+
+function addExtrusionLayer(layer: LayerState) {
+  if (map.getLayer(layer.layerId)) return;
   map.addLayer({
-    id: LAYER_ID, type: 'fill-extrusion', source: SOURCE_ID,
+    id: layer.layerId, type: 'fill-extrusion', source: layer.sourceId,
     paint: {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
@@ -3027,11 +3393,15 @@ function addExtrusionLayer() {
       'fill-extrusion-vertical-gradient': true
     }
   });
+  setLayerVisibility(layer, layer.visible);
 
   // NEW: parcel selection and inspection
-  map.on('click', LAYER_ID, (e) => {
+  map.on('click', layer.layerId, (e) => {
     const f = e.features?.[0];
     if (!f) return;
+    if (currentLayerId !== layer.id) {
+      setCurrentLayer(layer.id);
+    }
     
     // Handle info tool
     if (isInfoToolActive) {
@@ -3058,7 +3428,7 @@ function addExtrusionLayer() {
   });
   
   // Right-click to close popup
-  map.on('contextmenu', LAYER_ID, (e) => {
+  map.on('contextmenu', layer.layerId, (e) => {
     if (activePopup) {
       activePopup.remove();
       activePopup = null;
@@ -3066,39 +3436,42 @@ function addExtrusionLayer() {
     }
   });
   
-  map.on('mouseenter', LAYER_ID, () => { 
+  map.on('mouseenter', layer.layerId, () => { 
     if (isInfoToolActive) {
       map.getCanvas().style.cursor = 'pointer';
     }
   });
-  map.on('mouseleave', LAYER_ID, () => { 
+  map.on('mouseleave', layer.layerId, () => { 
     updateCursor();
   });
   
   // Keyboard event handling
-  document.addEventListener('keydown', (e) => {
-    // ESC key to close popup
-    if (e.key === 'Escape' && activePopup) {
-      activePopup.remove();
-      activePopup = null;
-      lastPicked = null;
-    }
-    
-    // Hotkey handling
-    const key = e.key.toLowerCase();
-    if (key === HOTKEYS.PAN) {
-      e.preventDefault();
-      activateTool('pan');
-    } else if (key === HOTKEYS.SELECT) {
-      e.preventDefault();
-      activateTool('select');
-    } else if (key === HOTKEYS.INFO) {
-      e.preventDefault();
-      activateTool('info');
-    }
-  });
+  if (!keyHandlersInstalled) {
+    document.addEventListener('keydown', (e) => {
+      // ESC key to close popup
+      if (e.key === 'Escape' && activePopup) {
+        activePopup.remove();
+        activePopup = null;
+        lastPicked = null;
+      }
+      
+      // Hotkey handling
+      const key = e.key.toLowerCase();
+      if (key === HOTKEYS.PAN) {
+        e.preventDefault();
+        activateTool('pan');
+      } else if (key === HOTKEYS.SELECT) {
+        e.preventDefault();
+        activateTool('select');
+      } else if (key === HOTKEYS.INFO) {
+        e.preventDefault();
+        activateTool('info');
+      }
+    });
+    keyHandlersInstalled = true;
+  }
   
-  ensureErrorLayer();
+  ensureErrorLayer(layer);
 }
 
 function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
@@ -3180,14 +3553,16 @@ function buildValueExpression(): Expression {
 
 function applyGrayRendering() {
   if (!currentGeoJSON) return;
+  const ids = getCurrentLayerIds();
+  if (!ids) return;
   
   // Apply gray color and no extrusion when no field is selected
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', '#888');
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
-  map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+  map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
+  map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+  map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   
   // Clear any filters
-  map.setFilter(LAYER_ID, null);
+  map.setFilter(ids.layerId, null);
   
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
@@ -3200,6 +3575,8 @@ function applyGrayRendering() {
 
 function applyExtrusion() {
   if (!currentGeoJSON) return;
+  const ids = getCurrentLayerIds();
+  if (!ids) return;
   
   // If no field is selected, apply gray rendering
   if (!currentField) {
@@ -3211,9 +3588,9 @@ function applyExtrusion() {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
     
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', 0);
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   } else {
     // For numeric fields, use the new color expression builder
     const colorExpr = buildNumericColorExpression();
@@ -3224,9 +3601,9 @@ function applyExtrusion() {
     const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
     const heightExpr: Expression = is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
 
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-color', colorExpr);
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-height', heightExpr);
-    map.setPaintProperty(LAYER_ID, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
+    map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   }
 
   // refresh which features are flagged as erroneous for current mode
@@ -3869,6 +4246,10 @@ fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
   if (!file) return;
 
+  persistCurrentLayerState();
+  const layerName = file.name.replace(/\.[^/.]+$/, '') || file.name;
+  registerLayer(createLayerState(layerName));
+
   revealUI();
   try {
     lastFile = file;
@@ -3945,6 +4326,7 @@ fileInput.addEventListener('change', async () => {
     if (val === 'continuous' || val === 'quantiles') {
       colorMode = val;
       scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+      persistCurrentLayerState();
     }
   })
 );
@@ -3970,6 +4352,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
       }
       
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);
+      persistCurrentLayerState();
     }
   })
 );
@@ -3987,6 +4370,7 @@ btnConfirmColorPicker.addEventListener('click', () => {
   if (currentFieldType === 'categorical' && categoricalColorMode === 'single') {
     scheduleUpdate('applyOnly', /*refreshLegend*/ true);
   }
+  persistCurrentLayerState();
 });
 
 // Update color picker when single color mode is selected
@@ -3996,6 +4380,7 @@ colorPicker.addEventListener('input', () => {
     singleColorValue = colorPicker.value;
     scheduleUpdate('applyOnly', /*refreshLegend*/ true);
   }
+  persistCurrentLayerState();
 });
 
 // Window management event listeners
@@ -4018,6 +4403,7 @@ rampSelect.addEventListener('change', () => {
   // Also update if using categorical color ramp
   const needsCategoricalUpdate = (currentFieldType === 'categorical' && categoricalColorMode === 'colorRamp');
   scheduleUpdate(needsRecompute || needsCategoricalUpdate ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
+  persistCurrentLayerState();
 });
 
 multInput.addEventListener('input', onMultInput);
@@ -4031,6 +4417,7 @@ multInput.addEventListener('change', () => {
       unit: unitsSelect.value
     };
   }
+  persistCurrentLayerState();
 });
 
 unitsSelect.addEventListener('change', () => {
@@ -4042,11 +4429,13 @@ unitsSelect.addEventListener('change', () => {
       unit: unitsSelect.value
     };
   }
+  persistCurrentLayerState();
 });
 
 opacityInput.addEventListener('input', () => {
   if (opacityOut) opacityOut.value = Number(opacityInput.value).toFixed(2);
   scheduleUpdate('applyOnly');
+  persistCurrentLayerState();
 });
 
 fieldSelect.addEventListener('change', () => {
@@ -4064,6 +4453,7 @@ fieldSelect.addEventListener('change', () => {
     if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
     if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
     if (map.getSource('markup-source')) map.removeSource('markup-source');
+    persistCurrentLayerState();
     return;
   }
   
@@ -4106,6 +4496,7 @@ fieldSelect.addEventListener('change', () => {
   if (map.getSource('markup-source')) map.removeSource('markup-source');
   
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+  persistCurrentLayerState();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
@@ -4115,6 +4506,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
     cachedExtrusionSettings = null;
     if (!currentGeoJSON || !currentField) return;
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    persistCurrentLayerState();
   });
 });
 
@@ -4136,6 +4528,7 @@ enable3DCheckbox.addEventListener('change', () => {
   if (currentGeoJSON && currentField) {
     applyExtrusion();
   }
+  persistCurrentLayerState();
 });
 
 /* ---------------- Main ---------------- */
@@ -4148,6 +4541,7 @@ updateFieldTypeUI();
 
 installWelcome();
 setQuality('high');
+renderLayerList();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
   if (!currentField || !currentGeoJSON || !currentStats) return [];
@@ -4785,6 +5179,8 @@ function selectParcelsInPolygon(polygon: number[][]) {
     console.log('No data loaded to select from');
     return;
   }
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   
   // Calculate bounding box for the lasso polygon
   const bbox = calculatePolygonBbox(polygon);
@@ -4810,7 +5206,7 @@ function selectParcelsInPolygon(polygon: number[][]) {
       
       // Set feature state for highlighting
       map.setFeatureState(
-        { source: SOURCE_ID, id: feature.id },
+        { source: sourceId, id: feature.id },
         { selected: true }
       );
       
@@ -4830,6 +5226,8 @@ function unselectParcelsInPolygon(polygon: number[][]) {
     console.log('No data loaded to unselect from');
     return;
   }
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
   
   // Calculate bounding box for the lasso polygon
   const bbox = calculatePolygonBbox(polygon);
@@ -4858,7 +5256,7 @@ function unselectParcelsInPolygon(polygon: number[][]) {
         
         // Set feature state to remove highlighting
         map.setFeatureState(
-          { source: SOURCE_ID, id: feature.id },
+          { source: sourceId, id: feature.id },
           { selected: false }
         );
         
@@ -5212,4 +5610,3 @@ function closePolygon() {
   // Restore cursor
   updateCursor();
 }
-

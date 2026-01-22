@@ -40,6 +40,43 @@
     #legend .swatch { width: 18px; height: 12px; border-radius: 2px; border: 1px solid #00000022; }
     .muted { color:#666; font-size:12px; }
 
+    .layer-list {
+      display: grid;
+      gap: 6px;
+      max-height: 200px;
+      overflow: auto;
+      padding-right: 4px;
+    }
+
+    .layer-row {
+      display: grid;
+      grid-template-columns: auto auto 1fr;
+      gap: 6px;
+      align-items: center;
+      padding: 4px 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .layer-row.current {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    }
+
+    .layer-name {
+      font-size: 12px;
+      color: #1f2937;
+      text-align: left;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
     .inline { display:grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
     input[type="range"] { width: 100%; margin: 0; }
     output { font-size: 12px; color:#333; min-width: 2.8ch; text-align: right; }
@@ -315,6 +352,13 @@
 		</button>
       </div>
       <div id="settingsContent" style="padding: 12px;">
+      <fieldset id="layerPanel">
+        <label>Layers</label>
+        <div id="layerList" class="layer-list"></div>
+      </fieldset>
+
+      <div class="divider"></div>
+
       <fieldset>
         <label for="file">Load a GeoParquet file (.parquet)</label>
         <input id="file" type="file" accept=".parquet,.parq" />

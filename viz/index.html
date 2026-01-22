@@ -98,10 +98,28 @@
     }
 
     .layer-add-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 6px;
+      display: flex;
       align-items: center;
+    }
+
+    .layer-add-row button {
+      width: 100%;
+    }
+
+    .data-store-button {
+      width: 100%;
+      text-align: left;
+      border: 1px solid #e5e7eb;
+      background: #fff;
+      border-radius: 8px;
+      padding: 6px 8px;
+      font-size: 12px;
+      color: #1f2937;
+      cursor: pointer;
+    }
+
+    .data-store-button:hover {
+      background: #f9fafb;
     }
 
     .inline { display:grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
@@ -379,22 +397,14 @@
 		</button>
       </div>
       <div id="settingsContent" style="padding: 12px;">
+      <div id="settingsTopActions" class="buttons" style="margin-bottom: 8px;">
+        <button id="btn-zoomto" type="button">Zoom to data</button>
+      </div>
       <fieldset id="layerPanel">
         <label>Layers</label>
         <div id="layerList" class="layer-list"></div>
         <div class="layer-add-row">
-          <select id="layerDataStoreSelect"></select>
           <button id="addLayerFromStore" type="button">Add layer</button>
-        </div>
-      </fieldset>
-
-      <div class="divider"></div>
-
-      <fieldset>
-        <label for="file">Load a GeoParquet file (.parquet)</label>
-        <input id="file" type="file" accept=".parquet,.parq" />
-        <div class="buttons">
-          <button id="btn-zoomto">Zoom to data</button>
         </div>
       </fieldset>
 
@@ -599,6 +609,29 @@
         <button id="btnSizeSkip">Skip</button>
         <button id="btnSizeOk">Continue</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Add layer -->
+  <div id="addLayerOverlay" class="overlay">
+    <div class="modal">
+      <h3>Add a layer</h3>
+      <div class="muted">Choose an existing data source or browse for a GeoParquet file.</div>
+
+      <div class="section-title">Existing data sources</div>
+      <div id="dataStoreList" class="layer-list"></div>
+
+      <div class="divider"></div>
+
+      <div class="buttons">
+        <button id="btnBrowseDataSource" type="button">Browse for file…</button>
+      </div>
+
+      <div class="footer">
+        <button id="btnCancelAddLayer" type="button">Cancel</button>
+      </div>
+
+      <input id="file" type="file" accept=".parquet,.parq" style="display:none" />
     </div>
   </div>
 

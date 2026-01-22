@@ -623,8 +623,8 @@ const extrusionOptions = document.getElementById('extrusionOptions') as HTMLFiel
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const layerList = document.getElementById('layerList') as HTMLDivElement;
-const layerDataStoreSelect = document.getElementById('layerDataStoreSelect') as HTMLSelectElement;
 const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
+const settingsTopActions = document.getElementById('settingsTopActions') as HTMLDivElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
 const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
@@ -645,9 +645,7 @@ const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
 if (addLayerFromStoreButton) {
   addLayerFromStoreButton.addEventListener('click', () => {
-    const selectedId = layerDataStoreSelect?.value;
-    if (!selectedId) return;
-    addLayerFromDataStore(selectedId);
+    openAddLayerModal();
   });
 }
 
@@ -659,9 +657,13 @@ const settingsContent = document.getElementById('settingsContent') as HTMLDivEle
 const btnQuality = document.createElement('button');
 btnQuality.id = 'btn-quality';
 btnQuality.textContent = 'Quality: Fast';
-btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;margin-bottom:8px;';
+btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;';
 btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
-settingsContent.prepend(btnQuality); // position at top of settings content
+if (settingsTopActions) {
+  settingsTopActions.prepend(btnQuality);
+} else {
+  settingsContent.prepend(btnQuality);
+}
 const btnMinimizeSettings = document.getElementById('btnMinimizeSettings') as HTMLButtonElement;
 
 // Toolbar elements
@@ -677,6 +679,7 @@ const legendContent = document.getElementById('legendContent') as HTMLDivElement
 const numericModalOverlay = document.getElementById('numericModalOverlay')!;
 const categoricalModalOverlay = document.getElementById('categoricalModalOverlay')!;
 const sizeOverlay = document.getElementById('sizeOverlay')!;
+const addLayerOverlay = document.getElementById('addLayerOverlay') as HTMLDivElement;
 const loadingOverlay = document.getElementById('loadingOverlay')!;
 
 // Numeric modal elements
@@ -710,6 +713,10 @@ const btnSizeOk = document.getElementById('btnSizeOk') as HTMLButtonElement;
 const progressEl = document.getElementById('progress')!;
 const progressBar = document.getElementById('progressBar') as HTMLDivElement;
 const progressMsg = document.getElementById('progressMsg') as HTMLDivElement;
+
+const dataStoreList = document.getElementById('dataStoreList') as HTMLDivElement;
+const btnBrowseDataSource = document.getElementById('btnBrowseDataSource') as HTMLButtonElement;
+const btnCancelAddLayer = document.getElementById('btnCancelAddLayer') as HTMLButtonElement;
 
 // Color scaling radios
 const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
@@ -935,29 +942,43 @@ function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore {
   };
 }
 
-function renderDataStoreOptions() {
-  if (!layerDataStoreSelect) return;
-  layerDataStoreSelect.replaceChildren();
+function renderDataStoreList() {
+  if (!dataStoreList) return;
+  dataStoreList.replaceChildren();
 
   if (dataStoreOrder.length === 0) {
-    const opt = new Option('No data loaded yet', '');
-    layerDataStoreSelect.appendChild(opt);
-    layerDataStoreSelect.disabled = true;
-    if (addLayerFromStoreButton) addLayerFromStoreButton.disabled = true;
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = 'No data sources loaded yet.';
+    dataStoreList.appendChild(empty);
     return;
   }
 
   dataStoreOrder.forEach(storeId => {
     const store = dataStores.get(storeId);
     if (!store) return;
-    const opt = new Option(store.name, storeId);
-    layerDataStoreSelect.appendChild(opt);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'data-store-button';
+    btn.textContent = store.name;
+    btn.addEventListener('click', () => {
+      if (addLayerFromDataStore(store.id)) {
+        closeAddLayerModal();
+      }
+    });
+    dataStoreList.appendChild(btn);
   });
-  layerDataStoreSelect.disabled = false;
-  if (addLayerFromStoreButton) addLayerFromStoreButton.disabled = false;
-  if (!layerDataStoreSelect.value && currentDataStoreId) {
-    layerDataStoreSelect.value = currentDataStoreId;
-  }
+}
+
+function openAddLayerModal() {
+  if (!addLayerOverlay) return;
+  renderDataStoreList();
+  addLayerOverlay.classList.add('show');
+}
+
+function closeAddLayerModal() {
+  if (!addLayerOverlay) return;
+  addLayerOverlay.classList.remove('show');
 }
 
 function createLayerState(name: string, dataStoreId: string): LayerState {
@@ -1110,7 +1131,7 @@ function applyLayerState(layer: LayerState) {
   update3DUI();
   updateFloatingLegend();
   updateSelectionControls();
-  renderDataStoreOptions();
+  renderDataStoreList();
 
   if (map.getLayer(layer.layerId)) {
     setLayerVisibility(layer, layer.visible);
@@ -1156,12 +1177,12 @@ function applyLayerOrderToMap() {
   }
 }
 
-function addLayerFromDataStore(storeId: string) {
+function addLayerFromDataStore(storeId: string): boolean {
   const store = dataStores.get(storeId);
-  if (!store) return;
+  if (!store) return false;
   if (!store.geojson) {
     alert('That data set is not ready yet. Finish loading it first.');
-    return;
+    return false;
   }
   persistCurrentLayerState();
   const layerName = `${store.name} (copy ${layerOrder.length + 1})`;
@@ -1177,6 +1198,7 @@ function addLayerFromDataStore(storeId: string) {
   addOrUpdateSource(layer.geojson);
   applyGrayRendering();
   applyLayerOrderToMap();
+  return true;
 }
 
 function setCurrentLayer(layerId: string) {
@@ -4416,6 +4438,22 @@ function updateFieldTypeUI() {
 
 /* ---------------- Events ---------------- */
 
+if (btnBrowseDataSource) {
+  btnBrowseDataSource.addEventListener('click', () => fileInput.click());
+}
+
+if (btnCancelAddLayer) {
+  btnCancelAddLayer.addEventListener('click', closeAddLayerModal);
+}
+
+if (addLayerOverlay) {
+  addLayerOverlay.addEventListener('click', (event) => {
+    if (event.target === addLayerOverlay) {
+      closeAddLayerModal();
+    }
+  });
+}
+
 // File load: read METADATA ONLY
 fileInput.addEventListener('change', async () => {
   const file = fileInput.files?.[0];
@@ -4426,8 +4464,9 @@ fileInput.addEventListener('change', async () => {
   dataStores.set(dataStore.id, dataStore);
   dataStoreOrder.push(dataStore.id);
   currentDataStoreId = dataStore.id;
-  renderDataStoreOptions();
+  renderDataStoreList();
   registerLayer(createLayerState(dataStore.name, dataStore.id));
+  closeAddLayerModal();
 
   revealUI();
   try {
@@ -4723,7 +4762,7 @@ updateFieldTypeUI();
 installWelcome();
 setQuality('high');
 renderLayerList();
-renderDataStoreOptions();
+renderDataStoreList();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
   if (!currentField || !currentGeoJSON || !currentStats) return [];

@@ -50,7 +50,7 @@
 
     .layer-row {
       display: grid;
-      grid-template-columns: auto auto 1fr;
+      grid-template-columns: auto auto 1fr auto auto auto;
       gap: 6px;
       align-items: center;
       padding: 4px 6px;
@@ -75,6 +75,33 @@
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
+    }
+
+    .layer-actions {
+      display: flex;
+      gap: 4px;
+    }
+
+    .layer-action-btn {
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 11px;
+      cursor: pointer;
+      color: #374151;
+    }
+
+    .layer-action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .layer-add-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      align-items: center;
     }
 
     .inline { display:grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center; }
@@ -355,6 +382,10 @@
       <fieldset id="layerPanel">
         <label>Layers</label>
         <div id="layerList" class="layer-list"></div>
+        <div class="layer-add-row">
+          <select id="layerDataStoreSelect"></select>
+          <button id="addLayerFromStore" type="button">Add layer</button>
+        </div>
       </fieldset>
 
       <div class="divider"></div>

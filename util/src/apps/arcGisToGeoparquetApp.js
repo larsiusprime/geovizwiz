@@ -60,6 +60,41 @@ export default async function startArcgisToGeoparquetApp() {
       line.textContent = msg;
       document.getElementById("log").appendChild(line);
     }
+
+    function buildFetchErrorMessage(err) {
+      const status = err?.status;
+      const bodyText = (err?.bodyText || '').toLowerCase();
+      const isAuthKeyword = /authentication required|unauthorized|login required|token required|invalid token/.test(bodyText);
+      const hasRefererKeyword = /referer|referrer/.test(bodyText);
+
+      if (status === 401 || isAuthKeyword) {
+        return 'This endpoint requires authentication. This app only fetches from unauthenticated endpoints, so it cannot access this service.';
+      }
+
+      if (status === 403 && hasRefererKeyword) {
+        return 'This endpoint requires a Referer header. This app runs entirely locally and cannot send custom Referer headers, so it cannot access this service.';
+      }
+
+      if (err?.isNetworkError || /failed to fetch/i.test(err?.message || '')) {
+        return 'Unable to reach this endpoint from the browser. The server may be blocking cross-origin requests or the network is unavailable.';
+      }
+
+      if (status === 404) {
+        return 'The endpoint was not found (404). Double-check the URL and try again.';
+      }
+
+      if (status) {
+        const statusLabel = err?.statusText ? ` ${err.statusText}` : '';
+        return `Request failed with status ${status}${statusLabel}.`;
+      }
+
+      return err?.message || 'An unexpected error occurred while contacting the service.';
+    }
+
+    function formatFetchError(err, context) {
+      const message = buildFetchErrorMessage(err);
+      return context ? `${context}: ${message}` : message;
+    }
     
     function buildLayerTree(layers = [], tables = [], serviceUrl) {
       const container = document.createElement('div');
@@ -158,7 +193,7 @@ export default async function startArcgisToGeoparquetApp() {
               const subtree = buildDirectoryTree(folderUrl, data);
               content.replaceWith(subtree);
             } catch (err) {
-              content.textContent = `Failed to load folder: ${err.message}`;
+              content.textContent = formatFetchError(err, 'Failed to load folder');
             }
           });
           li.appendChild(details);
@@ -206,7 +241,7 @@ export default async function startArcgisToGeoparquetApp() {
               content.replaceWith(tree);
               updateSelectedLayers();
             } catch (err) {
-              content.textContent = `Failed to load service: ${err.message}`;
+              content.textContent = formatFetchError(err, 'Failed to load service');
             }
           });
           li.appendChild(details);
@@ -322,7 +357,7 @@ export default async function startArcgisToGeoparquetApp() {
           setStep(2);
         } catch (err) {
           console.error(err);
-          endpointStatus.textContent = `Failed to load service: ${err.message}`;
+          endpointStatus.textContent = formatFetchError(err, 'Failed to load service');
         }
       });
     }
@@ -558,7 +593,7 @@ export default async function startArcgisToGeoparquetApp() {
             const preview = await fetchLayerPreview(item.serviceUrl, item.id);
             metadataContent.innerHTML = buildPreviewMarkup(preview);
           } catch (err) {
-            metadataContent.innerHTML = `<div class="muted">Failed to load metadata: ${err.message}</div>`;
+            metadataContent.innerHTML = `<div class="muted">${formatFetchError(err, 'Failed to load metadata')}</div>`;
           }
         });
         actions.appendChild(previewBtn);
@@ -619,7 +654,7 @@ export default async function startArcgisToGeoparquetApp() {
           });
         } catch (err) {
           console.error(err);
-          previewContent.innerHTML = `<div class="muted">Failed to load preview: ${err.message}</div>`;
+          previewContent.innerHTML = `<div class="muted">${formatFetchError(err, 'Failed to load preview')}</div>`;
         } finally {
           previewLayerBtn.disabled = false;
         }
@@ -641,9 +676,9 @@ export default async function startArcgisToGeoparquetApp() {
               await downloadLayerItem(item);
             } catch (err) {
               item.status = 'error';
-              item.error = err?.stack || err?.message || String(err)
+              item.error = formatFetchError(err);
               console.error("Export error:", err)
-              log(`Failed to download ${item.fullName}: ${err.message}`);
+              log(`Failed to download ${item.fullName}: ${buildFetchErrorMessage(err)}`);
               renderQueueList();
             }
             updateOverallProgress();

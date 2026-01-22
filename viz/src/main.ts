@@ -623,6 +623,8 @@ const extrusionOptions = document.getElementById('extrusionOptions') as HTMLFiel
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const layerList = document.getElementById('layerList') as HTMLDivElement;
+const layerDataStoreSelect = document.getElementById('layerDataStoreSelect') as HTMLSelectElement;
+const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
 const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
@@ -641,6 +643,13 @@ viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 // Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
+if (addLayerFromStoreButton) {
+  addLayerFromStoreButton.addEventListener('click', () => {
+    const selectedId = layerDataStoreSelect?.value;
+    if (!selectedId) return;
+    addLayerFromDataStore(selectedId);
+  });
+}
 
 // Window elements
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
@@ -747,6 +756,7 @@ const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ
 type LayerState = {
   id: string;
   name: string;
+  dataStoreId: string;
   sourceId: string;
   layerId: string;
   errorLayerId: string;
@@ -779,10 +789,29 @@ type LayerState = {
   is3DMode: boolean;
 };
 
+type DataStore = {
+  id: string;
+  name: string;
+  file: File;
+  asyncBuffer: AsyncBuffer;
+  geojson: GeoJSON.FeatureCollection | null;
+  numericFieldsFromSchema: string[];
+  categoricalFieldsFromSchema: string[];
+  chosenNumericFields: string[];
+  chosenCategoricalFields: string[];
+  landSizeField: string | null;
+  landSizeUnitLabel: string | null;
+  bldgSizeField: string | null;
+  bldgSizeUnitLabel: string | null;
+};
+
 const layers = new Map<string, LayerState>();
 const layerOrder: string[] = [];
 let currentLayerId: string | null = null;
 let layerCounter = 0;
+const dataStores = new Map<string, DataStore>();
+const dataStoreOrder: string[] = [];
+let currentDataStoreId: string | null = null;
 
 
 let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
@@ -886,12 +915,58 @@ function getCurrentSourceId() {
   return getCurrentLayerIds()?.sourceId ?? null;
 }
 
-function createLayerState(name: string): LayerState {
+function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore {
+  const id = `store-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const name = file.name.replace(/\.[^/.]+$/, '') || file.name;
+  return {
+    id,
+    name,
+    file,
+    asyncBuffer,
+    geojson: null,
+    numericFieldsFromSchema: [],
+    categoricalFieldsFromSchema: [],
+    chosenNumericFields: [],
+    chosenCategoricalFields: [],
+    landSizeField: null,
+    landSizeUnitLabel: null,
+    bldgSizeField: null,
+    bldgSizeUnitLabel: null
+  };
+}
+
+function renderDataStoreOptions() {
+  if (!layerDataStoreSelect) return;
+  layerDataStoreSelect.replaceChildren();
+
+  if (dataStoreOrder.length === 0) {
+    const opt = new Option('No data loaded yet', '');
+    layerDataStoreSelect.appendChild(opt);
+    layerDataStoreSelect.disabled = true;
+    if (addLayerFromStoreButton) addLayerFromStoreButton.disabled = true;
+    return;
+  }
+
+  dataStoreOrder.forEach(storeId => {
+    const store = dataStores.get(storeId);
+    if (!store) return;
+    const opt = new Option(store.name, storeId);
+    layerDataStoreSelect.appendChild(opt);
+  });
+  layerDataStoreSelect.disabled = false;
+  if (addLayerFromStoreButton) addLayerFromStoreButton.disabled = false;
+  if (!layerDataStoreSelect.value && currentDataStoreId) {
+    layerDataStoreSelect.value = currentDataStoreId;
+  }
+}
+
+function createLayerState(name: string, dataStoreId: string): LayerState {
   layerCounter += 1;
   const suffix = `layer-${layerCounter}`;
   return {
     id: suffix,
     name,
+    dataStoreId,
     sourceId: `${SOURCE_ID}-${suffix}`,
     layerId: `${LAYER_ID}-${suffix}`,
     errorLayerId: `${ERROR_LAYER_ID}-${suffix}`,
@@ -982,6 +1057,14 @@ function applyLayerState(layer: LayerState) {
   legendSortDirection = layer.legendSortDirection;
   customColors = layer.customColors;
   is3DMode = layer.is3DMode;
+  currentDataStoreId = layer.dataStoreId;
+  const store = dataStores.get(layer.dataStoreId);
+  if (store) {
+    lastFile = store.file;
+    lastAsyncBuffer = store.asyncBuffer;
+    lastNumericFieldsFromSchema = [...store.numericFieldsFromSchema];
+    lastCategoricalFieldsFromSchema = [...store.categoricalFieldsFromSchema];
+  }
 
   setSizeState(bldgSizeField, bldgSizeUnitLabel, landSizeField, landSizeUnitLabel);
 
@@ -1027,6 +1110,7 @@ function applyLayerState(layer: LayerState) {
   update3DUI();
   updateFloatingLegend();
   updateSelectionControls();
+  renderDataStoreOptions();
 
   if (map.getLayer(layer.layerId)) {
     setLayerVisibility(layer, layer.visible);
@@ -1040,10 +1124,59 @@ function applyLayerState(layer: LayerState) {
 
 function registerLayer(layer: LayerState) {
   layers.set(layer.id, layer);
-  layerOrder.push(layer.id);
+  layerOrder.unshift(layer.id);
   currentLayerId = layer.id;
   applyLayerState(layer);
+  applyLayerOrderToMap();
   renderLayerList();
+}
+
+function moveLayerInOrder(layerId: string, direction: 'up' | 'down') {
+  const index = layerOrder.indexOf(layerId);
+  if (index === -1) return;
+  const newIndex = direction === 'up' ? index - 1 : index + 1;
+  if (newIndex < 0 || newIndex >= layerOrder.length) return;
+  layerOrder.splice(index, 1);
+  layerOrder.splice(newIndex, 0, layerId);
+  applyLayerOrderToMap();
+  renderLayerList();
+}
+
+function applyLayerOrderToMap() {
+  for (let i = layerOrder.length - 1; i >= 0; i -= 1) {
+    const layerId = layerOrder[i];
+    const layer = layers.get(layerId);
+    if (!layer) continue;
+    if (map.getLayer(layer.layerId)) {
+      map.moveLayer(layer.layerId);
+    }
+    if (map.getLayer(layer.errorLayerId)) {
+      map.moveLayer(layer.errorLayerId);
+    }
+  }
+}
+
+function addLayerFromDataStore(storeId: string) {
+  const store = dataStores.get(storeId);
+  if (!store) return;
+  if (!store.geojson) {
+    alert('That data set is not ready yet. Finish loading it first.');
+    return;
+  }
+  persistCurrentLayerState();
+  const layerName = `${store.name} (copy ${layerOrder.length + 1})`;
+  const layer = createLayerState(layerName, store.id);
+  layer.geojson = store.geojson;
+  layer.chosenNumericFields = [...store.chosenNumericFields];
+  layer.chosenCategoricalFields = [...store.chosenCategoricalFields];
+  layer.landSizeField = store.landSizeField;
+  layer.landSizeUnitLabel = store.landSizeUnitLabel;
+  layer.bldgSizeField = store.bldgSizeField;
+  layer.bldgSizeUnitLabel = store.bldgSizeUnitLabel;
+  registerLayer(layer);
+  addOrUpdateSource(layer.geojson);
+  applyGrayRendering();
+  applyLayerOrderToMap();
 }
 
 function setCurrentLayer(layerId: string) {
@@ -1083,7 +1216,7 @@ function removeLayer(layerId: string) {
   if (idx >= 0) layerOrder.splice(idx, 1);
 
   if (currentLayerId === layerId) {
-    currentLayerId = layerOrder.length ? layerOrder[layerOrder.length - 1] : null;
+    currentLayerId = layerOrder.length ? layerOrder[0] : null;
     if (currentLayerId) {
       applyLayerState(layers.get(currentLayerId)!);
     } else {
@@ -1107,6 +1240,7 @@ function removeLayer(layerId: string) {
     }
   }
   renderLayerList();
+  applyLayerOrderToMap();
 }
 
 // Window management functions
@@ -1250,7 +1384,31 @@ function renderLayerList() {
     nameButton.textContent = layer.name || `Layer ${layerId}`;
     nameButton.addEventListener('click', () => setCurrentLayer(layerId));
 
-    row.append(visibilityToggle, currentRadio, nameButton);
+    const moveUpBtn = document.createElement('button');
+    moveUpBtn.type = 'button';
+    moveUpBtn.className = 'layer-action-btn';
+    moveUpBtn.textContent = 'Up';
+    moveUpBtn.disabled = layerOrder.indexOf(layerId) === 0;
+    moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
+
+    const moveDownBtn = document.createElement('button');
+    moveDownBtn.type = 'button';
+    moveDownBtn.className = 'layer-action-btn';
+    moveDownBtn.textContent = 'Down';
+    moveDownBtn.disabled = layerOrder.indexOf(layerId) === layerOrder.length - 1;
+    moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'layer-action-btn';
+    deleteBtn.textContent = 'Delete';
+    deleteBtn.addEventListener('click', () => {
+      if (!confirm(`Delete layer "${layer.name}"?`)) return;
+      removeLayer(layerId);
+      applyLayerOrderToMap();
+    });
+
+    row.append(visibilityToggle, currentRadio, nameButton, moveUpBtn, moveDownBtn, deleteBtn);
     layerList.appendChild(row);
   });
 }
@@ -3215,6 +3373,13 @@ function setSizeState(bField: string | null, bUnit: string | null, lField: strin
     activeLayer.landSizeField = landSizeField;
     activeLayer.landSizeUnitLabel = landSizeUnitLabel;
   }
+  const activeStore = activeLayer ? dataStores.get(activeLayer.dataStoreId) : null;
+  if (activeStore) {
+    activeStore.bldgSizeField = bldgSizeField;
+    activeStore.bldgSizeUnitLabel = bldgSizeUnitLabel;
+    activeStore.landSizeField = landSizeField;
+    activeStore.landSizeUnitLabel = landSizeUnitLabel;
+  }
   // enable/disable normalization radios
   normLand.disabled = !landSizeField;
   normBldg.disabled = !bldgSizeField;
@@ -3284,6 +3449,16 @@ async function loadSelectedColumns() {
       activeLayer.landSizeUnitLabel = landSizeUnitLabel;
       activeLayer.bldgSizeField = bldgSizeField;
       activeLayer.bldgSizeUnitLabel = bldgSizeUnitLabel;
+    }
+    const activeStore = activeLayer ? dataStores.get(activeLayer.dataStoreId) : null;
+    if (activeStore) {
+      activeStore.geojson = currentGeoJSON;
+      activeStore.chosenNumericFields = [...chosenNumericFields];
+      activeStore.chosenCategoricalFields = [...chosenCategoricalFields];
+      activeStore.landSizeField = landSizeField;
+      activeStore.landSizeUnitLabel = landSizeUnitLabel;
+      activeStore.bldgSizeField = bldgSizeField;
+      activeStore.bldgSizeUnitLabel = bldgSizeUnitLabel;
     }
 
     // Check which fields actually exist in the data
@@ -4247,13 +4422,17 @@ fileInput.addEventListener('change', async () => {
   if (!file) return;
 
   persistCurrentLayerState();
-  const layerName = file.name.replace(/\.[^/.]+$/, '') || file.name;
-  registerLayer(createLayerState(layerName));
+  const dataStore = createDataStore(file, fileToAsyncBuffer(file));
+  dataStores.set(dataStore.id, dataStore);
+  dataStoreOrder.push(dataStore.id);
+  currentDataStoreId = dataStore.id;
+  renderDataStoreOptions();
+  registerLayer(createLayerState(dataStore.name, dataStore.id));
 
   revealUI();
   try {
-    lastFile = file;
-    lastAsyncBuffer = fileToAsyncBuffer(file);
+    lastFile = dataStore.file;
+    lastAsyncBuffer = dataStore.asyncBuffer;
 
     const md = await parquetMetadataAsync(lastAsyncBuffer);
     const numRows = Number(md.num_rows ?? 0);
@@ -4295,6 +4474,8 @@ fileInput.addEventListener('change', async () => {
 
     lastNumericFieldsFromSchema = numeric.sort();
     lastCategoricalFieldsFromSchema = categorical.sort();
+    dataStore.numericFieldsFromSchema = [...lastNumericFieldsFromSchema];
+    dataStore.categoricalFieldsFromSchema = [...lastCategoricalFieldsFromSchema];
 
     // Show numeric fields modal first, then categorical if needed
     if (lastNumericFieldsFromSchema.length > 0) {
@@ -4542,6 +4723,7 @@ updateFieldTypeUI();
 installWelcome();
 setQuality('high');
 renderLayerList();
+renderDataStoreOptions();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
   if (!currentField || !currentGeoJSON || !currentStats) return [];

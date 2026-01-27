@@ -1627,6 +1627,99 @@ function updateFloatingLegend() {
     updateFloatingLegend();
     applyExtrusionWithVisibility();
   };
+
+  const getLegendCategories = () => {
+    const categories = new Set<string>();
+    if (!currentGeoJSON) return categories;
+    for (const feature of currentGeoJSON.features) {
+      const value = feature.properties?.[currentField!];
+      if (value != null && value !== '' && value !== undefined) {
+        categories.add(String(value));
+      }
+    }
+    return categories;
+  };
+
+  const getLegendRanges = () => {
+    const rangeBounds: { min: number; max: number; key: string }[] = [];
+    if (!currentStats) return rangeBounds;
+    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+      const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+      for (let i = 0; i < breaks.length - 1; i++) {
+        rangeBounds.push({ min: breaks[i], max: breaks[i + 1], key: `range_${i}` });
+      }
+    } else {
+      const min = currentStats.min;
+      const max = currentStats.max;
+      const step = (max - min) / 10;
+      for (let i = 0; i < 10; i++) {
+        rangeBounds.push({
+          min: min + (step * i),
+          max: i === 9 ? max : min + (step * (i + 1)),
+          key: `range_${i}`
+        });
+      }
+    }
+    return rangeBounds;
+  };
+
+  const applyCategorySelection = (category: string, shouldSelect: boolean, sourceId: string) => {
+    if (shouldSelect) {
+      selectedLegendItems.add(category);
+    } else {
+      selectedLegendItems.delete(category);
+    }
+    if (!currentGeoJSON) return;
+    for (const feature of currentGeoJSON.features) {
+      const value = feature.properties?.[currentField!];
+      if (value != null && value !== '' && value !== undefined) {
+        const featureCategory = String(value);
+        if (featureCategory === category && feature.id !== undefined) {
+          const parcelId = getParcelId(feature);
+          if (shouldSelect) {
+            selectedParcels.add(parcelId);
+          } else {
+            selectedParcels.delete(parcelId);
+          }
+          map.setFeatureState(
+            { source: sourceId, id: feature.id },
+            { selected: shouldSelect }
+          );
+        }
+      }
+    }
+  };
+
+  const applyRangeSelection = (
+    rangeKey: string,
+    range: { min: number; max: number },
+    shouldSelect: boolean,
+    sourceId: string
+  ) => {
+    if (shouldSelect) {
+      selectedLegendItems.add(rangeKey);
+    } else {
+      selectedLegendItems.delete(rangeKey);
+    }
+    if (!currentGeoJSON) return;
+    for (const feature of currentGeoJSON.features) {
+      const value = Number(feature.properties?.[currentField!]);
+      if (Number.isFinite(value) && feature.id !== undefined) {
+        if (value >= range.min && value <= range.max) {
+          const parcelId = getParcelId(feature);
+          if (shouldSelect) {
+            selectedParcels.add(parcelId);
+          } else {
+            selectedParcels.delete(parcelId);
+          }
+          map.setFeatureState(
+            { source: sourceId, id: feature.id },
+            { selected: shouldSelect }
+          );
+        }
+      }
+    }
+  };
   
   // Checkbox toggle all
   const checkboxAll = document.createElement('input');
@@ -1638,58 +1731,27 @@ function updateFloatingLegend() {
   
   // Set initial state based on current selections
   if (currentFieldType === 'categorical') {
-    const categories = new Set<string>();
-    for (const feature of currentGeoJSON!.features) {
-      const value = feature.properties?.[currentField!];
-      if (value != null && value !== '' && value !== undefined) {
-        categories.add(String(value));
-      }
-    }
+    const categories = getLegendCategories();
     checkboxAll.checked = categories.size > 0 && Array.from(categories).every(cat => selectedLegendItems.has(cat));
   } else {
-    const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length 
-      ? colorBreaks.length + 1 
+    const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length
+      ? colorBreaks.length + 1
       : 10;
     checkboxAll.checked = ranges > 0 && Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => selectedLegendItems.has(rangeKey));
   }
   
   checkboxAll.onchange = () => {
+    const sourceId = getCurrentSourceId();
+    if (!sourceId) return;
     if (currentFieldType === 'categorical') {
-      // Toggle all categorical items
-      const categories = new Set<string>();
-      for (const feature of currentGeoJSON!.features) {
-        const value = feature.properties?.[currentField!];
-        if (value != null && value !== '' && value !== undefined) {
-          categories.add(String(value));
-        }
-      }
-      
-      if (checkboxAll.checked) {
-        // Select all
-        categories.forEach(cat => selectedLegendItems.add(cat));
-      } else {
-        // Deselect all
-        categories.forEach(cat => selectedLegendItems.delete(cat));
-      }
+      const categories = getLegendCategories();
+      categories.forEach(category => applyCategorySelection(category, checkboxAll.checked, sourceId));
     } else {
-      // Toggle all numeric ranges
-      const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length 
-        ? colorBreaks.length + 1 
-        : 10;
-      
-      if (checkboxAll.checked) {
-        // Select all
-        for (let i = 0; i < ranges; i++) {
-          selectedLegendItems.add(`range_${i}`);
-        }
-      } else {
-        // Deselect all
-        for (let i = 0; i < ranges; i++) {
-          selectedLegendItems.delete(`range_${i}`);
-        }
-      }
+      const ranges = getLegendRanges();
+      ranges.forEach(range => applyRangeSelection(range.key, range, checkboxAll.checked, sourceId));
     }
     
+    updateSelectionControls();
     updateFloatingLegend(); // Refresh to update checkbox states
   };
   
@@ -1971,45 +2033,7 @@ function updateCategoricalFloatingLegend() {
      checkbox.onchange = () => {
        const sourceId = getCurrentSourceId();
        if (!sourceId) return;
-       if (checkbox.checked) {
-         selectedLegendItems.add(category);
-         // Add all parcels in this category to selection
-         if (currentGeoJSON) {
-           for (const feature of currentGeoJSON.features) {
-             const value = feature.properties?.[currentField!];
-             if (value != null && value !== '' && value !== undefined) {
-               const featureCategory = String(value);
-               if (featureCategory === category && feature.id !== undefined) {
-                 const parcelId = getParcelId(feature);
-                 selectedParcels.add(parcelId);
-                 map.setFeatureState(
-                   { source: sourceId, id: feature.id },
-                   { selected: true }
-                 );
-               }
-             }
-           }
-         }
-       } else {
-         selectedLegendItems.delete(category);
-         // Remove all parcels in this category from selection
-         if (currentGeoJSON) {
-           for (const feature of currentGeoJSON.features) {
-             const value = feature.properties?.[currentField!];
-             if (value != null && value !== '' && value !== undefined) {
-               const featureCategory = String(value);
-               if (featureCategory === category && feature.id !== undefined) {
-                 const parcelId = getParcelId(feature);
-                 selectedParcels.delete(parcelId);
-                 map.setFeatureState(
-                   { source: sourceId, id: feature.id },
-                   { selected: false }
-                 );
-               }
-             }
-           }
-         }
-       }
+       applyCategorySelection(category, checkbox.checked, sourceId);
        updateSelectionControls();
        updateFloatingLegend(); // Refresh to update header checkbox state
      };
@@ -2229,43 +2253,7 @@ function updateNumericFloatingLegend() {
      checkbox.onchange = () => {
        const sourceId = getCurrentSourceId();
        if (!sourceId) return;
-       if (checkbox.checked) {
-         selectedLegendItems.add(rangeKey);
-         // Add all parcels in this range to selection
-         if (currentGeoJSON) {
-           for (const feature of currentGeoJSON.features) {
-             const value = Number(feature.properties?.[currentField!]);
-             if (Number.isFinite(value)) {
-               if (value >= range.min && value <= range.max && feature.id !== undefined) {
-                 const parcelId = getParcelId(feature);
-                 selectedParcels.add(parcelId);
-                 map.setFeatureState(
-                   { source: sourceId, id: feature.id },
-                   { selected: true }
-                 );
-               }
-             }
-           }
-         }
-       } else {
-         selectedLegendItems.delete(rangeKey);
-         // Remove all parcels in this range from selection
-         if (currentGeoJSON) {
-           for (const feature of currentGeoJSON.features) {
-             const value = Number(feature.properties?.[currentField!]);
-             if (Number.isFinite(value)) {
-               if (value >= range.min && value <= range.max && feature.id !== undefined) {
-                 const parcelId = getParcelId(feature);
-                 selectedParcels.delete(parcelId);
-                 map.setFeatureState(
-                   { source: sourceId, id: feature.id },
-                   { selected: false }
-                 );
-               }
-             }
-           }
-         }
-       }
+       applyRangeSelection(rangeKey, range, checkbox.checked, sourceId);
        updateSelectionControls();
        updateFloatingLegend(); // Refresh to update header checkbox state
      };

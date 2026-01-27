@@ -1462,7 +1462,6 @@ function clearLegendVisibility() {
   if (currentGeoJSON && currentField) {
     applyExtrusion();
   }
-  updateMarkupLayer();
   persistCurrentLayerState();
 }
 
@@ -1691,7 +1690,6 @@ function updateFloatingLegend() {
       }
     }
     
-    updateMarkupLayer();
     updateFloatingLegend(); // Refresh to update checkbox states
   };
   
@@ -2394,9 +2392,6 @@ function applyExtrusionWithCustomColors() {
 }
 
 
-
-
-
 function applyVisibilityFilters() {
   const ids = getCurrentLayerIds();
   if (!ids) return;
@@ -2465,7 +2460,6 @@ function applyExtrusionWithVisibility() {
     applyExtrusion();
   }
   applyVisibilityFilters();
-  updateMarkupLayer();
 }
 
 
@@ -2565,136 +2559,7 @@ function minimalBoundingPolygon(
     properties: { algorithm: 'monotone_chain' }
   };
 }
-
-
-
-function updateMarkupLayer() {
-  // DISABLED: Old bounding polygon system
-  // The new parcel selection system uses feature state highlighting instead
-  return;
   
-  /* Original code commented out:
-  if (!currentGeoJSON) return;
-  
-  // Remove existing markup layers if they exist
-  if (map.getLayer('markup-layer')) {
-    map.removeLayer('markup-layer');
-  }
-  if (map.getLayer('markup-layer-outline')) {
-    map.removeLayer('markup-layer-outline');
-  }
-  if (map.getSource('markup-source')) {
-    map.removeSource('markup-source');
-  }
-  
-  // If no items are selected, don't show anything
-  if (selectedLegendItems.size === 0) return;
-  
-  // Collect all features that are selected
-  const selectedFeatures: GeoJSON.Feature[] = [];
-  
-  if (currentFieldType === 'categorical') {
-    // For categorical fields, collect features with selected categories
-    for (const feature of currentGeoJSON.features) {
-      const value = feature.properties?.[currentField!];
-      if (value != null && value !== '' && value !== undefined) {
-        const category = String(value);
-        if (selectedLegendItems.has(category)) {
-          selectedFeatures.push(feature);
-        }
-      }
-    }
-  } else {
-    // For numeric fields, collect features in selected ranges
-    if (!currentStats) return;
-    
-    const ranges: { min: number; max: number }[] = [];
-    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-      const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
-      for (let i = 0; i < breaks.length - 1; i++) {
-        ranges.push({ min: breaks[i], max: breaks[i + 1] });
-      }
-    } else {
-      const min = currentStats.min;
-      const max = currentStats.max;
-      const step = (max - min) / 10;
-      for (let i = 0; i < 10; i++) {
-        ranges.push({
-          min: min + (step * i),
-          max: i === 9 ? max : min + (step * (i + 1))
-        });
-      }
-    }
-    
-    // Check each feature against selected ranges
-    for (const feature of currentGeoJSON.features) {
-      const value = Number(feature.properties?.[currentField!]);
-      if (Number.isFinite(value)) {
-        for (let i = 0; i < ranges.length; i++) {
-          const rangeKey = `range_${i}`;
-          if (selectedLegendItems.has(rangeKey)) {
-            const range = ranges[i];
-            if (value >= range.min && value <= range.max) {
-              selectedFeatures.push(feature);
-              break; // Only add once per feature
-            }
-          }
-        }
-      }
-    }
-  }
-  
-  // If no features are selected, don't show bounding box
-  if (selectedFeatures.length === 0) {
-    return;
-  } 
-  
-  // Filter features to only include Polygon and MultiPolygon geometries
-  const polygonFeatures = selectedFeatures.filter(feature => 
-    feature.geometry?.type === 'Polygon' || feature.geometry?.type === 'MultiPolygon'
-  ) as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>[];
-  
-  // If no polygon features, don't show bounding box
-  if (polygonFeatures.length === 0) {
-    return;
-  }
-  
-  const boundingBox: GeoJSON.Feature = minimalBoundingPolygon(polygonFeatures);
-  
-  // Add markup source and layer
-  map.addSource('markup-source', {
-    type: 'geojson',
-    data: {
-      type: 'FeatureCollection',
-      features: [boundingBox]
-    }
-  });
-  
-  // Add black outline layer first (so it appears behind the yellow line)
-  map.addLayer({
-    id: 'markup-layer-outline',
-    type: 'line',
-    source: 'markup-source',
-    paint: {
-      'line-color': '#000000', // Black outline
-      'line-width': 5, // Slightly wider than the yellow line
-      'line-opacity': 1.0
-    }
-  });
-  
-  // Add yellow line layer on top
-  map.addLayer({
-    id: 'markup-layer',
-    type: 'line',
-    source: 'markup-source',
-    paint: {
-      'line-color': '#FFED00', // Yellow color
-      'line-width': 3,
-      'line-opacity': 1.0
-    }
-  });
-  */
-}
 
 // New parcel selection system functions
 function getParcelId(feature: any): string {

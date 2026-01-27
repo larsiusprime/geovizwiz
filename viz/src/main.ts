@@ -2408,7 +2408,7 @@ function applyVisibilityFilters() {
       // Hide specific categories
       const hiddenCategories = Array.from(hiddenLegendItems);
       if (hiddenCategories.length > 0) {
-        filter.push(['!', ['in', ['get', currentField], ['literal', hiddenCategories]]]);
+        filter.push(['!', ['in', ['to-string', ['get', currentField]], ['literal', hiddenCategories]]]);
       }
     } else {
       // For numeric fields, hide specific ranges

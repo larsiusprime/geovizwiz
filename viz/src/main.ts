@@ -722,6 +722,28 @@ const settingsContent = document.getElementById('settingsContent') as HTMLDivEle
 const paintControlsEl = document.getElementById('paintControls') as HTMLDivElement;
 const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 
+const EYE_ICON_OPEN = './src/svg/eye.svg';
+const EYE_ICON_CLOSED = './src/svg/eye_closed.svg';
+
+function setEyeButtonIcon(button: HTMLButtonElement, isHidden: boolean) {
+  const img = button.querySelector('img');
+  if (!img) return;
+  img.src = isHidden ? EYE_ICON_CLOSED : EYE_ICON_OPEN;
+  img.alt = isHidden ? 'Hidden' : 'Visible';
+}
+
+function createEyeButton(isHidden: boolean, title: string) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'eye-button';
+  button.title = title;
+  const img = document.createElement('img');
+  img.src = isHidden ? EYE_ICON_CLOSED : EYE_ICON_OPEN;
+  img.alt = isHidden ? 'Hidden' : 'Visible';
+  button.appendChild(img);
+  return button;
+}
+
 // Quality button (create after elements are declared)
 const btnQuality = document.createElement('button');
 btnQuality.id = 'btn-quality';
@@ -955,7 +977,7 @@ type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
 // Window state
 let isSettingsMinimized = false;
-let isPaintMinimized = true;
+let isPaintMinimized = false;
 let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
@@ -1352,23 +1374,36 @@ function showSettings() {
   isSettingsMinimized = false;
   settingsContent.style.display = 'block';
   controlsEl.style.display = 'grid';
+  positionPaintPanel();
   
   // Update toolbar button states
   updateToolbarButtonStates();
+}
+
+function positionPaintPanel() {
+  if (!controlsEl || !paintControlsEl) return;
+  if (paintControlsEl.dataset.userPositioned === 'true') return;
+  const rect = controlsEl.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  paintControlsEl.style.left = `${rect.left}px`;
+  paintControlsEl.style.top = `${rect.bottom + gap}px`;
+  paintControlsEl.style.transform = 'none';
 }
 
 function minimizePaint() {
   isPaintMinimized = true;
   paintContent.style.display = 'none';
   paintControlsEl.style.display = 'none';
-  updatePaintButtonState();
+  updateToolbarButtonStates();
 }
 
 function showPaint() {
   isPaintMinimized = false;
   paintContent.style.display = 'grid';
   paintControlsEl.style.display = 'grid';
-  updatePaintButtonState();
+  positionPaintPanel();
+  updateToolbarButtonStates();
 }
 
 function togglePaint() {
@@ -1382,8 +1417,10 @@ function togglePaint() {
 function updatePaintButtonState() {
   if (!btnPaintMenu) return;
   if (isPaintMinimized) {
+    btnPaintMenu.classList.add('inactive');
     btnPaintMenu.classList.remove('active');
   } else {
+    btnPaintMenu.classList.remove('inactive');
     btnPaintMenu.classList.add('active');
   }
 }
@@ -1427,6 +1464,7 @@ function makeDraggable(element: HTMLElement) {
   header.addEventListener('mousedown', (e) => {
     isDragging = true;
     dragTarget = element;
+    element.dataset.userPositioned = 'true';
     const rect = element.getBoundingClientRect();
     dragOffset.x = e.clientX - rect.left;
     dragOffset.y = e.clientY - rect.top;
@@ -1503,13 +1541,12 @@ function renderLayerList() {
     const row = document.createElement('div');
     row.className = `layer-row${layerId === currentLayerId ? ' current' : ''}`;
 
-    const visibilityToggle = document.createElement('input');
-    visibilityToggle.type = 'checkbox';
-    visibilityToggle.checked = layer.visible;
-    visibilityToggle.title = layer.visible ? 'Hide layer' : 'Show layer';
-    visibilityToggle.addEventListener('change', () => {
-      setLayerVisibility(layer, visibilityToggle.checked);
-      visibilityToggle.title = visibilityToggle.checked ? 'Hide layer' : 'Show layer';
+    const visibilityToggle = createEyeButton(!layer.visible, layer.visible ? 'Hide layer' : 'Show layer');
+    visibilityToggle.addEventListener('click', () => {
+      const nextVisible = !layer.visible;
+      setLayerVisibility(layer, nextVisible);
+      visibilityToggle.title = nextVisible ? 'Hide layer' : 'Show layer';
+      setEyeButtonIcon(visibilityToggle, !nextVisible);
     });
 
     const currentRadio = document.createElement('input');
@@ -1530,21 +1567,24 @@ function renderLayerList() {
     const moveUpBtn = document.createElement('button');
     moveUpBtn.type = 'button';
     moveUpBtn.className = 'layer-action-btn';
-    moveUpBtn.textContent = 'Up';
+    moveUpBtn.textContent = '🔼';
+    moveUpBtn.title = 'Move layer up';
     moveUpBtn.disabled = layerOrder.indexOf(layerId) === 0;
     moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
 
     const moveDownBtn = document.createElement('button');
     moveDownBtn.type = 'button';
     moveDownBtn.className = 'layer-action-btn';
-    moveDownBtn.textContent = 'Down';
+    moveDownBtn.textContent = '🔽';
+    moveDownBtn.title = 'Move layer down';
     moveDownBtn.disabled = layerOrder.indexOf(layerId) === layerOrder.length - 1;
     moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
 
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'layer-action-btn';
-    deleteBtn.textContent = 'Delete';
+    deleteBtn.textContent = '❌';
+    deleteBtn.title = 'Delete layer';
     deleteBtn.addEventListener('click', () => {
       if (!confirm(`Delete layer "${layer.name}"?`)) return;
       removeLayer(layerId);
@@ -1696,18 +1736,31 @@ function updateFloatingLegend() {
     font-weight: 600;
   `;
   
+  function getLegendCategories() {
+    const categories = new Set<string>();
+    if (!currentGeoJSON) return categories;
+    for (const feature of currentGeoJSON.features) {
+      const value = feature.properties?.[currentField!];
+      if (value != null && value !== '' && value !== undefined) {
+        categories.add(String(value));
+      }
+    }
+    return categories;
+  }
+
+  const isAllLegendHidden = () => {
+    if (currentFieldType === 'categorical') {
+      const categories = getLegendCategories();
+      return categories.size > 0 && Array.from(categories).every(cat => hiddenLegendItems.has(cat));
+    }
+    const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length
+      ? colorBreaks.length + 1
+      : 10;
+    return Array.from({ length: ranges }, (_, i) => `range_${i}`).every(rangeKey => hiddenLegendItems.has(rangeKey));
+  };
+
   // Eye toggle all button
-  const eyeAllBtn = document.createElement('button');
-  eyeAllBtn.textContent = '👁️';
-  eyeAllBtn.title = 'Toggle all visibility';
-  eyeAllBtn.style.cssText = `
-    border: none;
-    background: none;
-    cursor: pointer;
-    font-size: 14px;
-    padding: 2px;
-    flex-shrink: 0;
-  `;
+  const eyeAllBtn = createEyeButton(isAllLegendHidden(), 'Toggle all visibility');
   
   eyeAllBtn.onclick = () => {
     if (currentFieldType === 'categorical') {
@@ -1752,17 +1805,7 @@ function updateFloatingLegend() {
     applyExtrusionWithVisibility();
   };
 
-  const getLegendCategories = () => {
-    const categories = new Set<string>();
-    if (!currentGeoJSON) return categories;
-    for (const feature of currentGeoJSON.features) {
-      const value = feature.properties?.[currentField!];
-      if (value != null && value !== '' && value !== undefined) {
-        categories.add(String(value));
-      }
-    }
-    return categories;
-  };
+  
 
   const getLegendRanges = () => {
     const rangeBounds: { min: number; max: number; key: string }[] = [];
@@ -2065,17 +2108,7 @@ function updateCategoricalFloatingLegend() {
     countDisplay.textContent = count.toString();
     
      // Eye toggle button
-     const eyeBtn = document.createElement('button');
-     eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
-     eyeBtn.title = isHidden ? 'Show this category' : 'Hide this category';
-     eyeBtn.style.cssText = `
-       border: none;
-       background: none;
-       cursor: pointer;
-       font-size: 14px;
-       padding: 2px;
-       flex-shrink: 0;
-     `;
+     const eyeBtn = createEyeButton(isHidden, isHidden ? 'Show this category' : 'Hide this category');
      
      eyeBtn.onclick = () => {
        if (hiddenLegendItems.has(category)) {
@@ -2285,17 +2318,7 @@ function updateNumericFloatingLegend() {
     countDisplay.textContent = count.toString();
     
          // Eye toggle button
-     const eyeBtn = document.createElement('button');
-     eyeBtn.textContent = isHidden ? '👁️‍🗨️' : '👁️';
-     eyeBtn.title = isHidden ? 'Show this range' : 'Hide this range';
-     eyeBtn.style.cssText = `
-       border: none;
-       background: none;
-       cursor: pointer;
-       font-size: 14px;
-       padding: 2px;
-       flex-shrink: 0;
-     `;
+     const eyeBtn = createEyeButton(isHidden, isHidden ? 'Show this range' : 'Hide this range');
      
      eyeBtn.onclick = () => {
        if (hiddenLegendItems.has(rangeKey)) {
@@ -2858,6 +2881,7 @@ function installWelcome() {
 function revealUI() {
   if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
   if (controlsEl) controlsEl.style.display = 'grid';
+  positionPaintPanel();
 }
 
 function ensureRenderToast() {
@@ -4560,6 +4584,7 @@ document.addEventListener('mouseup', handleMouseUp);
 makeDraggable(controlsEl);
 makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
+positionPaintPanel();
 updatePaintButtonState();
 
 rampSelect.addEventListener('change', () => {
@@ -5109,6 +5134,8 @@ function updateToolbarButtonStates() {
     legendToolButton.classList.remove('inactive');
     legendToolButton.classList.add('active');
   }
+
+  updatePaintButtonState();
 }
 
 // Initialize toolbar when DOM is ready

@@ -834,7 +834,7 @@ const statsMedian = document.getElementById('statsMedian') as HTMLSpanElement;
 const statsMean = document.getElementById('statsMean') as HTMLSpanElement;
 const statsStdDev = document.getElementById('statsStdDev') as HTMLSpanElement;
 const statsCod = document.getElementById('statsCod') as HTMLSpanElement;
-const statsPercentiles = document.getElementById('statsPercentiles') as HTMLDivElement;
+const statsPercentiles = document.getElementById('statsPercentiles') as HTMLTableSectionElement;
 const statsHistogram = document.getElementById('statsHistogram') as HTMLDivElement;
 const statsNormAsIs = document.getElementById('stats-norm-asis') as HTMLInputElement;
 const statsNormLand = document.getElementById('stats-norm-land') as HTMLInputElement;
@@ -845,6 +845,10 @@ const statsRangeMinSlider = document.getElementById('statsRangeMinSlider') as HT
 const statsRangeMaxSlider = document.getElementById('statsRangeMaxSlider') as HTMLInputElement;
 const statsRangeMinInput = document.getElementById('statsRangeMinInput') as HTMLInputElement;
 const statsRangeMaxInput = document.getElementById('statsRangeMaxInput') as HTMLInputElement;
+const statsRangeSummary = document.getElementById('statsRangeSummary') as HTMLDivElement;
+const statsRangeLeft = document.getElementById('statsRangeLeft') as HTMLSpanElement;
+const statsRangeCenter = document.getElementById('statsRangeCenter') as HTMLSpanElement;
+const statsRangeRight = document.getElementById('statsRangeRight') as HTMLSpanElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -1674,6 +1678,7 @@ function resetStatisticsDisplay() {
   statsRangeMaxSlider.disabled = true;
   statsRangeMinInput.disabled = true;
   statsRangeMaxInput.disabled = true;
+  statsRangeSummary.style.visibility = 'hidden';
 }
 
 function populateStatisticsCategoryFields() {
@@ -1815,9 +1820,11 @@ function updateHistogramRangeControls(values: number[]) {
     statsRangeMaxSlider.disabled = true;
     statsRangeMinInput.disabled = true;
     statsRangeMaxInput.disabled = true;
+    statsRangeSummary.style.visibility = 'hidden';
     return;
   }
 
+  statsRangeSummary.style.visibility = 'visible';
   statsRangeMinSlider.disabled = false;
   statsRangeMaxSlider.disabled = false;
   statsRangeMinInput.disabled = false;
@@ -1852,6 +1859,35 @@ function updateHistogramRangeControls(values: number[]) {
   statsRangeMaxSlider.value = String(statsHistogramRange.max);
   statsRangeMinInput.value = String(statsHistogramRange.min);
   statsRangeMaxInput.value = String(statsHistogramRange.max);
+}
+
+function updateHistogramSummary(values: number[], rangeMin: number, rangeMax: number) {
+  if (!values.length) {
+    statsRangeLeft.textContent = '0%';
+    statsRangeCenter.textContent = '0%';
+    statsRangeRight.textContent = '0%';
+    statsRangeCenter.style.left = '50%';
+    return;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const total = values.length;
+  const leftCount = values.filter(v => v < rangeMin).length;
+  const middleCount = values.filter(v => v >= rangeMin && v <= rangeMax).length;
+  const rightCount = values.filter(v => v > rangeMax).length;
+  const leftPct = (leftCount / total) * 100;
+  const middlePct = (middleCount / total) * 100;
+  const rightPct = (rightCount / total) * 100;
+
+  statsRangeLeft.textContent = `${leftPct.toFixed(0)}%`;
+  statsRangeCenter.textContent = `${middlePct.toFixed(0)}%`;
+  statsRangeRight.textContent = `${rightPct.toFixed(0)}%`;
+
+  const span = max - min || 1;
+  const centerValue = (rangeMin + rangeMax) / 2;
+  const centerPercent = ((centerValue - min) / span) * 100;
+  statsRangeCenter.style.left = `${centerPercent}%`;
 }
 
 function renderStatisticsHistogram(values: number[]) {
@@ -1904,6 +1940,8 @@ function renderStatisticsHistogram(values: number[]) {
     }
     statsHistogram.appendChild(bin);
   });
+
+  updateHistogramSummary(values, range.min, range.max);
 }
 
 function updateStatisticsResults() {
@@ -1957,8 +1995,12 @@ function updateStatisticsResults() {
 
   statsPercentiles.replaceChildren();
   stats.percentiles.forEach(item => {
-    const row = document.createElement('div');
-    row.textContent = `${item.label}: ${Number.isFinite(item.value) ? fmt(item.value) : '—'}`;
+    const row = document.createElement('tr');
+    const labelCell = document.createElement('td');
+    labelCell.textContent = item.label;
+    const valueCell = document.createElement('td');
+    valueCell.textContent = Number.isFinite(item.value) ? fmt(item.value) : '—';
+    row.append(labelCell, valueCell);
     statsPercentiles.appendChild(row);
   });
 
@@ -1974,7 +2016,6 @@ function refreshStatisticsPanel() {
     populateStatisticsNumericFields();
   } else {
     statisticsSection.style.display = 'none';
-    statsNumericField = null;
   }
 
   if (statsNumericField) {
@@ -5124,25 +5165,20 @@ btnPaintMenu.addEventListener('click', togglePaint);
 statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
   statsCategoryValueIndex = null;
-  statsNumericField = null;
-  statsHistogramRange = null;
   populateStatisticsCategoryValues(statsCategoryField);
   statisticsSection.style.display = 'none';
-  const placeholder = new Option('Choose a field', '');
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  statsNumericFieldSelect.replaceChildren(placeholder);
-  statsNumericFieldSelect.disabled = true;
   resetStatisticsDisplay();
 });
 
 statsCategoryValueSelect.addEventListener('change', () => {
   statsCategoryValueIndex = statsCategoryValueSelect.value || null;
-  statsNumericField = null;
-  statsHistogramRange = null;
   if (statsCategoryValueIndex) {
     statisticsSection.style.display = 'grid';
     populateStatisticsNumericFields();
+    if (statsNumericField) {
+      updateStatisticsResults();
+      return;
+    }
   } else {
     statisticsSection.style.display = 'none';
   }

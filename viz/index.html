@@ -201,8 +201,16 @@
       gap: 6px;
     }
     .stats-range .range-inputs {
-      display: grid;
-      gap: 4px;
+      position: relative;
+      height: 24px;
+    }
+    .stats-range .range-inputs input[type="range"] {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      margin: 0;
+      background: transparent;
     }
     .stats-range .range-values {
       display: grid;
@@ -216,6 +224,41 @@
       border-radius: 6px;
       border: 1px solid #ddd;
       font-size: 12px;
+    }
+    .stats-range .range-summary {
+      position: relative;
+      height: 16px;
+      font-size: 11px;
+      color: #374151;
+    }
+    .stats-range .range-summary .summary-left {
+      position: absolute;
+      left: 0;
+      text-align: left;
+    }
+    .stats-range .range-summary .summary-center {
+      position: absolute;
+      transform: translateX(-50%);
+      text-align: center;
+    }
+    .stats-range .range-summary .summary-right {
+      position: absolute;
+      right: 0;
+      text-align: right;
+    }
+    .stats-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .stats-table th,
+    .stats-table td {
+      padding: 4px 0;
+      text-align: left;
+    }
+    .stats-table th:last-child,
+    .stats-table td:last-child {
+      text-align: right;
     }
 
     .histogram-bar {
@@ -713,7 +756,6 @@
       <div class="divider"></div>
 
       <div id="statisticsSection" class="stats-section" style="display: none;">
-        <div class="section-title">Statistic</div>
         <label for="statsNumericField">Numeric field</label>
         <select id="statsNumericField">
           <option value="" selected disabled>Choose a field</option>
@@ -732,16 +774,36 @@
             <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
           </label>
         </div>
+        <div class="divider"></div>
         <div id="statsResults" style="display: grid; gap: 6px;">
-          <div><strong>Parcel count</strong>: <span id="statsParcelCount">—</span></div>
-          <div><strong>Median</strong>: <span id="statsMedian">—</span></div>
-          <div><strong>Mean</strong>: <span id="statsMean">—</span></div>
-          <div><strong>Standard deviation</strong>: <span id="statsStdDev">—</span></div>
-          <div><strong>Coefficient of dispersion</strong>: <span id="statsCod">—</span></div>
+          <table class="stats-table">
+            <thead>
+              <tr>
+                <th>Statistic</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Parcel count</td><td><span id="statsParcelCount">—</span></td></tr>
+              <tr><td>Median</td><td><span id="statsMedian">—</span></td></tr>
+              <tr><td>Mean</td><td><span id="statsMean">—</span></td></tr>
+              <tr><td>Standard deviation</td><td><span id="statsStdDev">—</span></td></tr>
+              <tr><td>Coefficient of dispersion</td><td><span id="statsCod">—</span></td></tr>
+            </tbody>
+          </table>
+          <div class="divider"></div>
           <div>
-            <strong>Percentiles</strong>
-            <div id="statsPercentiles" class="muted" style="display: grid; gap: 2px; margin-top: 4px;"></div>
+            <table class="stats-table">
+              <thead>
+                <tr>
+                  <th>Percentile</th>
+                  <th>Value</th>
+                </tr>
+              </thead>
+              <tbody id="statsPercentiles"></tbody>
+            </table>
           </div>
+          <div class="divider"></div>
           <div>
             <strong>Histogram</strong>
             <div class="stats-range">
@@ -756,6 +818,11 @@
                 <label>Max
                   <input id="statsRangeMaxInput" type="number" />
                 </label>
+              </div>
+              <div class="range-summary" id="statsRangeSummary">
+                <span class="summary-left" id="statsRangeLeft">0%</span>
+                <span class="summary-center" id="statsRangeCenter">0%</span>
+                <span class="summary-right" id="statsRangeRight">0%</span>
               </div>
             </div>
             <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>

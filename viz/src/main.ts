@@ -2971,8 +2971,9 @@ function updateLegendPosition() {
 }
 
 function installWelcome() {
-  // hide controls initially
-  if (controlsEl) controlsEl.style.display = 'none';
+  minimizeLayers();
+  minimizeSettingsMenu();
+  minimizePaint();
 
   welcomeEl = document.createElement('div');
   welcomeEl.id = 'welcomeOverlay';
@@ -3000,8 +3001,9 @@ function installWelcome() {
 
 function revealUI() {
   if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
-  if (controlsEl) controlsEl.style.display = 'grid';
-  positionPaintPanel();
+  showLayers();
+  showPaint();
+  minimizeSettingsMenu();
 }
 
 function ensureRenderToast() {

@@ -841,14 +841,10 @@ const statsNormLand = document.getElementById('stats-norm-land') as HTMLInputEle
 const statsNormBldg = document.getElementById('stats-norm-bldg') as HTMLInputElement;
 const statsNormLandUnitEl = document.getElementById('statsNormLandUnit') as HTMLElement;
 const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTMLElement;
-const statsRangeMinSlider = document.getElementById('statsRangeMinSlider') as HTMLInputElement;
-const statsRangeMaxSlider = document.getElementById('statsRangeMaxSlider') as HTMLInputElement;
-const statsRangeMinInput = document.getElementById('statsRangeMinInput') as HTMLInputElement;
-const statsRangeMaxInput = document.getElementById('statsRangeMaxInput') as HTMLInputElement;
-const statsRangeSummary = document.getElementById('statsRangeSummary') as HTMLDivElement;
-const statsRangeLeft = document.getElementById('statsRangeLeft') as HTMLSpanElement;
-const statsRangeCenter = document.getElementById('statsRangeCenter') as HTMLSpanElement;
-const statsRangeRight = document.getElementById('statsRangeRight') as HTMLSpanElement;
+const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
+const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
+const statsOverflowMinAbs = document.getElementById('statsOverflowMinAbs') as HTMLInputElement;
+const statsOverflowMaxAbs = document.getElementById('statsOverflowMaxAbs') as HTMLInputElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -1120,8 +1116,9 @@ let statsCategoryField: string | null = null;
 let statsCategoryValueIndex: string | null = null;
 let statsNumericField: string | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
-let statsHistogramRange: { min: number; max: number } | null = null;
 let statsValuesCache: number[] = [];
+let statsOverflowPct = { min: 5, max: 95 };
+let statsOverflowAbs: { min: number | null; max: number | null } = { min: null, max: null };
 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
@@ -1674,11 +1671,10 @@ function resetStatisticsDisplay() {
   statsCod.textContent = '—';
   statsPercentiles.replaceChildren();
   statsHistogram.replaceChildren();
-  statsRangeMinSlider.disabled = true;
-  statsRangeMaxSlider.disabled = true;
-  statsRangeMinInput.disabled = true;
-  statsRangeMaxInput.disabled = true;
-  statsRangeSummary.style.visibility = 'hidden';
+  statsOverflowMinPct.disabled = true;
+  statsOverflowMaxPct.disabled = true;
+  statsOverflowMinAbs.disabled = true;
+  statsOverflowMaxAbs.disabled = true;
 }
 
 function populateStatisticsCategoryFields() {
@@ -1810,6 +1806,12 @@ function computeStatisticsValues(values: number[]) {
   return { min, max, median, mean, stdDev, cod, percentiles };
 }
 
+function percentileRank(values: number[], value: number) {
+  if (!values.length) return 0;
+  const count = values.filter(v => v <= value).length;
+  return (count / values.length) * 100;
+}
+
 function getHistogramDomain(values: number[]) {
   if (values.length === 0) {
     return { min: 0, max: 1 };
@@ -1817,87 +1819,37 @@ function getHistogramDomain(values: number[]) {
   return { min: Math.min(...values), max: Math.max(...values) };
 }
 
-function updateHistogramRangeControls(values: number[]) {
+function updateOverflowControls(values: number[]) {
   if (values.length === 0) {
-    statsHistogramRange = null;
-    statsRangeMinSlider.disabled = true;
-    statsRangeMaxSlider.disabled = true;
-    statsRangeMinInput.disabled = true;
-    statsRangeMaxInput.disabled = true;
-    statsRangeSummary.style.visibility = 'hidden';
+    statsOverflowMinPct.disabled = true;
+    statsOverflowMaxPct.disabled = true;
+    statsOverflowMinAbs.disabled = true;
+    statsOverflowMaxAbs.disabled = true;
     return;
   }
 
-  statsRangeSummary.style.visibility = 'visible';
-  statsRangeMinSlider.disabled = false;
-  statsRangeMaxSlider.disabled = false;
-  statsRangeMinInput.disabled = false;
-  statsRangeMaxInput.disabled = false;
+  statsOverflowMinPct.disabled = false;
+  statsOverflowMaxPct.disabled = false;
+  statsOverflowMinAbs.disabled = false;
+  statsOverflowMaxAbs.disabled = false;
 
-  const domain = getHistogramDomain(values);
-  const span = domain.max - domain.min;
-  const step = span > 0 ? span / 100 : 1;
+  statsOverflowMinPct.value = String(statsOverflowPct.min);
+  statsOverflowMaxPct.value = String(statsOverflowPct.max);
 
-  if (!statsHistogramRange || statsHistogramRange.min < domain.min || statsHistogramRange.max > domain.max) {
-    statsHistogramRange = { min: domain.min, max: domain.max };
-  } else {
-    statsHistogramRange = {
-      min: Math.max(domain.min, statsHistogramRange.min),
-      max: Math.min(domain.max, statsHistogramRange.max)
-    };
+  if (statsOverflowAbs.min === null || statsOverflowAbs.max === null) {
+    const minAbs = percentile(values, statsOverflowPct.min);
+    const maxAbs = percentile(values, statsOverflowPct.max);
+    statsOverflowAbs = { min: minAbs, max: maxAbs };
   }
 
-  if (statsHistogramRange.min > statsHistogramRange.max) {
-    statsHistogramRange.min = domain.min;
-    statsHistogramRange.max = domain.max;
-  }
-
-  statsRangeMinSlider.min = String(domain.min);
-  statsRangeMinSlider.max = String(domain.max);
-  statsRangeMinSlider.step = String(step);
-  statsRangeMaxSlider.min = String(domain.min);
-  statsRangeMaxSlider.max = String(domain.max);
-  statsRangeMaxSlider.step = String(step);
-
-  statsRangeMinSlider.value = String(statsHistogramRange.min);
-  statsRangeMaxSlider.value = String(statsHistogramRange.max);
-  statsRangeMinInput.value = String(statsHistogramRange.min);
-  statsRangeMaxInput.value = String(statsHistogramRange.max);
-}
-
-function updateHistogramSummary(values: number[], rangeMin: number, rangeMax: number) {
-  if (!values.length) {
-    statsRangeLeft.textContent = '0%';
-    statsRangeCenter.textContent = '0%';
-    statsRangeRight.textContent = '0%';
-    statsRangeCenter.style.left = '50%';
-    return;
-  }
-
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const total = values.length;
-  const leftCount = values.filter(v => v < rangeMin).length;
-  const middleCount = values.filter(v => v >= rangeMin && v <= rangeMax).length;
-  const rightCount = values.filter(v => v > rangeMax).length;
-  const leftPct = (leftCount / total) * 100;
-  const middlePct = (middleCount / total) * 100;
-  const rightPct = (rightCount / total) * 100;
-
-  statsRangeLeft.textContent = `${leftPct.toFixed(0)}%`;
-  statsRangeCenter.textContent = `${middlePct.toFixed(0)}%`;
-  statsRangeRight.textContent = `${rightPct.toFixed(0)}%`;
-
-  const span = max - min || 1;
-  const centerValue = (rangeMin + rangeMax) / 2;
-  const centerPercent = ((centerValue - min) / span) * 100;
-  statsRangeCenter.style.left = `${centerPercent}%`;
+  statsOverflowMinAbs.value = Number.isFinite(statsOverflowAbs.min) ? String(statsOverflowAbs.min) : '';
+  statsOverflowMaxAbs.value = Number.isFinite(statsOverflowAbs.max) ? String(statsOverflowAbs.max) : '';
 }
 
 function renderStatisticsHistogram(values: number[]) {
   statsHistogram.replaceChildren();
   if (values.length === 0) {
-    updateHistogramRangeControls(values);
+    updateOverflowControls(values);
     const empty = document.createElement('div');
     empty.className = 'muted';
     empty.textContent = 'No data';
@@ -1906,29 +1858,51 @@ function renderStatisticsHistogram(values: number[]) {
     return;
   }
 
-  updateHistogramRangeControls(values);
-  const range = statsHistogramRange ?? getHistogramDomain(values);
-  const min = range.min;
-  const max = range.max;
-  const bins = 10;
-  const counts = new Array(bins).fill(0);
-  const inRangeValues = values.filter(value => value >= min && value <= max);
-  if (min === max) {
-    counts[bins - 1] = inRangeValues.length;
-  } else {
-    const step = (max - min) / bins;
-    inRangeValues.forEach(value => {
-      const idx = Math.min(bins - 1, Math.floor((value - min) / step));
-      counts[idx] += 1;
-    });
-  }
+  updateOverflowControls(values);
+  const domain = getHistogramDomain(values);
+  const minAbs = statsOverflowAbs.min ?? percentile(values, statsOverflowPct.min);
+  const maxAbs = statsOverflowAbs.max ?? percentile(values, statsOverflowPct.max);
+  const overflowMin = Math.min(minAbs, maxAbs);
+  const overflowMax = Math.max(minAbs, maxAbs);
+
+  const buckets = 10;
+  const counts = new Array(buckets).fill(0);
+  const interiorBins = buckets - 2;
+  const interiorStart = overflowMin;
+  const interiorEnd = overflowMax;
+  const interiorSpan = interiorEnd - interiorStart || 1;
+  const interiorStep = interiorSpan / interiorBins;
+
+  values.forEach(value => {
+    if (value <= overflowMin) {
+      counts[0] += 1;
+      return;
+    }
+    if (value >= overflowMax) {
+      counts[buckets - 1] += 1;
+      return;
+    }
+    const idx = Math.min(
+      interiorBins - 1,
+      Math.floor((value - interiorStart) / interiorStep)
+    );
+    counts[1 + idx] += 1;
+  });
 
   const maxCount = Math.max(...counts, 1);
   counts.forEach((count, idx) => {
     const bin = document.createElement('div');
     bin.className = 'histogram-bin';
-    const rangeStart = min + ((max - min) / bins) * idx;
-    const rangeEnd = min + ((max - min) / bins) * (idx + 1);
+    let rangeStart = domain.min;
+    let rangeEnd = domain.max;
+    if (idx === 0) {
+      rangeEnd = overflowMin;
+    } else if (idx === buckets - 1) {
+      rangeStart = overflowMax;
+    } else {
+      rangeStart = interiorStart + interiorStep * (idx - 1);
+      rangeEnd = interiorStart + interiorStep * idx;
+    }
     bin.title = `${fmt(rangeStart)}–${fmt(rangeEnd)} (${count})`;
     if (count > 0) {
       const bar = document.createElement('div');
@@ -1944,8 +1918,6 @@ function renderStatisticsHistogram(values: number[]) {
     }
     statsHistogram.appendChild(bin);
   });
-
-  updateHistogramSummary(values, range.min, range.max);
 }
 
 function updateStatisticsResults() {
@@ -2003,13 +1975,22 @@ function updateStatisticsResults() {
   statsCod.textContent = Number.isFinite(stats.cod) ? `${fmt(stats.cod)}%` : '—';
 
   statsPercentiles.replaceChildren();
+  const sortedValues = values.slice().sort((a, b) => a - b);
   percentileRows.forEach(item => {
     const row = document.createElement('tr');
     const labelCell = document.createElement('td');
     labelCell.textContent = item.label;
     const valueCell = document.createElement('td');
     valueCell.textContent = Number.isFinite(item.value) ? fmt(item.value) : '—';
-    row.append(labelCell, valueCell);
+    const countCell = document.createElement('td');
+    if (Number.isFinite(item.value)) {
+      const cutoff = item.value;
+      const count = sortedValues.filter(v => v <= cutoff).length;
+      countCell.textContent = count.toLocaleString();
+    } else {
+      countCell.textContent = '—';
+    }
+    row.append(labelCell, valueCell, countCell);
     statsPercentiles.appendChild(row);
   });
 
@@ -5196,7 +5177,7 @@ statsCategoryValueSelect.addEventListener('change', () => {
 
 statsNumericFieldSelect.addEventListener('change', () => {
   statsNumericField = statsNumericFieldSelect.value || null;
-  statsHistogramRange = null;
+  statsOverflowAbs = { min: null, max: null };
   updateStatisticsResults();
 });
 
@@ -5204,64 +5185,64 @@ document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEa
   radio.addEventListener('change', () => {
     statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
       ?.value as 'asis' | 'perLand' | 'perBuilding';
-    statsHistogramRange = null;
+    statsOverflowAbs = { min: null, max: null };
     updateStatisticsResults();
   });
 });
 
-function clampHistogramRange(nextMin: number, nextMax: number) {
-  if (!statsHistogramRange) return;
-  const minLimit = Number(statsRangeMinSlider.min);
-  const maxLimit = Number(statsRangeMaxSlider.max);
-
-  let minValue = Math.max(minLimit, Math.min(nextMin, maxLimit));
-  let maxValue = Math.max(minLimit, Math.min(nextMax, maxLimit));
-
-  if (minValue > maxValue) {
-    [minValue, maxValue] = [maxValue, minValue];
+function clampOverflowPercent(minValue: number, maxValue: number) {
+  let minPct = Math.max(0, Math.min(minValue, 100));
+  let maxPct = Math.max(0, Math.min(maxValue, 100));
+  if (minPct > maxPct) {
+    [minPct, maxPct] = [maxPct, minPct];
   }
-
-  statsHistogramRange.min = minValue;
-  statsHistogramRange.max = maxValue;
-
-  statsRangeMinSlider.value = String(minValue);
-  statsRangeMaxSlider.value = String(maxValue);
-  statsRangeMinInput.value = String(minValue);
-  statsRangeMaxInput.value = String(maxValue);
+  statsOverflowPct = { min: minPct, max: maxPct };
 }
 
-statsRangeMinSlider.addEventListener('input', () => {
-  if (!statsHistogramRange) return;
-  const nextMin = Number(statsRangeMinSlider.value);
-  const nextMax = Math.max(nextMin, Number(statsRangeMaxSlider.value));
-  clampHistogramRange(nextMin, nextMax);
-  renderStatisticsHistogram(statsValuesCache);
+function applyOverflowFromPercent() {
+  if (!statsValuesCache.length) return;
+  const minAbs = percentile(statsValuesCache, statsOverflowPct.min);
+  const maxAbs = percentile(statsValuesCache, statsOverflowPct.max);
+  statsOverflowAbs = { min: minAbs, max: maxAbs };
+  updateStatisticsResults();
+}
+
+function applyOverflowFromAbsolute() {
+  if (!statsValuesCache.length) return;
+  const minAbs = Number(statsOverflowMinAbs.value);
+  const maxAbs = Number(statsOverflowMaxAbs.value);
+  if (!Number.isFinite(minAbs) || !Number.isFinite(maxAbs)) return;
+  statsOverflowAbs = { min: minAbs, max: maxAbs };
+  const minPct = percentileRank(statsValuesCache, minAbs);
+  const maxPct = percentileRank(statsValuesCache, maxAbs);
+  clampOverflowPercent(minPct, maxPct);
+  statsOverflowMinPct.value = String(statsOverflowPct.min);
+  statsOverflowMaxPct.value = String(statsOverflowPct.max);
+  updateStatisticsResults();
+}
+
+statsOverflowMinPct.addEventListener('input', () => {
+  const minPct = Number(statsOverflowMinPct.value);
+  const maxPct = Number(statsOverflowMaxPct.value);
+  if (!Number.isFinite(minPct) || !Number.isFinite(maxPct)) return;
+  clampOverflowPercent(minPct, maxPct);
+  applyOverflowFromPercent();
 });
 
-statsRangeMaxSlider.addEventListener('input', () => {
-  if (!statsHistogramRange) return;
-  const nextMax = Number(statsRangeMaxSlider.value);
-  const nextMin = Math.min(nextMax, Number(statsRangeMinSlider.value));
-  clampHistogramRange(nextMin, nextMax);
-  renderStatisticsHistogram(statsValuesCache);
+statsOverflowMaxPct.addEventListener('input', () => {
+  const minPct = Number(statsOverflowMinPct.value);
+  const maxPct = Number(statsOverflowMaxPct.value);
+  if (!Number.isFinite(minPct) || !Number.isFinite(maxPct)) return;
+  clampOverflowPercent(minPct, maxPct);
+  applyOverflowFromPercent();
 });
 
-statsRangeMinInput.addEventListener('input', () => {
-  if (!statsHistogramRange) return;
-  const nextMin = Number(statsRangeMinInput.value);
-  const nextMax = Number(statsRangeMaxInput.value);
-  if (!Number.isFinite(nextMin) || !Number.isFinite(nextMax)) return;
-  clampHistogramRange(nextMin, nextMax);
-  renderStatisticsHistogram(statsValuesCache);
+statsOverflowMinAbs.addEventListener('input', () => {
+  applyOverflowFromAbsolute();
 });
 
-statsRangeMaxInput.addEventListener('input', () => {
-  if (!statsHistogramRange) return;
-  const nextMin = Number(statsRangeMinInput.value);
-  const nextMax = Number(statsRangeMaxInput.value);
-  if (!Number.isFinite(nextMin) || !Number.isFinite(nextMax)) return;
-  clampHistogramRange(nextMin, nextMax);
-  renderStatisticsHistogram(statsValuesCache);
+statsOverflowMaxAbs.addEventListener('input', () => {
+  applyOverflowFromAbsolute();
 });
 
 // No longer needed - legend toggle removed from settings

@@ -200,25 +200,6 @@
       display: grid;
       gap: 6px;
     }
-    .stats-range .range-inputs {
-      position: relative;
-      height: 24px;
-    }
-    .stats-range .range-inputs input[type="range"] {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 100%;
-      margin: 0;
-      background: transparent;
-      pointer-events: auto;
-    }
-    .stats-range .range-inputs input[type="range"]:first-child {
-      z-index: 2;
-    }
-    .stats-range .range-inputs input[type="range"]:last-child {
-      z-index: 3;
-    }
     .stats-range .range-values {
       display: flex;
       justify-content: space-between;
@@ -231,27 +212,6 @@
       border-radius: 6px;
       border: 1px solid #ddd;
       font-size: 12px;
-    }
-    .stats-range .range-summary {
-      position: relative;
-      height: 16px;
-      font-size: 11px;
-      color: #374151;
-    }
-    .stats-range .range-summary .summary-left {
-      position: absolute;
-      left: 0;
-      text-align: left;
-    }
-    .stats-range .range-summary .summary-center {
-      position: absolute;
-      transform: translateX(-50%);
-      text-align: center;
-    }
-    .stats-range .range-summary .summary-right {
-      position: absolute;
-      right: 0;
-      text-align: right;
     }
     .stats-table {
       width: 100%;
@@ -805,6 +765,7 @@
                 <tr>
                   <th>Percentile</th>
                   <th>Value</th>
+                  <th>Count</th>
                 </tr>
               </thead>
               <tbody id="statsPercentiles"></tbody>
@@ -814,18 +775,14 @@
           <div>
             <strong>Histogram</strong>
             <div class="stats-range">
-              <div class="range-summary" id="statsRangeSummary">
-                <span class="summary-left" id="statsRangeLeft">0%</span>
-                <span class="summary-center" id="statsRangeCenter">0%</span>
-                <span class="summary-right" id="statsRangeRight">0%</span>
-              </div>
-              <div class="range-inputs">
-                <input id="statsRangeMinSlider" type="range" />
-                <input id="statsRangeMaxSlider" type="range" />
+              <div class="section-title">Overflow buckets</div>
+              <div class="range-values">
+                <label>Min: <input id="statsOverflowMinPct" type="number" min="0" max="100" step="0.1" />%</label>
+                <label>Max: <input id="statsOverflowMaxPct" type="number" min="0" max="100" step="0.1" />%</label>
               </div>
               <div class="range-values">
-                <label>Min: <input id="statsRangeMinInput" type="number" /></label>
-                <label>Max: <input id="statsRangeMaxInput" type="number" /></label>
+                <label>Min: <input id="statsOverflowMinAbs" type="number" step="0.1" /></label>
+                <label>Max: <input id="statsOverflowMaxAbs" type="number" step="0.1" /></label>
               </div>
             </div>
             <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>

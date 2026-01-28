@@ -8,7 +8,7 @@ import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 
 
 // Local imports
-import { OSM_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { OSM_STYLE, SATELLITE_STYLE, EMPTY_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
 import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
 import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -34,6 +34,62 @@ const map = new maplibregl.Map({
   pixelRatio: HQ_PR // supersample: render at higher internal resolution (smooth lines)
 });
 map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+
+type BasemapMode = 'streets' | 'satellite' | 'none';
+let currentBasemap: BasemapMode = 'streets';
+
+function getBasemapStyle(mode: BasemapMode) {
+  switch (mode) {
+    case 'satellite':
+      return SATELLITE_STYLE;
+    case 'none':
+      return EMPTY_STYLE;
+    case 'streets':
+    default:
+      return OSM_STYLE;
+  }
+}
+
+function updateBasemapButtonStates() {
+  basemapButtons.forEach(button => {
+    button.classList.toggle('active', button.dataset.basemap === currentBasemap);
+  });
+}
+
+function restoreLayersAfterStyleChange() {
+  layers.forEach(layer => {
+    if (!layer.geojson) return;
+    if (!map.getSource(layer.sourceId)) {
+      map.addSource(layer.sourceId, { type: 'geojson', data: layer.geojson });
+    }
+    addExtrusionLayer(layer);
+    ensureErrorLayer(layer);
+  });
+
+  if (currentLayerId) {
+    const layer = layers.get(currentLayerId);
+    if (layer) {
+      applyLayerState(layer);
+      if (currentGeoJSON && currentField) {
+        applyExtrusion();
+      } else if (currentGeoJSON) {
+        applyGrayRendering();
+      }
+      updateErrorLayer();
+    }
+  }
+}
+
+function setBasemapMode(mode: BasemapMode) {
+  if (mode === currentBasemap) return;
+  currentBasemap = mode;
+  updateBasemapButtonStates();
+  map.setStyle(getBasemapStyle(mode));
+  map.once('style.load', () => {
+    restoreLayersAfterStyleChange();
+  });
+}
+
 /* ---------------- Cursor Management ---------------- */
 
 // Update cursor based on active tool
@@ -700,12 +756,23 @@ const paintDividerCategorical = document.getElementById('paintDividerCategorical
 const paintDividerRamp = document.getElementById('paintDividerRamp') as HTMLDivElement;
 const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement;
 const currentLayerSource = document.getElementById('currentLayerSource') as HTMLDivElement;
+const basemapButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-basemap]'));
 
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
 (document.getElementById('btn-ortho') as HTMLButtonElement)?.addEventListener('click', () => setOrtho());
 viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
+
+basemapButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.basemap as BasemapMode | undefined;
+    if (mode) {
+      setBasemapMode(mode);
+    }
+  });
+});
+updateBasemapButtonStates();
 
 // Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
@@ -719,6 +786,8 @@ if (addLayerFromStoreButton) {
 // Window elements
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 const settingsContent = document.getElementById('settingsContent') as HTMLDivElement;
+const settingsControlsEl = document.getElementById('settingsControls') as HTMLDivElement;
+const settingsMenuContent = document.getElementById('settingsMenuContent') as HTMLDivElement;
 const paintControlsEl = document.getElementById('paintControls') as HTMLDivElement;
 const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 
@@ -752,9 +821,10 @@ btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
 if (settingsOtherActions) {
   settingsOtherActions.prepend(btnQuality);
 } else {
-  settingsContent.prepend(btnQuality);
+  settingsMenuContent.prepend(btnQuality);
 }
-const btnMinimizeSettings = document.getElementById('btnMinimizeSettings') as HTMLButtonElement;
+const btnMinimizeLayers = document.getElementById('btnMinimizeLayers') as HTMLButtonElement;
+const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu') as HTMLButtonElement;
 const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
 
 // Toolbar elements
@@ -975,7 +1045,8 @@ let _pendingRefreshLegend = false;
 type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
 // Window state
-let isSettingsMinimized = false;
+let isLayersMinimized = false;
+let isSettingsMenuMinimized = false;
 let isPaintMinimized = false;
 let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
@@ -1359,24 +1430,44 @@ function removeLayer(layerId: string) {
 }
 
 // Window management functions
-function minimizeSettings() {
-  isSettingsMinimized = true;
+function minimizeLayers() {
+  isLayersMinimized = true;
   settingsContent.style.display = 'none';
   controlsEl.style.display = 'none';
   minimizePaint();
-  
-  // Update toolbar button states
   updateToolbarButtonStates();
 }
 
-function showSettings() {
-  isSettingsMinimized = false;
+function showLayers() {
+  isLayersMinimized = false;
   settingsContent.style.display = 'block';
   controlsEl.style.display = 'grid';
   positionPaintPanel();
-  
-  // Update toolbar button states
+  positionSettingsPanel();
   updateToolbarButtonStates();
+}
+
+function minimizeSettingsMenu() {
+  isSettingsMenuMinimized = true;
+  settingsMenuContent.style.display = 'none';
+  settingsControlsEl.style.display = 'none';
+  updateToolbarButtonStates();
+}
+
+function showSettingsMenu() {
+  isSettingsMenuMinimized = false;
+  settingsMenuContent.style.display = 'grid';
+  settingsControlsEl.style.display = 'grid';
+  positionSettingsPanel();
+  updateToolbarButtonStates();
+}
+
+function toggleSettingsMenu() {
+  if (isSettingsMenuMinimized) {
+    showSettingsMenu();
+  } else {
+    minimizeSettingsMenu();
+  }
 }
 
 function positionPaintPanel() {
@@ -1388,6 +1479,17 @@ function positionPaintPanel() {
   paintControlsEl.style.left = `${rect.left}px`;
   paintControlsEl.style.top = `${rect.bottom + gap}px`;
   paintControlsEl.style.transform = 'none';
+}
+
+function positionSettingsPanel() {
+  if (!controlsEl || !settingsControlsEl) return;
+  if (settingsControlsEl.dataset.userPositioned === 'true') return;
+  const rect = controlsEl.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  settingsControlsEl.style.left = `${rect.right + gap}px`;
+  settingsControlsEl.style.top = `${rect.top}px`;
+  settingsControlsEl.style.transform = 'none';
 }
 
 function minimizePaint() {
@@ -4568,7 +4670,8 @@ colorPicker.addEventListener('input', () => {
 });
 
 // Window management event listeners
-btnMinimizeSettings.addEventListener('click', minimizeSettings);
+btnMinimizeLayers.addEventListener('click', minimizeLayers);
+btnMinimizeSettingsMenu.addEventListener('click', minimizeSettingsMenu);
 btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
 btnPaintMenu.addEventListener('click', togglePaint);
@@ -4581,9 +4684,11 @@ document.addEventListener('mouseup', handleMouseUp);
 
 // Make windows draggable
 makeDraggable(controlsEl);
+makeDraggable(settingsControlsEl);
 makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
 positionPaintPanel();
+positionSettingsPanel();
 updatePaintButtonState();
 
 rampSelect.addEventListener('change', () => {
@@ -4825,7 +4930,6 @@ const settingsToolButton = document.getElementById('settingsToolButton') as HTML
 const infoToolButton = document.getElementById('infoToolButton') as HTMLButtonElement;
 const panToolButton = document.getElementById('panToolButton') as HTMLButtonElement;
 const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
-const settingsSubmenu = document.getElementById('settingsSubmenu') as HTMLDivElement;
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 
 // Tool state
@@ -4984,7 +5088,6 @@ function setupSelectionModeHandlers() {
 // Helper function to close all submenus
 function closeAllSubmenus() {
   selectSubmenu.classList.remove('show');
-  settingsSubmenu.classList.remove('show');
 }
 
 function positionSubmenu(button: HTMLElement, submenu: HTMLElement) {
@@ -5050,26 +5153,21 @@ function initializeToolbar() {
     }
   });
   
-  // Handle settings button click
+  // Handle layers button click
   layersToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
-    if (isSettingsMinimized) {
-      showSettings();
+    if (isLayersMinimized) {
+      showLayers();
     } else {
-      minimizeSettings();
+      minimizeLayers();
     }
   });
 
   settingsToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
-    if (settingsSubmenu.classList.contains('show')) {
-      settingsSubmenu.classList.remove('show');
-      return;
-    }
-    positionSubmenu(settingsToolButton, settingsSubmenu);
-    settingsSubmenu.classList.add('show');
+    toggleSettingsMenu();
   });
   
   // Handle pan button click
@@ -5127,12 +5225,7 @@ function initializeToolbar() {
   // Close submenu when clicking outside
   document.addEventListener('click', (e) => {
     const target = e.target as Node;
-    if (
-      !selectToolButton.contains(target) &&
-      !selectSubmenu.contains(target) &&
-      !settingsToolButton.contains(target) &&
-      !settingsSubmenu.contains(target)
-    ) {
+    if (!selectToolButton.contains(target) && !selectSubmenu.contains(target)) {
       closeAllSubmenus();
     }
   });
@@ -5141,12 +5234,20 @@ function initializeToolbar() {
 // Update toolbar button states based on window visibility
 function updateToolbarButtonStates() {
   // Settings button state
-  if (isSettingsMinimized) {
+  if (isLayersMinimized) {
     layersToolButton.classList.add('inactive');
     layersToolButton.classList.remove('active');
   } else {
     layersToolButton.classList.remove('inactive');
     layersToolButton.classList.add('active');
+  }
+
+  if (isSettingsMenuMinimized) {
+    settingsToolButton.classList.add('inactive');
+    settingsToolButton.classList.remove('active');
+  } else {
+    settingsToolButton.classList.remove('inactive');
+    settingsToolButton.classList.add('active');
   }
   
   // Legend button state

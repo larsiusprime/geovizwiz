@@ -7,6 +7,31 @@ export const OSM_STYLE: any = {
   layers: [{ id: 'osm-tiles', type: 'raster', source: 'osm-tiles', minzoom: 0, maxzoom: 19 }]
 };
 
+export const SATELLITE_STYLE: any = {
+  version: 8,
+  sources: {
+    'satellite-tiles': {
+      type: 'raster',
+      tiles: ['https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'],
+      tileSize: 256,
+      attribution: 'Tiles © Esri — Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community'
+    }
+  },
+  layers: [{ id: 'satellite-tiles', type: 'raster', source: 'satellite-tiles', minzoom: 0, maxzoom: 19 }]
+};
+
+export const EMPTY_STYLE: any = {
+  version: 8,
+  sources: {},
+  layers: [
+    {
+      id: 'background',
+      type: 'background',
+      paint: { 'background-color': '#f8f8f8' }
+    }
+  ]
+};
+
 // Source / layer IDs
 export const SOURCE_ID = 'gp-source';
 export const LAYER_ID = 'gp-extrusions';

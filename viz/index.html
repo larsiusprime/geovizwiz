@@ -40,13 +40,16 @@
     #paintControls .row > * { min-width: 0; }
 
     #controls .buttons,
-    #paintControls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+    #paintControls .buttons,
+    #settingsControls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
     #controls button,
-    #paintControls button {
+    #paintControls button,
+    #settingsControls button {
       border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
     }
     #controls button:hover,
-    #paintControls button:hover { background: #f0f0f0; }
+    #paintControls button:hover,
+    #settingsControls button:hover { background: #f0f0f0; }
 
     .eye-button {
       border: none;
@@ -370,47 +373,10 @@
       color: white;
     }
 
-    .settings-submenu {
-      min-width: 220px;
-    }
-
-    .settings-submenu .submenu-section {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 4px;
-    }
-
-    .settings-submenu .submenu-section + .submenu-section {
-      border-top: 1px solid #eee;
-      margin-top: 2px;
-      padding-top: 8px;
-    }
-
-    .settings-submenu .submenu-title {
-      font-size: 12px;
-      font-weight: 600;
-      color: #555;
-      padding: 0 2px;
-    }
-
-    .settings-submenu .submenu-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .settings-submenu button {
-      border: 1px solid #ddd;
-      background: #f8f8f8;
-      padding: 6px 8px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 12px;
-    }
-
-    .settings-submenu button:hover {
-      background: #f0f0f0;
+    #settingsControls .buttons button.active {
+      background: #3b82f6;
+      color: white;
+      border-color: #2d6cdf;
     }
   </style>
 </head>
@@ -445,9 +411,8 @@
           <img src="./src/svg/layers.svg" alt="Layers" />
         </button>
 
-        <button id="settingsToolButton" class="toolbar-button has-submenu" title="Settings">
+        <button id="settingsToolButton" class="toolbar-button" title="Settings">
           <img src="./src/svg/settings.svg" alt="Settings" />
-          <img src="./src/svg/corner_triangle.svg" alt="" class="corner-triangle" />
         </button>
 
         <button id="btnPaintMenu" class="toolbar-button" title="Show/hide paint">
@@ -477,32 +442,13 @@
           </button>
         </div>
 
-        <div id="settingsSubmenu" class="toolbar-submenu settings-submenu">
-          <div class="submenu-section">
-            <div class="submenu-title">View presets</div>
-            <div class="submenu-actions">
-              <button data-view="top">Top</button>
-              <button data-view="iso">Perspective</button>
-              <button data-view="north">North</button>
-              <button data-view="east">East</button>
-              <button data-view="south">South</button>
-              <button data-view="west">West</button>
-            </div>
-          </div>
-          <div class="submenu-section">
-            <div class="submenu-title">Other</div>
-            <div id="settingsOtherActions" class="submenu-actions">
-              <button id="btn-zoomto" type="button">Zoom to data</button>
-            </div>
-          </div>
-        </div>
       </div>
 
 
       <div id="controls" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
       <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
         <div style="font-weight: 600; font-size: 13px;">Layers</div>
-        <button id="btnMinimizeSettings" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+        <button id="btnMinimizeLayers" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
 				<path d="M7 10l5 5 5-5z"/>
 			</svg>
@@ -529,6 +475,44 @@
 
       <fieldset id="legend">      </fieldset>
       </div>
+    </div>
+  </div>
+
+  <div id="settingsControls" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 320px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Settings</div>
+      <button id="btnMinimizeSettingsMenu" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="settingsMenuContent" style="padding: 12px; display: grid; gap: 10px;">
+      <fieldset>
+        <label>View presets</label>
+        <div class="buttons">
+          <button data-view="top" type="button">Top</button>
+          <button data-view="iso" type="button">Perspective</button>
+          <button data-view="north" type="button">North</button>
+          <button data-view="east" type="button">East</button>
+          <button data-view="south" type="button">South</button>
+          <button data-view="west" type="button">West</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <label>Basemap</label>
+        <div class="buttons">
+          <button data-basemap="streets" type="button">Streets</button>
+          <button data-basemap="satellite" type="button">Satellite</button>
+          <button data-basemap="none" type="button">Nothing</button>
+        </div>
+      </fieldset>
+      <fieldset>
+        <label>Other</label>
+        <div id="settingsOtherActions" class="buttons">
+          <button id="btn-zoomto" type="button">Zoom to data</button>
+        </div>
+      </fieldset>
     </div>
   </div>
 

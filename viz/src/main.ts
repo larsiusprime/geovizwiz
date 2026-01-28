@@ -607,6 +607,65 @@ function pointInPolygon(point: number[], polygon: number[][]): boolean {
   return inside;
 }
 
+function applyCategorySelection (category: string, shouldSelect: boolean, sourceId: string) {
+  console.log(`Category = ${category} shouldSelect = ${shouldSelect} sourceId = ${sourceId}`);
+  if (shouldSelect) {
+    selectedLegendItems.add(category);
+  } else {
+    selectedLegendItems.delete(category);
+  }
+  if (!currentGeoJSON) return;
+  for (const feature of currentGeoJSON.features) {
+    const value = feature.properties?.[currentField!];
+    if (value != null && value !== '' && value !== undefined) {
+      const featureCategory = String(value);
+      if (featureCategory === category && feature.id !== undefined) {
+        const parcelId = getParcelId(feature);
+        if (shouldSelect) {
+          selectedParcels.add(parcelId);
+        } else {
+          selectedParcels.delete(parcelId);
+        }
+        map.setFeatureState(
+          { source: sourceId, id: feature.id },
+          { selected: shouldSelect }
+        );
+      }
+    }
+  }
+};
+
+function applyRangeSelection (
+  rangeKey: string,
+  range: { min: number; max: number },
+  shouldSelect: boolean,
+  sourceId: string
+) {
+  if (shouldSelect) {
+    selectedLegendItems.add(rangeKey);
+  } else {
+    selectedLegendItems.delete(rangeKey);
+  }
+  if (!currentGeoJSON) return;
+  for (const feature of currentGeoJSON.features) {
+    const value = Number(feature.properties?.[currentField!]);
+    if (Number.isFinite(value) && feature.id !== undefined) {
+      if (value >= range.min && value <= range.max) {
+        const parcelId = getParcelId(feature);
+        if (shouldSelect) {
+          selectedParcels.add(parcelId);
+        } else {
+          selectedParcels.delete(parcelId);
+        }
+        map.setFeatureState(
+          { source: sourceId, id: feature.id },
+          { selected: shouldSelect }
+        );
+      }
+    }
+  }
+};
+
 // Also handle mouse events on the document to catch mouse up outside the map
 document.addEventListener('mouseup', handleRectangleMouseUp);
 document.addEventListener('mouseup', handleLassoMouseUp);
@@ -1663,64 +1722,6 @@ function updateFloatingLegend() {
     return rangeBounds;
   };
 
-  const applyCategorySelection = (category: string, shouldSelect: boolean, sourceId: string) => {
-    if (shouldSelect) {
-      selectedLegendItems.add(category);
-    } else {
-      selectedLegendItems.delete(category);
-    }
-    if (!currentGeoJSON) return;
-    for (const feature of currentGeoJSON.features) {
-      const value = feature.properties?.[currentField!];
-      if (value != null && value !== '' && value !== undefined) {
-        const featureCategory = String(value);
-        if (featureCategory === category && feature.id !== undefined) {
-          const parcelId = getParcelId(feature);
-          if (shouldSelect) {
-            selectedParcels.add(parcelId);
-          } else {
-            selectedParcels.delete(parcelId);
-          }
-          map.setFeatureState(
-            { source: sourceId, id: feature.id },
-            { selected: shouldSelect }
-          );
-        }
-      }
-    }
-  };
-
-  const applyRangeSelection = (
-    rangeKey: string,
-    range: { min: number; max: number },
-    shouldSelect: boolean,
-    sourceId: string
-  ) => {
-    if (shouldSelect) {
-      selectedLegendItems.add(rangeKey);
-    } else {
-      selectedLegendItems.delete(rangeKey);
-    }
-    if (!currentGeoJSON) return;
-    for (const feature of currentGeoJSON.features) {
-      const value = Number(feature.properties?.[currentField!]);
-      if (Number.isFinite(value) && feature.id !== undefined) {
-        if (value >= range.min && value <= range.max) {
-          const parcelId = getParcelId(feature);
-          if (shouldSelect) {
-            selectedParcels.add(parcelId);
-          } else {
-            selectedParcels.delete(parcelId);
-          }
-          map.setFeatureState(
-            { source: sourceId, id: feature.id },
-            { selected: shouldSelect }
-          );
-        }
-      }
-    }
-  };
-  
   // Checkbox toggle all
   const checkboxAll = document.createElement('input');
   checkboxAll.type = 'checkbox';

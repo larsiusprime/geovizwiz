@@ -484,7 +484,7 @@
       <!-- Numeric field options -->
       <fieldset id="numericOptions">
         <label>Field type: numeric</label>
-        
+
         <!-- Normalization choices -->
         <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
           <label style="display:flex; gap:8px; align-items:center;">
@@ -501,20 +501,6 @@
           </label>
         </div>
 
-        <fieldset>
-          <label>Color scaling</label>
-          <div style="display:grid; gap:6px;">
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input type="radio" name="colorMode" id="color-cont" value="continuous">
-              <span>Linear (min→max, clamped p1–p99)</span>
-            </label>
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
-              <span>Quantiles (equal-frequency, p1–p99)</span>
-            </label>
-          </div>
-        </fieldset>
-		
         <fieldset class="row">
           <div>
 			<label>Super Fancy 3D Extrusion!</label>
@@ -543,6 +529,8 @@
           </div>
         </fieldset>
       </fieldset>
+
+      <div id="paintDividerNumeric" class="divider"></div>
 
       <!-- Categorical field options -->
       <fieldset id="categoricalOptions" style="display: none;">
@@ -579,21 +567,40 @@
         </div>
       </fieldset>
 
+      <div id="paintDividerCategorical" class="divider"></div>
+
       <!-- Shared visualization options -->
-      <fieldset id="sharedOptions" style="display: none;">
-        <fieldset class="row">
-          <div>
-            <label for="ramp">Color ramp</label>
-            <select id="ramp"></select>
-          </div>
-          <div>
-            <label for="opacity">Opacity</label>
-            <div class="inline">
-              <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-              <output id="opacityVal">0.9</output>
-            </div>
-          </div>
-        </fieldset>
+      <fieldset id="colorRampOptions" style="display: none;">
+        <label>Color ramp</label>
+        <div>
+          <select id="ramp"></select>
+        </div>
+      </fieldset>
+
+      <div id="paintDividerRamp" class="divider"></div>
+
+      <fieldset id="colorScalingOptions" style="display: none;">
+        <label>Color scaling</label>
+        <div style="display:grid; gap:6px;">
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="colorMode" id="color-cont" value="continuous">
+            <span>Linear (min→max, clamped p1–p99)</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
+            <span>Quantiles (equal-frequency, p1–p99)</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <div id="paintDividerScaling" class="divider"></div>
+
+      <fieldset id="opacityOptions" style="display: none;">
+        <label>Opacity</label>
+        <div class="inline">
+          <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+          <output id="opacityVal">0.9</output>
+        </div>
       </fieldset>
     </div>
   </div>

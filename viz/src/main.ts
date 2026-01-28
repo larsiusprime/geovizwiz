@@ -692,7 +692,13 @@ const normLand = document.getElementById('norm-land') as HTMLInputElement;
 const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
-const sharedOptions = document.getElementById('sharedOptions') as HTMLFieldSetElement;
+const colorRampOptions = document.getElementById('colorRampOptions') as HTMLFieldSetElement;
+const colorScalingOptions = document.getElementById('colorScalingOptions') as HTMLFieldSetElement;
+const opacityOptions = document.getElementById('opacityOptions') as HTMLFieldSetElement;
+const paintDividerNumeric = document.getElementById('paintDividerNumeric') as HTMLDivElement;
+const paintDividerCategorical = document.getElementById('paintDividerCategorical') as HTMLDivElement;
+const paintDividerRamp = document.getElementById('paintDividerRamp') as HTMLDivElement;
+const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement;
 
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
@@ -4296,18 +4302,31 @@ function updateFieldTypeUI() {
     if (numericOptions) numericOptions.style.display = 'none';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
     if (colorOptions) colorOptions.style.display = 'none';
-    if (sharedOptions) sharedOptions.style.display = 'none';
+    if (colorRampOptions) colorRampOptions.style.display = 'none';
+    if (colorScalingOptions) colorScalingOptions.style.display = 'none';
+    if (opacityOptions) opacityOptions.style.display = 'none';
+    if (paintDividerNumeric) paintDividerNumeric.style.display = 'none';
+    if (paintDividerCategorical) paintDividerCategorical.style.display = 'none';
+    if (paintDividerRamp) paintDividerRamp.style.display = 'none';
+    if (paintDividerScaling) paintDividerScaling.style.display = 'none';
     extrusionOptions.style.display = 'none';
   } else {
-    // Show shared options when a field is selected
-    if (sharedOptions) sharedOptions.style.display = 'grid';
+    const showNumericOptions = currentFieldType === 'numeric';
+    const showCategoricalOptions = currentFieldType === 'categorical';
+    const showColorRampOptions = showNumericOptions || (showCategoricalOptions && categoricalColorMode === 'colorRamp');
+    const showColorScalingOptions = showNumericOptions;
+    const showOpacityOptions = true;
     
-    if (currentFieldType === 'numeric') {
+    if (colorRampOptions) colorRampOptions.style.display = showColorRampOptions ? 'grid' : 'none';
+    if (colorScalingOptions) colorScalingOptions.style.display = showColorScalingOptions ? 'grid' : 'none';
+    if (opacityOptions) opacityOptions.style.display = showOpacityOptions ? 'grid' : 'none';
+    
+    if (showNumericOptions) {
       if (numericOptions) numericOptions.style.display = 'grid';
       if (categoricalOptions) categoricalOptions.style.display = 'none';
       if (colorOptions) colorOptions.style.display = 'none';
       update3DUI(); // This will show/hide extrusion options based on 3D mode
-    } else if (currentFieldType === 'categorical') {
+    } else if (showCategoricalOptions) {
       if (numericOptions) numericOptions.style.display = 'none';
       if (categoricalOptions) categoricalOptions.style.display = 'grid';
       if (colorOptions) colorOptions.style.display = 'none';
@@ -4318,12 +4337,21 @@ function updateFieldTypeUI() {
         colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
       }
     }
-	
-	// Show/hide color ramp widget based on categorical color mode
-	const rampContainer = rampSelect.parentElement?.parentElement;
-	if (rampContainer) {
-	  rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType === 'numeric') ? 'block' : 'none';
-	}
+
+    const sectionVisibility = [
+      showNumericOptions,
+      showCategoricalOptions,
+      showColorRampOptions,
+      showColorScalingOptions,
+      showOpacityOptions
+    ];
+    const dividers = [paintDividerNumeric, paintDividerCategorical, paintDividerRamp, paintDividerScaling];
+    dividers.forEach((divider, index) => {
+      if (!divider) return;
+      const hasPrev = sectionVisibility[index];
+      const hasNext = sectionVisibility.slice(index + 1).some(Boolean);
+      divider.style.display = hasPrev && hasNext ? 'block' : 'none';
+    });
   }
 }
 

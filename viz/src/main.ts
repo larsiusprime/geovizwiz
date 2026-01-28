@@ -683,7 +683,7 @@ const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const layerList = document.getElementById('layerList') as HTMLDivElement;
 const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
-const settingsTopActions = document.getElementById('settingsTopActions') as HTMLDivElement;
+const settingsOtherActions = document.getElementById('settingsOtherActions') as HTMLDivElement;
 const btnPaintMenu = document.getElementById('btnPaintMenu') as HTMLButtonElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
@@ -748,10 +748,9 @@ function createEyeButton(isHidden: boolean, title: string) {
 const btnQuality = document.createElement('button');
 btnQuality.id = 'btn-quality';
 btnQuality.textContent = 'Quality: Fast';
-btnQuality.style.cssText = 'border:1px solid #ddd;background:#f8f8f8;padding:6px 8px;border-radius:8px;cursor:pointer;';
 btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
-if (settingsTopActions) {
-  settingsTopActions.prepend(btnQuality);
+if (settingsOtherActions) {
+  settingsOtherActions.prepend(btnQuality);
 } else {
   settingsContent.prepend(btnQuality);
 }
@@ -4822,9 +4821,11 @@ let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | '
 // Toolbar elements
 const selectToolButton = document.getElementById('selectToolButton') as HTMLButtonElement;
 const layersToolButton = document.getElementById('layersToolButton') as HTMLButtonElement;
+const settingsToolButton = document.getElementById('settingsToolButton') as HTMLButtonElement;
 const infoToolButton = document.getElementById('infoToolButton') as HTMLButtonElement;
 const panToolButton = document.getElementById('panToolButton') as HTMLButtonElement;
 const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
+const settingsSubmenu = document.getElementById('settingsSubmenu') as HTMLDivElement;
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 
 // Tool state
@@ -4983,7 +4984,11 @@ function setupSelectionModeHandlers() {
 // Helper function to close all submenus
 function closeAllSubmenus() {
   selectSubmenu.classList.remove('show');
-  // Add other submenus here if they exist in the future
+  settingsSubmenu.classList.remove('show');
+}
+
+function positionSubmenu(button: HTMLElement, submenu: HTMLElement) {
+  submenu.style.top = `${button.offsetTop}px`;
 }
 
 // Initialize toolbar
@@ -5013,6 +5018,7 @@ function initializeToolbar() {
     
     // Start hold timer
     selectButtonHoldTimer = window.setTimeout(() => {
+      positionSubmenu(selectToolButton, selectSubmenu);
       selectSubmenu.classList.add('show');
       selectButtonHoldTimer = null;
     }, selectButtonHoldDuration);
@@ -5053,6 +5059,17 @@ function initializeToolbar() {
     } else {
       minimizeSettings();
     }
+  });
+
+  settingsToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    if (settingsSubmenu.classList.contains('show')) {
+      settingsSubmenu.classList.remove('show');
+      return;
+    }
+    positionSubmenu(settingsToolButton, settingsSubmenu);
+    settingsSubmenu.classList.add('show');
   });
   
   // Handle pan button click
@@ -5109,7 +5126,13 @@ function initializeToolbar() {
   
   // Close submenu when clicking outside
   document.addEventListener('click', (e) => {
-    if (!selectToolButton.contains(e.target as Node) && !selectSubmenu.contains(e.target as Node)) {
+    const target = e.target as Node;
+    if (
+      !selectToolButton.contains(target) &&
+      !selectSubmenu.contains(target) &&
+      !settingsToolButton.contains(target) &&
+      !settingsSubmenu.contains(target)
+    ) {
       closeAllSubmenus();
     }
   });

@@ -369,6 +369,49 @@
       background: #3b82f6;
       color: white;
     }
+
+    .settings-submenu {
+      min-width: 220px;
+    }
+
+    .settings-submenu .submenu-section {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 4px;
+    }
+
+    .settings-submenu .submenu-section + .submenu-section {
+      border-top: 1px solid #eee;
+      margin-top: 2px;
+      padding-top: 8px;
+    }
+
+    .settings-submenu .submenu-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      padding: 0 2px;
+    }
+
+    .settings-submenu .submenu-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .settings-submenu button {
+      border: 1px solid #ddd;
+      background: #f8f8f8;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .settings-submenu button:hover {
+      background: #f0f0f0;
+    }
   </style>
 </head>
   <body>
@@ -402,6 +445,11 @@
           <img src="./src/svg/layers.svg" alt="Layers" />
         </button>
 
+        <button id="settingsToolButton" class="toolbar-button has-submenu" title="Settings">
+          <img src="./src/svg/settings.svg" alt="Settings" />
+          <img src="./src/svg/corner_triangle.svg" alt="" class="corner-triangle" />
+        </button>
+
         <button id="btnPaintMenu" class="toolbar-button" title="Show/hide paint">
           <img src="./src/svg/paint.svg" alt="Paint" />
         </button>
@@ -428,6 +476,26 @@
             Polygon
           </button>
         </div>
+
+        <div id="settingsSubmenu" class="toolbar-submenu settings-submenu">
+          <div class="submenu-section">
+            <div class="submenu-title">View presets</div>
+            <div class="submenu-actions">
+              <button data-view="top">Top</button>
+              <button data-view="iso">Perspective</button>
+              <button data-view="north">North</button>
+              <button data-view="east">East</button>
+              <button data-view="south">South</button>
+              <button data-view="west">West</button>
+            </div>
+          </div>
+          <div class="submenu-section">
+            <div class="submenu-title">Other</div>
+            <div id="settingsOtherActions" class="submenu-actions">
+              <button id="btn-zoomto" type="button">Zoom to data</button>
+            </div>
+          </div>
+        </div>
       </div>
 
 
@@ -441,20 +509,6 @@
 		</button>
       </div>
       <div id="settingsContent" style="padding: 12px;">
-      <div id="settingsTopActions" class="buttons" style="margin-bottom: 8px;">
-        <button id="btn-zoomto" type="button">Zoom to data</button>
-      </div>
-      <fieldset>
-        <label>View presets</label>
-        <div class="buttons">
-          <button data-view="top">Top</button>
-          <button data-view="iso">Perspective</button>
-          <button data-view="north">North</button>
-          <button data-view="east">East</button>
-          <button data-view="south">South</button>
-          <button data-view="west">West</button>
-        </div>
-      </fieldset>
       <fieldset id="layerPanel">
         <label>Layers</label>
         <div class="layer-add-row">

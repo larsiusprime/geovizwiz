@@ -16,25 +16,54 @@
       background: rgba(240, 240, 240, 0.9);
     }
 
-    #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
-    #controls label { display:block; font-size: 12px; color: #333; }
-    #controls select, #controls input[type="number"], #controls input[type="text"] {
+    #controls fieldset,
+    #paintControls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+    #controls label,
+    #paintControls label { display:block; font-size: 12px; color: #333; }
+    #controls select,
+    #controls input[type="number"],
+    #controls input[type="text"],
+    #paintControls select,
+    #paintControls input[type="number"],
+    #paintControls input[type="text"] {
       width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
     }
 
-    #controls .row {
+    #controls .row,
+    #paintControls .row {
       display: grid;
       grid-template-columns: minmax(0,1fr) minmax(0,1fr);
       gap: var(--gap);
       align-items: end;
     }
-    #controls .row > * { min-width: 0; }
+    #controls .row > *,
+    #paintControls .row > * { min-width: 0; }
 
-    #controls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
-    #controls button {
+    #controls .buttons,
+    #paintControls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
+    #controls button,
+    #paintControls button {
       border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
     }
-    #controls button:hover { background: #f0f0f0; }
+    #controls button:hover,
+    #paintControls button:hover { background: #f0f0f0; }
+
+    .paint-menu-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .paint-menu-button img {
+      width: 18px;
+      height: 18px;
+    }
+
+    .paint-menu-button.active {
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.2);
+    }
 
     #legend { display: none; align-items: center; gap: 6px; }
     #legend .swatch { width: 18px; height: 12px; border-radius: 2px; border: 1px solid #00000022; }
@@ -415,6 +444,43 @@
         <select id="field"><option value="" disabled selected>— load a file first —</option></select>
       </fieldset>
 
+      <div class="buttons">
+        <button id="btnPaintMenu" type="button" class="paint-menu-button">
+          <img src="./src/svg/paint.svg" alt="" />
+          Paint
+        </button>
+      </div>
+
+      <div class="divider"></div>
+
+      <fieldset>
+        <label>View presets</label>
+        <div class="buttons">
+          <button data-view="top">Top</button>
+          <button data-view="iso">Perspective</button>
+          <button data-view="north">North</button>
+          <button data-view="east">East</button>
+          <button data-view="south">South</button>
+          <button data-view="west">West</button>
+        </div>
+      </fieldset>
+
+
+      <fieldset id="legend">      </fieldset>
+      </div>
+    </div>
+  </div>
+
+  <div id="paintControls" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Paint</div>
+      <button id="btnMinimizePaint" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="paintContent" style="padding: 12px; display: grid; gap: 10px;">
       <!-- Numeric field options -->
       <fieldset id="numericOptions">
         <label>Field type: numeric</label>
@@ -529,24 +595,6 @@
           </div>
         </fieldset>
       </fieldset>
-
-      <div class="divider"></div>
-
-      <fieldset>
-        <label>View presets</label>
-        <div class="buttons">
-          <button data-view="top">Top</button>
-          <button data-view="iso">Perspective</button>
-          <button data-view="north">North</button>
-          <button data-view="east">East</button>
-          <button data-view="south">South</button>
-          <button data-view="west">West</button>
-        </div>
-      </fieldset>
-
-
-      <fieldset id="legend">      </fieldset>
-      </div>
     </div>
   </div>
 

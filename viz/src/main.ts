@@ -684,6 +684,7 @@ const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const layerList = document.getElementById('layerList') as HTMLDivElement;
 const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
 const settingsTopActions = document.getElementById('settingsTopActions') as HTMLDivElement;
+const btnPaintMenu = document.getElementById('btnPaintMenu') as HTMLButtonElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
 const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
@@ -711,6 +712,8 @@ if (addLayerFromStoreButton) {
 // Window elements
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 const settingsContent = document.getElementById('settingsContent') as HTMLDivElement;
+const paintControlsEl = document.getElementById('paintControls') as HTMLDivElement;
+const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 
 // Quality button (create after elements are declared)
 const btnQuality = document.createElement('button');
@@ -724,6 +727,7 @@ if (settingsTopActions) {
   settingsContent.prepend(btnQuality);
 }
 const btnMinimizeSettings = document.getElementById('btnMinimizeSettings') as HTMLButtonElement;
+const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
 
 // Toolbar elements
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
@@ -944,6 +948,7 @@ type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
 
 // Window state
 let isSettingsMinimized = false;
+let isPaintMinimized = true;
 let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
@@ -1329,6 +1334,7 @@ function minimizeSettings() {
   isSettingsMinimized = true;
   settingsContent.style.display = 'none';
   controlsEl.style.display = 'none';
+  minimizePaint();
   
   // Update toolbar button states
   updateToolbarButtonStates();
@@ -1341,6 +1347,37 @@ function showSettings() {
   
   // Update toolbar button states
   updateToolbarButtonStates();
+}
+
+function minimizePaint() {
+  isPaintMinimized = true;
+  paintContent.style.display = 'none';
+  paintControlsEl.style.display = 'none';
+  updatePaintButtonState();
+}
+
+function showPaint() {
+  isPaintMinimized = false;
+  paintContent.style.display = 'grid';
+  paintControlsEl.style.display = 'grid';
+  updatePaintButtonState();
+}
+
+function togglePaint() {
+  if (isPaintMinimized) {
+    showPaint();
+  } else {
+    minimizePaint();
+  }
+}
+
+function updatePaintButtonState() {
+  if (!btnPaintMenu) return;
+  if (isPaintMinimized) {
+    btnPaintMenu.classList.remove('active');
+  } else {
+    btnPaintMenu.classList.add('active');
+  }
 }
 
 function minimizeLegend() {
@@ -4459,7 +4496,9 @@ colorPicker.addEventListener('input', () => {
 
 // Window management event listeners
 btnMinimizeSettings.addEventListener('click', minimizeSettings);
+btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
+btnPaintMenu.addEventListener('click', togglePaint);
 
 // No longer needed - legend toggle removed from settings
 
@@ -4469,7 +4508,9 @@ document.addEventListener('mouseup', handleMouseUp);
 
 // Make windows draggable
 makeDraggable(controlsEl);
+makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
+updatePaintButtonState();
 
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks

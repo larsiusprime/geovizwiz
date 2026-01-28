@@ -4821,7 +4821,7 @@ let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | '
 
 // Toolbar elements
 const selectToolButton = document.getElementById('selectToolButton') as HTMLButtonElement;
-const settingsToolButton = document.getElementById('settingsToolButton') as HTMLButtonElement;
+const layersToolButton = document.getElementById('layersToolButton') as HTMLButtonElement;
 const infoToolButton = document.getElementById('infoToolButton') as HTMLButtonElement;
 const panToolButton = document.getElementById('panToolButton') as HTMLButtonElement;
 const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
@@ -5045,7 +5045,7 @@ function initializeToolbar() {
   });
   
   // Handle settings button click
-  settingsToolButton.addEventListener('click', (e) => {
+  layersToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
     if (isSettingsMinimized) {
@@ -5119,11 +5119,11 @@ function initializeToolbar() {
 function updateToolbarButtonStates() {
   // Settings button state
   if (isSettingsMinimized) {
-    settingsToolButton.classList.add('inactive');
-    settingsToolButton.classList.remove('active');
+    layersToolButton.classList.add('inactive');
+    layersToolButton.classList.remove('active');
   } else {
-    settingsToolButton.classList.remove('inactive');
-    settingsToolButton.classList.add('active');
+    layersToolButton.classList.remove('inactive');
+    layersToolButton.classList.add('active');
   }
   
   // Legend button state

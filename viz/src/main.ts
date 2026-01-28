@@ -1508,17 +1508,17 @@ function handleMouseUp() {
 function updateCurrentLayerDetails() {
   if (!currentLayerSource) return;
   if (!currentLayerId) {
-    currentLayerSource.textContent = 'layer source: —';
+    currentLayerSource.textContent = 'source: —';
     return;
   }
   const layer = layers.get(currentLayerId);
   if (!layer) {
-    currentLayerSource.textContent = 'layer source: —';
+    currentLayerSource.textContent = 'source: —';
     return;
   }
   const store = dataStores.get(layer.dataStoreId);
   const sourceName = store?.file?.name ?? store?.name ?? '—';
-  currentLayerSource.textContent = `layer source: ${sourceName}`;
+  currentLayerSource.textContent = `source: ${sourceName}`;
 }
 
 function renderLayerList() {

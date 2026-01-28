@@ -843,8 +843,6 @@ const statsNormLandUnitEl = document.getElementById('statsNormLandUnit') as HTML
 const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTMLElement;
 const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
 const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
-const statsOverflowMinAbs = document.getElementById('statsOverflowMinAbs') as HTMLInputElement;
-const statsOverflowMaxAbs = document.getElementById('statsOverflowMaxAbs') as HTMLInputElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -1011,6 +1009,7 @@ type LayerState = {
   legendSortField: 'name' | 'count' | null;
   legendSortDirection: 'asc' | 'desc';
   customColors: Map<string, string>;
+  opacity: number;
   is3DMode: boolean;
 };
 
@@ -1118,7 +1117,6 @@ let statsNumericField: string | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 let statsValuesCache: number[] = [];
 let statsOverflowPct = { min: 5, max: 95 };
-let statsOverflowAbs: { min: number | null; max: number | null } = { min: null, max: null };
 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
@@ -1248,6 +1246,7 @@ function createLayerState(name: string, dataStoreId: string): LayerState {
     legendSortField: 'count',
     legendSortDirection: 'desc',
     customColors: new Map(),
+    opacity: parseFloat(opacityInput.value),
     is3DMode: false
   };
 }
@@ -1280,6 +1279,7 @@ function persistCurrentLayerState() {
   layer.legendSortField = legendSortField;
   layer.legendSortDirection = legendSortDirection;
   layer.customColors = customColors;
+  layer.opacity = parseFloat(opacityInput.value);
   layer.is3DMode = is3DMode;
 }
 
@@ -1308,6 +1308,8 @@ function applyLayerState(layer: LayerState) {
   legendSortField = layer.legendSortField;
   legendSortDirection = layer.legendSortDirection;
   customColors = layer.customColors;
+  opacityInput.value = String(layer.opacity);
+  if (opacityOut) opacityOut.value = Number(layer.opacity).toFixed(2);
   is3DMode = layer.is3DMode;
   currentDataStoreId = layer.dataStoreId;
   const store = dataStores.get(layer.dataStoreId);
@@ -1673,8 +1675,6 @@ function resetStatisticsDisplay() {
   statsHistogram.replaceChildren();
   statsOverflowMinPct.disabled = true;
   statsOverflowMaxPct.disabled = true;
-  statsOverflowMinAbs.disabled = true;
-  statsOverflowMaxAbs.disabled = true;
 }
 
 function populateStatisticsCategoryFields() {
@@ -1806,12 +1806,6 @@ function computeStatisticsValues(values: number[]) {
   return { min, max, median, mean, stdDev, cod, percentiles };
 }
 
-function percentileRank(values: number[], value: number) {
-  if (!values.length) return 0;
-  const count = values.filter(v => v <= value).length;
-  return (count / values.length) * 100;
-}
-
 function formatPercentValue(value: number) {
   const rounded = Math.round(value * 10) / 10;
   const decimals = Number.isInteger(rounded) ? 0 : 1;
@@ -1840,27 +1834,14 @@ function updateOverflowControls(values: number[]) {
   if (values.length === 0) {
     statsOverflowMinPct.disabled = true;
     statsOverflowMaxPct.disabled = true;
-    statsOverflowMinAbs.disabled = true;
-    statsOverflowMaxAbs.disabled = true;
     return;
   }
 
   statsOverflowMinPct.disabled = false;
   statsOverflowMaxPct.disabled = false;
-  statsOverflowMinAbs.disabled = false;
-  statsOverflowMaxAbs.disabled = false;
 
   setPercentInputValue(statsOverflowMinPct, statsOverflowPct.min);
   setPercentInputValue(statsOverflowMaxPct, statsOverflowPct.max);
-
-  if (statsOverflowAbs.min === null || statsOverflowAbs.max === null) {
-    const minAbs = percentile(values, statsOverflowPct.min);
-    const maxAbs = percentile(values, statsOverflowPct.max);
-    statsOverflowAbs = { min: minAbs, max: maxAbs };
-  }
-
-  statsOverflowMinAbs.value = Number.isFinite(statsOverflowAbs.min) ? String(statsOverflowAbs.min) : '';
-  statsOverflowMaxAbs.value = Number.isFinite(statsOverflowAbs.max) ? String(statsOverflowAbs.max) : '';
 }
 
 function renderStatisticsHistogram(values: number[]) {
@@ -1877,8 +1858,8 @@ function renderStatisticsHistogram(values: number[]) {
 
   updateOverflowControls(values);
   const domain = getHistogramDomain(values);
-  const minAbs = statsOverflowAbs.min ?? percentile(values, statsOverflowPct.min);
-  const maxAbs = statsOverflowAbs.max ?? percentile(values, statsOverflowPct.max);
+  const minAbs = percentile(values, statsOverflowPct.min);
+  const maxAbs = percentile(values, statsOverflowPct.max);
   const overflowMin = Math.min(minAbs, maxAbs);
   const overflowMax = Math.max(minAbs, maxAbs);
 
@@ -5194,7 +5175,6 @@ statsCategoryValueSelect.addEventListener('change', () => {
 
 statsNumericFieldSelect.addEventListener('change', () => {
   statsNumericField = statsNumericFieldSelect.value || null;
-  statsOverflowAbs = { min: null, max: null };
   updateStatisticsResults();
 });
 
@@ -5202,7 +5182,6 @@ document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEa
   radio.addEventListener('change', () => {
     statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
       ?.value as 'asis' | 'perLand' | 'perBuilding';
-    statsOverflowAbs = { min: null, max: null };
     updateStatisticsResults();
   });
 });
@@ -5220,21 +5199,6 @@ function clampOverflowPercent(minValue: number, maxValue: number) {
 
 function applyOverflowFromPercent() {
   if (!statsValuesCache.length) return;
-  const minAbs = percentile(statsValuesCache, statsOverflowPct.min);
-  const maxAbs = percentile(statsValuesCache, statsOverflowPct.max);
-  statsOverflowAbs = { min: minAbs, max: maxAbs };
-  updateStatisticsResults();
-}
-
-function applyOverflowFromAbsolute() {
-  if (!statsValuesCache.length) return;
-  const minAbs = Number(statsOverflowMinAbs.value);
-  const maxAbs = Number(statsOverflowMaxAbs.value);
-  if (!Number.isFinite(minAbs) || !Number.isFinite(maxAbs)) return;
-  statsOverflowAbs = { min: minAbs, max: maxAbs };
-  const minPct = percentileRank(statsValuesCache, minAbs);
-  const maxPct = percentileRank(statsValuesCache, maxAbs);
-  clampOverflowPercent(minPct, maxPct);
   updateStatisticsResults();
 }
 
@@ -5278,13 +5242,6 @@ function bindPercentInput(input: HTMLInputElement) {
 bindPercentInput(statsOverflowMinPct);
 bindPercentInput(statsOverflowMaxPct);
 
-statsOverflowMinAbs.addEventListener('input', () => {
-  applyOverflowFromAbsolute();
-});
-
-statsOverflowMaxAbs.addEventListener('input', () => {
-  applyOverflowFromAbsolute();
-});
 
 // No longer needed - legend toggle removed from settings
 

@@ -722,8 +722,8 @@ const settingsContent = document.getElementById('settingsContent') as HTMLDivEle
 const paintControlsEl = document.getElementById('paintControls') as HTMLDivElement;
 const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 
-const EYE_ICON_OPEN = './src/svg/eye.svg';
-const EYE_ICON_CLOSED = './src/svg/eye_closed.svg';
+const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
+const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
 
 function setEyeButtonIcon(button: HTMLButtonElement, isHidden: boolean) {
   const img = button.querySelector('img');

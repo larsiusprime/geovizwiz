@@ -1812,6 +1812,23 @@ function percentileRank(values: number[], value: number) {
   return (count / values.length) * 100;
 }
 
+function formatPercentValue(value: number) {
+  const rounded = Math.round(value * 10) / 10;
+  const decimals = Number.isInteger(rounded) ? 0 : 1;
+  return `${rounded.toFixed(decimals)}%`;
+}
+
+function parsePercentInputValue(raw: string) {
+  const cleaned = raw.replace('%', '').trim();
+  if (!cleaned) return null;
+  const value = Number(cleaned);
+  return Number.isFinite(value) ? value : null;
+}
+
+function setPercentInputValue(input: HTMLInputElement, value: number) {
+  input.value = formatPercentValue(value);
+}
+
 function getHistogramDomain(values: number[]) {
   if (values.length === 0) {
     return { min: 0, max: 1 };
@@ -1833,8 +1850,8 @@ function updateOverflowControls(values: number[]) {
   statsOverflowMinAbs.disabled = false;
   statsOverflowMaxAbs.disabled = false;
 
-  statsOverflowMinPct.value = String(statsOverflowPct.min);
-  statsOverflowMaxPct.value = String(statsOverflowPct.max);
+  setPercentInputValue(statsOverflowMinPct, statsOverflowPct.min);
+  setPercentInputValue(statsOverflowMaxPct, statsOverflowPct.max);
 
   if (statsOverflowAbs.min === null || statsOverflowAbs.max === null) {
     const minAbs = percentile(values, statsOverflowPct.min);
@@ -5197,6 +5214,8 @@ function clampOverflowPercent(minValue: number, maxValue: number) {
     [minPct, maxPct] = [maxPct, minPct];
   }
   statsOverflowPct = { min: minPct, max: maxPct };
+  setPercentInputValue(statsOverflowMinPct, statsOverflowPct.min);
+  setPercentInputValue(statsOverflowMaxPct, statsOverflowPct.max);
 }
 
 function applyOverflowFromPercent() {
@@ -5216,26 +5235,48 @@ function applyOverflowFromAbsolute() {
   const minPct = percentileRank(statsValuesCache, minAbs);
   const maxPct = percentileRank(statsValuesCache, maxAbs);
   clampOverflowPercent(minPct, maxPct);
-  statsOverflowMinPct.value = String(statsOverflowPct.min);
-  statsOverflowMaxPct.value = String(statsOverflowPct.max);
   updateStatisticsResults();
 }
 
-statsOverflowMinPct.addEventListener('input', () => {
-  const minPct = Number(statsOverflowMinPct.value);
-  const maxPct = Number(statsOverflowMaxPct.value);
-  if (!Number.isFinite(minPct) || !Number.isFinite(maxPct)) return;
-  clampOverflowPercent(minPct, maxPct);
-  applyOverflowFromPercent();
-});
+function bindPercentInput(input: HTMLInputElement) {
+  input.addEventListener('focus', () => {
+    const parsed = parsePercentInputValue(input.value);
+    input.value = parsed === null ? '' : String(parsed);
+  });
+  input.addEventListener('blur', () => {
+    const parsed = parsePercentInputValue(input.value);
+    if (parsed === null) {
+      input.value = '';
+      return;
+    }
+    setPercentInputValue(input, parsed);
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+    event.preventDefault();
+    const step = Number(input.dataset.step ?? '0.1');
+    const current = parsePercentInputValue(input.value) ?? 0;
+    const delta = event.key === 'ArrowUp' ? step : -step;
+    const next = Math.min(100, Math.max(0, current + delta));
+    setPercentInputValue(input, next);
+    const minPct = parsePercentInputValue(statsOverflowMinPct.value);
+    const maxPct = parsePercentInputValue(statsOverflowMaxPct.value);
+    if (minPct !== null && maxPct !== null) {
+      clampOverflowPercent(minPct, maxPct);
+      applyOverflowFromPercent();
+    }
+  });
+  input.addEventListener('input', () => {
+    const minPct = parsePercentInputValue(statsOverflowMinPct.value);
+    const maxPct = parsePercentInputValue(statsOverflowMaxPct.value);
+    if (minPct === null || maxPct === null) return;
+    clampOverflowPercent(minPct, maxPct);
+    applyOverflowFromPercent();
+  });
+}
 
-statsOverflowMaxPct.addEventListener('input', () => {
-  const minPct = Number(statsOverflowMinPct.value);
-  const maxPct = Number(statsOverflowMaxPct.value);
-  if (!Number.isFinite(minPct) || !Number.isFinite(maxPct)) return;
-  clampOverflowPercent(minPct, maxPct);
-  applyOverflowFromPercent();
-});
+bindPercentInput(statsOverflowMinPct);
+bindPercentInput(statsOverflowMaxPct);
 
 statsOverflowMinAbs.addEventListener('input', () => {
   applyOverflowFromAbsolute();

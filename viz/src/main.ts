@@ -8,7 +8,7 @@ import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 
 
 // Local imports
-import { OSM_STYLE, SATELLITE_STYLE, EMPTY_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { OSM_STYLE, SATELLITE_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
 import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
 import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
@@ -38,75 +38,89 @@ map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 type BasemapMode = 'streets' | 'satellite' | 'none';
 let currentBasemap: BasemapMode = 'streets';
 
-function getBasemapStyle(mode: BasemapMode) {
-  switch (mode) {
-    case 'satellite':
-      return SATELLITE_STYLE;
-    case 'none':
-      return EMPTY_STYLE;
-    case 'streets':
-    default:
-      return OSM_STYLE;
-  }
-}
-
 function updateBasemapButtonStates() {
   basemapButtons.forEach(button => {
     button.classList.toggle('active', button.dataset.basemap === currentBasemap);
   });
 }
 
-function restoreLayersAfterStyleChange() {
-  layers.forEach(layer => {
-    if (!layer.geojson) return;
-    if (!map.getSource(layer.sourceId)) {
-      map.addSource(layer.sourceId, { type: 'geojson', data: layer.geojson });
-    }
-    addExtrusionLayer(layer);
-    ensureErrorLayer(layer);
-  });
+const BASEMAP_LAYER_IDS: Record<BasemapMode, string> = {
+  streets: 'osm-tiles',
+  satellite: 'satellite-tiles',
+  none: 'background'
+};
 
-  if (currentLayerId) {
-    const layer = layers.get(currentLayerId);
-    if (layer) {
-      applyLayerState(layer);
-      if (currentGeoJSON && currentField) {
-        applyExtrusion();
-      } else if (currentGeoJSON) {
-        applyGrayRendering();
-      }
-      updateErrorLayer();
-    }
+const BASEMAP_SOURCE_IDS: Partial<Record<BasemapMode, string>> = {
+  streets: 'osm-tiles',
+  satellite: 'satellite-tiles'
+};
+
+const ALL_BASEMAP_LAYER_IDS = new Set(Object.values(BASEMAP_LAYER_IDS));
+
+function getBasemapSourceConfig(mode: BasemapMode) {
+  if (mode === 'streets') {
+    return OSM_STYLE.sources['osm-tiles'];
   }
-
-  ensureBasemapAtBottom();
+  if (mode === 'satellite') {
+    return SATELLITE_STYLE.sources['satellite-tiles'];
+  }
+  return null;
 }
 
-function ensureBasemapAtBottom() {
-  const basemapLayerIds = new Set<string>();
-  if (currentBasemap === 'streets') {
-    basemapLayerIds.add('osm-tiles');
-  } else if (currentBasemap === 'satellite') {
-    basemapLayerIds.add('satellite-tiles');
-  } else if (currentBasemap === 'none') {
-    basemapLayerIds.add('background');
-  }
+function getBasemapInsertBeforeId() {
   const styleLayers = map.getStyle().layers ?? [];
-  styleLayers
-    .filter(layer => !basemapLayerIds.has(layer.id))
-    .forEach(layer => {
-      map.moveLayer(layer.id);
+  const nextLayer = styleLayers.find(layer => !ALL_BASEMAP_LAYER_IDS.has(layer.id));
+  return nextLayer?.id;
+}
+
+function removeBasemap(mode: BasemapMode) {
+  const layerId = BASEMAP_LAYER_IDS[mode];
+  if (map.getLayer(layerId)) {
+    map.removeLayer(layerId);
+  }
+  const sourceId = BASEMAP_SOURCE_IDS[mode];
+  if (sourceId && map.getSource(sourceId)) {
+    map.removeSource(sourceId);
+  }
+}
+
+function addBasemap(mode: BasemapMode) {
+  const beforeId = getBasemapInsertBeforeId();
+  if (mode === 'none') {
+    map.addLayer({
+      id: BASEMAP_LAYER_IDS.none,
+      type: 'background',
+      paint: { 'background-color': '#f8f8f8' }
+    }, beforeId);
+    return;
+  }
+
+  const sourceConfig = getBasemapSourceConfig(mode);
+  if (!sourceConfig) return;
+  const sourceId = BASEMAP_SOURCE_IDS[mode]!;
+  if (!map.getSource(sourceId)) {
+    map.addSource(sourceId, {
+      type: 'raster',
+      tiles: sourceConfig.tiles,
+      tileSize: sourceConfig.tileSize,
+      attribution: sourceConfig.attribution
     });
+  }
+  map.addLayer({
+    id: BASEMAP_LAYER_IDS[mode],
+    type: 'raster',
+    source: sourceId,
+    minzoom: sourceConfig.minzoom ?? 0,
+    maxzoom: sourceConfig.maxzoom ?? 19
+  }, beforeId);
 }
 
 function setBasemapMode(mode: BasemapMode) {
   if (mode === currentBasemap) return;
+  removeBasemap(currentBasemap);
   currentBasemap = mode;
   updateBasemapButtonStates();
-  map.setStyle(getBasemapStyle(mode));
-  map.once('style.load', () => {
-    restoreLayersAfterStyleChange();
-  });
+  addBasemap(mode);
 }
 
 /* ---------------- Cursor Management ---------------- */

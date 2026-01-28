@@ -823,6 +823,19 @@ const settingsControlsEl = document.getElementById('settingsControls') as HTMLDi
 const settingsMenuContent = document.getElementById('settingsMenuContent') as HTMLDivElement;
 const paintControlsEl = document.getElementById('paintControls') as HTMLDivElement;
 const paintContent = document.getElementById('paintContent') as HTMLDivElement;
+const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
+const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
+const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
+const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
+const statsNumericFieldSelect = document.getElementById('statsNumericField') as HTMLSelectElement;
+const statisticsSection = document.getElementById('statisticsSection') as HTMLFieldSetElement;
+const statsParcelCount = document.getElementById('statsParcelCount') as HTMLSpanElement;
+const statsMedian = document.getElementById('statsMedian') as HTMLSpanElement;
+const statsMean = document.getElementById('statsMean') as HTMLSpanElement;
+const statsStdDev = document.getElementById('statsStdDev') as HTMLSpanElement;
+const statsCod = document.getElementById('statsCod') as HTMLSpanElement;
+const statsPercentiles = document.getElementById('statsPercentiles') as HTMLDivElement;
+const statsHistogram = document.getElementById('statsHistogram') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -859,9 +872,11 @@ if (settingsOtherActions) {
 const btnMinimizeLayers = document.getElementById('btnMinimizeLayers') as HTMLButtonElement;
 const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu') as HTMLButtonElement;
 const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
+const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') as HTMLButtonElement;
 
 // Toolbar elements
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
+const statisticsToolButton = document.getElementById('statisticsToolButton') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
@@ -1083,7 +1098,14 @@ let isSettingsMenuMinimized = false;
 let isPaintMinimized = false;
 let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
+let isStatisticsMinimized = true;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
+
+// Statistics state
+let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
+let statsCategoryField: string | null = null;
+let statsCategoryValueIndex: string | null = null;
+let statsNumericField: string | null = null;
 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
@@ -1329,6 +1351,7 @@ function applyLayerState(layer: LayerState) {
   updateFloatingLegend();
   updateSelectionControls();
   renderDataStoreList();
+  refreshStatisticsPanel();
 
   if (map.getLayer(layer.layerId)) {
     setLayerVisibility(layer, layer.visible);
@@ -1453,6 +1476,7 @@ function removeLayer(layerId: string) {
       fieldSelect.replaceChildren(new Option('— load a file first —', ''));
       updateFieldTypeUI();
       updateFloatingLegend();
+      refreshStatisticsPanel();
       if (selectionControlsPanel) {
         selectionControlsPanel.style.display = 'none';
       }
@@ -1588,6 +1612,275 @@ function showLegend() {
   updateSelectionControlsPosition();
   // Update legend position
   updateLegendPosition();
+}
+
+function positionStatisticsPanel() {
+  if (!statisticsControlsEl) return;
+  if (statisticsControlsEl.dataset.userPositioned === 'true') return;
+  const anchor = (!isSettingsMenuMinimized && settingsControlsEl) ? settingsControlsEl : controlsEl;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  statisticsControlsEl.style.left = `${rect.right + gap}px`;
+  statisticsControlsEl.style.top = `${rect.top}px`;
+  statisticsControlsEl.style.transform = 'none';
+}
+
+function minimizeStatistics() {
+  isStatisticsMinimized = true;
+  statisticsContent.style.display = 'none';
+  statisticsControlsEl.style.display = 'none';
+  updateToolbarButtonStates();
+}
+
+function showStatistics() {
+  isStatisticsMinimized = false;
+  statisticsContent.style.display = 'grid';
+  statisticsControlsEl.style.display = 'grid';
+  positionStatisticsPanel();
+  updateToolbarButtonStates();
+}
+
+function toggleStatistics() {
+  if (isStatisticsMinimized) {
+    showStatistics();
+  } else {
+    minimizeStatistics();
+  }
+}
+
+function resetStatisticsDisplay() {
+  statsParcelCount.textContent = '—';
+  statsMedian.textContent = '—';
+  statsMean.textContent = '—';
+  statsStdDev.textContent = '—';
+  statsCod.textContent = '—';
+  statsPercentiles.replaceChildren();
+  statsHistogram.replaceChildren();
+}
+
+function populateStatisticsCategoryFields() {
+  statsCategoryFieldSelect.replaceChildren();
+  const placeholder = new Option('Choose a field', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  statsCategoryFieldSelect.appendChild(placeholder);
+
+  if (!currentGeoJSON) {
+    statsCategoryFieldSelect.disabled = true;
+    statsCategoryField = null;
+    return;
+  }
+
+  const availableCategorical = chosenCategoricalFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+
+  availableCategorical.forEach(field => {
+    statsCategoryFieldSelect.appendChild(new Option(field, field));
+  });
+
+  statsCategoryFieldSelect.disabled = availableCategorical.length === 0;
+  if (statsCategoryField && availableCategorical.includes(statsCategoryField)) {
+    statsCategoryFieldSelect.value = statsCategoryField;
+  } else {
+    statsCategoryField = null;
+  }
+}
+
+function populateStatisticsCategoryValues(field: string | null) {
+  statsCategoryValueSelect.replaceChildren();
+  const placeholder = new Option('Choose a value', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  statsCategoryValueSelect.appendChild(placeholder);
+
+  if (!currentGeoJSON || !field) {
+    statsCategoryValueSelect.disabled = true;
+    statsCategoryValueMap = [];
+    statsCategoryValueIndex = null;
+    return;
+  }
+
+  const valueMap = new Map<string, { label: string; value: unknown }>();
+  currentGeoJSON.features.forEach(feature => {
+    const raw = (feature.properties as Record<string, unknown> | undefined)?.[field];
+    if (raw === null || raw === undefined) return;
+    const key = `${typeof raw}:${String(raw)}`;
+    if (!valueMap.has(key)) {
+      valueMap.set(key, { label: String(raw), value: raw });
+    }
+  });
+
+  statsCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+
+  const everythingOption = new Option('Everything', 'everything');
+  statsCategoryValueSelect.appendChild(everythingOption);
+
+  statsCategoryValueMap.forEach((entry, index) => {
+    statsCategoryValueSelect.appendChild(new Option(entry.label, String(index)));
+  });
+
+  statsCategoryValueSelect.disabled = false;
+
+  if (statsCategoryValueIndex === 'everything') {
+    statsCategoryValueSelect.value = 'everything';
+  } else if (statsCategoryValueIndex && statsCategoryValueMap[Number(statsCategoryValueIndex)]) {
+    statsCategoryValueSelect.value = statsCategoryValueIndex;
+  } else {
+    statsCategoryValueIndex = null;
+  }
+}
+
+function populateStatisticsNumericFields() {
+  statsNumericFieldSelect.replaceChildren();
+  const placeholder = new Option('Choose a field', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  statsNumericFieldSelect.appendChild(placeholder);
+
+  if (!currentGeoJSON) {
+    statsNumericFieldSelect.disabled = true;
+    statsNumericField = null;
+    return;
+  }
+
+  const availableNumeric = chosenNumericFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+  availableNumeric.forEach(field => {
+    statsNumericFieldSelect.appendChild(new Option(field, field));
+  });
+  statsNumericFieldSelect.disabled = availableNumeric.length === 0;
+  if (statsNumericField && availableNumeric.includes(statsNumericField)) {
+    statsNumericFieldSelect.value = statsNumericField;
+  } else {
+    statsNumericField = null;
+  }
+}
+
+function computeStatisticsValues(values: number[]) {
+  if (values.length === 0) {
+    return {
+      median: NaN,
+      mean: NaN,
+      stdDev: NaN,
+      cod: NaN,
+      percentiles: [] as Array<{ label: string; value: number }>
+    };
+  }
+
+  const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
+  const median = percentile(values, 50);
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+  const stdDev = Math.sqrt(variance);
+  const absDeviation = values.reduce((sum, v) => sum + Math.abs(v - median), 0) / values.length;
+  const cod = Number.isFinite(median) && median !== 0 ? (absDeviation / Math.abs(median)) * 100 : NaN;
+  const percentiles = [10, 25, 50, 75, 90].map(p => ({
+    label: `p${p}`,
+    value: percentile(values, p)
+  }));
+
+  return { median, mean, stdDev, cod, percentiles };
+}
+
+function renderStatisticsHistogram(values: number[]) {
+  statsHistogram.replaceChildren();
+  if (values.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = 'No data';
+    empty.style.gridColumn = '1 / -1';
+    statsHistogram.appendChild(empty);
+    return;
+  }
+
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const bins = 10;
+  const counts = new Array(bins).fill(0);
+  if (min === max) {
+    counts[bins - 1] = values.length;
+  } else {
+    const step = (max - min) / bins;
+    values.forEach(value => {
+      const idx = Math.min(bins - 1, Math.floor((value - min) / step));
+      counts[idx] += 1;
+    });
+  }
+
+  const maxCount = Math.max(...counts, 1);
+  counts.forEach((count, idx) => {
+    const bar = document.createElement('div');
+    bar.className = 'histogram-bar';
+    bar.style.height = `${(count / maxCount) * 100}%`;
+    const rangeStart = min + ((max - min) / bins) * idx;
+    const rangeEnd = min + ((max - min) / bins) * (idx + 1);
+    bar.title = `${fmt(rangeStart)}–${fmt(rangeEnd)} (${count})`;
+    statsHistogram.appendChild(bar);
+  });
+}
+
+function updateStatisticsResults() {
+  if (!currentGeoJSON || !statsCategoryField || !statsCategoryValueIndex || !statsNumericField) {
+    resetStatisticsDisplay();
+    return;
+  }
+
+  let selection = currentGeoJSON.features;
+  if (statsCategoryValueIndex !== 'everything') {
+    const entry = statsCategoryValueMap[Number(statsCategoryValueIndex)];
+    if (entry) {
+      selection = selection.filter(feature => {
+        const value = (feature.properties as Record<string, unknown> | undefined)?.[statsCategoryField];
+        return value === entry.value;
+      });
+    }
+  }
+
+  const totalCount = currentGeoJSON.features.length;
+  const selectionCount = selection.length;
+  const percent = totalCount > 0 ? (selectionCount / totalCount) * 100 : 0;
+  statsParcelCount.textContent = `${selectionCount.toLocaleString()} (${percent.toFixed(1)}%)`;
+
+  const values = selection
+    .map(feature => numOrNull((feature.properties as Record<string, unknown> | undefined)?.[statsNumericField]))
+    .filter((value): value is number => value !== null);
+
+  const stats = computeStatisticsValues(values);
+  statsMedian.textContent = Number.isFinite(stats.median) ? fmt(stats.median) : '—';
+  statsMean.textContent = Number.isFinite(stats.mean) ? fmt(stats.mean) : '—';
+  statsStdDev.textContent = Number.isFinite(stats.stdDev) ? fmt(stats.stdDev) : '—';
+  statsCod.textContent = Number.isFinite(stats.cod) ? `${fmt(stats.cod)}%` : '—';
+
+  statsPercentiles.replaceChildren();
+  stats.percentiles.forEach(item => {
+    const row = document.createElement('div');
+    row.textContent = `${item.label}: ${Number.isFinite(item.value) ? fmt(item.value) : '—'}`;
+    statsPercentiles.appendChild(row);
+  });
+
+  renderStatisticsHistogram(values);
+}
+
+function refreshStatisticsPanel() {
+  populateStatisticsCategoryFields();
+  populateStatisticsCategoryValues(statsCategoryField);
+
+  if (statsCategoryValueIndex) {
+    statisticsSection.style.display = 'grid';
+    populateStatisticsNumericFields();
+  } else {
+    statisticsSection.style.display = 'none';
+    statsNumericField = null;
+  }
+
+  if (statsNumericField) {
+    updateStatisticsResults();
+  } else {
+    resetStatisticsDisplay();
+  }
 }
 
 // Dragging functions
@@ -3586,6 +3879,7 @@ async function loadSelectedColumns() {
 
     // Apply gray rendering when no field is selected
     applyGrayRendering();
+    refreshStatisticsPanel();
 
     fitToData(currentGeoJSON);
     persistCurrentLayerState();
@@ -4709,7 +5003,39 @@ btnMinimizeLayers.addEventListener('click', minimizeLayers);
 btnMinimizeSettingsMenu.addEventListener('click', minimizeSettingsMenu);
 btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
+btnMinimizeStatistics.addEventListener('click', minimizeStatistics);
 btnPaintMenu.addEventListener('click', togglePaint);
+
+statsCategoryFieldSelect.addEventListener('change', () => {
+  statsCategoryField = statsCategoryFieldSelect.value || null;
+  statsCategoryValueIndex = null;
+  statsNumericField = null;
+  populateStatisticsCategoryValues(statsCategoryField);
+  statisticsSection.style.display = 'none';
+  const placeholder = new Option('Choose a field', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  statsNumericFieldSelect.replaceChildren(placeholder);
+  statsNumericFieldSelect.disabled = true;
+  resetStatisticsDisplay();
+});
+
+statsCategoryValueSelect.addEventListener('change', () => {
+  statsCategoryValueIndex = statsCategoryValueSelect.value || null;
+  statsNumericField = null;
+  if (statsCategoryValueIndex) {
+    statisticsSection.style.display = 'grid';
+    populateStatisticsNumericFields();
+  } else {
+    statisticsSection.style.display = 'none';
+  }
+  resetStatisticsDisplay();
+});
+
+statsNumericFieldSelect.addEventListener('change', () => {
+  statsNumericField = statsNumericFieldSelect.value || null;
+  updateStatisticsResults();
+});
 
 // No longer needed - legend toggle removed from settings
 
@@ -4722,6 +5048,7 @@ makeDraggable(controlsEl);
 makeDraggable(settingsControlsEl);
 makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
+makeDraggable(statisticsControlsEl);
 positionPaintPanel();
 positionSettingsPanel();
 updatePaintButtonState();
@@ -4872,6 +5199,7 @@ updateFieldTypeUI();
 setQuality('high');
 renderLayerList();
 renderDataStoreList();
+refreshStatisticsPanel();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
   if (!currentField || !currentGeoJSON || !currentStats) return [];
@@ -5242,6 +5570,12 @@ function initializeToolbar() {
       minimizeLegend();
     }
   });
+
+  statisticsToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    toggleStatistics();
+  });
   
   // Handle submenu button clicks
   submenuButtons.forEach(button => {
@@ -5291,6 +5625,14 @@ function updateToolbarButtonStates() {
   } else {
     legendToolButton.classList.remove('inactive');
     legendToolButton.classList.add('active');
+  }
+
+  if (isStatisticsMinimized) {
+    statisticsToolButton.classList.add('inactive');
+    statisticsToolButton.classList.remove('active');
+  } else {
+    statisticsToolButton.classList.remove('inactive');
+    statisticsToolButton.classList.add('active');
   }
 
   updatePaintButtonState();

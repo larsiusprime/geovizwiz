@@ -194,6 +194,14 @@
     .progress.indeterminate .bar { width: 30%; animation: indet 1.2s infinite linear; }
     @keyframes indet { 0% { margin-left: -30% } 100% { margin-left: 100% } }
 
+    .histogram-bar {
+      background: #3b82f6;
+      border-radius: 3px 3px 0 0;
+      min-height: 4px;
+      display: block;
+      width: 100%;
+    }
+
     /* Vertical Toolbar Styles */
     #verticalToolbar {
       position: absolute;
@@ -421,6 +429,10 @@
         <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
           <img src="./src/svg/legend.svg" alt="Legend" />
         </button>
+
+        <button id="statisticsToolButton" class="toolbar-button" title="Statistics">
+          <img src="./src/svg/chart.svg" alt="Statistics" />
+        </button>
         
         <div id="selectSubmenu" class="toolbar-submenu">
           <button class="submenu-button" data-mode="select-one" title="Select individual parcels by clicking">
@@ -642,6 +654,53 @@
         <div class="inline">
           <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
           <output id="opacityVal">0.9</output>
+        </div>
+      </fieldset>
+    </div>
+  </div>
+
+  <div id="statisticsControls" style="position: absolute; top: 10px; left: 900px; width: min(calc(92vw - 80px), 320px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Statistics</div>
+      <button id="btnMinimizeStatistics" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
+      <fieldset style="display: grid; gap: 8px;">
+        <div class="section-title">Category</div>
+        <label for="statsCategoryField">Category field</label>
+        <select id="statsCategoryField">
+          <option value="" selected disabled>Choose a field</option>
+        </select>
+        <label for="statsCategoryValue">Category value</label>
+        <select id="statsCategoryValue" disabled>
+          <option value="" selected disabled>Choose a value</option>
+        </select>
+      </fieldset>
+
+      <fieldset id="statisticsSection" style="display: none; gap: 8px;">
+        <div class="section-title">Statistic</div>
+        <label for="statsNumericField">Numeric field</label>
+        <select id="statsNumericField">
+          <option value="" selected disabled>Choose a field</option>
+        </select>
+        <div id="statsResults" style="display: grid; gap: 6px;">
+          <div><strong>Parcel count</strong>: <span id="statsParcelCount">—</span></div>
+          <div><strong>Median</strong>: <span id="statsMedian">—</span></div>
+          <div><strong>Mean</strong>: <span id="statsMean">—</span></div>
+          <div><strong>Standard deviation</strong>: <span id="statsStdDev">—</span></div>
+          <div><strong>Coefficient of dispersion</strong>: <span id="statsCod">—</span></div>
+          <div>
+            <strong>Percentiles</strong>
+            <div id="statsPercentiles" class="muted" style="display: grid; gap: 2px; margin-top: 4px;"></div>
+          </div>
+          <div>
+            <strong>Histogram</strong>
+            <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>
+          </div>
         </div>
       </fieldset>
     </div>

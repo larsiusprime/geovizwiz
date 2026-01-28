@@ -78,6 +78,25 @@ function restoreLayersAfterStyleChange() {
       updateErrorLayer();
     }
   }
+
+  ensureBasemapAtBottom();
+}
+
+function ensureBasemapAtBottom() {
+  const basemapLayerIds = new Set<string>();
+  if (currentBasemap === 'streets') {
+    basemapLayerIds.add('osm-tiles');
+  } else if (currentBasemap === 'satellite') {
+    basemapLayerIds.add('satellite-tiles');
+  } else if (currentBasemap === 'none') {
+    basemapLayerIds.add('background');
+  }
+  const styleLayers = map.getStyle().layers ?? [];
+  styleLayers
+    .filter(layer => !basemapLayerIds.has(layer.id))
+    .forEach(layer => {
+      map.moveLayer(layer.id);
+    });
 }
 
 function setBasemapMode(mode: BasemapMode) {

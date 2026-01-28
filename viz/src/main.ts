@@ -1784,6 +1784,8 @@ function populateStatisticsNumericFields() {
 function computeStatisticsValues(values: number[]) {
   if (values.length === 0) {
     return {
+      min: NaN,
+      max: NaN,
       median: NaN,
       mean: NaN,
       stdDev: NaN,
@@ -1792,6 +1794,8 @@ function computeStatisticsValues(values: number[]) {
     };
   }
 
+  const min = Math.min(...values);
+  const max = Math.max(...values);
   const mean = values.reduce((sum, v) => sum + v, 0) / values.length;
   const median = percentile(values, 50);
   const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
@@ -1803,7 +1807,7 @@ function computeStatisticsValues(values: number[]) {
     value: percentile(values, p)
   }));
 
-  return { median, mean, stdDev, cod, percentiles };
+  return { min, max, median, mean, stdDev, cod, percentiles };
 }
 
 function getHistogramDomain(values: number[]) {
@@ -1988,13 +1992,18 @@ function updateStatisticsResults() {
   statsValuesCache = values;
 
   const stats = computeStatisticsValues(values);
+  const percentileRows = [
+    { label: 'min', value: stats.min },
+    ...stats.percentiles,
+    { label: 'max', value: stats.max }
+  ];
   statsMedian.textContent = Number.isFinite(stats.median) ? fmt(stats.median) : '—';
   statsMean.textContent = Number.isFinite(stats.mean) ? fmt(stats.mean) : '—';
   statsStdDev.textContent = Number.isFinite(stats.stdDev) ? fmt(stats.stdDev) : '—';
   statsCod.textContent = Number.isFinite(stats.cod) ? `${fmt(stats.cod)}%` : '—';
 
   statsPercentiles.replaceChildren();
-  stats.percentiles.forEach(item => {
+  percentileRows.forEach(item => {
     const row = document.createElement('tr');
     const labelCell = document.createElement('td');
     labelCell.textContent = item.label;

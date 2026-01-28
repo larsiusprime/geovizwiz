@@ -211,15 +211,22 @@
       width: 100%;
       margin: 0;
       background: transparent;
+      pointer-events: auto;
+    }
+    .stats-range .range-inputs input[type="range"]:first-child {
+      z-index: 2;
+    }
+    .stats-range .range-inputs input[type="range"]:last-child {
+      z-index: 3;
     }
     .stats-range .range-values {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 8px;
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
       align-items: center;
     }
     .stats-range .range-values input[type="number"] {
-      width: 100%;
+      width: 90px;
       padding: 4px 6px;
       border-radius: 6px;
       border: 1px solid #ddd;
@@ -807,22 +814,18 @@
           <div>
             <strong>Histogram</strong>
             <div class="stats-range">
+              <div class="range-summary" id="statsRangeSummary">
+                <span class="summary-left" id="statsRangeLeft">0%</span>
+                <span class="summary-center" id="statsRangeCenter">0%</span>
+                <span class="summary-right" id="statsRangeRight">0%</span>
+              </div>
               <div class="range-inputs">
                 <input id="statsRangeMinSlider" type="range" />
                 <input id="statsRangeMaxSlider" type="range" />
               </div>
               <div class="range-values">
-                <label>Min
-                  <input id="statsRangeMinInput" type="number" />
-                </label>
-                <label>Max
-                  <input id="statsRangeMaxInput" type="number" />
-                </label>
-              </div>
-              <div class="range-summary" id="statsRangeSummary">
-                <span class="summary-left" id="statsRangeLeft">0%</span>
-                <span class="summary-center" id="statsRangeCenter">0%</span>
-                <span class="summary-right" id="statsRangeRight">0%</span>
+                <label>Min: <input id="statsRangeMinInput" type="number" /></label>
+                <label>Max: <input id="statsRangeMaxInput" type="number" /></label>
               </div>
             </div>
             <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>

@@ -4855,7 +4855,6 @@ unitsSelect.value = 'centimeters';
 // Initialize UI - show numeric options by default, hide categorical
 updateFieldTypeUI();
 
-installWelcome();
 setQuality('high');
 renderLayerList();
 renderDataStoreList();
@@ -5289,6 +5288,8 @@ if (document.readyState === 'loading') {
 } else {
   initializeToolbar();
 }
+
+installWelcome();
 
 
 /* ---------------- Lasso Selection Tool ---------------- */

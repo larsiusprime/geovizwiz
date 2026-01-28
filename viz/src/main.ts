@@ -828,7 +828,7 @@ const statisticsContent = document.getElementById('statisticsContent') as HTMLDi
 const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
 const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
 const statsNumericFieldSelect = document.getElementById('statsNumericField') as HTMLSelectElement;
-const statisticsSection = document.getElementById('statisticsSection') as HTMLFieldSetElement;
+const statisticsSection = document.getElementById('statisticsSection') as HTMLDivElement;
 const statsParcelCount = document.getElementById('statsParcelCount') as HTMLSpanElement;
 const statsMedian = document.getElementById('statsMedian') as HTMLSpanElement;
 const statsMean = document.getElementById('statsMean') as HTMLSpanElement;
@@ -836,6 +836,15 @@ const statsStdDev = document.getElementById('statsStdDev') as HTMLSpanElement;
 const statsCod = document.getElementById('statsCod') as HTMLSpanElement;
 const statsPercentiles = document.getElementById('statsPercentiles') as HTMLDivElement;
 const statsHistogram = document.getElementById('statsHistogram') as HTMLDivElement;
+const statsNormAsIs = document.getElementById('stats-norm-asis') as HTMLInputElement;
+const statsNormLand = document.getElementById('stats-norm-land') as HTMLInputElement;
+const statsNormBldg = document.getElementById('stats-norm-bldg') as HTMLInputElement;
+const statsNormLandUnitEl = document.getElementById('statsNormLandUnit') as HTMLElement;
+const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTMLElement;
+const statsRangeMinSlider = document.getElementById('statsRangeMinSlider') as HTMLInputElement;
+const statsRangeMaxSlider = document.getElementById('statsRangeMaxSlider') as HTMLInputElement;
+const statsRangeMinInput = document.getElementById('statsRangeMinInput') as HTMLInputElement;
+const statsRangeMaxInput = document.getElementById('statsRangeMaxInput') as HTMLInputElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -1106,6 +1115,9 @@ let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
 let statsCategoryField: string | null = null;
 let statsCategoryValueIndex: string | null = null;
 let statsNumericField: string | null = null;
+let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
+let statsHistogramRange: { min: number; max: number } | null = null;
+let statsValuesCache: number[] = [];
 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
@@ -1658,6 +1670,10 @@ function resetStatisticsDisplay() {
   statsCod.textContent = '—';
   statsPercentiles.replaceChildren();
   statsHistogram.replaceChildren();
+  statsRangeMinSlider.disabled = true;
+  statsRangeMaxSlider.disabled = true;
+  statsRangeMinInput.disabled = true;
+  statsRangeMaxInput.disabled = true;
 }
 
 function populateStatisticsCategoryFields() {
@@ -1785,9 +1801,63 @@ function computeStatisticsValues(values: number[]) {
   return { median, mean, stdDev, cod, percentiles };
 }
 
+function getHistogramDomain(values: number[]) {
+  if (values.length === 0) {
+    return { min: 0, max: 1 };
+  }
+  return { min: Math.min(...values), max: Math.max(...values) };
+}
+
+function updateHistogramRangeControls(values: number[]) {
+  if (values.length === 0) {
+    statsHistogramRange = null;
+    statsRangeMinSlider.disabled = true;
+    statsRangeMaxSlider.disabled = true;
+    statsRangeMinInput.disabled = true;
+    statsRangeMaxInput.disabled = true;
+    return;
+  }
+
+  statsRangeMinSlider.disabled = false;
+  statsRangeMaxSlider.disabled = false;
+  statsRangeMinInput.disabled = false;
+  statsRangeMaxInput.disabled = false;
+
+  const domain = getHistogramDomain(values);
+  const span = domain.max - domain.min;
+  const step = span > 0 ? span / 100 : 1;
+
+  if (!statsHistogramRange || statsHistogramRange.min < domain.min || statsHistogramRange.max > domain.max) {
+    statsHistogramRange = { min: domain.min, max: domain.max };
+  } else {
+    statsHistogramRange = {
+      min: Math.max(domain.min, statsHistogramRange.min),
+      max: Math.min(domain.max, statsHistogramRange.max)
+    };
+  }
+
+  if (statsHistogramRange.min > statsHistogramRange.max) {
+    statsHistogramRange.min = domain.min;
+    statsHistogramRange.max = domain.max;
+  }
+
+  statsRangeMinSlider.min = String(domain.min);
+  statsRangeMinSlider.max = String(domain.max);
+  statsRangeMinSlider.step = String(step);
+  statsRangeMaxSlider.min = String(domain.min);
+  statsRangeMaxSlider.max = String(domain.max);
+  statsRangeMaxSlider.step = String(step);
+
+  statsRangeMinSlider.value = String(statsHistogramRange.min);
+  statsRangeMaxSlider.value = String(statsHistogramRange.max);
+  statsRangeMinInput.value = String(statsHistogramRange.min);
+  statsRangeMaxInput.value = String(statsHistogramRange.max);
+}
+
 function renderStatisticsHistogram(values: number[]) {
   statsHistogram.replaceChildren();
   if (values.length === 0) {
+    updateHistogramRangeControls(values);
     const empty = document.createElement('div');
     empty.className = 'muted';
     empty.textContent = 'No data';
@@ -1796,15 +1866,18 @@ function renderStatisticsHistogram(values: number[]) {
     return;
   }
 
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+  updateHistogramRangeControls(values);
+  const range = statsHistogramRange ?? getHistogramDomain(values);
+  const min = range.min;
+  const max = range.max;
   const bins = 10;
   const counts = new Array(bins).fill(0);
+  const inRangeValues = values.filter(value => value >= min && value <= max);
   if (min === max) {
-    counts[bins - 1] = values.length;
+    counts[bins - 1] = inRangeValues.length;
   } else {
     const step = (max - min) / bins;
-    values.forEach(value => {
+    inRangeValues.forEach(value => {
       const idx = Math.min(bins - 1, Math.floor((value - min) / step));
       counts[idx] += 1;
     });
@@ -1812,18 +1885,30 @@ function renderStatisticsHistogram(values: number[]) {
 
   const maxCount = Math.max(...counts, 1);
   counts.forEach((count, idx) => {
-    const bar = document.createElement('div');
-    bar.className = 'histogram-bar';
-    bar.style.height = `${(count / maxCount) * 100}%`;
+    const bin = document.createElement('div');
+    bin.className = 'histogram-bin';
     const rangeStart = min + ((max - min) / bins) * idx;
     const rangeEnd = min + ((max - min) / bins) * (idx + 1);
-    bar.title = `${fmt(rangeStart)}–${fmt(rangeEnd)} (${count})`;
-    statsHistogram.appendChild(bar);
+    bin.title = `${fmt(rangeStart)}–${fmt(rangeEnd)} (${count})`;
+    if (count > 0) {
+      const bar = document.createElement('div');
+      bar.className = 'histogram-bar';
+      bar.style.height = `${(count / maxCount) * 100}%`;
+      bin.appendChild(bar);
+    } else {
+      const spacer = document.createElement('div');
+      spacer.style.height = '100%';
+      spacer.style.width = '100%';
+      spacer.style.opacity = '0';
+      bin.appendChild(spacer);
+    }
+    statsHistogram.appendChild(bin);
   });
 }
 
 function updateStatisticsResults() {
   if (!currentGeoJSON || !statsCategoryField || !statsCategoryValueIndex || !statsNumericField) {
+    statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
@@ -1845,8 +1930,24 @@ function updateStatisticsResults() {
   statsParcelCount.textContent = `${selectionCount.toLocaleString()} (${percent.toFixed(1)}%)`;
 
   const values = selection
-    .map(feature => numOrNull((feature.properties as Record<string, unknown> | undefined)?.[statsNumericField]))
+    .map(feature => {
+      const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
+      let base = numOrNull(props[statsNumericField]);
+      if (base === null) return null;
+
+      if (statsNormalizationMode === 'perLand' && landSizeField) {
+        const denom = numOrNull(props[landSizeField]);
+        if (denom === null || denom <= 0) return null;
+        base = base / denom;
+      } else if (statsNormalizationMode === 'perBuilding' && bldgSizeField) {
+        const denom = numOrNull(props[bldgSizeField]);
+        if (denom === null || denom <= 0) return null;
+        base = base / denom;
+      }
+      return base;
+    })
     .filter((value): value is number => value !== null);
+  statsValuesCache = values;
 
   const stats = computeStatisticsValues(values);
   statsMedian.textContent = Number.isFinite(stats.median) ? fmt(stats.median) : '—';
@@ -3779,6 +3880,20 @@ function setSizeState(bField: string | null, bUnit: string | null, lField: strin
   normBldg.disabled = !bldgSizeField;
   normLandUnitEl.textContent = landSizeField ? (landSizeUnitLabel ?? '(unit)') : '(unit)';
   normBldgUnitEl.textContent = bldgSizeField ? (bldgSizeUnitLabel ?? '(unit)') : '(unit)';
+
+  statsNormLand.disabled = !landSizeField;
+  statsNormBldg.disabled = !bldgSizeField;
+  statsNormLandUnitEl.textContent = landSizeField ? (landSizeUnitLabel ?? '(unit)') : '(unit)';
+  statsNormBldgUnitEl.textContent = bldgSizeField ? (bldgSizeUnitLabel ?? '(unit)') : '(unit)';
+
+  if (statsNormalizationMode === 'perLand' && !landSizeField) {
+    statsNormalizationMode = 'asis';
+    statsNormAsIs.checked = true;
+  }
+  if (statsNormalizationMode === 'perBuilding' && !bldgSizeField) {
+    statsNormalizationMode = 'asis';
+    statsNormAsIs.checked = true;
+  }
 }
 
 /* ---------------- Loading overlay helpers ---------------- */
@@ -5010,6 +5125,7 @@ statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
   statsCategoryValueIndex = null;
   statsNumericField = null;
+  statsHistogramRange = null;
   populateStatisticsCategoryValues(statsCategoryField);
   statisticsSection.style.display = 'none';
   const placeholder = new Option('Choose a field', '');
@@ -5023,6 +5139,7 @@ statsCategoryFieldSelect.addEventListener('change', () => {
 statsCategoryValueSelect.addEventListener('change', () => {
   statsCategoryValueIndex = statsCategoryValueSelect.value || null;
   statsNumericField = null;
+  statsHistogramRange = null;
   if (statsCategoryValueIndex) {
     statisticsSection.style.display = 'grid';
     populateStatisticsNumericFields();
@@ -5034,7 +5151,72 @@ statsCategoryValueSelect.addEventListener('change', () => {
 
 statsNumericFieldSelect.addEventListener('change', () => {
   statsNumericField = statsNumericFieldSelect.value || null;
+  statsHistogramRange = null;
   updateStatisticsResults();
+});
+
+document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {
+  radio.addEventListener('change', () => {
+    statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
+      ?.value as 'asis' | 'perLand' | 'perBuilding';
+    statsHistogramRange = null;
+    updateStatisticsResults();
+  });
+});
+
+function clampHistogramRange(nextMin: number, nextMax: number) {
+  if (!statsHistogramRange) return;
+  const minLimit = Number(statsRangeMinSlider.min);
+  const maxLimit = Number(statsRangeMaxSlider.max);
+
+  let minValue = Math.max(minLimit, Math.min(nextMin, maxLimit));
+  let maxValue = Math.max(minLimit, Math.min(nextMax, maxLimit));
+
+  if (minValue > maxValue) {
+    [minValue, maxValue] = [maxValue, minValue];
+  }
+
+  statsHistogramRange.min = minValue;
+  statsHistogramRange.max = maxValue;
+
+  statsRangeMinSlider.value = String(minValue);
+  statsRangeMaxSlider.value = String(maxValue);
+  statsRangeMinInput.value = String(minValue);
+  statsRangeMaxInput.value = String(maxValue);
+}
+
+statsRangeMinSlider.addEventListener('input', () => {
+  if (!statsHistogramRange) return;
+  const nextMin = Number(statsRangeMinSlider.value);
+  const nextMax = Math.max(nextMin, Number(statsRangeMaxSlider.value));
+  clampHistogramRange(nextMin, nextMax);
+  renderStatisticsHistogram(statsValuesCache);
+});
+
+statsRangeMaxSlider.addEventListener('input', () => {
+  if (!statsHistogramRange) return;
+  const nextMax = Number(statsRangeMaxSlider.value);
+  const nextMin = Math.min(nextMax, Number(statsRangeMinSlider.value));
+  clampHistogramRange(nextMin, nextMax);
+  renderStatisticsHistogram(statsValuesCache);
+});
+
+statsRangeMinInput.addEventListener('input', () => {
+  if (!statsHistogramRange) return;
+  const nextMin = Number(statsRangeMinInput.value);
+  const nextMax = Number(statsRangeMaxInput.value);
+  if (!Number.isFinite(nextMin) || !Number.isFinite(nextMax)) return;
+  clampHistogramRange(nextMin, nextMax);
+  renderStatisticsHistogram(statsValuesCache);
+});
+
+statsRangeMaxInput.addEventListener('input', () => {
+  if (!statsHistogramRange) return;
+  const nextMin = Number(statsRangeMinInput.value);
+  const nextMax = Number(statsRangeMaxInput.value);
+  if (!Number.isFinite(nextMin) || !Number.isFinite(nextMax)) return;
+  clampHistogramRange(nextMin, nextMax);
+  renderStatisticsHistogram(statsValuesCache);
 });
 
 // No longer needed - legend toggle removed from settings

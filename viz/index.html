@@ -194,12 +194,41 @@
     .progress.indeterminate .bar { width: 30%; animation: indet 1.2s infinite linear; }
     @keyframes indet { 0% { margin-left: -30% } 100% { margin-left: 100% } }
 
+    .stats-section { display: grid; gap: 8px; }
+    .stats-section label { display: block; font-size: 12px; color: #333; }
+    .stats-range {
+      display: grid;
+      gap: 6px;
+    }
+    .stats-range .range-inputs {
+      display: grid;
+      gap: 4px;
+    }
+    .stats-range .range-values {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+    }
+    .stats-range .range-values input[type="number"] {
+      width: 100%;
+      padding: 4px 6px;
+      border-radius: 6px;
+      border: 1px solid #ddd;
+      font-size: 12px;
+    }
+
     .histogram-bar {
       background: #3b82f6;
       border-radius: 3px 3px 0 0;
       min-height: 4px;
       display: block;
       width: 100%;
+    }
+    .histogram-bin {
+      display: flex;
+      align-items: flex-end;
+      height: 100%;
     }
 
     /* Vertical Toolbar Styles */
@@ -669,7 +698,7 @@
       </button>
     </div>
     <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
-      <fieldset style="display: grid; gap: 8px;">
+      <div class="stats-section">
         <div class="section-title">Category</div>
         <label for="statsCategoryField">Category field</label>
         <select id="statsCategoryField">
@@ -679,14 +708,30 @@
         <select id="statsCategoryValue" disabled>
           <option value="" selected disabled>Choose a value</option>
         </select>
-      </fieldset>
+      </div>
 
-      <fieldset id="statisticsSection" style="display: none; gap: 8px;">
+      <div class="divider"></div>
+
+      <div id="statisticsSection" class="stats-section" style="display: none;">
         <div class="section-title">Statistic</div>
         <label for="statsNumericField">Numeric field</label>
         <select id="statsNumericField">
           <option value="" selected disabled>Choose a field</option>
         </select>
+        <div style="display: grid; gap: 6px;">
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
+            <span>as-is</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
+            <span>…per land size <em id="statsNormLandUnit">(unit)</em></span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
+            <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
+          </label>
+        </div>
         <div id="statsResults" style="display: grid; gap: 6px;">
           <div><strong>Parcel count</strong>: <span id="statsParcelCount">—</span></div>
           <div><strong>Median</strong>: <span id="statsMedian">—</span></div>
@@ -699,10 +744,24 @@
           </div>
           <div>
             <strong>Histogram</strong>
+            <div class="stats-range">
+              <div class="range-inputs">
+                <input id="statsRangeMinSlider" type="range" />
+                <input id="statsRangeMaxSlider" type="range" />
+              </div>
+              <div class="range-values">
+                <label>Min
+                  <input id="statsRangeMinInput" type="number" />
+                </label>
+                <label>Max
+                  <input id="statsRangeMaxInput" type="number" />
+                </label>
+              </div>
+            </div>
             <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>
           </div>
         </div>
-      </fieldset>
+      </div>
     </div>
   </div>
 

@@ -126,6 +126,18 @@
       cursor: not-allowed;
     }
 
+    .current-layer-header {
+      font-size: 14px;
+      font-weight: 700;
+      color: #111827;
+      margin-top: 6px;
+    }
+
+    .current-layer-source {
+      font-size: 12px;
+      color: #4b5563;
+    }
+
     .layer-add-row {
       display: flex;
       align-items: center;
@@ -429,13 +441,27 @@
       <div id="settingsTopActions" class="buttons" style="margin-bottom: 8px;">
         <button id="btn-zoomto" type="button">Zoom to data</button>
       </div>
+      <fieldset>
+        <label>View presets</label>
+        <div class="buttons">
+          <button data-view="top">Top</button>
+          <button data-view="iso">Perspective</button>
+          <button data-view="north">North</button>
+          <button data-view="east">East</button>
+          <button data-view="south">South</button>
+          <button data-view="west">West</button>
+        </div>
+      </fieldset>
       <fieldset id="layerPanel">
         <label>Layers</label>
-        <div id="layerList" class="layer-list"></div>
         <div class="layer-add-row">
           <button id="addLayerFromStore" type="button">Add layer</button>
         </div>
+        <div id="layerList" class="layer-list"></div>
       </fieldset>
+
+      <div class="current-layer-header">Current layer</div>
+      <div id="currentLayerSource" class="current-layer-source">layer source: —</div>
 
       <div class="divider"></div>
 
@@ -452,19 +478,6 @@
       </div>
 
       <div class="divider"></div>
-
-      <fieldset>
-        <label>View presets</label>
-        <div class="buttons">
-          <button data-view="top">Top</button>
-          <button data-view="iso">Perspective</button>
-          <button data-view="north">North</button>
-          <button data-view="east">East</button>
-          <button data-view="south">South</button>
-          <button data-view="west">West</button>
-        </div>
-      </fieldset>
-
 
       <fieldset id="legend">      </fieldset>
       </div>
@@ -503,13 +516,14 @@
 
         <fieldset class="row">
           <div>
-			<label>Super Fancy 3D Extrusion!</label>
+            <br/>
             <label style="display:flex; gap:8px; align-items:center;">
               <input type="checkbox" id="enable3D" />
               <span>3D enabled</span>
             </label>
           </div>
         </fieldset>
+
         <fieldset class="row" id="extrusionOptions" style="display: none;">
           <div>
             <label for="mult">Extrusion multiplier</label>
@@ -529,8 +543,6 @@
           </div>
         </fieldset>
       </fieldset>
-
-      <div id="paintDividerNumeric" class="divider"></div>
 
       <!-- Categorical field options -->
       <fieldset id="categoricalOptions" style="display: none;">

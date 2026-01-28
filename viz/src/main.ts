@@ -699,6 +699,7 @@ const paintDividerNumeric = document.getElementById('paintDividerNumeric') as HT
 const paintDividerCategorical = document.getElementById('paintDividerCategorical') as HTMLDivElement;
 const paintDividerRamp = document.getElementById('paintDividerRamp') as HTMLDivElement;
 const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement;
+const currentLayerSource = document.getElementById('currentLayerSource') as HTMLDivElement;
 
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
@@ -1197,6 +1198,7 @@ function applyLayerState(layer: LayerState) {
   }
 
   enable3DCheckbox.checked = is3DMode;
+  updateCurrentLayerDetails();
   updateFieldTypeUI();
   update3DUI();
   updateFloatingLegend();
@@ -1465,6 +1467,22 @@ function handleMouseUp() {
   document.body.style.userSelect = '';
 }
 
+function updateCurrentLayerDetails() {
+  if (!currentLayerSource) return;
+  if (!currentLayerId) {
+    currentLayerSource.textContent = 'layer source: —';
+    return;
+  }
+  const layer = layers.get(currentLayerId);
+  if (!layer) {
+    currentLayerSource.textContent = 'layer source: —';
+    return;
+  }
+  const store = dataStores.get(layer.dataStoreId);
+  const sourceName = store?.file?.name ?? store?.name ?? '—';
+  currentLayerSource.textContent = `layer source: ${sourceName}`;
+}
+
 function renderLayerList() {
   if (!layerList) return;
   layerList.replaceChildren();
@@ -1474,10 +1492,11 @@ function renderLayerList() {
     empty.className = 'muted';
     empty.textContent = 'No layers loaded yet.';
     layerList.appendChild(empty);
+    updateCurrentLayerDetails();
     return;
   }
 
-  layerOrder.forEach(layerId => {
+  layerOrder.forEach((layerId, index) => {
     const layer = layers.get(layerId);
     if (!layer) return;
 
@@ -1505,7 +1524,7 @@ function renderLayerList() {
     const nameButton = document.createElement('button');
     nameButton.type = 'button';
     nameButton.className = 'layer-name';
-    nameButton.textContent = layer.name || `Layer ${layerId}`;
+    nameButton.textContent = layer.field ?? `layer ${index + 1}`
     nameButton.addEventListener('click', () => setCurrentLayer(layerId));
 
     const moveUpBtn = document.createElement('button');
@@ -1535,6 +1554,8 @@ function renderLayerList() {
     row.append(visibilityToggle, currentRadio, nameButton, moveUpBtn, moveDownBtn, deleteBtn);
     layerList.appendChild(row);
   });
+
+  updateCurrentLayerDetails();
 }
 
 // Floating legend functions
@@ -1565,6 +1586,7 @@ function clearLegendVisibility() {
     applyExtrusion();
   }
   persistCurrentLayerState();
+  renderLayerList();
 }
 
 function updateFloatingLegend() {
@@ -4640,6 +4662,7 @@ fieldSelect.addEventListener('change', () => {
   
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
   persistCurrentLayerState();
+  renderLayerList();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {

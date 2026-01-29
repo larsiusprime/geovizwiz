@@ -3777,8 +3777,15 @@ function openCategoricalFieldChooserModal(opts: {
   };
   
   // Add a "Back" button to return to numeric modal
+  const existingBackButton = categoricalModalOverlay.querySelector<HTMLButtonElement>(
+    'button[data-role="back-to-numeric-fields"]'
+  );
+  if (existingBackButton) {
+    existingBackButton.remove();
+  }
   const backButton = document.createElement('button');
   backButton.textContent = 'Back to Numeric Fields';
+  backButton.dataset.role = 'back-to-numeric-fields';
   backButton.onclick = () => {
     categoricalModalOverlay.classList.remove('show');
     openNumericFieldChooserModal({ 

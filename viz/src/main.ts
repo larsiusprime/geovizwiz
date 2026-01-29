@@ -834,7 +834,7 @@ const filtersSelectButton = document.getElementById('filtersSelectButton') as HT
 const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
 const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
 const statsSubjectCategoryControls = document.getElementById('statsSubjectCategoryControls') as HTMLDivElement;
-const statsSubjectModeInputs = document.querySelectorAll<HTMLInputElement>('input[name="statsSubjectMode"]');
+const statsSubjectButtons = document.querySelectorAll<HTMLButtonElement>('[data-stats-subject]');
 const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
 const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
 const statsNumericFieldSelect = document.getElementById('statsNumericField') as HTMLSelectElement;
@@ -2078,22 +2078,10 @@ function updateStatisticsResults() {
 
   let selection: GeoJSON.Feature[] = [];
   if (statsSubjectMode === 'visible') {
-    const ids = getCurrentLayerIds();
-    if (!ids) {
-      statsValuesCache = [];
-      resetStatisticsDisplay();
-      return;
-    }
-    const rendered = map.queryRenderedFeatures({ layers: [ids.layerId] });
-    const seen = new Set<string>();
-    selection = rendered.reduce<GeoJSON.Feature[]>((acc, feature) => {
-      if (!feature?.id) return acc;
-      const parcelId = getParcelId(feature);
-      if (seen.has(parcelId)) return acc;
-      seen.add(parcelId);
-      acc.push(feature as GeoJSON.Feature);
-      return acc;
-    }, []);
+    const visibilityExpr = buildStatisticsVisibilityExpression();
+    selection = visibilityExpr
+      ? currentGeoJSON.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
+      : currentGeoJSON.features;
   } else if (statsSubjectMode === 'selected') {
     selection = currentGeoJSON.features.filter(feature => selectedParcels.has(getParcelId(feature)));
   } else if (statsSubjectMode === 'category') {
@@ -2177,6 +2165,20 @@ function updateStatisticsSubjectControls() {
   statsCategoryValueSelect.disabled = !isCategory || !statsCategoryField;
 }
 
+function updateStatisticsSubjectButtons() {
+  statsSubjectButtons.forEach(button => {
+    button.classList.toggle('active', button.dataset.statsSubject === statsSubjectMode);
+  });
+}
+
+function setStatsSubjectMode(mode: StatsSubjectMode) {
+  statsSubjectMode = mode;
+  updateStatisticsSubjectButtons();
+  updateStatisticsSubjectControls();
+  updateStatisticsSectionVisibility();
+  updateStatisticsResults();
+}
+
 function updateStatisticsSectionVisibility() {
   const shouldShow = statsSubjectMode !== 'category' || statsCategoryValueIndices.length > 0;
   statisticsSection.style.display = shouldShow ? 'grid' : 'none';
@@ -2189,6 +2191,7 @@ function refreshStatisticsPanel() {
   populateStatisticsCategoryFields();
   populateStatisticsCategoryValues(statsCategoryField);
 
+  updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
 
@@ -3322,6 +3325,70 @@ function buildFilterModeExpression(): any | null {
   if (!baseExpr) return null;
   const modeExpr = filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
   return filterInvert ? ['!', modeExpr] : modeExpr;
+}
+
+function resolveFilterValue(expr: any, feature: GeoJSON.Feature): any {
+  if (!Array.isArray(expr)) return expr;
+  const op = expr[0];
+  switch (op) {
+    case 'get': {
+      const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
+      return props[expr[1]];
+    }
+    case 'literal':
+      return expr[1];
+    case 'to-number': {
+      const value = resolveFilterValue(expr[1], feature);
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : NaN;
+    }
+    case 'to-string': {
+      const value = resolveFilterValue(expr[1], feature);
+      return value === null || value === undefined ? '' : String(value);
+    }
+    default:
+      return expr;
+  }
+}
+
+function evaluateFilterExpression(expr: any, feature: GeoJSON.Feature): boolean {
+  if (!Array.isArray(expr)) return Boolean(expr);
+  const op = expr[0];
+  switch (op) {
+    case 'all':
+      return expr.slice(1).every((clause: any) => evaluateFilterExpression(clause, feature));
+    case '!':
+      return !evaluateFilterExpression(expr[1], feature);
+    case 'in': {
+      const value = resolveFilterValue(expr[1], feature);
+      const list = resolveFilterValue(expr[2], feature);
+      return Array.isArray(list) ? list.includes(value) : false;
+    }
+    case '==':
+      return resolveFilterValue(expr[1], feature) === resolveFilterValue(expr[2], feature);
+    case '!=':
+      return resolveFilterValue(expr[1], feature) !== resolveFilterValue(expr[2], feature);
+    case '<':
+      return resolveFilterValue(expr[1], feature) < resolveFilterValue(expr[2], feature);
+    case '>':
+      return resolveFilterValue(expr[1], feature) > resolveFilterValue(expr[2], feature);
+    case '<=':
+      return resolveFilterValue(expr[1], feature) <= resolveFilterValue(expr[2], feature);
+    case '>=':
+      return resolveFilterValue(expr[1], feature) >= resolveFilterValue(expr[2], feature);
+    default:
+      return false;
+  }
+}
+
+function buildStatisticsVisibilityExpression(): any | null {
+  const expressions: any[] = [];
+  const legendExpr = buildLegendVisibilityFilter();
+  if (legendExpr) expressions.push(legendExpr);
+  const filterExpr = buildFilterModeExpression();
+  if (filterExpr) expressions.push(filterExpr);
+  if (!expressions.length) return null;
+  return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
 }
 
 function buildLegendVisibilityFilter(): any | null {
@@ -5811,13 +5878,11 @@ filtersInvertToggle.addEventListener('change', () => {
   persistCurrentLayerState();
 });
 
-statsSubjectModeInputs.forEach(radio => {
-  radio.addEventListener('change', () => {
-    const selected = document.querySelector<HTMLInputElement>('input[name="statsSubjectMode"]:checked');
-    statsSubjectMode = (selected?.value as StatsSubjectMode) ?? 'all';
-    updateStatisticsSubjectControls();
-    updateStatisticsSectionVisibility();
-    updateStatisticsResults();
+statsSubjectButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.statsSubject as StatsSubjectMode | undefined;
+    if (!mode) return;
+    setStatsSubjectMode(mode);
   });
 });
 
@@ -5844,12 +5909,6 @@ statsCategoryValueSelect.addEventListener('change', () => {
 statsNumericFieldSelect.addEventListener('change', () => {
   statsNumericField = statsNumericFieldSelect.value || null;
   updateStatisticsResults();
-});
-
-map.on('moveend', () => {
-  if (statsSubjectMode === 'visible') {
-    updateStatisticsResults();
-  }
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {

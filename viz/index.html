@@ -475,6 +475,10 @@
       background: #eef2ff;
     }
 
+    .stats-subject-actions {
+      flex-wrap: nowrap;
+    }
+
     .filters-invert-row {
       display: flex;
       align-items: center;
@@ -894,22 +898,12 @@
         <div class="section-title">Subject</div>
         <div style="display: grid; gap: 6px;">
           <div style="font-weight: 600; font-size: 12px;">Subject:</div>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsSubjectMode" id="stats-subject-all" value="all" checked />
-            <span>All parcels</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsSubjectMode" id="stats-subject-visible" value="visible" />
-            <span>All visible</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsSubjectMode" id="stats-subject-selected" value="selected" />
-            <span>All selected</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsSubjectMode" id="stats-subject-category" value="category" />
-            <span>By category...</span>
-          </label>
+          <div class="filters-actions stats-subject-actions">
+            <button type="button" data-stats-subject="all">All</button>
+            <button type="button" data-stats-subject="visible">Visible</button>
+            <button type="button" data-stats-subject="selected">Selected</button>
+            <button type="button" data-stats-subject="category">Category</button>
+          </div>
         </div>
         <div id="statsSubjectCategoryControls" style="display: none; gap: 6px; margin-top: 8px;">
           <label for="statsCategoryField">Category field</label>

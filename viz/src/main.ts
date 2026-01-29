@@ -3696,6 +3696,9 @@ function renderFiltersList() {
     const widget = document.createElement('div');
     widget.className = 'filter-widget';
 
+    const headerRow = document.createElement('div');
+    headerRow.className = 'filter-widget-header';
+
     const toggleLabel = document.createElement('label');
     toggleLabel.className = 'filter-toggle';
     const toggleInput = document.createElement('input');
@@ -3709,7 +3712,28 @@ function renderFiltersList() {
       }
       persistCurrentLayerState();
     });
-    toggleLabel.append(toggleInput, document.createTextNode('Active'));
+    toggleLabel.append(toggleInput);
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'filter-control-btn';
+    deleteButton.textContent = '✕';
+    deleteButton.title = 'Delete filter';
+    deleteButton.addEventListener('click', () => {
+      filters = filters.filter(existing => existing.id !== filter.id);
+      renderFiltersList();
+      updateFiltersUIState();
+      if (filterMode !== 'none') {
+        applyMapFilters();
+      }
+      persistCurrentLayerState();
+    });
+
+    headerRow.append(toggleLabel, deleteButton);
+    widget.appendChild(headerRow);
+
+    const fieldRow = document.createElement('div');
+    fieldRow.className = 'filter-widget-row';
 
     const fieldSelect = document.createElement('select');
     const placeholderOption = new Option('Select field', '');
@@ -3740,10 +3764,13 @@ function renderFiltersList() {
       persistCurrentLayerState();
     });
 
-    widget.appendChild(toggleLabel);
-    widget.appendChild(fieldSelect);
+    fieldRow.appendChild(fieldSelect);
+    widget.appendChild(fieldRow);
 
     if (filter.field && filter.fieldType) {
+      const operatorRow = document.createElement('div');
+      operatorRow.className = 'filter-widget-row split';
+
       const operatorSelect = document.createElement('select');
       const operatorPlaceholder = new Option('Select condition', '');
       operatorPlaceholder.disabled = true;
@@ -3768,7 +3795,7 @@ function renderFiltersList() {
         }
         persistCurrentLayerState();
       });
-      widget.appendChild(operatorSelect);
+      operatorRow.appendChild(operatorSelect);
 
       if (filter.operator) {
         if (filter.fieldType === 'numeric') {
@@ -3785,7 +3812,7 @@ function renderFiltersList() {
             }
             persistCurrentLayerState();
           });
-          widget.appendChild(valueInput);
+          operatorRow.appendChild(valueInput);
         } else {
           const categoricalValues = filter.field ? getCategoricalValues(filter.field) : [];
           const valueSelect = document.createElement('select');
@@ -3825,27 +3852,13 @@ function renderFiltersList() {
             }
             persistCurrentLayerState();
           });
-          widget.appendChild(valueSelect);
+          operatorRow.appendChild(valueSelect);
         }
+        widget.appendChild(operatorRow);
       }
     }
 
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'filter-control-btn';
-    deleteButton.textContent = '✕';
-    deleteButton.title = 'Delete filter';
-    deleteButton.addEventListener('click', () => {
-      filters = filters.filter(existing => existing.id !== filter.id);
-      renderFiltersList();
-      updateFiltersUIState();
-      if (filterMode !== 'none') {
-        applyMapFilters();
-      }
-      persistCurrentLayerState();
-    });
-
-    row.append(controlColumn, widget, deleteButton);
+    row.append(controlColumn, widget);
     filtersListEl.appendChild(row);
   });
 }

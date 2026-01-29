@@ -465,13 +465,16 @@
     .filters-list {
       display: grid;
       gap: 8px;
+      max-height: 260px;
+      overflow-y: auto;
+      padding-right: 4px;
     }
 
     .filter-row {
       display: grid;
-      grid-template-columns: auto 1fr auto;
+      grid-template-columns: auto 1fr;
       gap: 6px;
-      align-items: center;
+      align-items: stretch;
       padding: 6px;
       border: 1px solid #e5e7eb;
       border-radius: 8px;
@@ -494,18 +497,29 @@
     }
 
     .filter-widget {
-      display: flex;
-      flex-wrap: wrap;
+      display: grid;
       gap: 6px;
+    }
+
+    .filter-widget-header {
+      display: flex;
       align-items: center;
+      justify-content: space-between;
+    }
+
+    .filter-widget-row {
+      display: grid;
+      gap: 6px;
+    }
+
+    .filter-widget-row.split {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     }
 
     .filter-toggle {
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      font-size: 11px;
-      color: #444;
     }
 
     .filter-value-select[multiple] {

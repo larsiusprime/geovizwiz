@@ -987,6 +987,7 @@ const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ
 
 type FilterFieldType = 'numeric' | 'categorical';
 type FilterMode = 'none' | 'show' | 'hide';
+type FilterActionMode = 'none' | 'select' | 'show' | 'hide';
 type NumericFilterOperator = 'lt' | 'gt' | 'lte' | 'gte' | 'eq' | 'neq';
 type CategoricalFilterOperator = 'eq' | 'neq' | 'any' | 'not-any';
 type FilterOperator = NumericFilterOperator | CategoricalFilterOperator;
@@ -1037,6 +1038,7 @@ type LayerState = {
   is3DMode: boolean;
   filters: FilterRule[];
   filterMode: FilterMode;
+  filterActionMode: FilterActionMode;
 };
 
 type DataStore = {
@@ -1165,6 +1167,7 @@ let dragOffset = { x: 0, y: 0 };
 // Filters state
 let filters: FilterRule[] = [];
 let filterMode: FilterMode = 'none';
+let filterActionMode: FilterActionMode = 'none';
 
 const NUMERIC_FILTER_OPERATORS: Array<{ value: NumericFilterOperator; label: string }> = [
   { value: 'lt', label: '<' },
@@ -1303,7 +1306,8 @@ function createLayerState(name: string, dataStoreId: string): LayerState {
     opacity: parseFloat(opacityInput.value),
     is3DMode: false,
     filters: [],
-    filterMode: 'none'
+    filterMode: 'none',
+    filterActionMode: 'none'
   };
 }
 
@@ -1339,6 +1343,7 @@ function persistCurrentLayerState() {
   layer.is3DMode = is3DMode;
   layer.filters = cloneFilters(filters);
   layer.filterMode = filterMode;
+  layer.filterActionMode = filterActionMode;
 }
 
 function applyLayerState(layer: LayerState) {
@@ -1371,6 +1376,7 @@ function applyLayerState(layer: LayerState) {
   is3DMode = layer.is3DMode;
   filters = cloneFilters(layer.filters ?? []);
   filterMode = layer.filterMode ?? 'none';
+  filterActionMode = layer.filterActionMode ?? 'none';
   currentDataStoreId = layer.dataStoreId;
   const store = dataStores.get(layer.dataStoreId);
   if (store) {
@@ -1550,8 +1556,9 @@ function removeLayer(layerId: string) {
       selectedLegendItems = new Set();
       selectedParcels = new Set();
       highlightColor = '#FFFF00';
-      filters = [];
-      filterMode = 'none';
+  filters = [];
+  filterMode = 'none';
+  filterActionMode = 'none';
       fieldSelect.replaceChildren(new Option('— load a file first —', ''));
       updateFieldTypeUI();
       updateFloatingLegend();
@@ -3644,6 +3651,7 @@ function updateFiltersUIState() {
   if (filtersSelectButton) filtersSelectButton.disabled = !canApply;
   if (filtersShowButton) filtersShowButton.disabled = !canApply;
   if (filtersHideButton) filtersHideButton.disabled = !canApply;
+  updateFilterActionButtons();
 }
 
 function renderFiltersList() {
@@ -3670,9 +3678,7 @@ function renderFiltersList() {
     toggleInput.addEventListener('change', () => {
       filter.active = toggleInput.checked;
       updateFiltersUIState();
-      if (filterMode !== 'none') {
-        applyMapFilters();
-      }
+      applyActiveFilterAction();
       persistCurrentLayerState();
     });
     toggleLabel.append(toggleInput);
@@ -3686,9 +3692,7 @@ function renderFiltersList() {
       filters = filters.filter(existing => existing.id !== filter.id);
       renderFiltersList();
       updateFiltersUIState();
-      if (filterMode !== 'none') {
-        applyMapFilters();
-      }
+      applyActiveFilterAction();
       persistCurrentLayerState();
     });
 
@@ -3721,9 +3725,7 @@ function renderFiltersList() {
       filter.value = null;
       renderFiltersList();
       updateFiltersUIState();
-      if (filterMode !== 'none') {
-        applyMapFilters();
-      }
+      applyActiveFilterAction();
       persistCurrentLayerState();
     });
 
@@ -3753,9 +3755,7 @@ function renderFiltersList() {
         filter.value = null;
         renderFiltersList();
         updateFiltersUIState();
-        if (filterMode !== 'none') {
-          applyMapFilters();
-        }
+        applyActiveFilterAction();
         persistCurrentLayerState();
       });
       operatorRow.appendChild(operatorSelect);
@@ -3770,9 +3770,7 @@ function renderFiltersList() {
           const parsed = Number(valueInput.value);
           filter.value = Number.isFinite(parsed) ? parsed : null;
           updateFiltersUIState();
-          if (filterMode !== 'none') {
-            applyMapFilters();
-          }
+          applyActiveFilterAction();
           persistCurrentLayerState();
         });
         operatorRow.appendChild(valueInput);
@@ -3811,9 +3809,7 @@ function renderFiltersList() {
             filter.value = valueSelect.value || null;
           }
           updateFiltersUIState();
-          if (filterMode !== 'none') {
-            applyMapFilters();
-          }
+          applyActiveFilterAction();
           persistCurrentLayerState();
         });
         operatorRow.appendChild(valueSelect);
@@ -3897,9 +3893,51 @@ function applyFilteredSelection() {
 function applyFilterMode(mode: FilterMode) {
   if (!currentGeoJSON) return;
   filterMode = mode;
-  clearLegendVisibility();
+  if (mode !== 'none') {
+    clearLegendVisibility();
+  }
   applyMapFilters();
   updateFiltersUIState();
+  persistCurrentLayerState();
+}
+
+function updateFilterActionButtons() {
+  filtersSelectButton.classList.toggle('active', filterActionMode === 'select');
+  filtersShowButton.classList.toggle('active', filterActionMode === 'show');
+  filtersHideButton.classList.toggle('active', filterActionMode === 'hide');
+}
+
+function applyActiveFilterAction() {
+  if (filterActionMode === 'select') {
+    applyFilteredSelection();
+    return;
+  }
+  if (filterActionMode === 'show') {
+    applyFilterMode('show');
+    return;
+  }
+  if (filterActionMode === 'hide') {
+    applyFilterMode('hide');
+    return;
+  }
+}
+
+function setFilterActionMode(nextMode: FilterActionMode) {
+  const next = filterActionMode === nextMode ? 'none' : nextMode;
+  filterActionMode = next;
+
+  if (next === 'select') {
+    applyFilterMode('none');
+    applyFilteredSelection();
+  } else if (next === 'show' || next === 'hide') {
+    applyFilterMode(next);
+  } else {
+    if (filterMode !== 'none') {
+      applyFilterMode('none');
+    }
+  }
+
+  updateFilterActionButtons();
   persistCurrentLayerState();
 }
 
@@ -5655,15 +5693,15 @@ addFilterButton.addEventListener('click', () => {
 });
 
 filtersSelectButton.addEventListener('click', () => {
-  applyFilteredSelection();
+  setFilterActionMode('select');
 });
 
 filtersShowButton.addEventListener('click', () => {
-  applyFilterMode('show');
+  setFilterActionMode('show');
 });
 
 filtersHideButton.addEventListener('click', () => {
-  applyFilterMode('hide');
+  setFilterActionMode('hide');
 });
 
 statsCategoryFieldSelect.addEventListener('change', () => {

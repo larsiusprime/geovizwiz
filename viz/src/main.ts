@@ -3659,6 +3659,9 @@ function renderFiltersList() {
     const controlColumn = document.createElement('div');
     controlColumn.className = 'filter-controls';
 
+    const controlSpacer = document.createElement('div');
+    controlSpacer.className = 'filter-control-spacer';
+
     const upButton = document.createElement('button');
     upButton.type = 'button';
     upButton.className = 'filter-control-btn';
@@ -3691,7 +3694,7 @@ function renderFiltersList() {
       persistCurrentLayerState();
     });
 
-    controlColumn.append(upButton, downButton);
+    controlColumn.append(controlSpacer, upButton, downButton);
 
     const widget = document.createElement('div');
     widget.className = 'filter-widget';
@@ -3797,65 +3800,66 @@ function renderFiltersList() {
       });
       operatorRow.appendChild(operatorSelect);
 
-      if (filter.operator) {
-        if (filter.fieldType === 'numeric') {
-          const valueInput = document.createElement('input');
-          valueInput.type = 'number';
-          valueInput.placeholder = 'Value';
-          valueInput.value = typeof filter.value === 'number' ? String(filter.value) : '';
-          valueInput.addEventListener('input', () => {
-            const parsed = Number(valueInput.value);
-            filter.value = Number.isFinite(parsed) ? parsed : null;
-            updateFiltersUIState();
-            if (filterMode !== 'none') {
-              applyMapFilters();
-            }
-            persistCurrentLayerState();
-          });
-          operatorRow.appendChild(valueInput);
-        } else {
-          const categoricalValues = filter.field ? getCategoricalValues(filter.field) : [];
-          const valueSelect = document.createElement('select');
-          valueSelect.className = 'filter-value-select';
-          if (filter.operator === 'any' || filter.operator === 'not-any') {
-            valueSelect.multiple = true;
+      if (filter.fieldType === 'numeric') {
+        const valueInput = document.createElement('input');
+        valueInput.type = 'number';
+        valueInput.placeholder = 'Value';
+        valueInput.value = typeof filter.value === 'number' ? String(filter.value) : '';
+        valueInput.disabled = !filter.operator;
+        valueInput.addEventListener('input', () => {
+          const parsed = Number(valueInput.value);
+          filter.value = Number.isFinite(parsed) ? parsed : null;
+          updateFiltersUIState();
+          if (filterMode !== 'none') {
+            applyMapFilters();
           }
-          const needsPlaceholder = !valueSelect.multiple;
-          if (needsPlaceholder) {
-            const valuePlaceholder = new Option('Select value', '');
-            valuePlaceholder.disabled = true;
-            valuePlaceholder.selected = !filter.value;
-            valueSelect.appendChild(valuePlaceholder);
-          }
-          categoricalValues.forEach(value => {
-            valueSelect.appendChild(new Option(value, value));
-          });
-
-          if (Array.isArray(filter.value)) {
-            Array.from(valueSelect.options).forEach(option => {
-              option.selected = filter.value.includes(option.value);
-            });
-          } else if (typeof filter.value === 'string') {
-            valueSelect.value = filter.value;
-          }
-
-          valueSelect.addEventListener('change', () => {
-            if (valueSelect.multiple) {
-              const values = Array.from(valueSelect.selectedOptions).map(option => option.value);
-              filter.value = values;
-            } else {
-              filter.value = valueSelect.value || null;
-            }
-            updateFiltersUIState();
-            if (filterMode !== 'none') {
-              applyMapFilters();
-            }
-            persistCurrentLayerState();
-          });
-          operatorRow.appendChild(valueSelect);
+          persistCurrentLayerState();
+        });
+        operatorRow.appendChild(valueInput);
+      } else {
+        const categoricalValues = filter.field ? getCategoricalValues(filter.field) : [];
+        const valueSelect = document.createElement('select');
+        valueSelect.className = 'filter-value-select';
+        if (filter.operator === 'any' || filter.operator === 'not-any') {
+          valueSelect.multiple = true;
         }
-        widget.appendChild(operatorRow);
+        const needsPlaceholder = !valueSelect.multiple;
+        if (needsPlaceholder) {
+          const valuePlaceholder = new Option('Select value', '');
+          valuePlaceholder.disabled = true;
+          valuePlaceholder.selected = !filter.value;
+          valueSelect.appendChild(valuePlaceholder);
+        }
+        categoricalValues.forEach(value => {
+          valueSelect.appendChild(new Option(value, value));
+        });
+
+        if (Array.isArray(filter.value)) {
+          Array.from(valueSelect.options).forEach(option => {
+            option.selected = filter.value.includes(option.value);
+          });
+        } else if (typeof filter.value === 'string') {
+          valueSelect.value = filter.value;
+        }
+
+        valueSelect.disabled = !filter.operator;
+        valueSelect.addEventListener('change', () => {
+          if (valueSelect.multiple) {
+            const values = Array.from(valueSelect.selectedOptions).map(option => option.value);
+            filter.value = values;
+          } else {
+            filter.value = valueSelect.value || null;
+          }
+          updateFiltersUIState();
+          if (filterMode !== 'none') {
+            applyMapFilters();
+          }
+          persistCurrentLayerState();
+        });
+        operatorRow.appendChild(valueSelect);
       }
+
+      widget.appendChild(operatorRow);
     }
 
     row.append(controlColumn, widget);

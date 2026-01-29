@@ -891,15 +891,36 @@
     </div>
     <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
       <div class="stats-section">
-        <div class="section-title">Category</div>
-        <label for="statsCategoryField">Category field</label>
-        <select id="statsCategoryField">
-          <option value="" selected disabled>Choose a field</option>
-        </select>
-        <label for="statsCategoryValue">Category value</label>
-        <select id="statsCategoryValue" disabled>
-          <option value="" selected disabled>Choose a value</option>
-        </select>
+        <div class="section-title">Subject</div>
+        <div style="display: grid; gap: 6px;">
+          <div style="font-weight: 600; font-size: 12px;">Subject:</div>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsSubjectMode" id="stats-subject-all" value="all" checked />
+            <span>All parcels</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsSubjectMode" id="stats-subject-visible" value="visible" />
+            <span>All visible</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsSubjectMode" id="stats-subject-selected" value="selected" />
+            <span>All selected</span>
+          </label>
+          <label style="display:flex; gap:8px; align-items:center;">
+            <input type="radio" name="statsSubjectMode" id="stats-subject-category" value="category" />
+            <span>By category...</span>
+          </label>
+        </div>
+        <div id="statsSubjectCategoryControls" style="display: none; gap: 6px; margin-top: 8px;">
+          <label for="statsCategoryField">Category field</label>
+          <select id="statsCategoryField">
+            <option value="" selected disabled>Choose a field</option>
+          </select>
+          <label for="statsCategoryValue">Category value</label>
+          <select id="statsCategoryValue" multiple size="4" disabled>
+            <option value="" selected disabled>Choose value(s)</option>
+          </select>
+        </div>
       </div>
 
       <div class="divider"></div>

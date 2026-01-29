@@ -833,6 +833,8 @@ const addFilterButton = document.getElementById('addFilterButton') as HTMLButton
 const filtersSelectButton = document.getElementById('filtersSelectButton') as HTMLButtonElement;
 const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
 const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
+const statsSubjectCategoryControls = document.getElementById('statsSubjectCategoryControls') as HTMLDivElement;
+const statsSubjectModeInputs = document.querySelectorAll<HTMLInputElement>('input[name="statsSubjectMode"]');
 const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
 const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
 const statsNumericFieldSelect = document.getElementById('statsNumericField') as HTMLSelectElement;
@@ -1141,9 +1143,11 @@ let isFiltersMinimized = true;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
 
 // Statistics state
+type StatsSubjectMode = 'all' | 'visible' | 'selected' | 'category';
+let statsSubjectMode: StatsSubjectMode = 'all';
 let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
 let statsCategoryField: string | null = null;
-let statsCategoryValueIndex: string | null = null;
+let statsCategoryValueIndices: string[] = [];
 let statsNumericField: string | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 let statsValuesCache: number[] = [];
@@ -1851,15 +1855,15 @@ function populateStatisticsCategoryFields() {
 
 function populateStatisticsCategoryValues(field: string | null) {
   statsCategoryValueSelect.replaceChildren();
-  const placeholder = new Option('Choose a value', '');
+  const placeholder = new Option('Choose value(s)', '');
   placeholder.disabled = true;
-  placeholder.selected = true;
+  placeholder.selected = statsCategoryValueIndices.length === 0;
   statsCategoryValueSelect.appendChild(placeholder);
 
   if (!currentGeoJSON || !field) {
     statsCategoryValueSelect.disabled = true;
     statsCategoryValueMap = [];
-    statsCategoryValueIndex = null;
+    statsCategoryValueIndices = [];
     return;
   }
 
@@ -1875,21 +1879,20 @@ function populateStatisticsCategoryValues(field: string | null) {
 
   statsCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
-  const everythingOption = new Option('Everything', 'everything');
-  statsCategoryValueSelect.appendChild(everythingOption);
-
   statsCategoryValueMap.forEach((entry, index) => {
     statsCategoryValueSelect.appendChild(new Option(entry.label, String(index)));
   });
 
   statsCategoryValueSelect.disabled = false;
-
-  if (statsCategoryValueIndex === 'everything') {
-    statsCategoryValueSelect.value = 'everything';
-  } else if (statsCategoryValueIndex && statsCategoryValueMap[Number(statsCategoryValueIndex)]) {
-    statsCategoryValueSelect.value = statsCategoryValueIndex;
-  } else {
-    statsCategoryValueIndex = null;
+  const validSelections = new Set(
+    statsCategoryValueIndices.filter(index => statsCategoryValueMap[Number(index)])
+  );
+  statsCategoryValueIndices = Array.from(validSelections);
+  Array.from(statsCategoryValueSelect.options).forEach(option => {
+    option.selected = validSelections.has(option.value);
+  });
+  if (statsCategoryValueIndices.length === 0) {
+    placeholder.selected = true;
   }
 }
 
@@ -2062,21 +2065,50 @@ function renderStatisticsHistogram(values: number[]) {
 }
 
 function updateStatisticsResults() {
-  if (!currentGeoJSON || !statsCategoryField || !statsCategoryValueIndex || !statsNumericField) {
+  if (!currentGeoJSON || !statsNumericField) {
+    statsValuesCache = [];
+    resetStatisticsDisplay();
+    return;
+  }
+  if (statsSubjectMode === 'category' && (!statsCategoryField || statsCategoryValueIndices.length === 0)) {
     statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
 
-  let selection = currentGeoJSON.features;
-  if (statsCategoryValueIndex !== 'everything') {
-    const entry = statsCategoryValueMap[Number(statsCategoryValueIndex)];
-    if (entry) {
-      selection = selection.filter(feature => {
-        const value = (feature.properties as Record<string, unknown> | undefined)?.[statsCategoryField];
-        return value === entry.value;
-      });
+  let selection: GeoJSON.Feature[] = [];
+  if (statsSubjectMode === 'visible') {
+    const ids = getCurrentLayerIds();
+    if (!ids) {
+      statsValuesCache = [];
+      resetStatisticsDisplay();
+      return;
     }
+    const rendered = map.queryRenderedFeatures({ layers: [ids.layerId] });
+    const seen = new Set<string>();
+    selection = rendered.reduce<GeoJSON.Feature[]>((acc, feature) => {
+      if (!feature?.id) return acc;
+      const parcelId = getParcelId(feature);
+      if (seen.has(parcelId)) return acc;
+      seen.add(parcelId);
+      acc.push(feature as GeoJSON.Feature);
+      return acc;
+    }, []);
+  } else if (statsSubjectMode === 'selected') {
+    selection = currentGeoJSON.features.filter(feature => selectedParcels.has(getParcelId(feature)));
+  } else if (statsSubjectMode === 'category') {
+    const selectedValues = new Set(
+      statsCategoryValueIndices
+        .map(index => statsCategoryValueMap[Number(index)])
+        .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
+        .map(entry => entry.value)
+    );
+    selection = currentGeoJSON.features.filter(feature => {
+      const value = (feature.properties as Record<string, unknown> | undefined)?.[statsCategoryField as string];
+      return selectedValues.has(value);
+    });
+  } else {
+    selection = currentGeoJSON.features;
   }
 
   const totalCount = currentGeoJSON.features.length;
@@ -2138,16 +2170,27 @@ function updateStatisticsResults() {
   renderStatisticsHistogram(values);
 }
 
+function updateStatisticsSubjectControls() {
+  const isCategory = statsSubjectMode === 'category';
+  statsSubjectCategoryControls.style.display = isCategory ? 'grid' : 'none';
+  statsCategoryFieldSelect.disabled = !isCategory || statsCategoryFieldSelect.options.length <= 1;
+  statsCategoryValueSelect.disabled = !isCategory || !statsCategoryField;
+}
+
+function updateStatisticsSectionVisibility() {
+  const shouldShow = statsSubjectMode !== 'category' || statsCategoryValueIndices.length > 0;
+  statisticsSection.style.display = shouldShow ? 'grid' : 'none';
+  if (shouldShow) {
+    populateStatisticsNumericFields();
+  }
+}
+
 function refreshStatisticsPanel() {
   populateStatisticsCategoryFields();
   populateStatisticsCategoryValues(statsCategoryField);
 
-  if (statsCategoryValueIndex) {
-    statisticsSection.style.display = 'grid';
-    populateStatisticsNumericFields();
-  } else {
-    statisticsSection.style.display = 'none';
-  }
+  updateStatisticsSubjectControls();
+  updateStatisticsSectionVisibility();
 
   if (statsNumericField) {
     updateStatisticsResults();
@@ -3339,6 +3382,9 @@ function applyMapFilters() {
   } else {
     map.setFilter(ids.layerId, null);
   }
+  if (statsSubjectMode === 'visible') {
+    updateStatisticsResults();
+  }
 }
 
 function applyVisibilityFilters() {
@@ -3543,6 +3589,9 @@ function updateSelectionControls() {
         countElement.textContent = selectedParcels.size.toString();
       }
     }
+  }
+  if (statsSubjectMode === 'selected') {
+    updateStatisticsResults();
   }
 }
 
@@ -5762,25 +5811,32 @@ filtersInvertToggle.addEventListener('change', () => {
   persistCurrentLayerState();
 });
 
+statsSubjectModeInputs.forEach(radio => {
+  radio.addEventListener('change', () => {
+    const selected = document.querySelector<HTMLInputElement>('input[name="statsSubjectMode"]:checked');
+    statsSubjectMode = (selected?.value as StatsSubjectMode) ?? 'all';
+    updateStatisticsSubjectControls();
+    updateStatisticsSectionVisibility();
+    updateStatisticsResults();
+  });
+});
+
 statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
-  statsCategoryValueIndex = null;
+  statsCategoryValueIndices = [];
   populateStatisticsCategoryValues(statsCategoryField);
-  statisticsSection.style.display = 'none';
+  updateStatisticsSectionVisibility();
   resetStatisticsDisplay();
 });
 
 statsCategoryValueSelect.addEventListener('change', () => {
-  statsCategoryValueIndex = statsCategoryValueSelect.value || null;
-  if (statsCategoryValueIndex) {
-    statisticsSection.style.display = 'grid';
-    populateStatisticsNumericFields();
-    if (statsNumericField) {
-      updateStatisticsResults();
-      return;
-    }
-  } else {
-    statisticsSection.style.display = 'none';
+  statsCategoryValueIndices = Array.from(statsCategoryValueSelect.selectedOptions)
+    .map(option => option.value)
+    .filter(value => value);
+  updateStatisticsSectionVisibility();
+  if (statsCategoryValueIndices.length > 0 && statsNumericField) {
+    updateStatisticsResults();
+    return;
   }
   resetStatisticsDisplay();
 });
@@ -5788,6 +5844,12 @@ statsCategoryValueSelect.addEventListener('change', () => {
 statsNumericFieldSelect.addEventListener('change', () => {
   statsNumericField = statsNumericFieldSelect.value || null;
   updateStatisticsResults();
+});
+
+map.on('moveend', () => {
+  if (statsSubjectMode === 'visible') {
+    updateStatisticsResults();
+  }
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {

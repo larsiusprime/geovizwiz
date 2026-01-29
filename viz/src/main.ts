@@ -2236,7 +2236,7 @@ function renderLayerList() {
     const moveUpBtn = document.createElement('button');
     moveUpBtn.type = 'button';
     moveUpBtn.className = 'layer-action-btn';
-    moveUpBtn.textContent = '🔼';
+    moveUpBtn.textContent = '▲';
     moveUpBtn.title = 'Move layer up';
     moveUpBtn.disabled = layerOrder.indexOf(layerId) === 0;
     moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
@@ -2244,7 +2244,7 @@ function renderLayerList() {
     const moveDownBtn = document.createElement('button');
     moveDownBtn.type = 'button';
     moveDownBtn.className = 'layer-action-btn';
-    moveDownBtn.textContent = '🔽';
+    moveDownBtn.textContent = '▼';
     moveDownBtn.title = 'Move layer down';
     moveDownBtn.disabled = layerOrder.indexOf(layerId) === layerOrder.length - 1;
     moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
@@ -3686,7 +3686,7 @@ function renderFiltersList() {
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
     deleteButton.className = 'filter-control-btn filter-delete-btn';
-    deleteButton.textContent = '✕';
+    deleteButton.textContent = '❌';
     deleteButton.title = 'Delete filter';
     deleteButton.addEventListener('click', () => {
       filters = filters.filter(existing => existing.id !== filter.id);

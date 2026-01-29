@@ -825,6 +825,13 @@ const paintControlsEl = document.getElementById('paintControls') as HTMLDivEleme
 const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
 const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
+const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
+const filtersContent = document.getElementById('filtersContent') as HTMLDivElement;
+const filtersListEl = document.getElementById('filtersList') as HTMLDivElement;
+const addFilterButton = document.getElementById('addFilterButton') as HTMLButtonElement;
+const filtersSelectButton = document.getElementById('filtersSelectButton') as HTMLButtonElement;
+const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
+const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
 const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
 const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
 const statsNumericFieldSelect = document.getElementById('statsNumericField') as HTMLSelectElement;
@@ -880,10 +887,12 @@ const btnMinimizeLayers = document.getElementById('btnMinimizeLayers') as HTMLBu
 const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu') as HTMLButtonElement;
 const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
 const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') as HTMLButtonElement;
+const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
 
 // Toolbar elements
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 const statisticsToolButton = document.getElementById('statisticsToolButton') as HTMLButtonElement;
+const filtersToolButton = document.getElementById('filtersToolButton') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
@@ -976,6 +985,21 @@ const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ
 
 /* ---------------- State ---------------- */
 
+type FilterFieldType = 'numeric' | 'categorical';
+type FilterMode = 'none' | 'show' | 'hide';
+type NumericFilterOperator = 'lt' | 'gt' | 'lte' | 'gte' | 'eq' | 'neq';
+type CategoricalFilterOperator = 'eq' | 'neq' | 'any' | 'not-any';
+type FilterOperator = NumericFilterOperator | CategoricalFilterOperator;
+
+type FilterRule = {
+  id: string;
+  field: string | null;
+  fieldType: FilterFieldType | null;
+  operator: FilterOperator | null;
+  value: number | string | string[] | null;
+  active: boolean;
+};
+
 type LayerState = {
   id: string;
   name: string;
@@ -1011,6 +1035,8 @@ type LayerState = {
   customColors: Map<string, string>;
   opacity: number;
   is3DMode: boolean;
+  filters: FilterRule[];
+  filterMode: FilterMode;
 };
 
 type DataStore = {
@@ -1107,6 +1133,7 @@ let isPaintMinimized = false;
 let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
 let isStatisticsMinimized = true;
+let isFiltersMinimized = true;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
 
 // Statistics state
@@ -1135,6 +1162,26 @@ let isDragging = false;
 let dragTarget: HTMLElement | null = null;
 let dragOffset = { x: 0, y: 0 };
 
+// Filters state
+let filters: FilterRule[] = [];
+let filterMode: FilterMode = 'none';
+
+const NUMERIC_FILTER_OPERATORS: Array<{ value: NumericFilterOperator; label: string }> = [
+  { value: 'lt', label: '<' },
+  { value: 'gt', label: '>' },
+  { value: 'lte', label: '<=' },
+  { value: 'gte', label: '>=' },
+  { value: 'eq', label: '=' },
+  { value: 'neq', label: 'not =' }
+];
+
+const CATEGORICAL_FILTER_OPERATORS: Array<{ value: CategoricalFilterOperator; label: string }> = [
+  { value: 'eq', label: '=' },
+  { value: 'neq', label: 'not =' },
+  { value: 'any', label: 'any of...' },
+  { value: 'not-any', label: 'not any of...' }
+];
+
 /* ---------------- FUNCTIONS ----------------- */
 
 function getCurrentLayer(): LayerState | null {
@@ -1149,6 +1196,13 @@ function getCurrentLayerIds() {
 
 function getCurrentSourceId() {
   return getCurrentLayerIds()?.sourceId ?? null;
+}
+
+function cloneFilters(source: FilterRule[]): FilterRule[] {
+  return source.map(filter => ({
+    ...filter,
+    value: Array.isArray(filter.value) ? [...filter.value] : filter.value
+  }));
 }
 
 function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore {
@@ -1247,7 +1301,9 @@ function createLayerState(name: string, dataStoreId: string): LayerState {
     legendSortDirection: 'desc',
     customColors: new Map(),
     opacity: parseFloat(opacityInput.value),
-    is3DMode: false
+    is3DMode: false,
+    filters: [],
+    filterMode: 'none'
   };
 }
 
@@ -1281,6 +1337,8 @@ function persistCurrentLayerState() {
   layer.customColors = customColors;
   layer.opacity = parseFloat(opacityInput.value);
   layer.is3DMode = is3DMode;
+  layer.filters = cloneFilters(filters);
+  layer.filterMode = filterMode;
 }
 
 function applyLayerState(layer: LayerState) {
@@ -1311,6 +1369,8 @@ function applyLayerState(layer: LayerState) {
   opacityInput.value = String(layer.opacity);
   if (opacityOut) opacityOut.value = Number(layer.opacity).toFixed(2);
   is3DMode = layer.is3DMode;
+  filters = cloneFilters(layer.filters ?? []);
+  filterMode = layer.filterMode ?? 'none';
   currentDataStoreId = layer.dataStoreId;
   const store = dataStores.get(layer.dataStoreId);
   if (store) {
@@ -1376,6 +1436,8 @@ function applyLayerState(layer: LayerState) {
     const picker = selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement | null;
     if (picker) picker.value = highlightColor;
   }
+
+  refreshFiltersUI();
 }
 
 function registerLayer(layer: LayerState) {
@@ -1488,9 +1550,12 @@ function removeLayer(layerId: string) {
       selectedLegendItems = new Set();
       selectedParcels = new Set();
       highlightColor = '#FFFF00';
+      filters = [];
+      filterMode = 'none';
       fieldSelect.replaceChildren(new Option('— load a file first —', ''));
       updateFieldTypeUI();
       updateFloatingLegend();
+      refreshFiltersUI();
       refreshStatisticsPanel();
       if (selectionControlsPanel) {
         selectionControlsPanel.style.display = 'none';
@@ -1642,6 +1707,23 @@ function positionStatisticsPanel() {
   statisticsControlsEl.style.transform = 'none';
 }
 
+function positionFiltersPanel() {
+  if (!filtersControlsEl) return;
+  if (filtersControlsEl.dataset.userPositioned === 'true') return;
+  const anchor = (!isStatisticsMinimized && statisticsControlsEl)
+    ? statisticsControlsEl
+    : (!isSettingsMenuMinimized && settingsControlsEl)
+      ? settingsControlsEl
+      : controlsEl;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  filtersControlsEl.style.left = `${rect.right + gap}px`;
+  filtersControlsEl.style.top = `${rect.top}px`;
+  filtersControlsEl.style.transform = 'none';
+}
+
 function minimizeStatistics() {
   isStatisticsMinimized = true;
   statisticsContent.style.display = 'none';
@@ -1662,6 +1744,29 @@ function toggleStatistics() {
     showStatistics();
   } else {
     minimizeStatistics();
+  }
+}
+
+function minimizeFilters() {
+  isFiltersMinimized = true;
+  filtersContent.style.display = 'none';
+  filtersControlsEl.style.display = 'none';
+  updateToolbarButtonStates();
+}
+
+function showFilters() {
+  isFiltersMinimized = false;
+  filtersContent.style.display = 'grid';
+  filtersControlsEl.style.display = 'grid';
+  positionFiltersPanel();
+  updateToolbarButtonStates();
+}
+
+function toggleFilters() {
+  if (isFiltersMinimized) {
+    showFilters();
+  } else {
+    minimizeFilters();
   }
 }
 
@@ -2180,10 +2285,11 @@ function clearLegendVisibility() {
 
   // Reapply the current visualization to show all items
   if (currentGeoJSON && currentField) {
-    applyExtrusion();
+    applyExtrusionWithVisibility();
   }
   persistCurrentLayerState();
   renderLayerList();
+  updateFloatingLegend();
 }
 
 function updateFloatingLegend() {
@@ -3026,62 +3132,174 @@ function applyExtrusionWithCustomColors() {
 }
 
 
-function applyVisibilityFilters() {
-  const ids = getCurrentLayerIds();
-  if (!ids) return;
-  // Apply visibility filters if any items are hidden
-  if (hiddenLegendItems.size > 0) {
-    let filter: any[] = ['all'];
-    
-    if (currentFieldType === 'categorical') {
-      // Hide specific categories
-      const hiddenCategories = Array.from(hiddenLegendItems);
-      if (hiddenCategories.length > 0) {
-        filter.push(['!', ['in', ['to-string', ['get', currentField]], ['literal', hiddenCategories]]]);
-      }
-    } else {
-      // For numeric fields, hide specific ranges
-      if (!currentStats) return;
-      
-      const ranges: { min: number; max: number }[] = [];
-      if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-        const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
-        for (let i = 0; i < breaks.length - 1; i++) {
-          ranges.push({ min: breaks[i], max: breaks[i + 1] });
-        }
-      } else {
-        const min = currentStats.min;
-        const max = currentStats.max;
-        const step = (max - min) / 10;
-        for (let i = 0; i < 10; i++) {
-          ranges.push({
-            min: min + (step * i),
-            max: i === 9 ? max : min + (step * (i + 1))
-          });
-        }
-      }
-      
-      // Create conditions to hide ranges
-      hiddenLegendItems.forEach(rangeKey => {
-        const index = parseInt(rangeKey.split('_')[1]);
-        if (ranges[index]) {
-          const range = ranges[index];
-          filter.push(['!', ['all',
-            ['>=', ['get', currentField], range.min],
-            ['<=', ['get', currentField], range.max]
-          ]]);
-        }
-      });
+function getAvailableFilterFields() {
+  if (!currentGeoJSON) return [];
+  const availableNumeric = chosenNumericFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+  const availableCategorical = chosenCategoricalFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+  return [
+    ...availableNumeric.map(field => ({ field, type: 'numeric' as const })),
+    ...availableCategorical.map(field => ({ field, type: 'categorical' as const }))
+  ];
+}
+
+function syncFiltersWithAvailableFields() {
+  const availableFields = new Set(getAvailableFilterFields().map(item => item.field));
+  filters.forEach(filter => {
+    if (filter.field && !availableFields.has(filter.field)) {
+      filter.field = null;
+      filter.fieldType = null;
+      filter.operator = null;
+      filter.value = null;
     }
-    
-    // Apply the filter to the layer
-    if (filter.length > 1) {
-      map.setFilter(ids.layerId, filter as any);
+  });
+}
+
+function getCategoricalValues(field: string): string[] {
+  if (!currentGeoJSON) return [];
+  const values = new Set<string>();
+  for (const feature of currentGeoJSON.features) {
+    const raw = feature.properties?.[field];
+    if (raw === undefined || raw === null || raw === '') continue;
+    values.add(String(raw));
+  }
+  return Array.from(values).sort();
+}
+
+function isFilterComplete(filter: FilterRule): boolean {
+  if (!filter.active || !filter.field || !filter.operator) return false;
+  if (filter.value === null || filter.value === undefined) return false;
+  if (Array.isArray(filter.value)) return filter.value.length > 0;
+  if (typeof filter.value === 'string') return filter.value.trim().length > 0;
+  return Number.isFinite(filter.value);
+}
+
+function getActiveFilters(): FilterRule[] {
+  return filters.filter(isFilterComplete);
+}
+
+function buildFilterExpression(filter: FilterRule): any | null {
+  if (!filter.field || !filter.operator || filter.value === null) return null;
+  if (filter.fieldType === 'numeric') {
+    if (!Number.isFinite(filter.value)) return null;
+    const value = Number(filter.value);
+    const fieldExpr: Expression = ['to-number', ['get', filter.field]] as any;
+    switch (filter.operator) {
+      case 'lt':
+        return ['<', fieldExpr, value];
+      case 'gt':
+        return ['>', fieldExpr, value];
+      case 'lte':
+        return ['<=', fieldExpr, value];
+      case 'gte':
+        return ['>=', fieldExpr, value];
+      case 'eq':
+        return ['==', fieldExpr, value];
+      case 'neq':
+        return ['!=', fieldExpr, value];
+      default:
+        return null;
+    }
+  }
+
+  if (filter.fieldType === 'categorical') {
+    const fieldExpr: Expression = ['to-string', ['get', filter.field]] as any;
+    if (filter.operator === 'eq') {
+      return ['==', fieldExpr, String(filter.value)];
+    }
+    if (filter.operator === 'neq') {
+      return ['!=', fieldExpr, String(filter.value)];
+    }
+    if ((filter.operator === 'any' || filter.operator === 'not-any') && Array.isArray(filter.value)) {
+      const expr: any = ['in', fieldExpr, ['literal', filter.value.map(String)]];
+      return filter.operator === 'not-any' ? ['!', expr] : expr;
+    }
+  }
+  return null;
+}
+
+function buildFiltersExpression(activeFilters: FilterRule[]): any | null {
+  if (!activeFilters.length) return null;
+  const expressions = activeFilters
+    .map(filter => buildFilterExpression(filter))
+    .filter(Boolean) as any[];
+  if (!expressions.length) return null;
+  return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
+}
+
+function buildFilterModeExpression(): any | null {
+  if (filterMode === 'none') return null;
+  const activeFilters = getActiveFilters();
+  const baseExpr = buildFiltersExpression(activeFilters);
+  if (!baseExpr) return null;
+  return filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
+}
+
+function buildLegendVisibilityFilter(): any | null {
+  if (!currentField || hiddenLegendItems.size === 0) return null;
+  const conditions: any[] = [];
+
+  if (currentFieldType === 'categorical') {
+    const hiddenCategories = Array.from(hiddenLegendItems);
+    if (hiddenCategories.length > 0) {
+      conditions.push(['!', ['in', ['to-string', ['get', currentField]], ['literal', hiddenCategories]]]);
     }
   } else {
-    // Clear any filters
+    if (!currentStats) return null;
+    const ranges: { min: number; max: number }[] = [];
+    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+      const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+      for (let i = 0; i < breaks.length - 1; i++) {
+        ranges.push({ min: breaks[i], max: breaks[i + 1] });
+      }
+    } else {
+      const min = currentStats.min;
+      const max = currentStats.max;
+      const step = (max - min) / 10;
+      for (let i = 0; i < 10; i++) {
+        ranges.push({
+          min: min + (step * i),
+          max: i === 9 ? max : min + (step * (i + 1))
+        });
+      }
+    }
+
+    hiddenLegendItems.forEach(rangeKey => {
+      const index = parseInt(rangeKey.split('_')[1]);
+      if (ranges[index]) {
+        const range = ranges[index];
+        conditions.push(['!', ['all',
+          ['>=', ['get', currentField], range.min],
+          ['<=', ['get', currentField], range.max]
+        ]]);
+      }
+    });
+  }
+
+  if (!conditions.length) return null;
+  return conditions.length === 1 ? conditions[0] : ['all', ...conditions];
+}
+
+function applyMapFilters() {
+  const ids = getCurrentLayerIds();
+  if (!ids) return;
+  const expressions: any[] = ['all'];
+  const legendExpr = buildLegendVisibilityFilter();
+  if (legendExpr) expressions.push(legendExpr);
+  const filterExpr = buildFilterModeExpression();
+  if (filterExpr) expressions.push(filterExpr);
+  if (expressions.length > 1) {
+    map.setFilter(ids.layerId, expressions as any);
+  } else {
     map.setFilter(ids.layerId, null);
   }
+}
+
+function applyVisibilityFilters() {
+  applyMapFilters();
 }
 
 function applyExtrusionWithVisibility() {
@@ -3407,10 +3625,312 @@ function updateLegendPosition() {
   floatingLegend.style.top = `${legendTop}px`;
 }
 
+function createFilterRule(): FilterRule {
+  return {
+    id: `filter-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    field: null,
+    fieldType: null,
+    operator: null,
+    value: null,
+    active: true
+  };
+}
+
+function updateFiltersUIState() {
+  const hasData = Boolean(currentGeoJSON);
+  const hasActiveFilters = getActiveFilters().length > 0;
+  const canApply = hasData && hasActiveFilters;
+  if (addFilterButton) addFilterButton.disabled = !hasData;
+  if (filtersSelectButton) filtersSelectButton.disabled = !canApply;
+  if (filtersShowButton) filtersShowButton.disabled = !canApply;
+  if (filtersHideButton) filtersHideButton.disabled = !canApply;
+}
+
+function renderFiltersList() {
+  if (!filtersListEl) return;
+  filtersListEl.replaceChildren();
+
+  const availableFields = getAvailableFilterFields();
+
+  filters.forEach((filter, index) => {
+    const row = document.createElement('div');
+    row.className = 'filter-row';
+
+    const controlColumn = document.createElement('div');
+    controlColumn.className = 'filter-controls';
+
+    const upButton = document.createElement('button');
+    upButton.type = 'button';
+    upButton.className = 'filter-control-btn';
+    upButton.textContent = '▲';
+    upButton.title = 'Move filter up';
+    upButton.disabled = index === 0;
+    upButton.addEventListener('click', () => {
+      if (index === 0) return;
+      const swapped = filters[index - 1];
+      filters[index - 1] = filters[index];
+      filters[index] = swapped;
+      renderFiltersList();
+      updateFiltersUIState();
+      persistCurrentLayerState();
+    });
+
+    const downButton = document.createElement('button');
+    downButton.type = 'button';
+    downButton.className = 'filter-control-btn';
+    downButton.textContent = '▼';
+    downButton.title = 'Move filter down';
+    downButton.disabled = index === filters.length - 1;
+    downButton.addEventListener('click', () => {
+      if (index === filters.length - 1) return;
+      const swapped = filters[index + 1];
+      filters[index + 1] = filters[index];
+      filters[index] = swapped;
+      renderFiltersList();
+      updateFiltersUIState();
+      persistCurrentLayerState();
+    });
+
+    controlColumn.append(upButton, downButton);
+
+    const widget = document.createElement('div');
+    widget.className = 'filter-widget';
+
+    const toggleLabel = document.createElement('label');
+    toggleLabel.className = 'filter-toggle';
+    const toggleInput = document.createElement('input');
+    toggleInput.type = 'checkbox';
+    toggleInput.checked = filter.active;
+    toggleInput.addEventListener('change', () => {
+      filter.active = toggleInput.checked;
+      updateFiltersUIState();
+      if (filterMode !== 'none') {
+        applyMapFilters();
+      }
+      persistCurrentLayerState();
+    });
+    toggleLabel.append(toggleInput, document.createTextNode('Active'));
+
+    const fieldSelect = document.createElement('select');
+    const placeholderOption = new Option('Select field', '');
+    placeholderOption.disabled = true;
+    placeholderOption.selected = !filter.field;
+    fieldSelect.appendChild(placeholderOption);
+    availableFields.forEach(item => {
+      const option = new Option(item.field, item.field);
+      option.dataset.type = item.type;
+      fieldSelect.appendChild(option);
+    });
+    if (filter.field) {
+      fieldSelect.value = filter.field;
+    }
+
+    fieldSelect.addEventListener('change', () => {
+      const selected = fieldSelect.value;
+      const selectedOption = fieldSelect.selectedOptions[0];
+      filter.field = selected;
+      filter.fieldType = (selectedOption?.dataset.type as FilterFieldType) ?? null;
+      filter.operator = null;
+      filter.value = null;
+      renderFiltersList();
+      updateFiltersUIState();
+      if (filterMode !== 'none') {
+        applyMapFilters();
+      }
+      persistCurrentLayerState();
+    });
+
+    widget.appendChild(toggleLabel);
+    widget.appendChild(fieldSelect);
+
+    if (filter.field && filter.fieldType) {
+      const operatorSelect = document.createElement('select');
+      const operatorPlaceholder = new Option('Select condition', '');
+      operatorPlaceholder.disabled = true;
+      operatorPlaceholder.selected = !filter.operator;
+      operatorSelect.appendChild(operatorPlaceholder);
+      const operatorOptions = filter.fieldType === 'numeric'
+        ? NUMERIC_FILTER_OPERATORS
+        : CATEGORICAL_FILTER_OPERATORS;
+      operatorOptions.forEach(option => {
+        operatorSelect.appendChild(new Option(option.label, option.value));
+      });
+      if (filter.operator) {
+        operatorSelect.value = filter.operator;
+      }
+      operatorSelect.addEventListener('change', () => {
+        filter.operator = operatorSelect.value as FilterOperator;
+        filter.value = null;
+        renderFiltersList();
+        updateFiltersUIState();
+        if (filterMode !== 'none') {
+          applyMapFilters();
+        }
+        persistCurrentLayerState();
+      });
+      widget.appendChild(operatorSelect);
+
+      if (filter.operator) {
+        if (filter.fieldType === 'numeric') {
+          const valueInput = document.createElement('input');
+          valueInput.type = 'number';
+          valueInput.placeholder = 'Value';
+          valueInput.value = typeof filter.value === 'number' ? String(filter.value) : '';
+          valueInput.addEventListener('input', () => {
+            const parsed = Number(valueInput.value);
+            filter.value = Number.isFinite(parsed) ? parsed : null;
+            updateFiltersUIState();
+            if (filterMode !== 'none') {
+              applyMapFilters();
+            }
+            persistCurrentLayerState();
+          });
+          widget.appendChild(valueInput);
+        } else {
+          const categoricalValues = filter.field ? getCategoricalValues(filter.field) : [];
+          const valueSelect = document.createElement('select');
+          valueSelect.className = 'filter-value-select';
+          if (filter.operator === 'any' || filter.operator === 'not-any') {
+            valueSelect.multiple = true;
+          }
+          const needsPlaceholder = !valueSelect.multiple;
+          if (needsPlaceholder) {
+            const valuePlaceholder = new Option('Select value', '');
+            valuePlaceholder.disabled = true;
+            valuePlaceholder.selected = !filter.value;
+            valueSelect.appendChild(valuePlaceholder);
+          }
+          categoricalValues.forEach(value => {
+            valueSelect.appendChild(new Option(value, value));
+          });
+
+          if (Array.isArray(filter.value)) {
+            Array.from(valueSelect.options).forEach(option => {
+              option.selected = filter.value.includes(option.value);
+            });
+          } else if (typeof filter.value === 'string') {
+            valueSelect.value = filter.value;
+          }
+
+          valueSelect.addEventListener('change', () => {
+            if (valueSelect.multiple) {
+              const values = Array.from(valueSelect.selectedOptions).map(option => option.value);
+              filter.value = values;
+            } else {
+              filter.value = valueSelect.value || null;
+            }
+            updateFiltersUIState();
+            if (filterMode !== 'none') {
+              applyMapFilters();
+            }
+            persistCurrentLayerState();
+          });
+          widget.appendChild(valueSelect);
+        }
+      }
+    }
+
+    const deleteButton = document.createElement('button');
+    deleteButton.type = 'button';
+    deleteButton.className = 'filter-control-btn';
+    deleteButton.textContent = '✕';
+    deleteButton.title = 'Delete filter';
+    deleteButton.addEventListener('click', () => {
+      filters = filters.filter(existing => existing.id !== filter.id);
+      renderFiltersList();
+      updateFiltersUIState();
+      if (filterMode !== 'none') {
+        applyMapFilters();
+      }
+      persistCurrentLayerState();
+    });
+
+    row.append(controlColumn, widget, deleteButton);
+    filtersListEl.appendChild(row);
+  });
+}
+
+function refreshFiltersUI() {
+  syncFiltersWithAvailableFields();
+  renderFiltersList();
+  updateFiltersUIState();
+}
+
+function matchesFilterRule(feature: GeoJSON.Feature, filter: FilterRule): boolean {
+  if (!filter.field || !filter.operator) return false;
+  const rawValue = feature.properties?.[filter.field];
+  if (filter.fieldType === 'numeric') {
+    const numericValue = numOrNull(rawValue);
+    if (numericValue === null || filter.value === null || !Number.isFinite(filter.value)) return false;
+    const target = Number(filter.value);
+    switch (filter.operator) {
+      case 'lt':
+        return numericValue < target;
+      case 'gt':
+        return numericValue > target;
+      case 'lte':
+        return numericValue <= target;
+      case 'gte':
+        return numericValue >= target;
+      case 'eq':
+        return numericValue === target;
+      case 'neq':
+        return numericValue !== target;
+      default:
+        return false;
+    }
+  }
+
+  if (filter.fieldType === 'categorical') {
+    if (rawValue === null || rawValue === undefined) return false;
+    const value = String(rawValue);
+    if (filter.operator === 'eq') return value === String(filter.value);
+    if (filter.operator === 'neq') return value !== String(filter.value);
+    if ((filter.operator === 'any' || filter.operator === 'not-any') && Array.isArray(filter.value)) {
+      const hasValue = filter.value.map(String).includes(value);
+      return filter.operator === 'not-any' ? !hasValue : hasValue;
+    }
+  }
+
+  return false;
+}
+
+function applyFilteredSelection() {
+  if (!currentGeoJSON) return;
+  const activeFilters = getActiveFilters();
+  if (!activeFilters.length) return;
+  const sourceId = getCurrentSourceId();
+  if (!sourceId) return;
+
+  clearAllSelections();
+
+  for (const feature of currentGeoJSON.features) {
+    if (!activeFilters.every(filter => matchesFilterRule(feature, filter))) continue;
+    if (feature.id === undefined) continue;
+    const parcelId = getParcelId(feature);
+    selectedParcels.add(parcelId);
+    map.setFeatureState(
+      { source: sourceId, id: feature.id },
+      { selected: true }
+    );
+  }
+  updateSelectionControls();
+}
+
+function applyFilterMode(mode: FilterMode) {
+  if (!currentGeoJSON) return;
+  filterMode = mode;
+  clearLegendVisibility();
+  applyMapFilters();
+  updateFiltersUIState();
+  persistCurrentLayerState();
+}
+
 function installWelcome() {
   minimizeLayers();
   minimizeSettingsMenu();
   minimizePaint();
+  minimizeFilters();
 
   welcomeEl = document.createElement('div');
   welcomeEl.id = 'welcomeOverlay';
@@ -4274,9 +4794,8 @@ function applyGrayRendering() {
   map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
   map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
   map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-  
-  // Clear any filters
-  map.setFilter(ids.layerId, null);
+
+  applyMapFilters();
   
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
@@ -5148,7 +5667,27 @@ btnMinimizeSettingsMenu.addEventListener('click', minimizeSettingsMenu);
 btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
 btnMinimizeStatistics.addEventListener('click', minimizeStatistics);
+btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnPaintMenu.addEventListener('click', togglePaint);
+
+addFilterButton.addEventListener('click', () => {
+  filters.push(createFilterRule());
+  renderFiltersList();
+  updateFiltersUIState();
+  persistCurrentLayerState();
+});
+
+filtersSelectButton.addEventListener('click', () => {
+  applyFilteredSelection();
+});
+
+filtersShowButton.addEventListener('click', () => {
+  applyFilterMode('show');
+});
+
+filtersHideButton.addEventListener('click', () => {
+  applyFilterMode('hide');
+});
 
 statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
@@ -5255,8 +5794,10 @@ makeDraggable(settingsControlsEl);
 makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
 makeDraggable(statisticsControlsEl);
+makeDraggable(filtersControlsEl);
 positionPaintPanel();
 positionSettingsPanel();
+positionFiltersPanel();
 updatePaintButtonState();
 
 rampSelect.addEventListener('change', () => {
@@ -5401,6 +5942,7 @@ unitsSelect.value = 'centimeters';
 
 // Initialize UI - show numeric options by default, hide categorical
 updateFieldTypeUI();
+refreshFiltersUI();
 
 setQuality('high');
 renderLayerList();
@@ -5737,6 +6279,12 @@ function initializeToolbar() {
     closeAllSubmenus();
     toggleSettingsMenu();
   });
+
+  filtersToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    toggleFilters();
+  });
   
   // Handle pan button click
   panToolButton.addEventListener('click', (e) => {
@@ -5839,6 +6387,14 @@ function updateToolbarButtonStates() {
   } else {
     statisticsToolButton.classList.remove('inactive');
     statisticsToolButton.classList.add('active');
+  }
+
+  if (isFiltersMinimized) {
+    filtersToolButton.classList.add('inactive');
+    filtersToolButton.classList.remove('active');
+  } else {
+    filtersToolButton.classList.remove('inactive');
+    filtersToolButton.classList.add('active');
   }
 
   updatePaintButtonState();

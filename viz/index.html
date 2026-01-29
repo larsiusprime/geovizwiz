@@ -425,6 +425,92 @@
       color: white;
       border-color: #2d6cdf;
     }
+
+    #filtersControls select,
+    #filtersControls input[type="number"] {
+      width: 100%;
+      padding: 6px 8px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-size: 13px;
+    }
+
+    .filters-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .filters-actions button,
+    #filtersControls button {
+      border: 1px solid #ddd;
+      background: #f8f8f8;
+      padding: 6px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .filters-actions button:disabled,
+    #filtersControls button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .filters-actions button:hover:not(:disabled),
+    #filtersControls button:hover:not(:disabled) {
+      background: #f0f0f0;
+    }
+
+    .filters-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .filter-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 6px;
+      align-items: center;
+      padding: 6px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .filter-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .filter-control-btn {
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      border-radius: 6px;
+      padding: 2px 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .filter-widget {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 11px;
+      color: #444;
+    }
+
+    .filter-value-select[multiple] {
+      min-height: 64px;
+    }
   </style>
 </head>
   <body>
@@ -460,6 +546,10 @@
 
         <button id="settingsToolButton" class="toolbar-button" title="Settings">
           <img src="./src/svg/settings.svg" alt="Settings" />
+        </button>
+
+        <button id="filtersToolButton" class="toolbar-button" title="Filters">
+          <img src="./src/svg/filters.svg" alt="Filters" />
         </button>
 
         <button id="btnPaintMenu" class="toolbar-button" title="Show/hide paint">
@@ -563,6 +653,31 @@
           <button id="btn-zoomto" type="button">Zoom to data</button>
         </div>
       </fieldset>
+    </div>
+  </div>
+
+  <div id="filtersControls" style="position: absolute; top: 10px; left: 860px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Filters</div>
+      <button id="btnMinimizeFilters" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="filtersContent" style="padding: 12px; display: grid; gap: 12px;">
+      <div class="section-title">Action</div>
+      <div class="filters-actions">
+        <button id="filtersSelectButton" type="button">Select filtered</button>
+        <button id="filtersShowButton" type="button">Show filtered</button>
+        <button id="filtersHideButton" type="button">Hide filtered</button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="section-title">Filters</div>
+      <div id="filtersList" class="filters-list"></div>
+      <button id="addFilterButton" type="button">Add filter</button>
     </div>
   </div>
 

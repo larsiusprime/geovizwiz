@@ -3640,7 +3640,7 @@ function updateFiltersUIState() {
   const hasData = Boolean(currentGeoJSON);
   const hasActiveFilters = getActiveFilters().length > 0;
   const canApply = hasData && hasActiveFilters;
-  if (addFilterButton) addFilterButton.disabled = !hasData;
+  if (addFilterButton) addFilterButton.disabled = false;
   if (filtersSelectButton) filtersSelectButton.disabled = !canApply;
   if (filtersShowButton) filtersShowButton.disabled = !canApply;
   if (filtersHideButton) filtersHideButton.disabled = !canApply;

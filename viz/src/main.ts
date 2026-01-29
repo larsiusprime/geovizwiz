@@ -3652,49 +3652,9 @@ function renderFiltersList() {
 
   const availableFields = getAvailableFilterFields();
 
-  filters.forEach((filter, index) => {
+  filters.forEach(filter => {
     const row = document.createElement('div');
     row.className = 'filter-row';
-
-    const controlColumn = document.createElement('div');
-    controlColumn.className = 'filter-controls';
-
-    const controlSpacer = document.createElement('div');
-    controlSpacer.className = 'filter-control-spacer';
-
-    const upButton = document.createElement('button');
-    upButton.type = 'button';
-    upButton.className = 'filter-control-btn';
-    upButton.textContent = '▲';
-    upButton.title = 'Move filter up';
-    upButton.disabled = index === 0;
-    upButton.addEventListener('click', () => {
-      if (index === 0) return;
-      const swapped = filters[index - 1];
-      filters[index - 1] = filters[index];
-      filters[index] = swapped;
-      renderFiltersList();
-      updateFiltersUIState();
-      persistCurrentLayerState();
-    });
-
-    const downButton = document.createElement('button');
-    downButton.type = 'button';
-    downButton.className = 'filter-control-btn';
-    downButton.textContent = '▼';
-    downButton.title = 'Move filter down';
-    downButton.disabled = index === filters.length - 1;
-    downButton.addEventListener('click', () => {
-      if (index === filters.length - 1) return;
-      const swapped = filters[index + 1];
-      filters[index + 1] = filters[index];
-      filters[index] = swapped;
-      renderFiltersList();
-      updateFiltersUIState();
-      persistCurrentLayerState();
-    });
-
-    controlColumn.append(controlSpacer, upButton, downButton);
 
     const widget = document.createElement('div');
     widget.className = 'filter-widget';
@@ -3719,7 +3679,7 @@ function renderFiltersList() {
 
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
-    deleteButton.className = 'filter-control-btn';
+    deleteButton.className = 'filter-control-btn filter-delete-btn';
     deleteButton.textContent = '✕';
     deleteButton.title = 'Delete filter';
     deleteButton.addEventListener('click', () => {
@@ -3862,7 +3822,7 @@ function renderFiltersList() {
       widget.appendChild(operatorRow);
     }
 
-    row.append(controlColumn, widget);
+    row.append(widget);
     filtersListEl.appendChild(row);
   });
 }

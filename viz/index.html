@@ -468,10 +468,29 @@
       background: #eef2ff;
     }
 
+    .filters-invert-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #333;
+    }
+
+    .filters-invert-row input[type="checkbox"] {
+      margin: 0;
+    }
+
+    .filters-invert-divider {
+      width: 1px;
+      height: 14px;
+      background: #e6e6e6;
+      justify-self: center;
+    }
+
     .filters-list {
       display: grid;
       gap: 8px;
-      max-height: 260px;
+      max-height: none;
       overflow-y: auto;
       padding-right: 4px;
     }
@@ -702,6 +721,13 @@
       <div class="divider"></div>
 
       <div class="section-title">Filters</div>
+      <div class="filters-invert-row">
+        <label style="display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="filtersInvertToggle" />
+          <span>Invert</span>
+        </label>
+      </div>
+      <div class="filters-invert-divider"></div>
       <div id="filtersList" class="filters-list"></div>
       <button id="addFilterButton" type="button">Add filter</button>
     </div>

@@ -828,6 +828,7 @@ const statisticsContent = document.getElementById('statisticsContent') as HTMLDi
 const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
 const filtersContent = document.getElementById('filtersContent') as HTMLDivElement;
 const filtersListEl = document.getElementById('filtersList') as HTMLDivElement;
+const filtersInvertToggle = document.getElementById('filtersInvertToggle') as HTMLInputElement;
 const addFilterButton = document.getElementById('addFilterButton') as HTMLButtonElement;
 const filtersSelectButton = document.getElementById('filtersSelectButton') as HTMLButtonElement;
 const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
@@ -1039,6 +1040,7 @@ type LayerState = {
   filters: FilterRule[];
   filterMode: FilterMode;
   filterActionMode: FilterActionMode;
+  filterInvert: boolean;
 };
 
 type DataStore = {
@@ -1168,6 +1170,7 @@ let dragOffset = { x: 0, y: 0 };
 let filters: FilterRule[] = [];
 let filterMode: FilterMode = 'none';
 let filterActionMode: FilterActionMode = 'none';
+let filterInvert = false;
 
 const NUMERIC_FILTER_OPERATORS: Array<{ value: NumericFilterOperator; label: string }> = [
   { value: 'lt', label: '<' },
@@ -1307,7 +1310,8 @@ function createLayerState(name: string, dataStoreId: string): LayerState {
     is3DMode: false,
     filters: [],
     filterMode: 'none',
-    filterActionMode: 'none'
+    filterActionMode: 'none',
+    filterInvert: false
   };
 }
 
@@ -1344,6 +1348,7 @@ function persistCurrentLayerState() {
   layer.filters = cloneFilters(filters);
   layer.filterMode = filterMode;
   layer.filterActionMode = filterActionMode;
+  layer.filterInvert = filterInvert;
 }
 
 function applyLayerState(layer: LayerState) {
@@ -1377,6 +1382,10 @@ function applyLayerState(layer: LayerState) {
   filters = cloneFilters(layer.filters ?? []);
   filterMode = layer.filterMode ?? 'none';
   filterActionMode = layer.filterActionMode ?? 'none';
+  filterInvert = layer.filterInvert ?? false;
+  if (filtersInvertToggle) {
+    filtersInvertToggle.checked = filterInvert;
+  }
   currentDataStoreId = layer.dataStoreId;
   const store = dataStores.get(layer.dataStoreId);
   if (store) {
@@ -1556,9 +1565,13 @@ function removeLayer(layerId: string) {
       selectedLegendItems = new Set();
       selectedParcels = new Set();
       highlightColor = '#FFFF00';
-  filters = [];
-  filterMode = 'none';
-  filterActionMode = 'none';
+      filters = [];
+      filterMode = 'none';
+      filterActionMode = 'none';
+      filterInvert = false;
+      if (filtersInvertToggle) {
+        filtersInvertToggle.checked = false;
+      }
       fieldSelect.replaceChildren(new Option('— load a file first —', ''));
       updateFieldTypeUI();
       updateFloatingLegend();
@@ -1729,6 +1742,23 @@ function positionFiltersPanel() {
   filtersControlsEl.style.left = `${rect.right + gap}px`;
   filtersControlsEl.style.top = `${rect.top}px`;
   filtersControlsEl.style.transform = 'none';
+  updateFiltersPanelLayout();
+}
+
+function updateFiltersPanelLayout() {
+  if (!filtersControlsEl || !filtersContent || !filtersListEl) return;
+  if (filtersControlsEl.style.display === 'none') return;
+  const panelRect = filtersControlsEl.getBoundingClientRect();
+  if (panelRect.height === 0 && panelRect.width === 0) return;
+  const viewportPadding = 16;
+  const maxPanelHeight = Math.max(220, window.innerHeight - panelRect.top - viewportPadding);
+  filtersControlsEl.style.maxHeight = `${maxPanelHeight}px`;
+
+  const contentRect = filtersContent.getBoundingClientRect();
+  const listRect = filtersListEl.getBoundingClientRect();
+  const nonListHeight = contentRect.height - listRect.height;
+  const availableListHeight = Math.max(140, maxPanelHeight - nonListHeight - 8);
+  filtersListEl.style.maxHeight = `${availableListHeight}px`;
 }
 
 function minimizeStatistics() {
@@ -1766,6 +1796,7 @@ function showFilters() {
   filtersContent.style.display = 'grid';
   filtersControlsEl.style.display = 'grid';
   positionFiltersPanel();
+  updateFiltersPanelLayout();
   updateToolbarButtonStates();
 }
 
@@ -2169,9 +2200,13 @@ function handleMouseMove(e: MouseEvent) {
 }
 
 function handleMouseUp() {
+  const releasedTarget = dragTarget;
   isDragging = false;
   dragTarget = null;
   document.body.style.userSelect = '';
+  if (releasedTarget?.id === 'filtersControls') {
+    updateFiltersPanelLayout();
+  }
 }
 
 function updateCurrentLayerDetails() {
@@ -3242,7 +3277,8 @@ function buildFilterModeExpression(): any | null {
   const activeFilters = getActiveFilters();
   const baseExpr = buildFiltersExpression(activeFilters);
   if (!baseExpr) return null;
-  return filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
+  const modeExpr = filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
+  return filterInvert ? ['!', modeExpr] : modeExpr;
 }
 
 function buildLegendVisibilityFilter(): any | null {
@@ -3821,6 +3857,7 @@ function renderFiltersList() {
     row.append(widget);
     filtersListEl.appendChild(row);
   });
+  updateFiltersPanelLayout();
 }
 
 function refreshFiltersUI() {
@@ -3868,6 +3905,13 @@ function matchesFilterRule(feature: GeoJSON.Feature, filter: FilterRule): boolea
   return false;
 }
 
+function matchesActiveFilters(feature: GeoJSON.Feature): boolean {
+  const activeFilters = getActiveFilters();
+  if (!activeFilters.length) return false;
+  const baseMatch = activeFilters.every(filter => matchesFilterRule(feature, filter));
+  return filterInvert ? !baseMatch : baseMatch;
+}
+
 function applyFilteredSelection() {
   if (!currentGeoJSON) return;
   const activeFilters = getActiveFilters();
@@ -3878,7 +3922,7 @@ function applyFilteredSelection() {
   clearAllSelections();
 
   for (const feature of currentGeoJSON.features) {
-    if (!activeFilters.every(filter => matchesFilterRule(feature, filter))) continue;
+    if (!matchesActiveFilters(feature)) continue;
     if (feature.id === undefined) continue;
     const parcelId = getParcelId(feature);
     selectedParcels.add(parcelId);
@@ -5704,6 +5748,13 @@ filtersHideButton.addEventListener('click', () => {
   setFilterActionMode('hide');
 });
 
+filtersInvertToggle.addEventListener('change', () => {
+  filterInvert = filtersInvertToggle.checked;
+  applyActiveFilterAction();
+  applyMapFilters();
+  persistCurrentLayerState();
+});
+
 statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
   statsCategoryValueIndex = null;
@@ -5802,6 +5853,9 @@ bindPercentInput(statsOverflowMaxPct);
 // Global mouse event listeners for dragging
 document.addEventListener('mousemove', handleMouseMove);
 document.addEventListener('mouseup', handleMouseUp);
+window.addEventListener('resize', () => {
+  updateFiltersPanelLayout();
+});
 
 // Make windows draggable
 makeDraggable(controlsEl);

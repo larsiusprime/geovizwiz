@@ -864,6 +864,7 @@ const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HT
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
+const PENCIL_ICON = new URL('./svg/pencil.svg', import.meta.url).href;
 
 function setEyeButtonIcon(button: HTMLButtonElement, isHidden: boolean) {
   const img = button.querySelector('img');
@@ -5170,6 +5171,11 @@ function addPopupEditFunctionality(parcelId: string) {
       if (resetButton) resetButton.style.display = changed ? 'inline-flex' : 'none';
     };
 
+    const setEditButtonToPencil = (button: HTMLButtonElement | null) => {
+      if (!button) return;
+      button.innerHTML = `<img src="${PENCIL_ICON}" alt="Edit" style="width:12px;height:12px;display:block;">`;
+    };
+
     const exitEditMode = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical', displayValue: any) => {
       row.dataset.editing = 'false';
       row.style.background = '';
@@ -5178,7 +5184,7 @@ function addPopupEditFunctionality(parcelId: string) {
         valueCell.textContent = formatPopupValue(fieldType, displayValue);
       }
       const editButton = row.querySelector('.popup-edit-btn') as HTMLButtonElement | null;
-      if (editButton) editButton.textContent = '✏';
+      setEditButtonToPencil(editButton);
       updateRowChangedState(row, field, fieldType);
     };
 
@@ -5932,7 +5938,11 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
           ${printable}
         </td>
         <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
-          <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">✏</button>
+          <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">
+            <img src="${PENCIL_ICON}" alt="Edit" style="width:12px;height:12px;display:block;">
+          </button>
+        </td>
+        <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
           <button type="button" class="popup-reset-btn" title="Reset to original" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;${changed ? '' : 'display:none;'}">↩</button>
         </td>
       </tr>`;
@@ -5978,9 +5988,10 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
       <div style="overflow-y:auto; max-height:400px;">
         <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
           <colgroup>
-          <col span="1" style="width:55%">
-          <col span="1" style="width:30%">
-          <col span="1" style="width:15%">
+          <col span="1" style="width:53%">
+          <col span="1" style="width:29%">
+          <col span="1" style="width:9%">
+          <col span="1" style="width:9%">
           </colgroup>
           <tbody id="popupFieldsTable">
           ${rows}

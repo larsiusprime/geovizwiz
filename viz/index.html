@@ -581,6 +581,44 @@
     .filter-value-select[multiple] {
       min-height: 64px;
     }
+
+    .land-schedule-section {
+      display: grid;
+      gap: 8px;
+    }
+
+    .land-schedule-row {
+      display: grid;
+      gap: 6px;
+    }
+
+    .land-schedule-row.split {
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      align-items: end;
+    }
+
+    .land-schedule-row.inline {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .land-schedule-row.inline label {
+      margin: 0;
+    }
+
+    .land-schedule-inline-unit {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .land-schedule-subtitle {
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+    }
   </style>
 </head>
   <body>
@@ -632,6 +670,10 @@
 
         <button id="statisticsToolButton" class="toolbar-button" title="Statistics">
           <img src="./src/svg/chart.svg" alt="Statistics" />
+        </button>
+
+        <button id="landScheduleToolButton" class="toolbar-button" title="Land Schedule">
+          <img src="./src/svg/land.svg" alt="Land Schedule" />
         </button>
         
         <div id="selectSubmenu" class="toolbar-submenu">
@@ -1008,6 +1050,62 @@
                 <tbody id="statsCategoricalValues"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="landScheduleControls" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
+      <button id="btnMinimizeLandSchedule" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+    </div>
+    <div id="landScheduleContent" style="padding: 12px; display: grid; gap: 12px;">
+      <fieldset class="land-schedule-section">
+        <label>Market Area</label>
+        <div class="land-schedule-row">
+          <select id="landScheduleFieldSelect">
+            <option value="" selected disabled>Choose a field</option>
+          </select>
+        </div>
+        <div id="landScheduleValueRow" class="land-schedule-row" style="display: none;">
+          <label>Schedule for: <span id="landScheduleFieldLabel"></span> =</label>
+          <select id="landScheduleValueSelect"></select>
+        </div>
+      </fieldset>
+
+      <div class="divider"></div>
+
+      <div id="landScheduleValuationSection" style="display: none; gap: 10px;">
+        <div class="land-schedule-subtitle">Valuation</div>
+        <div class="land-schedule-subtitle" style="margin-top: 6px;">Base lot</div>
+        <div class="land-schedule-row split">
+          <label>Size range:</label>
+          <div class="land-schedule-row split" style="gap: 8px;">
+            <label>min: <input id="landScheduleBaseMin" type="number" inputmode="decimal" /></label>
+            <label>max: <input id="landScheduleBaseMax" type="number" inputmode="decimal" /></label>
+          </div>
+        </div>
+        <div class="land-schedule-row inline">
+          <label>Value:</label>
+          <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
+          <span>per:</span>
+          <select id="landScheduleBasePer">
+            <option value="" selected disabled>Select</option>
+            <option value="lot">lot</option>
+            <option value="area">area</option>
+            <option value="frontage">frontage</option>
+          </select>
+          <div id="landScheduleUnitRow" class="land-schedule-inline-unit" style="display: none;">
+            <span>unit:</span>
+            <select id="landScheduleBaseUnit">
+              <option value="" selected disabled>Select</option>
+            </select>
           </div>
         </div>
       </div>

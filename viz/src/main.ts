@@ -1012,6 +1012,13 @@ type FilterRule = {
   active: boolean;
 };
 
+type ParcelFieldPatch = {
+  original: any;
+  current: any;
+};
+
+type ParcelPatchMap = Map<string, Map<string, ParcelFieldPatch>>;
+
 type LayerState = {
   id: string;
   name: string;
@@ -1051,6 +1058,7 @@ type LayerState = {
   filterMode: FilterMode;
   filterActionMode: FilterActionMode;
   filterInvert: boolean;
+  parcelPatchMap: ParcelPatchMap;
 };
 
 type DataStore = {
@@ -1082,6 +1090,7 @@ let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
 let currentField: string | null = null;
 let currentFieldType: 'numeric' | 'categorical' | null = null;
 let currentStats: { min: number; max: number } | null = null;
+let parcelPatchMap: ParcelPatchMap = new Map();
 
 let normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 type ColorMode = 'continuous' | 'quantiles';
@@ -1130,7 +1139,7 @@ let qualityMode: QualityMode = 'fast';
 
 // --- popup state ---
 let activePopup: maplibregl.Popup | null = null;
-let lastPicked: { props: Record<string, any>, lngLat: maplibregl.LngLatLike } | null = null;
+let lastPicked: { props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string } | null = null;
 
 type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
 
@@ -1324,7 +1333,8 @@ function createLayerState(name: string, dataStoreId: string): LayerState {
     filters: [],
     filterMode: 'none',
     filterActionMode: 'none',
-    filterInvert: false
+    filterInvert: false,
+    parcelPatchMap: new Map()
   };
 }
 
@@ -1362,6 +1372,7 @@ function persistCurrentLayerState() {
   layer.filterMode = filterMode;
   layer.filterActionMode = filterActionMode;
   layer.filterInvert = filterInvert;
+  layer.parcelPatchMap = parcelPatchMap;
 }
 
 function applyLayerState(layer: LayerState) {
@@ -1393,6 +1404,7 @@ function applyLayerState(layer: LayerState) {
   if (opacityOut) opacityOut.value = Number(layer.opacity).toFixed(2);
   is3DMode = layer.is3DMode;
   filters = cloneFilters(layer.filters ?? []);
+  parcelPatchMap = layer.parcelPatchMap ?? new Map();
   filterMode = layer.filterMode ?? 'none';
   filterActionMode = layer.filterActionMode ?? 'none';
   filterInvert = layer.filterInvert ?? false;
@@ -4784,9 +4796,11 @@ async function loadSelectedColumns() {
 
     if (cancelRequested) return;
     currentGeoJSON = { type: 'FeatureCollection', features };
+    parcelPatchMap = new Map();
     const activeLayer = getCurrentLayer();
     if (activeLayer) {
       activeLayer.geojson = currentGeoJSON;
+      activeLayer.parcelPatchMap = parcelPatchMap;
       activeLayer.chosenNumericFields = [...chosenNumericFields];
       activeLayer.chosenCategoricalFields = [...chosenCategoricalFields];
       activeLayer.landSizeField = landSizeField;
@@ -4884,6 +4898,7 @@ function clearData() {
   if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
   if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
   if (map.getSource('markup-source')) map.removeSource('markup-source');
+  parcelPatchMap = new Map();
   hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
@@ -4926,7 +4941,8 @@ function addExtrusionLayer(layer: LayerState) {
     // Handle info tool
     if (isInfoToolActive) {
       const props = (f.properties || {}) as Record<string, any>;
-      showPopup(props, e.lngLat);
+      const parcelId = getParcelId(f);
+      showPopup(props, e.lngLat, parcelId);
       return;
     }
     
@@ -4994,7 +5010,7 @@ function addExtrusionLayer(layer: LayerState) {
   ensureErrorLayer(layer);
 }
 
-function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
+function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) {
   // Only show popup if info tool is active
   if (!isInfoToolActive) return;
   
@@ -5005,12 +5021,13 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike) {
     maxWidth: '460px'          // ← wider than default 240px
   })
     .setLngLat(lngLat)
-    .setHTML(buildPopupHTML(props))
+    .setHTML(buildPopupHTML(props, parcelId))
     .addTo(map);
-  lastPicked = { props, lngLat };
+  lastPicked = { props, lngLat, parcelId };
   
   // Add search functionality to the popup
   addPopupSearchFunctionality();
+  addPopupEditFunctionality(parcelId);
 }
 
 function addPopupSearchFunctionality() {
@@ -5039,6 +5056,285 @@ function addPopupSearchFunctionality() {
         });
       }
     }
+  }, 0);
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getPopupFieldType(field: string): 'numeric' | 'categorical' {
+  if (chosenNumericFields.includes(field) || field === landSizeField || field === bldgSizeField) {
+    return 'numeric';
+  }
+  return 'categorical';
+}
+
+function valuesEqualForField(fieldType: 'numeric' | 'categorical', a: any, b: any): boolean {
+  if (fieldType === 'numeric') {
+    const aNum = Number(a);
+    const bNum = Number(b);
+    if (!Number.isFinite(aNum) || !Number.isFinite(bNum)) return false;
+    return Object.is(aNum, bNum);
+  }
+  return String(a ?? '') === String(b ?? '');
+}
+
+function normalizeFieldValue(fieldType: 'numeric' | 'categorical', value: any): any {
+  if (fieldType === 'numeric') {
+    if (value === null || value === undefined || value === '') return null;
+    const num = Number(value);
+    return Number.isFinite(num) ? num : null;
+  }
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
+function getParcelPatchEntry(parcelId: string, field: string): ParcelFieldPatch | undefined {
+  return parcelPatchMap.get(parcelId)?.get(field);
+}
+
+function setParcelPatchEntry(parcelId: string, field: string, original: any, current: any) {
+  let parcelEntry = parcelPatchMap.get(parcelId);
+  if (!parcelEntry) {
+    parcelEntry = new Map();
+    parcelPatchMap.set(parcelId, parcelEntry);
+  }
+  parcelEntry.set(field, { original, current });
+}
+
+function clearParcelPatchEntry(parcelId: string, field: string) {
+  const parcelEntry = parcelPatchMap.get(parcelId);
+  if (!parcelEntry) return;
+  parcelEntry.delete(field);
+  if (parcelEntry.size === 0) {
+    parcelPatchMap.delete(parcelId);
+  }
+}
+
+function isFieldChanged(parcelId: string, field: string, fieldType: 'numeric' | 'categorical'): boolean {
+  const patch = getParcelPatchEntry(parcelId, field);
+  if (!patch) return false;
+  return !valuesEqualForField(fieldType, patch.original, patch.current);
+}
+
+function findFeatureByParcelId(parcelId: string): GeoJSON.Feature | null {
+  if (!currentGeoJSON) return null;
+  return currentGeoJSON.features.find(feature => getParcelId(feature) === parcelId) ?? null;
+}
+
+function updateMapSourceData() {
+  if (!currentGeoJSON) return;
+  const layer = getCurrentLayer();
+  if (!layer) return;
+  const source = map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
+  if (source) {
+    source.setData(currentGeoJSON);
+  }
+}
+
+function updateLastPickedProps(parcelId: string, field: string, value: any) {
+  if (lastPicked && lastPicked.parcelId === parcelId) {
+    lastPicked.props[field] = value;
+  }
+}
+
+function formatPopupValue(fieldType: 'numeric' | 'categorical', value: any): string {
+  if (value === null || value === undefined || value === '') return '—';
+  if (fieldType === 'numeric') {
+    const num = Number(value);
+    return Number.isFinite(num) ? fmt(num) : '—';
+  }
+  return String(value);
+}
+
+function addPopupEditFunctionality(parcelId: string) {
+  setTimeout(() => {
+    const popupElement = activePopup?.getElement();
+    if (!popupElement) return;
+    const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement | null;
+    if (!tableBody || tableBody.dataset.editHandlersAttached === 'true') return;
+    tableBody.dataset.editHandlersAttached = 'true';
+
+    const updateRowChangedState = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical') => {
+      const changed = isFieldChanged(parcelId, field, fieldType);
+      row.style.background = changed ? 'rgba(255, 0, 0, 0.08)' : '';
+      const fieldCell = row.querySelector('td:first-child code') as HTMLElement | null;
+      if (fieldCell) fieldCell.style.fontWeight = changed ? '700' : '';
+      const resetButton = row.querySelector('.popup-reset-btn') as HTMLButtonElement | null;
+      if (resetButton) resetButton.style.display = changed ? 'inline-flex' : 'none';
+    };
+
+    const exitEditMode = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical', displayValue: any) => {
+      row.dataset.editing = 'false';
+      row.style.background = '';
+      const valueCell = row.querySelector('[data-value-cell]') as HTMLTableCellElement | null;
+      if (valueCell) {
+        valueCell.textContent = formatPopupValue(fieldType, displayValue);
+      }
+      const editButton = row.querySelector('.popup-edit-btn') as HTMLButtonElement | null;
+      if (editButton) editButton.textContent = '✏';
+      updateRowChangedState(row, field, fieldType);
+    };
+
+    const getCurrentFieldValue = (parcelIdValue: string, field: string, fieldType: 'numeric' | 'categorical') => {
+      const patch = getParcelPatchEntry(parcelIdValue, field);
+      if (patch) return patch.current;
+      const feature = findFeatureByParcelId(parcelIdValue);
+      return normalizeFieldValue(fieldType, feature?.properties?.[field]);
+    };
+
+    const acceptInputValue = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical', input: HTMLInputElement) => {
+      const currentValue = row.dataset.lastValidValue ?? input.value;
+      if (fieldType === 'numeric') {
+        const trimmed = input.value.trim();
+        if (!trimmed) {
+          input.value = currentValue;
+          return;
+        }
+        const num = Number(trimmed);
+        if (!Number.isFinite(num)) {
+          input.value = currentValue;
+          return;
+        }
+        const normalized = String(num);
+        input.value = normalized;
+        row.dataset.pendingValue = normalized;
+        row.dataset.lastValidValue = normalized;
+      } else {
+        const nextValue = input.value;
+        row.dataset.pendingValue = nextValue;
+        row.dataset.lastValidValue = nextValue;
+      }
+    };
+
+    const commitRowValue = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical') => {
+      const input = row.querySelector('input') as HTMLInputElement | null;
+      if (input) {
+        acceptInputValue(row, field, fieldType, input);
+      }
+      const pendingValue = row.dataset.pendingValue ?? row.dataset.lastValidValue ?? '';
+      const normalized = normalizeFieldValue(fieldType, pendingValue);
+      if (fieldType === 'numeric' && normalized === null) {
+        const currentValue = getCurrentFieldValue(parcelId, field, fieldType);
+        exitEditMode(row, field, fieldType, currentValue);
+        return;
+      }
+
+      const feature = findFeatureByParcelId(parcelId);
+      if (!feature || !feature.properties) return;
+      const existingPatch = getParcelPatchEntry(parcelId, field);
+      const originalValue = existingPatch
+        ? existingPatch.original
+        : normalizeFieldValue(fieldType, feature.properties[field]);
+      if (valuesEqualForField(fieldType, originalValue, normalized)) {
+        clearParcelPatchEntry(parcelId, field);
+        feature.properties[field] = originalValue;
+      } else {
+        setParcelPatchEntry(parcelId, field, originalValue, normalized);
+        feature.properties[field] = normalized;
+      }
+
+      updateMapSourceData();
+      updateLastPickedProps(parcelId, field, feature.properties[field]);
+      exitEditMode(row, field, fieldType, feature.properties[field]);
+    };
+
+    const resetRowValue = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical') => {
+      const patch = getParcelPatchEntry(parcelId, field);
+      if (!patch) return;
+      const feature = findFeatureByParcelId(parcelId);
+      if (!feature || !feature.properties) return;
+      feature.properties[field] = patch.original;
+      clearParcelPatchEntry(parcelId, field);
+      updateMapSourceData();
+      updateLastPickedProps(parcelId, field, feature.properties[field]);
+      exitEditMode(row, field, fieldType, feature.properties[field]);
+    };
+
+    const enterEditMode = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical') => {
+      row.dataset.editing = 'true';
+      row.style.background = '#fff4b8';
+      const editButton = row.querySelector('.popup-edit-btn') as HTMLButtonElement | null;
+      if (editButton) editButton.textContent = '💾';
+
+      const valueCell = row.querySelector('[data-value-cell]') as HTMLTableCellElement | null;
+      if (!valueCell) return;
+      valueCell.replaceChildren();
+
+      const input = document.createElement('input');
+      input.type = fieldType === 'numeric' ? 'number' : 'text';
+      if (fieldType === 'numeric') {
+        input.step = 'any';
+      }
+      input.style.width = '100%';
+      input.style.boxSizing = 'border-box';
+      input.style.fontSize = '12px';
+      input.style.padding = '2px 4px';
+
+      const currentValue = getCurrentFieldValue(parcelId, field, fieldType);
+      input.value = currentValue === null || currentValue === undefined ? '' : String(currentValue);
+      row.dataset.lastValidValue = input.value;
+      row.dataset.pendingValue = input.value;
+
+      if (fieldType === 'categorical') {
+        const values = getCategoricalValues(field);
+        if (values.length > 0 && values.length < 50) {
+          const listId = `popup-values-${parcelId}-${field.replace(/[^a-z0-9_-]/gi, '_')}`;
+          const datalist = document.createElement('datalist');
+          datalist.id = listId;
+          values
+            .filter(value => String(value) !== String(currentValue))
+            .forEach(value => {
+              const option = document.createElement('option');
+              option.value = String(value);
+              datalist.appendChild(option);
+            });
+          input.setAttribute('list', listId);
+          valueCell.appendChild(datalist);
+        }
+      }
+
+      input.addEventListener('blur', () => acceptInputValue(row, field, fieldType, input));
+      input.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          acceptInputValue(row, field, fieldType, input);
+          input.blur();
+        }
+      });
+      valueCell.appendChild(input);
+      input.focus();
+      input.select();
+    };
+
+    tableBody.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) return;
+      const editButton = target.closest('.popup-edit-btn') as HTMLButtonElement | null;
+      const resetButton = target.closest('.popup-reset-btn') as HTMLButtonElement | null;
+      if (!editButton && !resetButton) return;
+      const row = (editButton ?? resetButton)?.closest('tr') as HTMLTableRowElement | null;
+      if (!row) return;
+      const field = row.dataset.field;
+      const fieldType = row.dataset.fieldType as 'numeric' | 'categorical' | undefined;
+      if (!field || !fieldType) return;
+
+      if (resetButton) {
+        resetRowValue(row, field, fieldType);
+        return;
+      }
+      if (row.dataset.editing === 'true') {
+        commitRowValue(row, field, fieldType);
+      } else {
+        enterEditMode(row, field, fieldType);
+      }
+    });
   }, 0);
 }
 
@@ -5087,8 +5383,9 @@ function applyGrayRendering() {
   updateErrorLayer();
 
   if (activePopup && lastPicked) {
-    activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
+    activePopup.setHTML(buildPopupHTML(lastPicked.props, lastPicked.parcelId)).setLngLat(lastPicked.lngLat);
     addPopupSearchFunctionality();
+    addPopupEditFunctionality(lastPicked.parcelId);
   }
 }
 
@@ -5129,8 +5426,9 @@ function applyExtrusion() {
   updateErrorLayer();
 
   if (activePopup && lastPicked) {
-    activePopup.setHTML(buildPopupHTML(lastPicked.props)).setLngLat(lastPicked.lngLat);
+    activePopup.setHTML(buildPopupHTML(lastPicked.props, lastPicked.parcelId)).setLngLat(lastPicked.lngLat);
     addPopupSearchFunctionality();
+    addPopupEditFunctionality(lastPicked.parcelId);
   }
 }
 
@@ -5602,7 +5900,7 @@ function currentModeErrorMessage(props: Record<string, any>): string | null {
   return null;
 }
 
-function buildPopupHTML(props: Record<string, any>): string {
+function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   const title = props.name ?? props.NAME ?? props.id ?? props.ID ?? '';
   const metric = computeDisplayedMetricFromProps(props);
   const heightM = metric != null ? computeExtrusionHeightMeters(metric) : null;
@@ -5618,15 +5916,24 @@ function buildPopupHTML(props: Record<string, any>): string {
   ]));
 
   const rows = fieldsToShow.map(k => {
-    const v = (props as any)[k];
-    const printable = (typeof v === 'number') ? fmt(v) : (v ?? '—');
+    const fieldType = getPopupFieldType(k);
+    const patch = getParcelPatchEntry(parcelId, k);
+    const v = patch ? patch.current : (props as any)[k];
+    const printable = escapeHtml(formatPopupValue(fieldType, v));
+    const changed = isFieldChanged(parcelId, k, fieldType);
+    const rowStyle = changed ? 'background: rgba(255, 0, 0, 0.08);' : '';
+    const nameStyle = changed ? 'font-weight:700;' : '';
     return `
-      <tr>
+      <tr data-field="${escapeHtml(k)}" data-field-type="${fieldType}" style="${rowStyle}">
         <td style="padding:2px 6px; overflow-wrap:anywhere;">
-          <code style="white-space:normal;">${k}</code>
+          <code style="white-space:normal;${nameStyle}">${escapeHtml(k)}</code>
+        </td>
+        <td style="padding:2px 6px; text-align:right; white-space:nowrap;" data-value-cell>
+          ${printable}
         </td>
         <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
-          ${printable}
+          <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">✏</button>
+          <button type="button" class="popup-reset-btn" title="Reset to original" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;${changed ? '' : 'display:none;'}">↩</button>
         </td>
       </tr>`;
   }).join('');
@@ -5671,8 +5978,9 @@ function buildPopupHTML(props: Record<string, any>): string {
       <div style="overflow-y:auto; max-height:400px;">
         <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
           <colgroup>
-            <col span="1" style="width:65%">
-            <col span="1" style="width:35%">
+          <col span="1" style="width:55%">
+          <col span="1" style="width:30%">
+          <col span="1" style="width:15%">
           </colgroup>
           <tbody id="popupFieldsTable">
           ${rows}

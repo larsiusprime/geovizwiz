@@ -5173,7 +5173,7 @@ function addPopupEditFunctionality(parcelId: string) {
 
     const setEditButtonToPencil = (button: HTMLButtonElement | null) => {
       if (!button) return;
-      button.innerHTML = `<img src="${PENCIL_ICON}" alt="Edit" style="width:12px;height:12px;display:block;">`;
+      button.innerHTML = `✏️`;
     };
 
     const exitEditMode = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical', displayValue: any) => {
@@ -5939,7 +5939,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
         </td>
         <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
           <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">
-            <img src="${PENCIL_ICON}" alt="Edit" style="width:12px;height:12px;display:block;">
+            ✏️
           </button>
         </td>
         <td style="padding:2px 6px; text-align:right; white-space:nowrap;">

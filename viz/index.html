@@ -595,6 +595,15 @@
     .land-schedule-row.split {
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
       align-items: end;
+      margin-right:20px;
+    }
+    
+    .land-schedule-row.split input {
+      width: 120px;
+    }
+
+    .land-schedule-row.split label {
+      font-size: 12px;
     }
 
     .land-schedule-row.inline {
@@ -1081,15 +1090,17 @@
     </div>
     <div id="landScheduleContent" style="padding: 12px; display: grid; gap: 12px;">
       <div class="land-schedule-section">
-        <div class="land-schedule-subtitle">Market Area</div>
+        <div class="land-schedule-subtitle">Market Area field:</div>
         <div class="land-schedule-row">
           <select id="landScheduleFieldSelect">
             <option value="" selected disabled>Choose a field</option>
           </select>
         </div>
+        <div class="land-schedule-subtitle" id="landScheduleFieldLabel"></div>
         <div id="landScheduleValueRow" class="land-schedule-row" style="display: none;">
-          <label><span id="landScheduleFieldLabel"></span>:</label>
-          <select id="landScheduleValueSelect"></select>
+          <select id="landScheduleValueSelect">
+            <option value="" selected disabled>Choose a value</option>
+          </select>
         </div>
       </div>
 
@@ -1101,16 +1112,14 @@
         <div class="land-schedule-row">
           <div class="land-schedule-subtitle" style="font-weight: 500;">Size range</div>
           <div class="land-schedule-row split" style="gap: 8px;">
-            <label>min <input id="landScheduleBaseMin" type="number" inputmode="decimal" /></label>
-            <label>max <input id="landScheduleBaseMax" type="number" inputmode="decimal" /></label>
+            <label>Min <input id="landScheduleBaseMin" type="number" inputmode="decimal" /></label>
+            <label>Max <input id="landScheduleBaseMax" type="number" inputmode="decimal" /></label>
           </div>
         </div>
-        <div class="land-schedule-row">
+        <div class="land-schedule-row split" style="gap: 8px;">
           <label>value
             <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
           </label>
-        </div>
-        <div class="land-schedule-row">
           <label>per size unit:
             <select id="landScheduleBasePer">
               <option value="" selected disabled>Select</option>

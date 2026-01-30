@@ -597,6 +597,10 @@
       align-items: end;
       margin-right:20px;
     }
+
+    .land-schedule-row.split.land-schedule-fields {
+      align-items: start;
+    }
     
     .land-schedule-row.split input {
       width: 120px;
@@ -604,6 +608,28 @@
 
     .land-schedule-row.split label {
       font-size: 12px;
+    }
+
+    .land-schedule-field {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .land-schedule-box-title {
+      font-weight: 600;
+      font-size: 12px;
+      color: #333;
+      margin-top: 6px;
+    }
+
+    .land-schedule-box {
+      border: 1px solid #e1e1e1;
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      background: #fff;
     }
 
     .land-schedule-row.inline {
@@ -1108,26 +1134,36 @@
 
       <div id="landScheduleValuationSection" style="display: none; gap: 10px;">
         <div class="land-schedule-subtitle">Valuation</div>
-        <div class="land-schedule-subtitle" style="margin-top: 6px;">Base lot</div>
-        <div class="land-schedule-row">
-          <div class="land-schedule-subtitle" style="font-weight: 500;">Size range</div>
-          <div class="land-schedule-row split" style="gap: 8px;">
-            <label>Min <input id="landScheduleBaseMin" type="number" inputmode="decimal" /></label>
-            <label>Max <input id="landScheduleBaseMax" type="number" inputmode="decimal" /></label>
+        <div class="land-schedule-box-title">Base lot</div>
+        <div class="land-schedule-box">
+          <div class="land-schedule-row">
+            <div class="land-schedule-subtitle" style="font-weight: 500;">Size range</div>
+            <div class="land-schedule-row split land-schedule-fields" style="gap: 8px;">
+              <label class="land-schedule-field">
+                <span>Min</span>
+                <input id="landScheduleBaseMin" type="number" inputmode="decimal" />
+              </label>
+              <label class="land-schedule-field">
+                <span>Max</span>
+                <input id="landScheduleBaseMax" type="number" inputmode="decimal" />
+              </label>
+            </div>
           </div>
-        </div>
-        <div class="land-schedule-row split" style="gap: 8px;">
-          <label>value
-            <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
-          </label>
-          <label>per size unit:
-            <select id="landScheduleBasePer">
-              <option value="" selected disabled>Select</option>
-              <option value="lot">lot</option>
-              <option value="area">area</option>
-              <option value="frontage">frontage</option>
-            </select>
-          </label>
+          <div class="land-schedule-row split land-schedule-fields" style="gap: 8px;">
+            <label class="land-schedule-field">
+              <span>Value</span>
+              <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
+            </label>
+            <label class="land-schedule-field">
+              <span>Per size unit</span>
+              <select id="landScheduleBasePer">
+                <option value="" selected disabled>Select</option>
+                <option value="lot">lot</option>
+                <option value="area">area</option>
+                <option value="frontage">frontage</option>
+              </select>
+            </label>
+          </div>
         </div>
       </div>
     </div>

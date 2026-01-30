@@ -831,6 +831,11 @@ const scatterplotContent = document.getElementById('scatterplotContent') as HTML
 const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
 const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
 const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
+const scatterXMinInput = document.getElementById('scatterXMin') as HTMLInputElement;
+const scatterXMaxInput = document.getElementById('scatterXMax') as HTMLInputElement;
+const scatterYMinInput = document.getElementById('scatterYMin') as HTMLInputElement;
+const scatterYMaxInput = document.getElementById('scatterYMax') as HTMLInputElement;
+const scatterResetExtentsButton = document.getElementById('scatterResetExtents') as HTMLButtonElement;
 const scatterPlot = document.getElementById('scatterPlot') as HTMLDivElement;
 const scatterPlotEmpty = document.getElementById('scatterPlotEmpty') as HTMLDivElement;
 const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
@@ -1211,6 +1216,10 @@ let scatterCategoryField: string | null = null;
 let scatterCategoryValueIndices: string[] = [];
 let scatterXField: string | null = null;
 let scatterYField: string | null = null;
+let scatterRangeIsCustom = false;
+let scatterDefaultRange = { xMin: null as number | null, xMax: null as number | null, yMin: null as number | null, yMax: null as number | null };
+let isUpdatingScatterRangeInputs = false;
+let scatterRefreshTimer: number | null = null;
 
 type SubjectSelectorControls = {
   buttons: HTMLButtonElement[];
@@ -2695,16 +2704,59 @@ function setScatterSubjectMode(mode: SubjectMode) {
   scatterSubjectMode = mode;
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
-  updateScatterPlot();
+  scatterRangeIsCustom = false;
+  scheduleScatterPlotRefresh();
 }
 
 function getPlotly(): any | null {
   return (window as any).Plotly ?? null;
 }
 
+function scheduleScatterPlotRefresh() {
+  if (scatterRefreshTimer !== null) {
+    window.clearTimeout(scatterRefreshTimer);
+  }
+  scatterRefreshTimer = window.setTimeout(() => {
+    scatterRefreshTimer = null;
+    if (isScatterplotMinimized) return;
+    updateScatterPlot();
+  }, 1000);
+}
+
+function parseScatterRangeInput(input: HTMLInputElement): number | null {
+  const value = input.value.trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setScatterRangeInputs(range: { xMin: number | null; xMax: number | null; yMin: number | null; yMax: number | null }) {
+  isUpdatingScatterRangeInputs = true;
+  scatterXMinInput.value = range.xMin === null ? '' : String(range.xMin);
+  scatterXMaxInput.value = range.xMax === null ? '' : String(range.xMax);
+  scatterYMinInput.value = range.yMin === null ? '' : String(range.yMin);
+  scatterYMaxInput.value = range.yMax === null ? '' : String(range.yMax);
+  isUpdatingScatterRangeInputs = false;
+}
+
+function setScatterRangeControlsEnabled(enabled: boolean) {
+  scatterXMinInput.disabled = !enabled;
+  scatterXMaxInput.disabled = !enabled;
+  scatterYMinInput.disabled = !enabled;
+  scatterYMaxInput.disabled = !enabled;
+  scatterResetExtentsButton.disabled = !enabled;
+}
+
+function clearScatterRangeControls() {
+  setScatterRangeInputs({ xMin: null, xMax: null, yMin: null, yMax: null });
+  scatterRangeIsCustom = false;
+}
+
 function resetScatterPlot(message: string) {
   scatterPlotEmpty.textContent = message;
   scatterPlotEmpty.style.display = 'block';
+  setScatterRangeControlsEnabled(false);
+  clearScatterRangeControls();
   const plotly = getPlotly();
   if (plotly) {
     plotly.purge(scatterPlot);
@@ -2754,6 +2806,19 @@ function updateScatterPlot() {
   }
 
   scatterPlotEmpty.style.display = 'none';
+  setScatterRangeControlsEnabled(true);
+  const xMinDefault = Math.min(...xValues);
+  const xMaxDefault = Math.max(...xValues);
+  const yMinDefault = Math.min(...yValues);
+  const yMaxDefault = Math.max(...yValues);
+  scatterDefaultRange = { xMin: xMinDefault, xMax: xMaxDefault, yMin: yMinDefault, yMax: yMaxDefault };
+  if (!scatterRangeIsCustom) {
+    setScatterRangeInputs(scatterDefaultRange);
+  }
+  const xMin = scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMinInput) ?? xMinDefault) : xMinDefault;
+  const xMax = scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMaxInput) ?? xMaxDefault) : xMaxDefault;
+  const yMin = scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMinInput) ?? yMinDefault) : yMinDefault;
+  const yMax = scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMaxInput) ?? yMaxDefault) : yMaxDefault;
   const trace = {
     x: xValues,
     y: yValues,
@@ -2764,10 +2829,10 @@ function updateScatterPlot() {
   const layout = {
     margin: { l: 48, r: 16, t: 8, b: 42 },
     height: 220,
-    xaxis: { title: scatterXField },
-    yaxis: { title: scatterYField }
+    xaxis: { title: scatterXField, range: [Math.min(xMin, xMax), Math.max(xMin, xMax)] },
+    yaxis: { title: scatterYField, range: [Math.min(yMin, yMax), Math.max(yMin, yMax)] }
   };
-  const config = { displayModeBar: false, responsive: true };
+  const config = { displayModeBar: false, responsive: true, staticPlot: true };
   plotly.react(scatterPlot, [trace], layout, config);
 }
 
@@ -2777,7 +2842,7 @@ function refreshScatterPanel() {
   populateScatterFields();
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 }
 
 // Dragging functions
@@ -4149,7 +4214,7 @@ function applyMapFilters() {
     updateStatisticsResults();
   }
   if (scatterSubjectMode === 'visible') {
-    updateScatterPlot();
+    scheduleScatterPlotRefresh();
   }
 }
 
@@ -4360,7 +4425,7 @@ function updateSelectionControls() {
     updateStatisticsResults();
   }
   if (scatterSubjectMode === 'selected') {
-    updateScatterPlot();
+    scheduleScatterPlotRefresh();
   }
 }
 
@@ -6950,7 +7015,8 @@ scatterCategoryFieldSelect.addEventListener('change', () => {
   scatterCategoryValueIndices = [];
   populateScatterCategoryValues(scatterCategoryField);
   updateScatterSubjectControls();
-  updateScatterPlot();
+  scatterRangeIsCustom = false;
+  scheduleScatterPlotRefresh();
 });
 
 scatterCategoryValueSelect.addEventListener('change', () => {
@@ -6958,7 +7024,8 @@ scatterCategoryValueSelect.addEventListener('change', () => {
     .map(option => option.value)
     .filter(value => value);
   updateScatterSubjectControls();
-  updateScatterPlot();
+  scatterRangeIsCustom = false;
+  scheduleScatterPlotRefresh();
 });
 
 statsFieldSelect.addEventListener('change', () => {
@@ -6974,12 +7041,30 @@ statsFieldSelect.addEventListener('change', () => {
 
 scatterXFieldSelect.addEventListener('change', () => {
   scatterXField = scatterXFieldSelect.value || null;
-  updateScatterPlot();
+  scatterRangeIsCustom = false;
+  scheduleScatterPlotRefresh();
 });
 
 scatterYFieldSelect.addEventListener('change', () => {
   scatterYField = scatterYFieldSelect.value || null;
-  updateScatterPlot();
+  scatterRangeIsCustom = false;
+  scheduleScatterPlotRefresh();
+});
+
+function handleScatterRangeInput() {
+  if (isUpdatingScatterRangeInputs) return;
+  scatterRangeIsCustom = true;
+  scheduleScatterPlotRefresh();
+}
+
+scatterXMinInput.addEventListener('input', handleScatterRangeInput);
+scatterXMaxInput.addEventListener('input', handleScatterRangeInput);
+scatterYMinInput.addEventListener('input', handleScatterRangeInput);
+scatterYMaxInput.addEventListener('input', handleScatterRangeInput);
+scatterResetExtentsButton.addEventListener('click', () => {
+  scatterRangeIsCustom = false;
+  setScatterRangeInputs(scatterDefaultRange);
+  scheduleScatterPlotRefresh();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {

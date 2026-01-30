@@ -1091,14 +1091,41 @@
       <div class="divider"></div>
       <div class="stats-section" style="display: grid; gap: 8px;">
         <div style="font-weight: 600; font-size: 12px;">Plot</div>
-        <label style="display: grid; gap: 4px; font-size: 12px;">
-          <span>X:</span>
-          <select id="scatterXField"></select>
-        </label>
-        <label style="display: grid; gap: 4px; font-size: 12px;">
-          <span>Y:</span>
-          <select id="scatterYField"></select>
-        </label>
+        <div style="display: grid; gap: 8px; font-size: 12px;">
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; flex: 1 1 160px;">
+              <span style="font-weight: 600;">X:</span>
+              <select id="scatterXField" style="flex: 1;"></select>
+            </label>
+            <label style="display: flex; align-items: center; gap: 4px;">
+              <span class="muted">min:</span>
+              <input id="scatterXMin" type="number" inputmode="decimal" style="width: 86px;" disabled />
+            </label>
+            <label style="display: flex; align-items: center; gap: 4px;">
+              <span class="muted">max:</span>
+              <input id="scatterXMax" type="number" inputmode="decimal" style="width: 86px;" disabled />
+            </label>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; flex: 1 1 160px;">
+              <span style="font-weight: 600;">Y:</span>
+              <select id="scatterYField" style="flex: 1;"></select>
+            </label>
+            <label style="display: flex; align-items: center; gap: 4px;">
+              <span class="muted">min:</span>
+              <input id="scatterYMin" type="number" inputmode="decimal" style="width: 86px;" disabled />
+            </label>
+            <label style="display: flex; align-items: center; gap: 4px;">
+              <span class="muted">max:</span>
+              <input id="scatterYMax" type="number" inputmode="decimal" style="width: 86px;" disabled />
+            </label>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <button id="scatterResetExtents" type="button" class="toolbar-button" style="height: 28px; padding: 0 10px; font-size: 12px;" disabled>
+              Reset extents
+            </button>
+          </div>
+        </div>
         <div id="scatterPlotEmpty" class="muted" style="display: none;">Select X and Y fields to render the scatterplot.</div>
         <div id="scatterPlot" style="height: 220px; width: 100%;"></div>
       </div>

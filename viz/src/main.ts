@@ -837,7 +837,11 @@ const statsSubjectCategoryControls = document.getElementById('statsSubjectCatego
 const statsSubjectButtons = document.querySelectorAll<HTMLButtonElement>('[data-stats-subject]');
 const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
 const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
-const statsNumericFieldSelect = document.getElementById('statsNumericField') as HTMLSelectElement;
+const statsFieldSelect = document.getElementById('statsField') as HTMLSelectElement;
+const statsDetails = document.getElementById('statsDetails') as HTMLDivElement;
+const statsNumericBlock = document.getElementById('statsNumericBlock') as HTMLDivElement;
+const statsCategoricalBlock = document.getElementById('statsCategoricalBlock') as HTMLDivElement;
+const statsNormalizationControls = document.getElementById('statsNormalizationControls') as HTMLDivElement;
 const statisticsSection = document.getElementById('statisticsSection') as HTMLDivElement;
 const statsParcelCount = document.getElementById('statsParcelCount') as HTMLSpanElement;
 const statsMedian = document.getElementById('statsMedian') as HTMLSpanElement;
@@ -846,6 +850,10 @@ const statsStdDev = document.getElementById('statsStdDev') as HTMLSpanElement;
 const statsCod = document.getElementById('statsCod') as HTMLSpanElement;
 const statsPercentiles = document.getElementById('statsPercentiles') as HTMLTableSectionElement;
 const statsHistogram = document.getElementById('statsHistogram') as HTMLDivElement;
+const statsCategoricalParcelCount = document.getElementById('statsCategoricalParcelCount') as HTMLSpanElement;
+const statsCategoricalUniqueCount = document.getElementById('statsCategoricalUniqueCount') as HTMLSpanElement;
+const statsCategoricalModalValue = document.getElementById('statsCategoricalModalValue') as HTMLSpanElement;
+const statsCategoricalValues = document.getElementById('statsCategoricalValues') as HTMLTableSectionElement;
 const statsNormAsIs = document.getElementById('stats-norm-asis') as HTMLInputElement;
 const statsNormLand = document.getElementById('stats-norm-land') as HTMLInputElement;
 const statsNormBldg = document.getElementById('stats-norm-bldg') as HTMLInputElement;
@@ -1148,7 +1156,8 @@ let statsSubjectMode: StatsSubjectMode = 'all';
 let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
 let statsCategoryField: string | null = null;
 let statsCategoryValueIndices: string[] = [];
-let statsNumericField: string | null = null;
+let statsField: string | null = null;
+let statsFieldType: 'numeric' | 'categorical' | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 let statsValuesCache: number[] = [];
 let statsOverflowPct = { min: 5, max: 95 };
@@ -1822,6 +1831,10 @@ function resetStatisticsDisplay() {
   statsHistogram.replaceChildren();
   statsOverflowMinPct.disabled = true;
   statsOverflowMaxPct.disabled = true;
+  statsCategoricalParcelCount.textContent = '—';
+  statsCategoricalUniqueCount.textContent = '—';
+  statsCategoricalModalValue.textContent = '—';
+  statsCategoricalValues.replaceChildren();
 }
 
 function populateStatisticsCategoryFields() {
@@ -1896,30 +1909,44 @@ function populateStatisticsCategoryValues(field: string | null) {
   }
 }
 
-function populateStatisticsNumericFields() {
-  statsNumericFieldSelect.replaceChildren();
+function getStatsFieldType(field: string | null) {
+  if (!field) return null;
+  if (chosenNumericFields.includes(field)) return 'numeric';
+  if (chosenCategoricalFields.includes(field)) return 'categorical';
+  return null;
+}
+
+function populateStatisticsFields() {
+  statsFieldSelect.replaceChildren();
   const placeholder = new Option('Choose a field', '');
   placeholder.disabled = true;
   placeholder.selected = true;
-  statsNumericFieldSelect.appendChild(placeholder);
+  statsFieldSelect.appendChild(placeholder);
 
   if (!currentGeoJSON) {
-    statsNumericFieldSelect.disabled = true;
-    statsNumericField = null;
+    statsFieldSelect.disabled = true;
+    statsField = null;
+    statsFieldType = null;
     return;
   }
 
   const availableNumeric = chosenNumericFields.filter(k =>
     currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
-  availableNumeric.forEach(field => {
-    statsNumericFieldSelect.appendChild(new Option(field, field));
+  const availableCategorical = chosenCategoricalFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+  const availableFields = [...availableNumeric, ...availableCategorical];
+  availableFields.forEach(field => {
+    statsFieldSelect.appendChild(new Option(field, field));
   });
-  statsNumericFieldSelect.disabled = availableNumeric.length === 0;
-  if (statsNumericField && availableNumeric.includes(statsNumericField)) {
-    statsNumericFieldSelect.value = statsNumericField;
+  statsFieldSelect.disabled = availableFields.length === 0;
+  if (statsField && availableFields.includes(statsField)) {
+    statsFieldSelect.value = statsField;
+    statsFieldType = getStatsFieldType(statsField);
   } else {
-    statsNumericField = null;
+    statsField = null;
+    statsFieldType = null;
   }
 }
 
@@ -2065,12 +2092,18 @@ function renderStatisticsHistogram(values: number[]) {
 }
 
 function updateStatisticsResults() {
-  if (!currentGeoJSON || !statsNumericField) {
+  if (!currentGeoJSON || !statsField) {
     statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
   if (statsSubjectMode === 'category' && (!statsCategoryField || statsCategoryValueIndices.length === 0)) {
+    statsValuesCache = [];
+    resetStatisticsDisplay();
+    return;
+  }
+  statsFieldType = getStatsFieldType(statsField);
+  if (!statsFieldType) {
     statsValuesCache = [];
     resetStatisticsDisplay();
     return;
@@ -2102,60 +2135,108 @@ function updateStatisticsResults() {
   const totalCount = currentGeoJSON.features.length;
   const selectionCount = selection.length;
   const percent = totalCount > 0 ? (selectionCount / totalCount) * 100 : 0;
-  statsParcelCount.textContent = `${selectionCount.toLocaleString()} (${percent.toFixed(1)}%)`;
+  const parcelText = `${selectionCount.toLocaleString()} (${percent.toFixed(1)}%)`;
+  statsParcelCount.textContent = parcelText;
+  statsCategoricalParcelCount.textContent = parcelText;
 
-  const values = selection
-    .map(feature => {
-      const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-      let base = numOrNull(props[statsNumericField]);
-      if (base === null) return null;
+  if (statsFieldType === 'numeric') {
+    const values = selection
+      .map(feature => {
+        const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
+        let base = numOrNull(props[statsField]);
+        if (base === null) return null;
 
-      if (statsNormalizationMode === 'perLand' && landSizeField) {
-        const denom = numOrNull(props[landSizeField]);
-        if (denom === null || denom <= 0) return null;
-        base = base / denom;
-      } else if (statsNormalizationMode === 'perBuilding' && bldgSizeField) {
-        const denom = numOrNull(props[bldgSizeField]);
-        if (denom === null || denom <= 0) return null;
-        base = base / denom;
+        if (statsNormalizationMode === 'perLand' && landSizeField) {
+          const denom = numOrNull(props[landSizeField]);
+          if (denom === null || denom <= 0) return null;
+          base = base / denom;
+        } else if (statsNormalizationMode === 'perBuilding' && bldgSizeField) {
+          const denom = numOrNull(props[bldgSizeField]);
+          if (denom === null || denom <= 0) return null;
+          base = base / denom;
+        }
+        return base;
+      })
+      .filter((value): value is number => value !== null);
+    statsValuesCache = values;
+
+    const stats = computeStatisticsValues(values);
+    const percentileRows = [
+      { label: 'min', value: stats.min },
+      ...stats.percentiles,
+      { label: 'max', value: stats.max }
+    ];
+    statsMedian.textContent = Number.isFinite(stats.median) ? fmt(stats.median) : '—';
+    statsMean.textContent = Number.isFinite(stats.mean) ? fmt(stats.mean) : '—';
+    statsStdDev.textContent = Number.isFinite(stats.stdDev) ? fmt(stats.stdDev) : '—';
+    statsCod.textContent = Number.isFinite(stats.cod) ? `${fmt(stats.cod)}%` : '—';
+
+    statsPercentiles.replaceChildren();
+    const sortedValues = values.slice().sort((a, b) => a - b);
+    percentileRows.forEach(item => {
+      const row = document.createElement('tr');
+      const labelCell = document.createElement('td');
+      labelCell.textContent = item.label;
+      const valueCell = document.createElement('td');
+      valueCell.textContent = Number.isFinite(item.value) ? fmt(item.value) : '—';
+      const countCell = document.createElement('td');
+      if (Number.isFinite(item.value)) {
+        const cutoff = item.value;
+        const count = sortedValues.filter(v => v <= cutoff).length;
+        countCell.textContent = count.toLocaleString();
+      } else {
+        countCell.textContent = '—';
       }
-      return base;
-    })
-    .filter((value): value is number => value !== null);
-  statsValuesCache = values;
+      row.append(labelCell, valueCell, countCell);
+      statsPercentiles.appendChild(row);
+    });
 
-  const stats = computeStatisticsValues(values);
-  const percentileRows = [
-    { label: 'min', value: stats.min },
-    ...stats.percentiles,
-    { label: 'max', value: stats.max }
-  ];
-  statsMedian.textContent = Number.isFinite(stats.median) ? fmt(stats.median) : '—';
-  statsMean.textContent = Number.isFinite(stats.mean) ? fmt(stats.mean) : '—';
-  statsStdDev.textContent = Number.isFinite(stats.stdDev) ? fmt(stats.stdDev) : '—';
-  statsCod.textContent = Number.isFinite(stats.cod) ? `${fmt(stats.cod)}%` : '—';
+    renderStatisticsHistogram(values);
+    return;
+  }
 
+  statsValuesCache = [];
+  statsMedian.textContent = '—';
+  statsMean.textContent = '—';
+  statsStdDev.textContent = '—';
+  statsCod.textContent = '—';
   statsPercentiles.replaceChildren();
-  const sortedValues = values.slice().sort((a, b) => a - b);
-  percentileRows.forEach(item => {
-    const row = document.createElement('tr');
-    const labelCell = document.createElement('td');
-    labelCell.textContent = item.label;
-    const valueCell = document.createElement('td');
-    valueCell.textContent = Number.isFinite(item.value) ? fmt(item.value) : '—';
-    const countCell = document.createElement('td');
-    if (Number.isFinite(item.value)) {
-      const cutoff = item.value;
-      const count = sortedValues.filter(v => v <= cutoff).length;
-      countCell.textContent = count.toLocaleString();
-    } else {
-      countCell.textContent = '—';
-    }
-    row.append(labelCell, valueCell, countCell);
-    statsPercentiles.appendChild(row);
+  statsHistogram.replaceChildren();
+  statsOverflowMinPct.disabled = true;
+  statsOverflowMaxPct.disabled = true;
+
+  const counts = new Map<string, number>();
+  selection.forEach(feature => {
+    const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
+    const raw = props[statsField];
+    if (raw === null || raw === undefined || raw === '') return;
+    const key = String(raw);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
   });
 
-  renderStatisticsHistogram(values);
+  statsCategoricalUniqueCount.textContent = counts.size.toLocaleString();
+  const entries = Array.from(counts.entries()).map(([label, count]) => ({ label, count }));
+  entries.sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    return a.label.localeCompare(b.label);
+  });
+  if (entries.length > 0) {
+    const modal = entries[0];
+    statsCategoricalModalValue.textContent = `${modal.label} (${modal.count.toLocaleString()})`;
+  } else {
+    statsCategoricalModalValue.textContent = '—';
+  }
+
+  statsCategoricalValues.replaceChildren();
+  entries.forEach(entry => {
+    const row = document.createElement('tr');
+    const valueCell = document.createElement('td');
+    valueCell.textContent = entry.label;
+    const countCell = document.createElement('td');
+    countCell.textContent = entry.count.toLocaleString();
+    row.append(valueCell, countCell);
+    statsCategoricalValues.appendChild(row);
+  });
 }
 
 function updateStatisticsSubjectControls() {
@@ -2182,9 +2263,32 @@ function setStatsSubjectMode(mode: StatsSubjectMode) {
 function updateStatisticsSectionVisibility() {
   const shouldShow = statsSubjectMode !== 'category' || statsCategoryValueIndices.length > 0;
   statisticsSection.style.display = shouldShow ? 'grid' : 'none';
-  if (shouldShow) {
-    populateStatisticsNumericFields();
+  if (!shouldShow) {
+    statsDetails.style.display = 'none';
+    statsNumericBlock.style.display = 'none';
+    statsCategoricalBlock.style.display = 'none';
+    return;
   }
+  populateStatisticsFields();
+  const hasField = Boolean(statsField);
+  statsDetails.style.display = hasField ? 'grid' : 'none';
+  if (!hasField) {
+    statsFieldType = null;
+    statsNumericBlock.style.display = 'none';
+    statsCategoricalBlock.style.display = 'none';
+    return;
+  }
+  statsFieldType = getStatsFieldType(statsField);
+  if (!statsFieldType) {
+    statsNumericBlock.style.display = 'none';
+    statsCategoricalBlock.style.display = 'none';
+    statsNormalizationControls.style.display = 'none';
+    return;
+  }
+  const isNumeric = statsFieldType === 'numeric';
+  statsNumericBlock.style.display = isNumeric ? 'grid' : 'none';
+  statsCategoricalBlock.style.display = isNumeric ? 'none' : 'grid';
+  statsNormalizationControls.style.display = isNumeric ? 'grid' : 'none';
 }
 
 function refreshStatisticsPanel() {
@@ -2195,7 +2299,7 @@ function refreshStatisticsPanel() {
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
 
-  if (statsNumericField) {
+  if (statsField) {
     updateStatisticsResults();
   } else {
     resetStatisticsDisplay();
@@ -5899,16 +6003,22 @@ statsCategoryValueSelect.addEventListener('change', () => {
     .map(option => option.value)
     .filter(value => value);
   updateStatisticsSectionVisibility();
-  if (statsCategoryValueIndices.length > 0 && statsNumericField) {
+  if (statsCategoryValueIndices.length > 0 && statsField) {
     updateStatisticsResults();
     return;
   }
   resetStatisticsDisplay();
 });
 
-statsNumericFieldSelect.addEventListener('change', () => {
-  statsNumericField = statsNumericFieldSelect.value || null;
-  updateStatisticsResults();
+statsFieldSelect.addEventListener('change', () => {
+  statsField = statsFieldSelect.value || null;
+  statsFieldType = getStatsFieldType(statsField);
+  updateStatisticsSectionVisibility();
+  if (statsField) {
+    updateStatisticsResults();
+  } else {
+    resetStatisticsDisplay();
+  }
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {

@@ -235,6 +235,10 @@
     .stats-table td:last-child {
       text-align: right;
     }
+    .stats-table-scroll {
+      max-height: 150px;
+      overflow-y: auto;
+    }
 
     .histogram-bar {
       background: #3b82f6;
@@ -917,63 +921,94 @@
       <div class="divider"></div>
 
       <div id="statisticsSection" class="stats-section" style="display: none;">
-        <select id="statsNumericField">
+        <select id="statsField">
           <option value="" selected disabled>Choose a field</option>
         </select>
-        <div style="display: grid; gap: 6px;">
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
-            <span>as-is</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
-            <span>…per land size <em id="statsNormLandUnit">(unit)</em></span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
-            <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
-          </label>
-        </div>
-        <div class="divider"></div>
-        <div id="statsResults" style="display: grid; gap: 6px;">
-          <table class="stats-table">
-            <thead>
-              <tr>
-                <th>Statistic</th>
-                <th>Value</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td>Parcel count</td><td><span id="statsParcelCount">—</span></td></tr>
-              <tr><td>Median</td><td><span id="statsMedian">—</span></td></tr>
-              <tr><td>Mean</td><td><span id="statsMean">—</span></td></tr>
-              <tr><td>Standard deviation</td><td><span id="statsStdDev">—</span></td></tr>
-              <tr><td>Coefficient of dispersion</td><td><span id="statsCod">—</span></td></tr>
-            </tbody>
-          </table>
-          <div class="divider"></div>
-          <div>
+        <div id="statsDetails" style="display: none; gap: 6px;">
+          <div id="statsNumericBlock" style="display: grid; gap: 6px;">
+            <div id="statsNormalizationControls" style="display: grid; gap: 6px;">
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
+                <span>as-is</span>
+              </label>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
+                <span>…per land size <em id="statsNormLandUnit">(unit)</em></span>
+              </label>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
+                <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
+              </label>
+            </div>
+            <div class="divider"></div>
+            <div id="statsResults" style="display: grid; gap: 6px;">
+              <table class="stats-table">
+                <thead>
+                  <tr>
+                    <th>Statistic</th>
+                    <th>Value</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr><td>Parcel count</td><td><span id="statsParcelCount">—</span></td></tr>
+                  <tr><td>Median</td><td><span id="statsMedian">—</span></td></tr>
+                  <tr><td>Mean</td><td><span id="statsMean">—</span></td></tr>
+                  <tr><td>Standard deviation</td><td><span id="statsStdDev">—</span></td></tr>
+                  <tr><td>Coefficient of dispersion</td><td><span id="statsCod">—</span></td></tr>
+                </tbody>
+              </table>
+              <div class="divider"></div>
+              <div class="stats-table-scroll">
+                <table class="stats-table">
+                  <thead>
+                    <tr>
+                      <th>Percentile</th>
+                      <th>Value</th>
+                      <th>Count</th>
+                    </tr>
+                  </thead>
+                  <tbody id="statsPercentiles"></tbody>
+                </table>
+              </div>
+              <div class="divider"></div>
+              <div>
+                <strong>Histogram</strong>
+                <div class="stats-range">
+                  <div class="range-values">
+                    <label>Min: <input id="statsOverflowMinPct" type="text" inputmode="decimal" data-step="0.1" /></label>
+                    <label>Max: <input id="statsOverflowMaxPct" type="text" inputmode="decimal" data-step="0.1" /></label>
+                  </div>
+                </div>
+                <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>
+              </div>
+            </div>
+          </div>
+          <div id="statsCategoricalBlock" style="display: none; gap: 6px;">
             <table class="stats-table">
               <thead>
                 <tr>
-                  <th>Percentile</th>
+                  <th>Statistic</th>
                   <th>Value</th>
-                  <th>Count</th>
                 </tr>
               </thead>
-              <tbody id="statsPercentiles"></tbody>
+              <tbody>
+                <tr><td>Parcel count</td><td><span id="statsCategoricalParcelCount">—</span></td></tr>
+                <tr><td>Unique category values</td><td><span id="statsCategoricalUniqueCount">—</span></td></tr>
+                <tr><td>Modal category value</td><td><span id="statsCategoricalModalValue">—</span></td></tr>
+              </tbody>
             </table>
-          </div>
-          <div class="divider"></div>
-          <div>
-            <strong>Histogram</strong>
-            <div class="stats-range">
-              <div class="range-values">
-                <label>Min: <input id="statsOverflowMinPct" type="text" inputmode="decimal" data-step="0.1" /></label>
-                <label>Max: <input id="statsOverflowMaxPct" type="text" inputmode="decimal" data-step="0.1" /></label>
-              </div>
+            <div class="divider"></div>
+            <div class="stats-table-scroll">
+              <table class="stats-table">
+                <thead>
+                  <tr>
+                    <th>Value</th>
+                    <th>Count</th>
+                  </tr>
+                </thead>
+                <tbody id="statsCategoricalValues"></tbody>
+              </table>
             </div>
-            <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>
           </div>
         </div>
       </div>

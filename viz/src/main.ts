@@ -828,9 +828,15 @@ const statisticsContent = document.getElementById('statisticsContent') as HTMLDi
 const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
 const scatterplotControlsEl = document.getElementById('scatterplotControls') as HTMLDivElement;
 const scatterplotContent = document.getElementById('scatterplotContent') as HTMLDivElement;
+const scatterDataSourceSelect = document.getElementById('scatterDataSourceSelect') as HTMLSelectElement;
 const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
 const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
 const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
+const scatterXMinInput = document.getElementById('scatterXMin') as HTMLInputElement;
+const scatterXMaxInput = document.getElementById('scatterXMax') as HTMLInputElement;
+const scatterYMinInput = document.getElementById('scatterYMin') as HTMLInputElement;
+const scatterYMaxInput = document.getElementById('scatterYMax') as HTMLInputElement;
+const scatterResetExtentsButton = document.getElementById('scatterResetExtents') as HTMLButtonElement;
 const scatterPlot = document.getElementById('scatterPlot') as HTMLDivElement;
 const scatterPlotEmpty = document.getElementById('scatterPlotEmpty') as HTMLDivElement;
 const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
@@ -1211,6 +1217,10 @@ let scatterCategoryField: string | null = null;
 let scatterCategoryValueIndices: string[] = [];
 let scatterXField: string | null = null;
 let scatterYField: string | null = null;
+let scatterRangeIsCustom = false;
+let scatterDefaultRange = { xMin: null as number | null, xMax: null as number | null, yMin: null as number | null, yMax: null as number | null };
+let isUpdatingScatterRangeInputs = false;
+let scatterDataStoreId: string | null = null;
 
 type SubjectSelectorControls = {
   buttons: HTMLButtonElement[];
@@ -1342,6 +1352,40 @@ function renderDataStoreList() {
     });
     dataStoreList.appendChild(btn);
   });
+
+  renderScatterDataSourceOptions();
+}
+
+function getScatterDataStore(): DataStore | null {
+  return scatterDataStoreId ? dataStores.get(scatterDataStoreId) ?? null : null;
+}
+
+function getScatterGeoJSON(): GeoJSON.FeatureCollection | null {
+  return getScatterDataStore()?.geojson ?? null;
+}
+
+function renderScatterDataSourceOptions() {
+  if (!scatterDataSourceSelect) return;
+  scatterDataSourceSelect.replaceChildren();
+
+  const placeholder = new Option('Choose a data source', '');
+  placeholder.disabled = true;
+  placeholder.selected = scatterDataStoreId === null;
+  scatterDataSourceSelect.appendChild(placeholder);
+
+  dataStoreOrder.forEach(storeId => {
+    const store = dataStores.get(storeId);
+    if (!store) return;
+    scatterDataSourceSelect.appendChild(new Option(store.name, store.id));
+  });
+
+  if (scatterDataStoreId && dataStores.has(scatterDataStoreId)) {
+    scatterDataSourceSelect.value = scatterDataStoreId;
+  } else {
+    scatterDataStoreId = null;
+  }
+
+  scatterDataSourceSelect.disabled = dataStoreOrder.length === 0;
 }
 
 function openAddLayerModal() {
@@ -2364,6 +2408,44 @@ function getSubjectSelection(
   return currentGeoJSON.features;
 }
 
+function getScatterSubjectSelection(
+  geojson: GeoJSON.FeatureCollection,
+  mode: SubjectMode,
+  categoryField: string | null,
+  categoryValueIndices: string[],
+  categoryValueMap: Array<{ label: string; value: unknown }>
+): GeoJSON.Feature[] {
+  if (mode === 'visible') {
+    if (geojson !== currentGeoJSON) {
+      return geojson.features;
+    }
+    const visibilityExpr = buildStatisticsVisibilityExpression();
+    return visibilityExpr
+      ? geojson.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
+      : geojson.features;
+  }
+  if (mode === 'selected') {
+    if (geojson !== currentGeoJSON) {
+      return [];
+    }
+    return geojson.features.filter(feature => selectedParcels.has(getParcelId(feature)));
+  }
+  if (mode === 'category') {
+    if (!categoryField || categoryValueIndices.length === 0) return [];
+    const selectedValues = new Set(
+      categoryValueIndices
+        .map(index => categoryValueMap[Number(index)])
+        .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
+        .map(entry => entry.value)
+    );
+    return geojson.features.filter(feature => {
+      const value = (feature.properties as Record<string, unknown> | undefined)?.[categoryField];
+      return selectedValues.has(value);
+    });
+  }
+  return geojson.features;
+}
+
 function updateStatisticsResults() {
   if (!currentGeoJSON || !statsField) {
     statsValuesCache = [];
@@ -2570,14 +2652,16 @@ function populateScatterCategoryFields() {
   placeholder.selected = true;
   scatterCategoryFieldSelect.appendChild(placeholder);
 
-  if (!currentGeoJSON) {
+  const scatterGeoJSON = getScatterGeoJSON();
+  const scatterStore = getScatterDataStore();
+  if (!scatterGeoJSON || !scatterStore) {
     scatterCategoryFieldSelect.disabled = true;
     scatterCategoryField = null;
     return;
   }
 
-  const availableCategorical = chosenCategoricalFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  const availableCategorical = scatterStore.chosenCategoricalFields.filter(k =>
+    scatterGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
 
   availableCategorical.forEach(field => {
@@ -2599,7 +2683,8 @@ function populateScatterCategoryValues(field: string | null) {
   placeholder.selected = scatterCategoryValueIndices.length === 0;
   scatterCategoryValueSelect.appendChild(placeholder);
 
-  if (!currentGeoJSON || !field) {
+  const scatterGeoJSON = getScatterGeoJSON();
+  if (!scatterGeoJSON || !field) {
     scatterCategoryValueSelect.disabled = true;
     scatterCategoryValueMap = [];
     scatterCategoryValueIndices = [];
@@ -2607,7 +2692,7 @@ function populateScatterCategoryValues(field: string | null) {
   }
 
   const valueMap = new Map<string, { label: string; value: unknown }>();
-  currentGeoJSON.features.forEach(feature => {
+  scatterGeoJSON.features.forEach(feature => {
     const raw = (feature.properties as Record<string, unknown> | undefined)?.[field];
     if (raw === null || raw === undefined) return;
     const key = `${typeof raw}:${String(raw)}`;
@@ -2646,7 +2731,8 @@ function populateScatterFieldSelect(
   placeholder.selected = true;
   select.appendChild(placeholder);
 
-  if (!currentGeoJSON) {
+  const scatterGeoJSON = getScatterGeoJSON();
+  if (!scatterGeoJSON) {
     select.disabled = true;
     return null;
   }
@@ -2664,21 +2750,32 @@ function populateScatterFieldSelect(
 }
 
 function populateScatterFields() {
-  if (!currentGeoJSON) {
+  const scatterGeoJSON = getScatterGeoJSON();
+  const scatterStore = getScatterDataStore();
+  if (!scatterGeoJSON || !scatterStore) {
     scatterXField = null;
     scatterYField = null;
     scatterXFieldSelect.disabled = true;
     scatterYFieldSelect.disabled = true;
     return;
   }
-  const availableNumeric = chosenNumericFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  const availableNumeric = scatterStore.chosenNumericFields.filter(k =>
+    scatterGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
   scatterXField = populateScatterFieldSelect(scatterXFieldSelect, scatterXField, availableNumeric);
   scatterYField = populateScatterFieldSelect(scatterYFieldSelect, scatterYField, availableNumeric);
 }
 
 function updateScatterSubjectControls() {
+  const scatterGeoJSON = getScatterGeoJSON();
+  if (!scatterDataStoreId || !scatterGeoJSON) {
+    scatterSubjectControls.buttons.forEach(button => { button.disabled = true; });
+    scatterSubjectControls.categoryControls.style.display = 'none';
+    scatterCategoryFieldSelect.disabled = true;
+    scatterCategoryValueSelect.disabled = true;
+    return;
+  }
+  scatterSubjectControls.buttons.forEach(button => { button.disabled = false; });
   updateSubjectControls(
     scatterSubjectControls,
     scatterSubjectMode,
@@ -2695,6 +2792,7 @@ function setScatterSubjectMode(mode: SubjectMode) {
   scatterSubjectMode = mode;
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
+  scatterRangeIsCustom = false;
   updateScatterPlot();
 }
 
@@ -2702,9 +2800,40 @@ function getPlotly(): any | null {
   return (window as any).Plotly ?? null;
 }
 
+function parseScatterRangeInput(input: HTMLInputElement): number | null {
+  const value = input.value.trim();
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setScatterRangeInputs(range: { xMin: number | null; xMax: number | null; yMin: number | null; yMax: number | null }) {
+  isUpdatingScatterRangeInputs = true;
+  scatterXMinInput.value = range.xMin === null ? '' : String(range.xMin);
+  scatterXMaxInput.value = range.xMax === null ? '' : String(range.xMax);
+  scatterYMinInput.value = range.yMin === null ? '' : String(range.yMin);
+  scatterYMaxInput.value = range.yMax === null ? '' : String(range.yMax);
+  isUpdatingScatterRangeInputs = false;
+}
+
+function setScatterRangeControlsEnabled(enabled: boolean) {
+  scatterXMinInput.disabled = !enabled;
+  scatterXMaxInput.disabled = !enabled;
+  scatterYMinInput.disabled = !enabled;
+  scatterYMaxInput.disabled = !enabled;
+  scatterResetExtentsButton.disabled = !enabled;
+}
+
+function clearScatterRangeControls() {
+  setScatterRangeInputs({ xMin: null, xMax: null, yMin: null, yMax: null });
+  scatterRangeIsCustom = false;
+}
+
 function resetScatterPlot(message: string) {
   scatterPlotEmpty.textContent = message;
   scatterPlotEmpty.style.display = 'block';
+  setScatterRangeControlsEnabled(false);
+  clearScatterRangeControls();
   const plotly = getPlotly();
   if (plotly) {
     plotly.purge(scatterPlot);
@@ -2718,7 +2847,12 @@ function updateScatterPlot() {
     resetScatterPlot('Plotly is still loading. Please try again in a moment.');
     return;
   }
-  if (!currentGeoJSON) {
+  if (!scatterDataStoreId) {
+    resetScatterPlot('Select a data source to render the scatterplot.');
+    return;
+  }
+  const scatterGeoJSON = getScatterGeoJSON();
+  if (!scatterGeoJSON) {
     resetScatterPlot('Load data to render the scatterplot.');
     return;
   }
@@ -2731,7 +2865,8 @@ function updateScatterPlot() {
     return;
   }
 
-  const selection = getSubjectSelection(
+  const selection = getScatterSubjectSelection(
+    scatterGeoJSON,
     scatterSubjectMode,
     scatterCategoryField,
     scatterCategoryValueIndices,
@@ -2754,6 +2889,19 @@ function updateScatterPlot() {
   }
 
   scatterPlotEmpty.style.display = 'none';
+  setScatterRangeControlsEnabled(true);
+  const xMinDefault = Math.min(...xValues);
+  const xMaxDefault = Math.max(...xValues);
+  const yMinDefault = Math.min(...yValues);
+  const yMaxDefault = Math.max(...yValues);
+  scatterDefaultRange = { xMin: xMinDefault, xMax: xMaxDefault, yMin: yMinDefault, yMax: yMaxDefault };
+  if (!scatterRangeIsCustom) {
+    setScatterRangeInputs(scatterDefaultRange);
+  }
+  const xMin = scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMinInput) ?? xMinDefault) : xMinDefault;
+  const xMax = scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMaxInput) ?? xMaxDefault) : xMaxDefault;
+  const yMin = scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMinInput) ?? yMinDefault) : yMinDefault;
+  const yMax = scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMaxInput) ?? yMaxDefault) : yMaxDefault;
   const trace = {
     x: xValues,
     y: yValues,
@@ -2764,14 +2912,15 @@ function updateScatterPlot() {
   const layout = {
     margin: { l: 48, r: 16, t: 8, b: 42 },
     height: 220,
-    xaxis: { title: scatterXField },
-    yaxis: { title: scatterYField }
+    xaxis: { title: scatterXField, range: [Math.min(xMin, xMax), Math.max(xMin, xMax)] },
+    yaxis: { title: scatterYField, range: [Math.min(yMin, yMax), Math.max(yMin, yMax)] }
   };
-  const config = { displayModeBar: false, responsive: true };
+  const config = { displayModeBar: false, responsive: true, staticPlot: true };
   plotly.react(scatterPlot, [trace], layout, config);
 }
 
 function refreshScatterPanel() {
+  renderScatterDataSourceOptions();
   populateScatterCategoryFields();
   populateScatterCategoryValues(scatterCategoryField);
   populateScatterFields();
@@ -6924,6 +7073,16 @@ scatterSubjectButtons.forEach(button => {
   });
 });
 
+scatterDataSourceSelect.addEventListener('change', () => {
+  scatterDataStoreId = scatterDataSourceSelect.value || null;
+  scatterCategoryField = null;
+  scatterCategoryValueIndices = [];
+  scatterXField = null;
+  scatterYField = null;
+  scatterRangeIsCustom = false;
+  refreshScatterPanel();
+});
+
 statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
   statsCategoryValueIndices = [];
@@ -6950,6 +7109,7 @@ scatterCategoryFieldSelect.addEventListener('change', () => {
   scatterCategoryValueIndices = [];
   populateScatterCategoryValues(scatterCategoryField);
   updateScatterSubjectControls();
+  scatterRangeIsCustom = false;
   updateScatterPlot();
 });
 
@@ -6958,6 +7118,7 @@ scatterCategoryValueSelect.addEventListener('change', () => {
     .map(option => option.value)
     .filter(value => value);
   updateScatterSubjectControls();
+  scatterRangeIsCustom = false;
   updateScatterPlot();
 });
 
@@ -6974,11 +7135,29 @@ statsFieldSelect.addEventListener('change', () => {
 
 scatterXFieldSelect.addEventListener('change', () => {
   scatterXField = scatterXFieldSelect.value || null;
+  scatterRangeIsCustom = false;
   updateScatterPlot();
 });
 
 scatterYFieldSelect.addEventListener('change', () => {
   scatterYField = scatterYFieldSelect.value || null;
+  scatterRangeIsCustom = false;
+  updateScatterPlot();
+});
+
+function handleScatterRangeInput() {
+  if (isUpdatingScatterRangeInputs) return;
+  scatterRangeIsCustom = true;
+  updateScatterPlot();
+}
+
+scatterXMinInput.addEventListener('input', handleScatterRangeInput);
+scatterXMaxInput.addEventListener('input', handleScatterRangeInput);
+scatterYMinInput.addEventListener('input', handleScatterRangeInput);
+scatterYMaxInput.addEventListener('input', handleScatterRangeInput);
+scatterResetExtentsButton.addEventListener('click', () => {
+  scatterRangeIsCustom = false;
+  setScatterRangeInputs(scatterDefaultRange);
   updateScatterPlot();
 });
 

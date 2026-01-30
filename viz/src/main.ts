@@ -861,6 +861,19 @@ const statsNormLandUnitEl = document.getElementById('statsNormLandUnit') as HTML
 const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTMLElement;
 const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
 const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
+const landScheduleControlsEl = document.getElementById('landScheduleControls') as HTMLDivElement;
+const landScheduleContent = document.getElementById('landScheduleContent') as HTMLDivElement;
+const landScheduleFieldSelect = document.getElementById('landScheduleFieldSelect') as HTMLSelectElement;
+const landScheduleValueRow = document.getElementById('landScheduleValueRow') as HTMLDivElement;
+const landScheduleFieldLabel = document.getElementById('landScheduleFieldLabel') as HTMLSpanElement;
+const landScheduleValueSelect = document.getElementById('landScheduleValueSelect') as HTMLSelectElement;
+const landScheduleValuationSection = document.getElementById('landScheduleValuationSection') as HTMLDivElement;
+const landScheduleBaseMin = document.getElementById('landScheduleBaseMin') as HTMLInputElement;
+const landScheduleBaseMax = document.getElementById('landScheduleBaseMax') as HTMLInputElement;
+const landScheduleBaseValue = document.getElementById('landScheduleBaseValue') as HTMLInputElement;
+const landScheduleBasePer = document.getElementById('landScheduleBasePer') as HTMLSelectElement;
+const landScheduleUnitRow = document.getElementById('landScheduleUnitRow') as HTMLDivElement;
+const landScheduleBaseUnit = document.getElementById('landScheduleBaseUnit') as HTMLSelectElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -900,11 +913,13 @@ const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu
 const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
 const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') as HTMLButtonElement;
 const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
+const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
 
 // Toolbar elements
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 const statisticsToolButton = document.getElementById('statisticsToolButton') as HTMLButtonElement;
 const filtersToolButton = document.getElementById('filtersToolButton') as HTMLButtonElement;
+const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
@@ -1158,6 +1173,7 @@ let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
 let isStatisticsMinimized = true;
 let isFiltersMinimized = true;
+let isLandScheduleMinimized = true;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
 
 // Statistics state
@@ -1171,6 +1187,23 @@ let statsFieldType: 'numeric' | 'categorical' | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 let statsValuesCache: number[] = [];
 let statsOverflowPct = { min: 5, max: 95 };
+
+type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
+type LandScheduleUnit = 'sqft' | 'acre' | 'sqm' | 'hectare' | 'foot' | 'meter';
+type LandScheduleBaseLot = {
+  min: number | null;
+  max: number | null;
+  value: number | null;
+  per: LandSchedulePerUnit | null;
+  unit: LandScheduleUnit | null;
+};
+
+const LAND_SCHEDULE_DEFAULT_KEY = '__default__';
+const LAND_SCHEDULE_DEFAULT_LABEL = 'Default Schedule';
+const landScheduleStore = new Map<string, Map<string, LandScheduleBaseLot>>();
+let currentLandScheduleField: string | null = null;
+let currentLandScheduleValue: string | null = null;
+let isUpdatingLandScheduleUI = false;
 
 // Selection state
 let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
@@ -1468,6 +1501,7 @@ function applyLayerState(layer: LayerState) {
   updateSelectionControls();
   renderDataStoreList();
   refreshStatisticsPanel();
+  refreshLandSchedulePanel();
 
   if (map.getLayer(layer.layerId)) {
     setLayerVisibility(layer, layer.visible);
@@ -1603,6 +1637,7 @@ function removeLayer(layerId: string) {
       updateFloatingLegend();
       refreshFiltersUI();
       refreshStatisticsPanel();
+      refreshLandSchedulePanel();
       if (selectionControlsPanel) {
         selectionControlsPanel.style.display = 'none';
       }
@@ -1831,6 +1866,48 @@ function toggleFilters() {
     showFilters();
   } else {
     minimizeFilters();
+  }
+}
+
+function positionLandSchedulePanel() {
+  if (!landScheduleControlsEl) return;
+  if (landScheduleControlsEl.dataset.userPositioned === 'true') return;
+  const anchor = (!isFiltersMinimized && filtersControlsEl)
+    ? filtersControlsEl
+    : (!isStatisticsMinimized && statisticsControlsEl)
+      ? statisticsControlsEl
+      : (!isSettingsMenuMinimized && settingsControlsEl)
+        ? settingsControlsEl
+        : controlsEl;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  landScheduleControlsEl.style.left = `${rect.right + gap}px`;
+  landScheduleControlsEl.style.top = `${rect.top}px`;
+  landScheduleControlsEl.style.transform = 'none';
+}
+
+function minimizeLandSchedule() {
+  isLandScheduleMinimized = true;
+  landScheduleContent.style.display = 'none';
+  landScheduleControlsEl.style.display = 'none';
+  updateToolbarButtonStates();
+}
+
+function showLandSchedule() {
+  isLandScheduleMinimized = false;
+  landScheduleContent.style.display = 'grid';
+  landScheduleControlsEl.style.display = 'grid';
+  positionLandSchedulePanel();
+  updateToolbarButtonStates();
+}
+
+function toggleLandSchedule() {
+  if (isLandScheduleMinimized) {
+    showLandSchedule();
+  } else {
+    minimizeLandSchedule();
   }
 }
 
@@ -3374,6 +3451,153 @@ function getCategoricalValues(field: string): string[] {
   return Array.from(values).sort();
 }
 
+function getLandScheduleEntry(field: string, valueKey: string): LandScheduleBaseLot {
+  let fieldMap = landScheduleStore.get(field);
+  if (!fieldMap) {
+    fieldMap = new Map();
+    landScheduleStore.set(field, fieldMap);
+  }
+  let entry = fieldMap.get(valueKey);
+  if (!entry) {
+    entry = {
+      min: null,
+      max: null,
+      value: null,
+      per: null,
+      unit: null
+    };
+    fieldMap.set(valueKey, entry);
+  }
+  return entry;
+}
+
+function getAvailableLandScheduleFields(): string[] {
+  if (!currentGeoJSON) return [];
+  return chosenCategoricalFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+}
+
+function parseOptionalNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function setLandScheduleInputValue(input: HTMLInputElement, value: number | null) {
+  input.value = value === null ? '' : String(value);
+}
+
+function updateLandScheduleUnitOptions(per: LandSchedulePerUnit | null) {
+  const placeholder = new Option('Select', '');
+  placeholder.disabled = true;
+  landScheduleBaseUnit.replaceChildren(placeholder);
+  landScheduleBaseUnit.value = '';
+  if (!per || per === 'lot') {
+    landScheduleUnitRow.style.display = 'none';
+    return;
+  }
+
+  const options = per === 'area'
+    ? (['sqft', 'acre', 'sqm', 'hectare'] as LandScheduleUnit[])
+    : (['foot', 'meter'] as LandScheduleUnit[]);
+
+  options.forEach(unit => {
+    landScheduleBaseUnit.appendChild(new Option(unit, unit));
+  });
+  landScheduleUnitRow.style.display = 'inline-flex';
+}
+
+function updateLandScheduleInputsFromStore() {
+  if (!currentLandScheduleField || !currentLandScheduleValue) {
+    landScheduleValuationSection.style.display = 'none';
+    return;
+  }
+  const entry = getLandScheduleEntry(currentLandScheduleField, currentLandScheduleValue);
+  isUpdatingLandScheduleUI = true;
+  setLandScheduleInputValue(landScheduleBaseMin, entry.min);
+  setLandScheduleInputValue(landScheduleBaseMax, entry.max);
+  setLandScheduleInputValue(landScheduleBaseValue, entry.value);
+  landScheduleBasePer.value = entry.per ?? '';
+  updateLandScheduleUnitOptions(entry.per);
+  landScheduleBaseUnit.value = entry.unit ?? '';
+  landScheduleValuationSection.style.display = 'grid';
+  isUpdatingLandScheduleUI = false;
+}
+
+function updateLandScheduleStoreFromInputs() {
+  if (isUpdatingLandScheduleUI || !currentLandScheduleField || !currentLandScheduleValue) return;
+  const entry = getLandScheduleEntry(currentLandScheduleField, currentLandScheduleValue);
+  entry.min = parseOptionalNumber(landScheduleBaseMin.value);
+  entry.max = parseOptionalNumber(landScheduleBaseMax.value);
+  entry.value = parseOptionalNumber(landScheduleBaseValue.value);
+  entry.per = (landScheduleBasePer.value as LandSchedulePerUnit) || null;
+  entry.unit = landScheduleBaseUnit.value
+    ? (landScheduleBaseUnit.value as LandScheduleUnit)
+    : null;
+  if (entry.per === 'lot') {
+    entry.unit = null;
+  }
+}
+
+function updateLandScheduleValueOptions() {
+  landScheduleValueSelect.replaceChildren();
+  landScheduleValuationSection.style.display = 'none';
+  if (!currentLandScheduleField) {
+    landScheduleValueRow.style.display = 'none';
+    currentLandScheduleValue = null;
+    return;
+  }
+
+  landScheduleFieldLabel.textContent = currentLandScheduleField;
+  landScheduleValueRow.style.display = 'grid';
+
+  landScheduleValueSelect.appendChild(new Option(LAND_SCHEDULE_DEFAULT_LABEL, LAND_SCHEDULE_DEFAULT_KEY));
+  const values = getCategoricalValues(currentLandScheduleField);
+  values.forEach(value => landScheduleValueSelect.appendChild(new Option(value, value)));
+
+  if (currentLandScheduleValue && (currentLandScheduleValue === LAND_SCHEDULE_DEFAULT_KEY || values.includes(currentLandScheduleValue))) {
+    landScheduleValueSelect.value = currentLandScheduleValue;
+    updateLandScheduleInputsFromStore();
+  } else {
+    landScheduleValueSelect.selectedIndex = -1;
+    currentLandScheduleValue = null;
+  }
+}
+
+function refreshLandSchedulePanel() {
+  landScheduleFieldSelect.replaceChildren();
+  landScheduleValuationSection.style.display = 'none';
+  const availableFields = getAvailableLandScheduleFields();
+
+  if (!availableFields.length) {
+    landScheduleFieldSelect.appendChild(new Option('No categorical fields', ''));
+    landScheduleFieldSelect.value = '';
+    landScheduleFieldSelect.disabled = true;
+    currentLandScheduleField = null;
+    currentLandScheduleValue = null;
+    landScheduleValueRow.style.display = 'none';
+    return;
+  }
+
+  landScheduleFieldSelect.disabled = false;
+  const placeholder = new Option('Choose a field', '');
+  placeholder.disabled = true;
+  landScheduleFieldSelect.appendChild(placeholder);
+  availableFields.forEach(field => landScheduleFieldSelect.appendChild(new Option(field, field)));
+
+  if (currentLandScheduleField && availableFields.includes(currentLandScheduleField)) {
+    landScheduleFieldSelect.value = currentLandScheduleField;
+  } else {
+    landScheduleFieldSelect.value = '';
+    currentLandScheduleField = null;
+    currentLandScheduleValue = null;
+  }
+
+  updateLandScheduleValueOptions();
+}
+
 function isFilterComplete(filter: FilterRule): boolean {
   if (!filter.active || !filter.field || !filter.operator) return false;
   if (filter.value === null || filter.value === undefined) return false;
@@ -4845,6 +5069,7 @@ async function loadSelectedColumns() {
     // Apply gray rendering when no field is selected
     applyGrayRendering();
     refreshStatisticsPanel();
+    refreshLandSchedulePanel();
 
     fitToData(currentGeoJSON);
     persistCurrentLayerState();
@@ -6273,7 +6498,32 @@ btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
 btnMinimizeStatistics.addEventListener('click', minimizeStatistics);
 btnMinimizeFilters.addEventListener('click', minimizeFilters);
+btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnPaintMenu.addEventListener('click', togglePaint);
+
+landScheduleFieldSelect.addEventListener('change', () => {
+  currentLandScheduleField = landScheduleFieldSelect.value || null;
+  currentLandScheduleValue = null;
+  updateLandScheduleValueOptions();
+});
+
+landScheduleValueSelect.addEventListener('change', () => {
+  currentLandScheduleValue = landScheduleValueSelect.value || null;
+  updateLandScheduleInputsFromStore();
+});
+
+landScheduleBaseMin.addEventListener('input', updateLandScheduleStoreFromInputs);
+landScheduleBaseMax.addEventListener('input', updateLandScheduleStoreFromInputs);
+landScheduleBaseValue.addEventListener('input', updateLandScheduleStoreFromInputs);
+landScheduleBasePer.addEventListener('change', () => {
+  const per = (landScheduleBasePer.value as LandSchedulePerUnit) || null;
+  updateLandScheduleUnitOptions(per);
+  if (per === 'lot') {
+    landScheduleBaseUnit.value = '';
+  }
+  updateLandScheduleStoreFromInputs();
+});
+landScheduleBaseUnit.addEventListener('change', updateLandScheduleStoreFromInputs);
 
 addFilterButton.addEventListener('click', () => {
   filters.push(createFilterRule());
@@ -6421,9 +6671,11 @@ makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
 makeDraggable(statisticsControlsEl);
 makeDraggable(filtersControlsEl);
+makeDraggable(landScheduleControlsEl);
 positionPaintPanel();
 positionSettingsPanel();
 positionFiltersPanel();
+positionLandSchedulePanel();
 updatePaintButtonState();
 
 rampSelect.addEventListener('change', () => {
@@ -6574,6 +6826,7 @@ setQuality('high');
 renderLayerList();
 renderDataStoreList();
 refreshStatisticsPanel();
+refreshLandSchedulePanel();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
   if (!currentField || !currentGeoJSON || !currentStats) return [];
@@ -6956,6 +7209,12 @@ function initializeToolbar() {
     closeAllSubmenus();
     toggleStatistics();
   });
+
+  landScheduleToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    toggleLandSchedule();
+  });
   
   // Handle submenu button clicks
   submenuButtons.forEach(button => {
@@ -7021,6 +7280,14 @@ function updateToolbarButtonStates() {
   } else {
     filtersToolButton.classList.remove('inactive');
     filtersToolButton.classList.add('active');
+  }
+
+  if (isLandScheduleMinimized) {
+    landScheduleToolButton.classList.add('inactive');
+    landScheduleToolButton.classList.remove('active');
+  } else {
+    landScheduleToolButton.classList.remove('inactive');
+    landScheduleToolButton.classList.add('active');
   }
 
   updatePaintButtonState();

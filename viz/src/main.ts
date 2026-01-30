@@ -5,7 +5,6 @@ import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
-import Plotly from 'plotly.js-dist-min';
 
 
 // Local imports
@@ -2703,14 +2702,26 @@ function setScatterSubjectMode(mode: SubjectMode) {
   updateScatterPlot();
 }
 
+function getPlotly(): any | null {
+  return (window as any).Plotly ?? null;
+}
+
 function resetScatterPlot(message: string) {
   scatterPlotEmpty.textContent = message;
   scatterPlotEmpty.style.display = 'block';
-  Plotly.purge(scatterPlot);
+  const plotly = getPlotly();
+  if (plotly) {
+    plotly.purge(scatterPlot);
+  }
   scatterPlot.innerHTML = '';
 }
 
 function updateScatterPlot() {
+  const plotly = getPlotly();
+  if (!plotly) {
+    resetScatterPlot('Plotly is still loading. Please try again in a moment.');
+    return;
+  }
   if (!currentGeoJSON) {
     resetScatterPlot('Load data to render the scatterplot.');
     return;
@@ -2761,7 +2772,7 @@ function updateScatterPlot() {
     yaxis: { title: scatterYField }
   };
   const config = { displayModeBar: false, responsive: true };
-  Plotly.react(scatterPlot, [trace], layout, config);
+  plotly.react(scatterPlot, [trace], layout, config);
 }
 
 function refreshScatterPanel() {

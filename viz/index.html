@@ -1080,47 +1080,45 @@
       </button>
     </div>
     <div id="landScheduleContent" style="padding: 12px; display: grid; gap: 12px;">
-      <fieldset class="land-schedule-section">
-        <label>Market Area</label>
+      <div class="land-schedule-section">
+        <div class="land-schedule-subtitle">Market Area</div>
         <div class="land-schedule-row">
           <select id="landScheduleFieldSelect">
             <option value="" selected disabled>Choose a field</option>
           </select>
         </div>
         <div id="landScheduleValueRow" class="land-schedule-row" style="display: none;">
-          <label>Schedule for: <span id="landScheduleFieldLabel"></span> =</label>
+          <label><span id="landScheduleFieldLabel"></span>:</label>
           <select id="landScheduleValueSelect"></select>
         </div>
-      </fieldset>
+      </div>
 
       <div class="divider"></div>
 
       <div id="landScheduleValuationSection" style="display: none; gap: 10px;">
         <div class="land-schedule-subtitle">Valuation</div>
         <div class="land-schedule-subtitle" style="margin-top: 6px;">Base lot</div>
-        <div class="land-schedule-row split">
-          <label>Size range:</label>
+        <div class="land-schedule-row">
+          <div class="land-schedule-subtitle" style="font-weight: 500;">Size range</div>
           <div class="land-schedule-row split" style="gap: 8px;">
-            <label>min: <input id="landScheduleBaseMin" type="number" inputmode="decimal" /></label>
-            <label>max: <input id="landScheduleBaseMax" type="number" inputmode="decimal" /></label>
+            <label>min <input id="landScheduleBaseMin" type="number" inputmode="decimal" /></label>
+            <label>max <input id="landScheduleBaseMax" type="number" inputmode="decimal" /></label>
           </div>
         </div>
-        <div class="land-schedule-row inline">
-          <label>Value:</label>
-          <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
-          <span>per:</span>
-          <select id="landScheduleBasePer">
-            <option value="" selected disabled>Select</option>
-            <option value="lot">lot</option>
-            <option value="area">area</option>
-            <option value="frontage">frontage</option>
-          </select>
-          <div id="landScheduleUnitRow" class="land-schedule-inline-unit" style="display: none;">
-            <span>unit:</span>
-            <select id="landScheduleBaseUnit">
+        <div class="land-schedule-row">
+          <label>value
+            <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
+          </label>
+        </div>
+        <div class="land-schedule-row">
+          <label>per size unit:
+            <select id="landScheduleBasePer">
               <option value="" selected disabled>Select</option>
+              <option value="lot">lot</option>
+              <option value="area">area</option>
+              <option value="frontage">frontage</option>
             </select>
-          </div>
+          </label>
         </div>
       </div>
     </div>

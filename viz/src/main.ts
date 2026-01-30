@@ -887,8 +887,6 @@ const landScheduleBaseMin = document.getElementById('landScheduleBaseMin') as HT
 const landScheduleBaseMax = document.getElementById('landScheduleBaseMax') as HTMLInputElement;
 const landScheduleBaseValue = document.getElementById('landScheduleBaseValue') as HTMLInputElement;
 const landScheduleBasePer = document.getElementById('landScheduleBasePer') as HTMLSelectElement;
-const landScheduleUnitRow = document.getElementById('landScheduleUnitRow') as HTMLDivElement;
-const landScheduleBaseUnit = document.getElementById('landScheduleBaseUnit') as HTMLSelectElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -1222,13 +1220,11 @@ type SubjectSelectorControls = {
 };
 
 type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
-type LandScheduleUnit = 'sqft' | 'acre' | 'sqm' | 'hectare' | 'foot' | 'meter';
 type LandScheduleBaseLot = {
   min: number | null;
   max: number | null;
   value: number | null;
   per: LandSchedulePerUnit | null;
-  unit: LandScheduleUnit | null;
 };
 
 const LAND_SCHEDULE_DEFAULT_KEY = '__default__';
@@ -3851,8 +3847,7 @@ function getLandScheduleEntry(field: string, valueKey: string): LandScheduleBase
       min: null,
       max: null,
       value: null,
-      per: null,
-      unit: null
+      per: null
     };
     fieldMap.set(valueKey, entry);
   }
@@ -3877,26 +3872,6 @@ function setLandScheduleInputValue(input: HTMLInputElement, value: number | null
   input.value = value === null ? '' : String(value);
 }
 
-function updateLandScheduleUnitOptions(per: LandSchedulePerUnit | null) {
-  const placeholder = new Option('Select', '');
-  placeholder.disabled = true;
-  landScheduleBaseUnit.replaceChildren(placeholder);
-  landScheduleBaseUnit.value = '';
-  if (!per || per === 'lot') {
-    landScheduleUnitRow.style.display = 'none';
-    return;
-  }
-
-  const options = per === 'area'
-    ? (['sqft', 'acre', 'sqm', 'hectare'] as LandScheduleUnit[])
-    : (['foot', 'meter'] as LandScheduleUnit[]);
-
-  options.forEach(unit => {
-    landScheduleBaseUnit.appendChild(new Option(unit, unit));
-  });
-  landScheduleUnitRow.style.display = 'inline-flex';
-}
-
 function updateLandScheduleInputsFromStore() {
   if (!currentLandScheduleField || !currentLandScheduleValue) {
     landScheduleValuationSection.style.display = 'none';
@@ -3908,8 +3883,6 @@ function updateLandScheduleInputsFromStore() {
   setLandScheduleInputValue(landScheduleBaseMax, entry.max);
   setLandScheduleInputValue(landScheduleBaseValue, entry.value);
   landScheduleBasePer.value = entry.per ?? '';
-  updateLandScheduleUnitOptions(entry.per);
-  landScheduleBaseUnit.value = entry.unit ?? '';
   landScheduleValuationSection.style.display = 'grid';
   isUpdatingLandScheduleUI = false;
 }
@@ -3921,12 +3894,6 @@ function updateLandScheduleStoreFromInputs() {
   entry.max = parseOptionalNumber(landScheduleBaseMax.value);
   entry.value = parseOptionalNumber(landScheduleBaseValue.value);
   entry.per = (landScheduleBasePer.value as LandSchedulePerUnit) || null;
-  entry.unit = landScheduleBaseUnit.value
-    ? (landScheduleBaseUnit.value as LandScheduleUnit)
-    : null;
-  if (entry.per === 'lot') {
-    entry.unit = null;
-  }
 }
 
 function updateLandScheduleValueOptions() {
@@ -6912,14 +6879,8 @@ landScheduleBaseMin.addEventListener('input', updateLandScheduleStoreFromInputs)
 landScheduleBaseMax.addEventListener('input', updateLandScheduleStoreFromInputs);
 landScheduleBaseValue.addEventListener('input', updateLandScheduleStoreFromInputs);
 landScheduleBasePer.addEventListener('change', () => {
-  const per = (landScheduleBasePer.value as LandSchedulePerUnit) || null;
-  updateLandScheduleUnitOptions(per);
-  if (per === 'lot') {
-    landScheduleBaseUnit.value = '';
-  }
   updateLandScheduleStoreFromInputs();
 });
-landScheduleBaseUnit.addEventListener('change', updateLandScheduleStoreFromInputs);
 
 addFilterButton.addEventListener('click', () => {
   filters.push(createFilterRule());

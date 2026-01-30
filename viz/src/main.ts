@@ -5,6 +5,7 @@ import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
+import Plotly from 'plotly.js-dist-min';
 
 
 // Local imports
@@ -825,6 +826,14 @@ const paintControlsEl = document.getElementById('paintControls') as HTMLDivEleme
 const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
 const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
+const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
+const scatterplotControlsEl = document.getElementById('scatterplotControls') as HTMLDivElement;
+const scatterplotContent = document.getElementById('scatterplotContent') as HTMLDivElement;
+const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
+const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
+const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
+const scatterPlot = document.getElementById('scatterPlot') as HTMLDivElement;
+const scatterPlotEmpty = document.getElementById('scatterPlotEmpty') as HTMLDivElement;
 const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
 const filtersContent = document.getElementById('filtersContent') as HTMLDivElement;
 const filtersListEl = document.getElementById('filtersList') as HTMLDivElement;
@@ -833,10 +842,17 @@ const addFilterButton = document.getElementById('addFilterButton') as HTMLButton
 const filtersSelectButton = document.getElementById('filtersSelectButton') as HTMLButtonElement;
 const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
 const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
-const statsSubjectCategoryControls = document.getElementById('statsSubjectCategoryControls') as HTMLDivElement;
-const statsSubjectButtons = document.querySelectorAll<HTMLButtonElement>('[data-stats-subject]');
-const statsCategoryFieldSelect = document.getElementById('statsCategoryField') as HTMLSelectElement;
-const statsCategoryValueSelect = document.getElementById('statsCategoryValue') as HTMLSelectElement;
+
+const statsSubjectControls = buildSubjectSelector(statsSubjectSection);
+const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection);
+
+const statsSubjectButtons = statsSubjectControls.buttons;
+const statsCategoryFieldSelect = statsSubjectControls.categoryFieldSelect;
+const statsCategoryValueSelect = statsSubjectControls.categoryValueSelect;
+
+const scatterSubjectButtons = scatterSubjectControls.buttons;
+const scatterCategoryFieldSelect = scatterSubjectControls.categoryFieldSelect;
+const scatterCategoryValueSelect = scatterSubjectControls.categoryValueSelect;
 const statsFieldSelect = document.getElementById('statsField') as HTMLSelectElement;
 const statsDetails = document.getElementById('statsDetails') as HTMLDivElement;
 const statsNumericBlock = document.getElementById('statsNumericBlock') as HTMLDivElement;
@@ -912,12 +928,14 @@ const btnMinimizeLayers = document.getElementById('btnMinimizeLayers') as HTMLBu
 const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu') as HTMLButtonElement;
 const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
 const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') as HTMLButtonElement;
+const btnMinimizeScatterplot = document.getElementById('btnMinimizeScatterplot') as HTMLButtonElement;
 const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
 const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
 
 // Toolbar elements
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 const statisticsToolButton = document.getElementById('statisticsToolButton') as HTMLButtonElement;
+const scatterplotToolButton = document.getElementById('scatterplotToolButton') as HTMLButtonElement;
 const filtersToolButton = document.getElementById('filtersToolButton') as HTMLButtonElement;
 const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
 
@@ -1172,13 +1190,14 @@ let isPaintMinimized = false;
 let isLegendVisible = true;  // Start with legend visible
 let isLegendMinimized = false;
 let isStatisticsMinimized = true;
+let isScatterplotMinimized = true;
 let isFiltersMinimized = true;
 let isLandScheduleMinimized = true;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
 
 // Statistics state
-type StatsSubjectMode = 'all' | 'visible' | 'selected' | 'category';
-let statsSubjectMode: StatsSubjectMode = 'all';
+type SubjectMode = 'all' | 'visible' | 'selected' | 'category';
+let statsSubjectMode: SubjectMode = 'all';
 let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
 let statsCategoryField: string | null = null;
 let statsCategoryValueIndices: string[] = [];
@@ -1187,6 +1206,21 @@ let statsFieldType: 'numeric' | 'categorical' | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 let statsValuesCache: number[] = [];
 let statsOverflowPct = { min: 5, max: 95 };
+
+// Scatterplot state
+let scatterSubjectMode: SubjectMode = 'all';
+let scatterCategoryValueMap: Array<{ label: string; value: unknown }> = [];
+let scatterCategoryField: string | null = null;
+let scatterCategoryValueIndices: string[] = [];
+let scatterXField: string | null = null;
+let scatterYField: string | null = null;
+
+type SubjectSelectorControls = {
+  buttons: HTMLButtonElement[];
+  categoryControls: HTMLDivElement;
+  categoryFieldSelect: HTMLSelectElement;
+  categoryValueSelect: HTMLSelectElement;
+};
 
 type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
 type LandScheduleUnit = 'sqft' | 'acre' | 'sqm' | 'hectare' | 'foot' | 'meter';
@@ -1501,6 +1535,7 @@ function applyLayerState(layer: LayerState) {
   updateSelectionControls();
   renderDataStoreList();
   refreshStatisticsPanel();
+  refreshScatterPanel();
   refreshLandSchedulePanel();
 
   if (map.getLayer(layer.layerId)) {
@@ -1637,6 +1672,7 @@ function removeLayer(layerId: string) {
       updateFloatingLegend();
       refreshFiltersUI();
       refreshStatisticsPanel();
+      refreshScatterPanel();
       refreshLandSchedulePanel();
       if (selectionControlsPanel) {
         selectionControlsPanel.style.display = 'none';
@@ -1788,14 +1824,33 @@ function positionStatisticsPanel() {
   statisticsControlsEl.style.transform = 'none';
 }
 
-function positionFiltersPanel() {
-  if (!filtersControlsEl) return;
-  if (filtersControlsEl.dataset.userPositioned === 'true') return;
+function positionScatterplotPanel() {
+  if (!scatterplotControlsEl) return;
+  if (scatterplotControlsEl.dataset.userPositioned === 'true') return;
   const anchor = (!isStatisticsMinimized && statisticsControlsEl)
     ? statisticsControlsEl
     : (!isSettingsMenuMinimized && settingsControlsEl)
       ? settingsControlsEl
       : controlsEl;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  scatterplotControlsEl.style.left = `${rect.right + gap}px`;
+  scatterplotControlsEl.style.top = `${rect.top}px`;
+  scatterplotControlsEl.style.transform = 'none';
+}
+
+function positionFiltersPanel() {
+  if (!filtersControlsEl) return;
+  if (filtersControlsEl.dataset.userPositioned === 'true') return;
+  const anchor = (!isScatterplotMinimized && scatterplotControlsEl)
+    ? scatterplotControlsEl
+    : (!isStatisticsMinimized && statisticsControlsEl)
+      ? statisticsControlsEl
+      : (!isSettingsMenuMinimized && settingsControlsEl)
+        ? settingsControlsEl
+        : controlsEl;
   if (!anchor) return;
   const rect = anchor.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return;
@@ -1845,6 +1900,29 @@ function toggleStatistics() {
   }
 }
 
+function minimizeScatterplot() {
+  isScatterplotMinimized = true;
+  scatterplotContent.style.display = 'none';
+  scatterplotControlsEl.style.display = 'none';
+  updateToolbarButtonStates();
+}
+
+function showScatterplot() {
+  isScatterplotMinimized = false;
+  scatterplotContent.style.display = 'grid';
+  scatterplotControlsEl.style.display = 'grid';
+  positionScatterplotPanel();
+  updateToolbarButtonStates();
+}
+
+function toggleScatterplot() {
+  if (isScatterplotMinimized) {
+    showScatterplot();
+  } else {
+    minimizeScatterplot();
+  }
+}
+
 function minimizeFilters() {
   isFiltersMinimized = true;
   filtersContent.style.display = 'none';
@@ -1874,11 +1952,13 @@ function positionLandSchedulePanel() {
   if (landScheduleControlsEl.dataset.userPositioned === 'true') return;
   const anchor = (!isFiltersMinimized && filtersControlsEl)
     ? filtersControlsEl
-    : (!isStatisticsMinimized && statisticsControlsEl)
-      ? statisticsControlsEl
-      : (!isSettingsMenuMinimized && settingsControlsEl)
-        ? settingsControlsEl
-        : controlsEl;
+    : (!isScatterplotMinimized && scatterplotControlsEl)
+      ? scatterplotControlsEl
+      : (!isStatisticsMinimized && statisticsControlsEl)
+        ? statisticsControlsEl
+        : (!isSettingsMenuMinimized && settingsControlsEl)
+          ? settingsControlsEl
+          : controlsEl;
   if (!anchor) return;
   const rect = anchor.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return;
@@ -1925,6 +2005,82 @@ function resetStatisticsDisplay() {
   statsCategoricalUniqueCount.textContent = '—';
   statsCategoricalModalValue.textContent = '—';
   statsCategoricalValues.replaceChildren();
+}
+
+function buildSubjectSelector(container: HTMLElement): SubjectSelectorControls {
+  container.replaceChildren();
+  const subjectBlock = document.createElement('div');
+  subjectBlock.style.display = 'grid';
+  subjectBlock.style.gap = '6px';
+
+  const title = document.createElement('div');
+  title.style.fontWeight = '600';
+  title.style.fontSize = '12px';
+  title.textContent = 'Subject:';
+
+  const actions = document.createElement('div');
+  actions.className = 'filters-actions stats-subject-actions';
+
+  const buttons: HTMLButtonElement[] = [];
+  const modes: Array<{ mode: SubjectMode; label: string }> = [
+    { mode: 'all', label: 'All' },
+    { mode: 'visible', label: 'Visible' },
+    { mode: 'selected', label: 'Selected' },
+    { mode: 'category', label: 'Category' }
+  ];
+  modes.forEach(({ mode, label }) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.subjectMode = mode;
+    button.textContent = label;
+    actions.appendChild(button);
+    buttons.push(button);
+  });
+
+  subjectBlock.append(title, actions);
+
+  const categoryControls = document.createElement('div');
+  categoryControls.style.display = 'none';
+  categoryControls.style.gap = '6px';
+  categoryControls.style.marginTop = '8px';
+
+  const categoryFieldSelect = document.createElement('select');
+  const fieldPlaceholder = new Option('Choose a field', '');
+  fieldPlaceholder.disabled = true;
+  fieldPlaceholder.selected = true;
+  categoryFieldSelect.appendChild(fieldPlaceholder);
+
+  const categoryValueSelect = document.createElement('select');
+  categoryValueSelect.multiple = true;
+  categoryValueSelect.size = 4;
+  categoryValueSelect.disabled = true;
+  const valuePlaceholder = new Option('Choose value(s)', '');
+  valuePlaceholder.disabled = true;
+  valuePlaceholder.selected = true;
+  categoryValueSelect.appendChild(valuePlaceholder);
+
+  categoryControls.append(categoryFieldSelect, categoryValueSelect);
+  container.append(subjectBlock, categoryControls);
+
+  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect };
+}
+
+function updateSubjectButtons(controls: SubjectSelectorControls, mode: SubjectMode) {
+  controls.buttons.forEach(button => {
+    button.classList.toggle('active', button.dataset.subjectMode === mode);
+  });
+}
+
+function updateSubjectControls(
+  controls: SubjectSelectorControls,
+  mode: SubjectMode,
+  hasFieldOptions: boolean,
+  hasFieldSelected: boolean
+) {
+  const isCategory = mode === 'category';
+  controls.categoryControls.style.display = isCategory ? 'grid' : 'none';
+  controls.categoryFieldSelect.disabled = !isCategory || !hasFieldOptions;
+  controls.categoryValueSelect.disabled = !isCategory || !hasFieldSelected;
 }
 
 function populateStatisticsCategoryFields() {
@@ -2181,6 +2337,38 @@ function renderStatisticsHistogram(values: number[]) {
   });
 }
 
+function getSubjectSelection(
+  mode: SubjectMode,
+  categoryField: string | null,
+  categoryValueIndices: string[],
+  categoryValueMap: Array<{ label: string; value: unknown }>
+): GeoJSON.Feature[] {
+  if (!currentGeoJSON) return [];
+  if (mode === 'visible') {
+    const visibilityExpr = buildStatisticsVisibilityExpression();
+    return visibilityExpr
+      ? currentGeoJSON.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
+      : currentGeoJSON.features;
+  }
+  if (mode === 'selected') {
+    return currentGeoJSON.features.filter(feature => selectedParcels.has(getParcelId(feature)));
+  }
+  if (mode === 'category') {
+    if (!categoryField || categoryValueIndices.length === 0) return [];
+    const selectedValues = new Set(
+      categoryValueIndices
+        .map(index => categoryValueMap[Number(index)])
+        .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
+        .map(entry => entry.value)
+    );
+    return currentGeoJSON.features.filter(feature => {
+      const value = (feature.properties as Record<string, unknown> | undefined)?.[categoryField];
+      return selectedValues.has(value);
+    });
+  }
+  return currentGeoJSON.features;
+}
+
 function updateStatisticsResults() {
   if (!currentGeoJSON || !statsField) {
     statsValuesCache = [];
@@ -2199,28 +2387,12 @@ function updateStatisticsResults() {
     return;
   }
 
-  let selection: GeoJSON.Feature[] = [];
-  if (statsSubjectMode === 'visible') {
-    const visibilityExpr = buildStatisticsVisibilityExpression();
-    selection = visibilityExpr
-      ? currentGeoJSON.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
-      : currentGeoJSON.features;
-  } else if (statsSubjectMode === 'selected') {
-    selection = currentGeoJSON.features.filter(feature => selectedParcels.has(getParcelId(feature)));
-  } else if (statsSubjectMode === 'category') {
-    const selectedValues = new Set(
-      statsCategoryValueIndices
-        .map(index => statsCategoryValueMap[Number(index)])
-        .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
-        .map(entry => entry.value)
-    );
-    selection = currentGeoJSON.features.filter(feature => {
-      const value = (feature.properties as Record<string, unknown> | undefined)?.[statsCategoryField as string];
-      return selectedValues.has(value);
-    });
-  } else {
-    selection = currentGeoJSON.features;
-  }
+  const selection = getSubjectSelection(
+    statsSubjectMode,
+    statsCategoryField,
+    statsCategoryValueIndices,
+    statsCategoryValueMap
+  );
 
   const totalCount = currentGeoJSON.features.length;
   const selectionCount = selection.length;
@@ -2330,19 +2502,19 @@ function updateStatisticsResults() {
 }
 
 function updateStatisticsSubjectControls() {
-  const isCategory = statsSubjectMode === 'category';
-  statsSubjectCategoryControls.style.display = isCategory ? 'grid' : 'none';
-  statsCategoryFieldSelect.disabled = !isCategory || statsCategoryFieldSelect.options.length <= 1;
-  statsCategoryValueSelect.disabled = !isCategory || !statsCategoryField;
+  updateSubjectControls(
+    statsSubjectControls,
+    statsSubjectMode,
+    statsCategoryFieldSelect.options.length > 1,
+    Boolean(statsCategoryField)
+  );
 }
 
 function updateStatisticsSubjectButtons() {
-  statsSubjectButtons.forEach(button => {
-    button.classList.toggle('active', button.dataset.statsSubject === statsSubjectMode);
-  });
+  updateSubjectButtons(statsSubjectControls, statsSubjectMode);
 }
 
-function setStatsSubjectMode(mode: StatsSubjectMode) {
+function setStatsSubjectMode(mode: SubjectMode) {
   statsSubjectMode = mode;
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
@@ -2394,6 +2566,211 @@ function refreshStatisticsPanel() {
   } else {
     resetStatisticsDisplay();
   }
+}
+
+function populateScatterCategoryFields() {
+  scatterCategoryFieldSelect.replaceChildren();
+  const placeholder = new Option('Choose a field', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  scatterCategoryFieldSelect.appendChild(placeholder);
+
+  if (!currentGeoJSON) {
+    scatterCategoryFieldSelect.disabled = true;
+    scatterCategoryField = null;
+    return;
+  }
+
+  const availableCategorical = chosenCategoricalFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+
+  availableCategorical.forEach(field => {
+    scatterCategoryFieldSelect.appendChild(new Option(field, field));
+  });
+
+  scatterCategoryFieldSelect.disabled = availableCategorical.length === 0;
+  if (scatterCategoryField && availableCategorical.includes(scatterCategoryField)) {
+    scatterCategoryFieldSelect.value = scatterCategoryField;
+  } else {
+    scatterCategoryField = null;
+  }
+}
+
+function populateScatterCategoryValues(field: string | null) {
+  scatterCategoryValueSelect.replaceChildren();
+  const placeholder = new Option('Choose value(s)', '');
+  placeholder.disabled = true;
+  placeholder.selected = scatterCategoryValueIndices.length === 0;
+  scatterCategoryValueSelect.appendChild(placeholder);
+
+  if (!currentGeoJSON || !field) {
+    scatterCategoryValueSelect.disabled = true;
+    scatterCategoryValueMap = [];
+    scatterCategoryValueIndices = [];
+    return;
+  }
+
+  const valueMap = new Map<string, { label: string; value: unknown }>();
+  currentGeoJSON.features.forEach(feature => {
+    const raw = (feature.properties as Record<string, unknown> | undefined)?.[field];
+    if (raw === null || raw === undefined) return;
+    const key = `${typeof raw}:${String(raw)}`;
+    if (!valueMap.has(key)) {
+      valueMap.set(key, { label: String(raw), value: raw });
+    }
+  });
+
+  scatterCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+
+  scatterCategoryValueMap.forEach((entry, index) => {
+    scatterCategoryValueSelect.appendChild(new Option(entry.label, String(index)));
+  });
+
+  scatterCategoryValueSelect.disabled = false;
+  const validSelections = new Set(
+    scatterCategoryValueIndices.filter(index => scatterCategoryValueMap[Number(index)])
+  );
+  scatterCategoryValueIndices = Array.from(validSelections);
+  Array.from(scatterCategoryValueSelect.options).forEach(option => {
+    option.selected = validSelections.has(option.value);
+  });
+  if (scatterCategoryValueIndices.length === 0) {
+    placeholder.selected = true;
+  }
+}
+
+function populateScatterFieldSelect(
+  select: HTMLSelectElement,
+  currentValue: string | null,
+  availableNumeric: string[]
+): string | null {
+  select.replaceChildren();
+  const placeholder = new Option('Choose a field', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
+
+  if (!currentGeoJSON) {
+    select.disabled = true;
+    return null;
+  }
+
+  availableNumeric.forEach(field => {
+    select.appendChild(new Option(field, field));
+  });
+
+  select.disabled = availableNumeric.length === 0;
+  if (currentValue && availableNumeric.includes(currentValue)) {
+    select.value = currentValue;
+    return currentValue;
+  }
+  return null;
+}
+
+function populateScatterFields() {
+  if (!currentGeoJSON) {
+    scatterXField = null;
+    scatterYField = null;
+    scatterXFieldSelect.disabled = true;
+    scatterYFieldSelect.disabled = true;
+    return;
+  }
+  const availableNumeric = chosenNumericFields.filter(k =>
+    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+  scatterXField = populateScatterFieldSelect(scatterXFieldSelect, scatterXField, availableNumeric);
+  scatterYField = populateScatterFieldSelect(scatterYFieldSelect, scatterYField, availableNumeric);
+}
+
+function updateScatterSubjectControls() {
+  updateSubjectControls(
+    scatterSubjectControls,
+    scatterSubjectMode,
+    scatterCategoryFieldSelect.options.length > 1,
+    Boolean(scatterCategoryField)
+  );
+}
+
+function updateScatterSubjectButtons() {
+  updateSubjectButtons(scatterSubjectControls, scatterSubjectMode);
+}
+
+function setScatterSubjectMode(mode: SubjectMode) {
+  scatterSubjectMode = mode;
+  updateScatterSubjectButtons();
+  updateScatterSubjectControls();
+  updateScatterPlot();
+}
+
+function resetScatterPlot(message: string) {
+  scatterPlotEmpty.textContent = message;
+  scatterPlotEmpty.style.display = 'block';
+  Plotly.purge(scatterPlot);
+  scatterPlot.innerHTML = '';
+}
+
+function updateScatterPlot() {
+  if (!currentGeoJSON) {
+    resetScatterPlot('Load data to render the scatterplot.');
+    return;
+  }
+  if (scatterSubjectMode === 'category' && (!scatterCategoryField || scatterCategoryValueIndices.length === 0)) {
+    resetScatterPlot('Choose category values to render the scatterplot.');
+    return;
+  }
+  if (!scatterXField || !scatterYField) {
+    resetScatterPlot('Select X and Y fields to render the scatterplot.');
+    return;
+  }
+
+  const selection = getSubjectSelection(
+    scatterSubjectMode,
+    scatterCategoryField,
+    scatterCategoryValueIndices,
+    scatterCategoryValueMap
+  );
+  const xValues: number[] = [];
+  const yValues: number[] = [];
+  selection.forEach(feature => {
+    const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
+    const xVal = numOrNull(props[scatterXField]);
+    const yVal = numOrNull(props[scatterYField]);
+    if (xVal === null || yVal === null) return;
+    xValues.push(xVal);
+    yValues.push(yVal);
+  });
+
+  if (xValues.length === 0) {
+    resetScatterPlot('No data available for the current selection.');
+    return;
+  }
+
+  scatterPlotEmpty.style.display = 'none';
+  const trace = {
+    x: xValues,
+    y: yValues,
+    type: 'scatter',
+    mode: 'markers',
+    marker: { size: 6, color: 'rgba(59, 130, 246, 0.7)' }
+  };
+  const layout = {
+    margin: { l: 48, r: 16, t: 8, b: 42 },
+    height: 220,
+    xaxis: { title: scatterXField },
+    yaxis: { title: scatterYField }
+  };
+  const config = { displayModeBar: false, responsive: true };
+  Plotly.react(scatterPlot, [trace], layout, config);
+}
+
+function refreshScatterPanel() {
+  populateScatterCategoryFields();
+  populateScatterCategoryValues(scatterCategoryField);
+  populateScatterFields();
+  updateScatterSubjectButtons();
+  updateScatterSubjectControls();
+  updateScatterPlot();
 }
 
 // Dragging functions
@@ -3793,6 +4170,9 @@ function applyMapFilters() {
   if (statsSubjectMode === 'visible') {
     updateStatisticsResults();
   }
+  if (scatterSubjectMode === 'visible') {
+    updateScatterPlot();
+  }
 }
 
 function applyVisibilityFilters() {
@@ -4000,6 +4380,9 @@ function updateSelectionControls() {
   }
   if (statsSubjectMode === 'selected') {
     updateStatisticsResults();
+  }
+  if (scatterSubjectMode === 'selected') {
+    updateScatterPlot();
   }
 }
 
@@ -5069,6 +5452,7 @@ async function loadSelectedColumns() {
     // Apply gray rendering when no field is selected
     applyGrayRendering();
     refreshStatisticsPanel();
+    refreshScatterPanel();
     refreshLandSchedulePanel();
 
     fitToData(currentGeoJSON);
@@ -6497,6 +6881,7 @@ btnMinimizeSettingsMenu.addEventListener('click', minimizeSettingsMenu);
 btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
 btnMinimizeStatistics.addEventListener('click', minimizeStatistics);
+btnMinimizeScatterplot.addEventListener('click', minimizeScatterplot);
 btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnPaintMenu.addEventListener('click', togglePaint);
@@ -6553,9 +6938,17 @@ filtersInvertToggle.addEventListener('change', () => {
 
 statsSubjectButtons.forEach(button => {
   button.addEventListener('click', () => {
-    const mode = button.dataset.statsSubject as StatsSubjectMode | undefined;
+    const mode = button.dataset.subjectMode as SubjectMode | undefined;
     if (!mode) return;
     setStatsSubjectMode(mode);
+  });
+});
+
+scatterSubjectButtons.forEach(button => {
+  button.addEventListener('click', () => {
+    const mode = button.dataset.subjectMode as SubjectMode | undefined;
+    if (!mode) return;
+    setScatterSubjectMode(mode);
   });
 });
 
@@ -6563,6 +6956,7 @@ statsCategoryFieldSelect.addEventListener('change', () => {
   statsCategoryField = statsCategoryFieldSelect.value || null;
   statsCategoryValueIndices = [];
   populateStatisticsCategoryValues(statsCategoryField);
+  updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
   resetStatisticsDisplay();
 });
@@ -6579,6 +6973,22 @@ statsCategoryValueSelect.addEventListener('change', () => {
   resetStatisticsDisplay();
 });
 
+scatterCategoryFieldSelect.addEventListener('change', () => {
+  scatterCategoryField = scatterCategoryFieldSelect.value || null;
+  scatterCategoryValueIndices = [];
+  populateScatterCategoryValues(scatterCategoryField);
+  updateScatterSubjectControls();
+  updateScatterPlot();
+});
+
+scatterCategoryValueSelect.addEventListener('change', () => {
+  scatterCategoryValueIndices = Array.from(scatterCategoryValueSelect.selectedOptions)
+    .map(option => option.value)
+    .filter(value => value);
+  updateScatterSubjectControls();
+  updateScatterPlot();
+});
+
 statsFieldSelect.addEventListener('change', () => {
   statsField = statsFieldSelect.value || null;
   statsFieldType = getStatsFieldType(statsField);
@@ -6588,6 +6998,16 @@ statsFieldSelect.addEventListener('change', () => {
   } else {
     resetStatisticsDisplay();
   }
+});
+
+scatterXFieldSelect.addEventListener('change', () => {
+  scatterXField = scatterXFieldSelect.value || null;
+  updateScatterPlot();
+});
+
+scatterYFieldSelect.addEventListener('change', () => {
+  scatterYField = scatterYFieldSelect.value || null;
+  updateScatterPlot();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {
@@ -6670,6 +7090,7 @@ makeDraggable(settingsControlsEl);
 makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
 makeDraggable(statisticsControlsEl);
+makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
 makeDraggable(landScheduleControlsEl);
 positionPaintPanel();
@@ -6826,6 +7247,7 @@ setQuality('high');
 renderLayerList();
 renderDataStoreList();
 refreshStatisticsPanel();
+refreshScatterPanel();
 refreshLandSchedulePanel();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
@@ -7210,6 +7632,12 @@ function initializeToolbar() {
     toggleStatistics();
   });
 
+  scatterplotToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    toggleScatterplot();
+  });
+
   landScheduleToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
@@ -7272,6 +7700,14 @@ function updateToolbarButtonStates() {
   } else {
     statisticsToolButton.classList.remove('inactive');
     statisticsToolButton.classList.add('active');
+  }
+
+  if (isScatterplotMinimized) {
+    scatterplotToolButton.classList.add('inactive');
+    scatterplotToolButton.classList.remove('active');
+  } else {
+    scatterplotToolButton.classList.remove('inactive');
+    scatterplotToolButton.classList.add('active');
   }
 
   if (isFiltersMinimized) {

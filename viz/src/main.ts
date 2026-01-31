@@ -849,7 +849,7 @@ const filtersShowButton = document.getElementById('filtersShowButton') as HTMLBu
 const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
 
 const statsSubjectControls = buildSubjectSelector(statsSubjectSection);
-const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection);
+const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection, { title: null });
 
 const statsSubjectButtons = statsSubjectControls.buttons;
 const statsCategoryFieldSelect = statsSubjectControls.categoryFieldSelect;
@@ -2048,16 +2048,24 @@ function resetStatisticsDisplay() {
   statsCategoricalValues.replaceChildren();
 }
 
-function buildSubjectSelector(container: HTMLElement): SubjectSelectorControls {
+type SubjectSelectorOptions = {
+  title?: string | null;
+};
+
+function buildSubjectSelector(container: HTMLElement, options: SubjectSelectorOptions = {}): SubjectSelectorControls {
   container.replaceChildren();
   const subjectBlock = document.createElement('div');
   subjectBlock.style.display = 'grid';
   subjectBlock.style.gap = '6px';
 
-  const title = document.createElement('div');
-  title.style.fontWeight = '600';
-  title.style.fontSize = '12px';
-  title.textContent = 'Subject:';
+  const titleText = options.title ?? 'Subject:';
+  let title: HTMLDivElement | null = null;
+  if (titleText) {
+    title = document.createElement('div');
+    title.style.fontWeight = '600';
+    title.style.fontSize = '12px';
+    title.textContent = titleText;
+  }
 
   const actions = document.createElement('div');
   actions.className = 'filters-actions stats-subject-actions';
@@ -2078,7 +2086,10 @@ function buildSubjectSelector(container: HTMLElement): SubjectSelectorControls {
     buttons.push(button);
   });
 
-  subjectBlock.append(title, actions);
+  if (title) {
+    subjectBlock.append(title);
+  }
+  subjectBlock.append(actions);
 
   const categoryControls = document.createElement('div');
   categoryControls.style.display = 'none';

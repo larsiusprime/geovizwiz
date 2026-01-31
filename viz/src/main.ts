@@ -5882,6 +5882,11 @@ function addExtrusionLayer(layer: LayerState) {
         activePopup = null;
         lastPicked = null;
       }
+
+      const activeElement = document.activeElement;
+      if (isTextInputElement(activeElement) || isTextInputElement(e.target as Element | null)) {
+        return;
+      }
       
       // Hotkey handling
       const key = e.key.toLowerCase();
@@ -5920,6 +5925,34 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, pa
   // Add search functionality to the popup
   addPopupSearchFunctionality();
   addPopupEditFunctionality(parcelId);
+}
+
+function isTextInputElement(element: Element | null): boolean {
+  if (!element) return false;
+  if (element instanceof HTMLInputElement) {
+    const nonTextTypes = new Set([
+      'button',
+      'checkbox',
+      'color',
+      'date',
+      'file',
+      'hidden',
+      'image',
+      'radio',
+      'range',
+      'reset',
+      'submit'
+    ]);
+    if (nonTextTypes.has(element.type)) return false;
+    if (element.disabled || element.readOnly) return false;
+    return true;
+  }
+  if (element instanceof HTMLTextAreaElement) {
+    if (element.disabled || element.readOnly) return false;
+    return true;
+  }
+  if (element instanceof HTMLSelectElement) return false;
+  return (element as HTMLElement).isContentEditable;
 }
 
 function addPopupSearchFunctionality() {

@@ -480,6 +480,37 @@
       background: #eef2ff;
     }
 
+    .filters-saved-container {
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 16px 12px 12px;
+      background: #fff;
+      position: relative;
+    }
+
+    .filters-saved-tabs {
+      display: flex;
+      gap: 6px;
+      margin-top: -28px;
+      margin-bottom: 10px;
+    }
+
+    .filters-saved-tab {
+      border: 1px solid #ddd;
+      border-bottom: none;
+      background: #f8f8f8;
+      padding: 6px 12px;
+      border-radius: 8px 8px 0 0;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    .filters-saved-tab.active {
+      border-color: #3b82f6;
+      background: #fff;
+      box-shadow: none;
+    }
+
     .filters-saved-section {
       display: grid;
       gap: 8px;
@@ -839,18 +870,20 @@
       </button>
     </div>
     <div id="filtersContent" style="padding: 12px; display: grid; gap: 12px;">
-      <div class="filters-saved-section">
-        <div class="filters-actions">
-          <button id="filtersSaveToggle" type="button">Save filter</button>
-          <button id="filtersLoadToggle" type="button">Load filter</button>
+      <div class="filters-saved-container">
+        <div class="filters-saved-tabs">
+          <button id="filtersSaveToggle" class="filters-saved-tab" type="button">Save</button>
+          <button id="filtersLoadToggle" class="filters-saved-tab" type="button">Load</button>
         </div>
-        <div id="filtersSaveControls" class="filters-save-row" style="display: none;">
-          <input id="filtersSaveName" type="text" placeholder="type a name" />
-          <button id="filtersSaveConfirm" type="button" title="Save">💾</button>
-        </div>
-        <div id="filtersSavedStatus" class="filters-saved-status" style="display: none;"></div>
-        <div id="filtersLoadControls" class="filters-load-row" style="display: none;">
-          <select id="filtersLoadSelect"></select>
+        <div class="filters-saved-section">
+          <div id="filtersSaveControls" class="filters-save-row" style="display: none;">
+            <input id="filtersSaveName" type="text" placeholder="type a name" />
+            <button id="filtersSaveConfirm" type="button" title="Save">💾</button>
+          </div>
+          <div id="filtersSavedStatus" class="filters-saved-status" style="display: none;"></div>
+          <div id="filtersLoadControls" class="filters-load-row" style="display: none;">
+            <select id="filtersLoadSelect"></select>
+          </div>
         </div>
       </div>
 

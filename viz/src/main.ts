@@ -1366,7 +1366,7 @@ function renderSavedFiltersOptions() {
 }
 
 function setSavedFiltersPanelMode(nextMode: 'none' | 'save' | 'load') {
-  savedFiltersPanelMode = savedFiltersPanelMode === nextMode ? 'none' : nextMode;
+  savedFiltersPanelMode = nextMode;
   updateSavedFiltersUIState();
 }
 

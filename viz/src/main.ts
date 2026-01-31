@@ -846,6 +846,8 @@ const filtersInvertToggle = document.getElementById('filtersInvertToggle') as HT
 const addFilterButton = document.getElementById('addFilterButton') as HTMLButtonElement;
 const filtersSaveToggle = document.getElementById('filtersSaveToggle') as HTMLButtonElement;
 const filtersLoadToggle = document.getElementById('filtersLoadToggle') as HTMLButtonElement;
+const filtersSavePanel = document.getElementById('filtersSavePanel') as HTMLDivElement;
+const filtersLoadPanel = document.getElementById('filtersLoadPanel') as HTMLDivElement;
 const filtersSaveControls = document.getElementById('filtersSaveControls') as HTMLDivElement;
 const filtersSaveNameInput = document.getElementById('filtersSaveName') as HTMLInputElement;
 const filtersSaveConfirmButton = document.getElementById('filtersSaveConfirm') as HTMLButtonElement;
@@ -1384,17 +1386,29 @@ function updateSavedFiltersUIState() {
 
   if (filtersSaveToggle) {
     filtersSaveToggle.disabled = !hasConditions;
-    filtersSaveToggle.classList.toggle('active', savedFiltersPanelMode === 'save');
+    const isActive = savedFiltersPanelMode === 'save';
+    filtersSaveToggle.classList.toggle('active', isActive);
+    filtersSaveToggle.setAttribute('aria-selected', String(isActive));
+    filtersSaveToggle.tabIndex = isActive ? 0 : -1;
   }
   if (filtersLoadToggle) {
     filtersLoadToggle.disabled = !hasSaved;
-    filtersLoadToggle.classList.toggle('active', savedFiltersPanelMode === 'load');
+    const isActive = savedFiltersPanelMode === 'load';
+    filtersLoadToggle.classList.toggle('active', isActive);
+    filtersLoadToggle.setAttribute('aria-selected', String(isActive));
+    filtersLoadToggle.tabIndex = isActive ? 0 : -1;
   }
 
   const showSave = savedFiltersPanelMode === 'save' && hasConditions;
   const showLoad = savedFiltersPanelMode === 'load' && hasSaved;
   const hasMatch = Boolean(savedFilterMatchName);
 
+  if (filtersSavePanel) {
+    filtersSavePanel.style.display = showSave ? 'grid' : 'none';
+  }
+  if (filtersLoadPanel) {
+    filtersLoadPanel.style.display = showLoad ? 'grid' : 'none';
+  }
   if (filtersSaveControls) {
     filtersSaveControls.style.display = showSave && !hasMatch ? 'grid' : 'none';
   }

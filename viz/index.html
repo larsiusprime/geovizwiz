@@ -483,35 +483,53 @@
     .filters-saved-container {
       border: 1px solid #e5e7eb;
       border-radius: 10px;
-      padding: 16px 12px 12px;
       background: #fff;
-      position: relative;
+      overflow: hidden;
     }
 
     .filters-saved-tabs {
       display: flex;
-      gap: 6px;
-      margin-top: -28px;
-      margin-bottom: 10px;
+      align-items: flex-end;
+      border-bottom: 1px solid #e5e7eb;
+      background: #f8fafc;
+      padding: 0 6px;
+      gap: 0;
     }
 
     .filters-saved-tab {
-      border: 1px solid #ddd;
+      border: 1px solid transparent;
       border-bottom: none;
-      background: #f8f8f8;
-      padding: 6px 12px;
+      background: transparent;
+      padding: 8px 12px;
       border-radius: 8px 8px 0 0;
       cursor: pointer;
       font-size: 12px;
+      margin: 0 2px -1px;
+      color: #4b5563;
+    }
+
+    .filters-saved-tab:hover:not(:disabled) {
+      background: #eef2f7;
     }
 
     .filters-saved-tab.active {
-      border-color: #3b82f6;
+      border-color: #e5e7eb;
       background: #fff;
-      box-shadow: none;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    .filters-saved-tab:disabled {
+      color: #9ca3af;
     }
 
     .filters-saved-section {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .filters-saved-panel {
       display: grid;
       gap: 8px;
     }
@@ -871,18 +889,22 @@
     </div>
     <div id="filtersContent" style="padding: 12px; display: grid; gap: 12px;">
       <div class="filters-saved-container">
-        <div class="filters-saved-tabs">
-          <button id="filtersSaveToggle" class="filters-saved-tab" type="button">Save</button>
-          <button id="filtersLoadToggle" class="filters-saved-tab" type="button">Load</button>
+        <div class="filters-saved-tabs" role="tablist" aria-label="Saved filters">
+          <button id="filtersSaveToggle" class="filters-saved-tab" type="button" role="tab" aria-controls="filtersSavePanel" aria-selected="false">Save</button>
+          <button id="filtersLoadToggle" class="filters-saved-tab" type="button" role="tab" aria-controls="filtersLoadPanel" aria-selected="false">Load</button>
         </div>
         <div class="filters-saved-section">
-          <div id="filtersSaveControls" class="filters-save-row" style="display: none;">
-            <input id="filtersSaveName" type="text" placeholder="type a name" />
-            <button id="filtersSaveConfirm" type="button" title="Save">💾</button>
+          <div id="filtersSavePanel" class="filters-saved-panel" role="tabpanel" aria-labelledby="filtersSaveToggle" style="display: none;">
+            <div id="filtersSaveControls" class="filters-save-row" style="display: none;">
+              <input id="filtersSaveName" type="text" placeholder="type a name" />
+              <button id="filtersSaveConfirm" type="button" title="Save">💾</button>
+            </div>
+            <div id="filtersSavedStatus" class="filters-saved-status" style="display: none;"></div>
           </div>
-          <div id="filtersSavedStatus" class="filters-saved-status" style="display: none;"></div>
-          <div id="filtersLoadControls" class="filters-load-row" style="display: none;">
-            <select id="filtersLoadSelect"></select>
+          <div id="filtersLoadPanel" class="filters-saved-panel" role="tabpanel" aria-labelledby="filtersLoadToggle" style="display: none;">
+            <div id="filtersLoadControls" class="filters-load-row" style="display: none;">
+              <select id="filtersLoadSelect"></select>
+            </div>
           </div>
         </div>
       </div>

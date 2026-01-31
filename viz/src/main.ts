@@ -1221,6 +1221,7 @@ let scatterRangeIsCustom = false;
 let scatterDefaultRange = { xMin: null as number | null, xMax: null as number | null, yMin: null as number | null, yMax: null as number | null };
 let isUpdatingScatterRangeInputs = false;
 let scatterDataStoreId: string | null = null;
+let scatterPlotRefreshTimer: number | null = null;
 
 type SubjectSelectorControls = {
   buttons: HTMLButtonElement[];
@@ -1952,6 +1953,7 @@ function showScatterplot() {
   scatterplotControlsEl.style.display = 'grid';
   positionScatterplotPanel();
   updateToolbarButtonStates();
+  scheduleScatterPlotRefresh();
 }
 
 function toggleScatterplot() {
@@ -2793,7 +2795,7 @@ function setScatterSubjectMode(mode: SubjectMode) {
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
   scatterRangeIsCustom = false;
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 }
 
 function getPlotly(): any | null {
@@ -2919,6 +2921,17 @@ function updateScatterPlot() {
   plotly.react(scatterPlot, [trace], layout, config);
 }
 
+function scheduleScatterPlotRefresh() {
+  if (scatterPlotRefreshTimer !== null) {
+    window.clearTimeout(scatterPlotRefreshTimer);
+  }
+  scatterPlotRefreshTimer = window.setTimeout(() => {
+    scatterPlotRefreshTimer = null;
+    if (isScatterplotMinimized) return;
+    updateScatterPlot();
+  }, 1000);
+}
+
 function refreshScatterPanel() {
   renderScatterDataSourceOptions();
   populateScatterCategoryFields();
@@ -2926,7 +2939,7 @@ function refreshScatterPanel() {
   populateScatterFields();
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 }
 
 // Dragging functions
@@ -4298,7 +4311,7 @@ function applyMapFilters() {
     updateStatisticsResults();
   }
   if (scatterSubjectMode === 'visible') {
-    updateScatterPlot();
+    scheduleScatterPlotRefresh();
   }
 }
 
@@ -4509,7 +4522,7 @@ function updateSelectionControls() {
     updateStatisticsResults();
   }
   if (scatterSubjectMode === 'selected') {
-    updateScatterPlot();
+    scheduleScatterPlotRefresh();
   }
 }
 
@@ -7110,7 +7123,7 @@ scatterCategoryFieldSelect.addEventListener('change', () => {
   populateScatterCategoryValues(scatterCategoryField);
   updateScatterSubjectControls();
   scatterRangeIsCustom = false;
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 });
 
 scatterCategoryValueSelect.addEventListener('change', () => {
@@ -7119,7 +7132,7 @@ scatterCategoryValueSelect.addEventListener('change', () => {
     .filter(value => value);
   updateScatterSubjectControls();
   scatterRangeIsCustom = false;
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 });
 
 statsFieldSelect.addEventListener('change', () => {
@@ -7136,19 +7149,19 @@ statsFieldSelect.addEventListener('change', () => {
 scatterXFieldSelect.addEventListener('change', () => {
   scatterXField = scatterXFieldSelect.value || null;
   scatterRangeIsCustom = false;
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 });
 
 scatterYFieldSelect.addEventListener('change', () => {
   scatterYField = scatterYFieldSelect.value || null;
   scatterRangeIsCustom = false;
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 });
 
 function handleScatterRangeInput() {
   if (isUpdatingScatterRangeInputs) return;
   scatterRangeIsCustom = true;
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 }
 
 scatterXMinInput.addEventListener('input', handleScatterRangeInput);
@@ -7158,7 +7171,7 @@ scatterYMaxInput.addEventListener('input', handleScatterRangeInput);
 scatterResetExtentsButton.addEventListener('click', () => {
   scatterRangeIsCustom = false;
   setScatterRangeInputs(scatterDefaultRange);
-  updateScatterPlot();
+  scheduleScatterPlotRefresh();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {

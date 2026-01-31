@@ -2929,7 +2929,7 @@ function scheduleScatterPlotRefresh() {
     scatterPlotRefreshTimer = null;
     if (isScatterplotMinimized) return;
     updateScatterPlot();
-  }, 1000);
+  }, 250);
 }
 
 function refreshScatterPanel() {

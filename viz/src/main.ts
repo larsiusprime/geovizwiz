@@ -14,14 +14,64 @@ import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 import { makeFieldCheckbox, divider } from './utils.dom';
+import type {
+  BasemapMode,
+  NumericFilterOperator, CategoricalFilterOperator,
+  ParcelFieldPatch,
+  QualityMode, UpdateMode, MetricUnitKey,
+  SubjectMode, LandSchedulePerUnit, LandScheduleBaseLot,
+  LayerState, DataStore, SubjectSelectorControls, SubjectSelectorOptions
+} from './types';
 
+
+import { S, LAND_SCHEDULE_DEFAULT_KEY, LAND_SCHEDULE_DEFAULT_LABEL } from './state';
+import {
+  initFilterElements, initFilterCallbacks,
+  cloneFilters,
+  setSavedFiltersPanelMode, updateSavedFiltersUIState,
+  saveCurrentFilters, applySavedFilter,
+  getCategoricalValues,
+  buildSavedFilterExpression, evaluateFilterExpression,
+  buildLayerVisibilityExpression,
+  applyMapFilters, applyVisibilityFilters,
+  createFilterRule, updateFiltersUIState, renderFiltersList,
+  refreshFiltersUI, renderSubjectFilterOptions,
+  applyActiveFilterAction, setFilterActionMode,
+} from './filters';
+import {
+  createWindowManager, initWindowCallbacks, initPositionElements,
+  positionPaintPanel, positionSettingsPanel, positionStatisticsPanel,
+  positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel,
+  updateFiltersPanelLayout, updatePaintButtonState,
+  makeDraggable, handleMouseMove, handleMouseUp,
+  type WindowManager
+} from './windows';
+import {
+  initSelection, initSelectionElements,
+  handleRectangleMouseDown, handleRectangleMouseMove, handleRectangleMouseUp,
+  featureIntersectsBbox,
+  applyCategorySelection, applyRangeSelection,
+  getParcelId, findFeatureByParcelId,
+  addParcelToSelection, removeParcelFromSelection, clearAllSelections,
+  updateSelectionControls, updateSelectionControlsPosition,
+  handleLassoMouseDown, handleLassoMouseMove, handleLassoMouseUp,
+  handlePolygonMouseDown, handlePolygonMouseMove, handlePolygonDoubleClick,
+} from './selection';
+import {
+  initLegendElements, initLegendCallbacks,
+  hideFloatingLegend, clearLegendVisibility,
+  updateFloatingLegend, updateLegendPosition,
+  updateHighlightColors,
+  applyExtrusionWithCustomColors, applyExtrusionWithVisibility,
+} from './legend';
+(window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Map Bootstrap ----------------- */
 
 
 const HQ_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3 is a good "HQ" target
 
-const map = new maplibregl.Map({
+S.map = new maplibregl.Map({
   container: 'map',
   style: OSM_STYLE,
   center: [-95.3698, 29.7604],
@@ -33,14 +83,12 @@ const map = new maplibregl.Map({
   doubleClickZoom: false,
   pixelRatio: HQ_PR // supersample: render at higher internal resolution (smooth lines)
 });
-map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+S.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 
-type BasemapMode = 'streets' | 'satellite' | 'none';
-let currentBasemap: BasemapMode = 'streets';
 
 function updateBasemapButtonStates() {
   basemapButtons.forEach(button => {
-    button.classList.toggle('active', button.dataset.basemap === currentBasemap);
+    button.classList.toggle('active', button.dataset.basemap === S.currentBasemap);
   });
 }
 
@@ -68,26 +116,26 @@ function getBasemapSourceConfig(mode: BasemapMode) {
 }
 
 function getBasemapInsertBeforeId() {
-  const styleLayers = map.getStyle().layers ?? [];
+  const styleLayers = S.map.getStyle().layers ?? [];
   const nextLayer = styleLayers.find(layer => !ALL_BASEMAP_LAYER_IDS.has(layer.id));
   return nextLayer?.id;
 }
 
 function removeBasemap(mode: BasemapMode) {
   const layerId = BASEMAP_LAYER_IDS[mode];
-  if (map.getLayer(layerId)) {
-    map.removeLayer(layerId);
+  if (S.map.getLayer(layerId)) {
+    S.map.removeLayer(layerId);
   }
   const sourceId = BASEMAP_SOURCE_IDS[mode];
-  if (sourceId && map.getSource(sourceId)) {
-    map.removeSource(sourceId);
+  if (sourceId && S.map.getSource(sourceId)) {
+    S.map.removeSource(sourceId);
   }
 }
 
 function addBasemap(mode: BasemapMode) {
   const beforeId = getBasemapInsertBeforeId();
   if (mode === 'none') {
-    map.addLayer({
+    S.map.addLayer({
       id: BASEMAP_LAYER_IDS.none,
       type: 'background',
       paint: { 'background-color': '#f8f8f8' }
@@ -98,15 +146,15 @@ function addBasemap(mode: BasemapMode) {
   const sourceConfig = getBasemapSourceConfig(mode);
   if (!sourceConfig) return;
   const sourceId = BASEMAP_SOURCE_IDS[mode]!;
-  if (!map.getSource(sourceId)) {
-    map.addSource(sourceId, {
+  if (!S.map.getSource(sourceId)) {
+    S.map.addSource(sourceId, {
       type: 'raster',
       tiles: sourceConfig.tiles,
       tileSize: sourceConfig.tileSize,
       attribution: sourceConfig.attribution
     });
   }
-  map.addLayer({
+  S.map.addLayer({
     id: BASEMAP_LAYER_IDS[mode],
     type: 'raster',
     source: sourceId,
@@ -116,9 +164,9 @@ function addBasemap(mode: BasemapMode) {
 }
 
 function setBasemapMode(mode: BasemapMode) {
-  if (mode === currentBasemap) return;
-  removeBasemap(currentBasemap);
-  currentBasemap = mode;
+  if (mode === S.currentBasemap) return;
+  removeBasemap(S.currentBasemap);
+  S.currentBasemap = mode;
   updateBasemapButtonStates();
   addBasemap(mode);
 }
@@ -127,13 +175,13 @@ function setBasemapMode(mode: BasemapMode) {
 
 // Update cursor based on active tool
 function updateCursor() {
-  if (isInfoToolActive) {
-    map.getCanvas().style.cursor = 'pointer';
-  } else if (isPanToolActive) {
-    map.getCanvas().style.cursor = 'grab';
+  if (S.isInfoToolActive) {
+    S.map.getCanvas().style.cursor = 'pointer';
+  } else if (S.isPanToolActive) {
+    S.map.getCanvas().style.cursor = 'grab';
   } else {
     // When SELECT mode is engaged, use arrow cursor
-    map.getCanvas().style.cursor = 'default';
+    S.map.getCanvas().style.cursor = 'default';
   }
 }
 
@@ -146,7 +194,7 @@ function getViewportPoint(e: MouseEvent): maplibregl.Point {
 
 // Helper function to convert viewport coordinates to map container coordinates
 function getMapPoint(e: MouseEvent): maplibregl.Point {
-  const canvas = map.getCanvas();
+  const canvas = S.map.getCanvas();
   const rect = canvas.getBoundingClientRect();
   return new maplibregl.Point(
     e.clientX - rect.left,
@@ -156,10 +204,10 @@ function getMapPoint(e: MouseEvent): maplibregl.Point {
 
 // Pan tool mouse handlers - just for cursor management
 function handlePanMouseDown(e: MouseEvent) {
-  if (!isPanToolActive || e.button !== 0) return;
+  if (!S.isPanToolActive || e.button !== 0) return;
   
-  isPanning = true;
-  map.getCanvas().style.cursor = 'grabbing';
+  S.isPanning = true;
+  S.map.getCanvas().style.cursor = 'grabbing';
 }
 
 function handlePanMouseMove(_e: MouseEvent) {
@@ -167,597 +215,17 @@ function handlePanMouseMove(_e: MouseEvent) {
 }
 
 function handlePanMouseUp(_e: MouseEvent) {
-  if (!isPanToolActive || !isPanning) return;
+  if (!S.isPanToolActive || !S.isPanning) return;
   
-  isPanning = false;
-  map.getCanvas().style.cursor = 'grab';
+  S.isPanning = false;
+  S.map.getCanvas().style.cursor = 'grab';
 }
 
 
 /* ---------------- Pan Tool ---------------- */
 
-// Pan tool state
-let isPanning = false;
 
-/* ---------------- Rectangle Selection Tool ---------------- */
-
-// Rectangle selection state
-let isRectangleSelecting = false;
-let isRectangleUnselecting = false;
-let rectangleStartPoint: maplibregl.Point | null = null;
-let rectangleElement: HTMLDivElement | null = null;
-let originalDragPan: boolean | undefined;
-
-// Inject marching-ants CSS once (uniform speed)
-function ensureMarchingAntsStyles() {
-  if (document.getElementById('marching-ants-style')) return;
-
-  const css = `
-  :root {
-    --ants-size: 8px;        /* dash length */
-    --ants-thickness: 2px;   /* border thickness */
-    --ants-speed: 0.6s;      /* one dash per cycle */
-    --ants-a: #fff;          /* color A */
-    --ants-b: #000;          /* color B */
-    --ants-fill: rgba(59,130,246,0.10);
-    --ants-fill-unselect: rgba(239,68,68,0.10);
-  }
-
-  /* Animate only px on the moving axis; anchor the other axis with 0/100% */
-  @keyframes ants {
-    from {
-      background-position:
-        0 0,          /* top    */
-        0 100%,       /* bottom */
-        0 0,          /* left   */
-        100% 0;       /* right  */
-    }
-    to {
-      background-position:
-        var(--ants-size) 0,
-        var(--ants-size) 100%,
-        0 var(--ants-size),
-        100% var(--ants-size);
-    }
-  }
-
-  /* Animated stroke dash for SVG paths */
-  @keyframes stroke-ants {
-    from { stroke-dashoffset: 0; }
-    to { stroke-dashoffset: calc(var(--ants-size) * 2); }
-  }
-
-  .selection-rect {
-    position: absolute;
-    pointer-events: none;
-    z-index: 1000;
-    display: none;
-    box-sizing: border-box;
-
-    /* fill sits under the ants */
-    background-color: var(--ants-fill);
-
-    /* 4 edge layers */
-    background-image:
-      linear-gradient(90deg, var(--ants-a) 50%, var(--ants-b) 0), /* top */
-      linear-gradient(90deg, var(--ants-a) 50%, var(--ants-b) 0), /* bottom */
-      linear-gradient(0deg,  var(--ants-a) 50%, var(--ants-b) 0), /* left */
-      linear-gradient(0deg,  var(--ants-a) 50%, var(--ants-b) 0); /* right */
-
-    background-size:
-      var(--ants-size) var(--ants-thickness),
-      var(--ants-size) var(--ants-thickness),
-      var(--ants-thickness) var(--ants-size),
-      var(--ants-thickness) var(--ants-size);
-
-    background-repeat:
-      repeat-x, repeat-x, repeat-y, repeat-y;
-
-    /* Start positions match @keyframes 'from' so interpolation is px-only */
-    background-position:
-      0 0,
-      0 100%,
-      0 0,
-      100% 0;
-
-    animation: ants var(--ants-speed) linear infinite;
-  }
-
-  .selection-rect.unselect {
-    background-color: var(--ants-fill-unselect);
-    background-image:
-      linear-gradient(90deg, #ffffff 50%, #ef4444 0), /* top */
-      linear-gradient(90deg, #ffffff 50%, #ef4444 0), /* bottom */
-      linear-gradient(0deg,  #ffffff 50%, #ef4444 0), /* left */
-      linear-gradient(0deg,  #ffffff 50%, #ef4444 0); /* right */
-  }
-
-  /* Lasso path with animated marching ants - dual path approach */
-  .lasso-path {
-    stroke-width: var(--ants-thickness);
-    stroke-linejoin: round;
-    stroke-linecap: round;
-    fill: none;
-    stroke-dasharray: var(--ants-size), var(--ants-size);
-    animation: stroke-ants var(--ants-speed) linear infinite;
-  }
-
-  .lasso-path.select {
-    stroke: var(--ants-b);
-  }
-
-  .lasso-path.unselect {
-    stroke: #ef4444;
-  }
-
-  .lasso-path-bg {
-    stroke-width: var(--ants-thickness);
-    stroke-linejoin: round;
-    stroke-linecap: round;
-    fill: none;
-    animation: stroke-ants var(--ants-speed) linear infinite;
-    animation-direction: reverse;
-  }
-
-  .lasso-path-bg.select {
-    stroke: var(--ants-a);
-  }
-
-  .lasso-path-bg.unselect {
-    stroke: #ffffff;
-  }
-
-  .lasso-fill {
-    fill: var(--ants-fill);
-  }
-
-  .lasso-fill.unselect {
-    fill: var(--ants-fill-unselect);
-  }
-
-  /* Polygon selection styles */
-  .polygon-fill {
-    fill: var(--ants-fill);
-  }
-
-  .polygon-fill.unselect {
-    fill: var(--ants-fill-unselect);
-  }
-
-  .polygon-path {
-    stroke-width: var(--ants-thickness);
-    stroke-linejoin: round;
-    stroke-linecap: round;
-    fill: none;
-    stroke-dasharray: var(--ants-size), var(--ants-size);
-    animation: stroke-ants var(--ants-speed) linear infinite;
-  }
-
-  .polygon-path.select {
-    stroke: var(--ants-b);
-  }
-
-  .polygon-path.unselect {
-    stroke: #ef4444;
-  }
-
-  .polygon-path-bg {
-    stroke-width: var(--ants-thickness);
-    stroke-linejoin: round;
-    stroke-linecap: round;
-    fill: none;
-    animation: stroke-ants var(--ants-speed) linear infinite;
-    animation-direction: reverse;
-  }
-
-  .polygon-path-bg.select {
-    stroke: var(--ants-a);
-  }
-
-  .polygon-path-bg.unselect {
-    stroke: #ffffff;
-  }
-
-  /* Polygon closing indicator */
-  .polygon-closing-indicator {
-    fill: #ffffff;
-    stroke-width: 2px;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-  }
-
-  .polygon-closing-indicator.select {
-    stroke: #000000;
-  }
-
-  .polygon-closing-indicator.unselect {
-    stroke: #ef4444;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .selection-rect, .lasso-path, .polygon-path { animation-duration: 2s; }
-  }
-  `;
-
-  const style = document.createElement('style');
-  style.id = 'marching-ants-style';
-  style.textContent = css;
-  document.head.appendChild(style);
-}
-
-function createRectangleElement(): HTMLDivElement {
-  ensureMarchingAntsStyles();
-  const rect = document.createElement('div');
-  rect.className = 'selection-rect';
-  document.body.appendChild(rect);
-  return rect;
-}
-
-// Initialize rectangle element
-rectangleElement = createRectangleElement();
-
-// Rectangle selection mouse handlers
-function handleRectangleMouseDown(e: MouseEvent) {
-  // Only activate if we're in rectangle selection mode
-  if (currentSelectionMode !== 'select-rectangle') return;
-  
-  // Only activate on left click (select only), shift+left click (add), or alt+left click (remove)
-  if (e.button !== 0) return;
-  
-  // Prevent default behavior
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // Determine mode based on modifier keys
-  const isAddMode = e.shiftKey && !e.altKey;
-  const isRemoveMode = e.altKey && !e.shiftKey;
-  const isSelectOnlyMode = !e.shiftKey && !e.altKey;
-  
-  // Start rectangle selection/unselection
-  if (isRemoveMode) {
-    isRectangleUnselecting = true;
-  } else {
-    isRectangleSelecting = true;
-  }
-  
-  // Store start point in viewport coordinates for visual positioning
-  rectangleStartPoint = getViewportPoint(e);
-  
-  // Temporarily disable map drag pan
-  originalDragPan = map.dragPan.isEnabled();
-  map.dragPan.disable();
-  
-  // Show rectangle element with appropriate styling
-  if (rectangleElement) {
-    const viewportPoint = getViewportPoint(e);
-    rectangleElement.style.display = 'block';
-    rectangleElement.style.left = `${viewportPoint.x}px`;
-    rectangleElement.style.top = `${viewportPoint.y}px`;
-    rectangleElement.style.width = '0px';
-    rectangleElement.style.height = '0px';
-    
-    // Apply styling based on mode
-    if (isRemoveMode) {
-      rectangleElement.classList.add('unselect');
-    } else {
-      rectangleElement.classList.remove('unselect');
-    }
-  }
-  
-  // Change cursor to arrow for SELECT mode
-  map.getCanvas().style.cursor = 'default';
-}
-
-function handleRectangleMouseMove(e: MouseEvent) {
-  if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
-  
-  // Calculate rectangle dimensions for visual positioning (viewport coordinates)
-  const currentViewportPoint = getViewportPoint(e);
-  const left = Math.min(rectangleStartPoint.x, currentViewportPoint.x);
-  const top = Math.min(rectangleStartPoint.y, currentViewportPoint.y);
-  const width = Math.abs(currentViewportPoint.x - rectangleStartPoint.x);
-  const height = Math.abs(currentViewportPoint.y - rectangleStartPoint.y);
-  
-  // Update rectangle element
-  rectangleElement.style.left = `${left}px`;
-  rectangleElement.style.top = `${top}px`;
-  rectangleElement.style.width = `${width}px`;
-  rectangleElement.style.height = `${height}px`;
-}
-
-function handleRectangleMouseUp(e: MouseEvent) {
-  if (currentSelectionMode !== 'select-rectangle' || (!isRectangleSelecting && !isRectangleUnselecting) || !rectangleStartPoint || !rectangleElement) return;
-  
-  // Get current point in viewport coordinates
-  const currentViewportPoint = getViewportPoint(e);
-  
-  // Calculate rectangle dimensions in viewport coordinates
-  const viewportLeft = Math.min(rectangleStartPoint.x, currentViewportPoint.x);
-  const viewportTop = Math.min(rectangleStartPoint.y, currentViewportPoint.y);
-  const viewportWidth = Math.abs(currentViewportPoint.x - rectangleStartPoint.x);
-  const viewportHeight = Math.abs(currentViewportPoint.y - rectangleStartPoint.y);
-  
-  // Only process if rectangle has meaningful size
-  if (viewportWidth > 5 && viewportHeight > 5) {
-    // Convert viewport coordinates to map coordinates for selection logic
-    const canvas = map.getCanvas();
-    const rect = canvas.getBoundingClientRect();
-    
-    // Convert viewport coordinates to map container coordinates
-    const mapStartPoint = new maplibregl.Point(
-      rectangleStartPoint.x - rect.left,
-      rectangleStartPoint.y - rect.top
-    );
-    const mapCurrentPoint = new maplibregl.Point(
-      currentViewportPoint.x - rect.left,
-      currentViewportPoint.y - rect.top
-    );
-    
-    // Convert to geographic coordinates
-    const topLeft = map.unproject([mapStartPoint.x, mapStartPoint.y]);
-    const bottomRight = map.unproject([mapCurrentPoint.x, mapCurrentPoint.y]);
-    
-    // Create bounding box
-    const bbox: [number, number, number, number] = [
-      Math.min(topLeft.lng, bottomRight.lng),
-      Math.min(topLeft.lat, bottomRight.lat),
-      Math.max(topLeft.lng, bottomRight.lng),
-      Math.max(topLeft.lat, bottomRight.lat)
-    ];
-    
-    // Log coordinates to console
-    const mode = isRectangleUnselecting ? 'Unselect' : 'Select';
-    console.log(`Rectangle ${mode} Coordinates:`);
-    console.log('Viewport space:', { left: viewportLeft, top: viewportTop, width: viewportWidth, height: viewportHeight });
-    console.log('Map coordinates (bbox):', bbox);
-    console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
-    console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
-    
-    // Handle different selection modes
-    if (isRectangleUnselecting) {
-      // Remove parcels from selection
-      unselectParcelsInBoundingBox(bbox);
-    } else {
-      // Check if this is select-only mode (no modifiers)
-      const isSelectOnlyMode = !e.shiftKey && !e.altKey;
-      if (isSelectOnlyMode) {
-        // Select only these parcels, unselect all others
-        clearAllSelections();
-        selectParcelsInBoundingBox(bbox);
-      } else {
-        // Add parcels to selection
-        selectParcelsInBoundingBox(bbox);
-      }
-    }
-  }
-  
-  // Clean up
-  isRectangleSelecting = false;
-  isRectangleUnselecting = false;
-  rectangleStartPoint = null;
-  
-  // Hide rectangle element
-  if (rectangleElement) {
-    rectangleElement.style.display = 'none';
-    rectangleElement.classList.remove('unselect');
-  }
-  
-  // Restore map drag pan
-  if (originalDragPan !== undefined) {
-    if (originalDragPan) {
-      map.dragPan.enable();
-    }
-    originalDragPan = undefined;
-  }
-  
-  // Restore cursor
-  updateCursor();
-}
-
-// Function to select parcels within a bounding box
-function selectParcelsInBoundingBox(bbox: [number, number, number, number]) {
-  if (!currentGeoJSON) {
-    console.log('No data loaded to select from');
-    return;
-  }
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  let selectedCount = 0;
-  
-  // Check each feature to see if it intersects with the bounding box
-  for (const feature of currentGeoJSON.features) {
-    if (!feature.geometry || !feature.id) continue;
-    
-    // Check if the feature's bounding box intersects with our selection box
-    if (featureIntersectsBbox(feature, bbox)) {
-      const parcelId = getParcelId(feature);
-      selectedParcels.add(parcelId);
-      
-      // Set feature state for highlighting
-      map.setFeatureState(
-        { source: sourceId, id: feature.id },
-        { selected: true }
-      );
-      
-      selectedCount++;
-    }
-  }
-  
-  console.log(`Selected ${selectedCount} parcels within the rectangle`);
-  
-  // Update the selection controls UI
-  updateSelectionControls();
-}
-
-// Function to unselect parcels within a bounding box
-function unselectParcelsInBoundingBox(bbox: [number, number, number, number]) {
-  if (!currentGeoJSON) {
-    console.log('No data loaded to unselect from');
-    return;
-  }
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  let unselectedCount = 0;
-  
-  // Check each feature to see if it intersects with the bounding box
-  for (const feature of currentGeoJSON.features) {
-    if (!feature.geometry || !feature.id) continue;
-    
-    // Check if the feature's bounding box intersects with our selection box
-    if (featureIntersectsBbox(feature, bbox)) {
-      const parcelId = getParcelId(feature);
-      
-      // Only unselect if it was previously selected
-      if (selectedParcels.has(parcelId)) {
-        selectedParcels.delete(parcelId);
-        
-        // Set feature state to remove highlighting
-        map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: false }
-        );
-        
-        unselectedCount++;
-      }
-    }
-  }
-  
-  console.log(`Unselected ${unselectedCount} parcels within the rectangle`);
-  
-  // Update the selection controls UI
-  updateSelectionControls();
-}
-
-// Helper function to check if a feature intersects with a bounding box
-function featureIntersectsBbox(feature: GeoJSON.Feature, bbox: [number, number, number, number]): boolean {
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  
-  if (feature.geometry.type === 'Polygon') {
-    return polygonIntersectsBbox(feature.geometry.coordinates, bbox);
-  } else if (feature.geometry.type === 'MultiPolygon') {
-    return feature.geometry.coordinates.some(polygon => 
-      polygonIntersectsBbox(polygon, bbox)
-    );
-  }
-  
-  return false;
-}
-
-// Helper function to check if a polygon intersects with a bounding box
-function polygonIntersectsBbox(polygon: number[][][], bbox: [number, number, number, number]): boolean {
-  const [minLng, minLat, maxLng, maxLat] = bbox;
-  
-  // Check if any point of the polygon is inside the bbox
-  for (const ring of polygon) {
-    for (const coord of ring) {
-      const [lng, lat] = coord;
-      if (lng >= minLng && lng <= maxLng && lat >= minLat && lat <= maxLat) {
-        return true;
-      }
-    }
-  }
-  
-  // Also check if the bbox is completely inside the polygon
-  // This handles cases where the selection rectangle is smaller than the polygon
-  const bboxCorners = [
-    [minLng, minLat],
-    [maxLng, minLat],
-    [maxLng, maxLat],
-    [minLng, maxLat]
-  ];
-  
-  for (const corner of bboxCorners) {
-    if (pointInPolygon(corner, polygon[0])) {
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-// Point-in-polygon test using ray casting algorithm
-function pointInPolygon(point: number[], polygon: number[][]): boolean {
-  const [x, y] = point;
-  let inside = false;
-  
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const [xi, yi] = polygon[i];
-    const [xj, yj] = polygon[j];
-    
-    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) {
-      inside = !inside;
-    }
-  }
-  
-  return inside;
-}
-
-function applyCategorySelection (category: string, shouldSelect: boolean, sourceId: string) {
-  console.log(`Category = ${category} shouldSelect = ${shouldSelect} sourceId = ${sourceId}`);
-  if (shouldSelect) {
-    selectedLegendItems.add(category);
-  } else {
-    selectedLegendItems.delete(category);
-  }
-  if (!currentGeoJSON) return;
-  for (const feature of currentGeoJSON.features) {
-    const value = feature.properties?.[currentField!];
-    if (value != null && value !== '' && value !== undefined) {
-      const featureCategory = String(value);
-      if (featureCategory === category && feature.id !== undefined) {
-        const parcelId = getParcelId(feature);
-        if (shouldSelect) {
-          selectedParcels.add(parcelId);
-        } else {
-          selectedParcels.delete(parcelId);
-        }
-        map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: shouldSelect }
-        );
-      }
-    }
-  }
-};
-
-function applyRangeSelection (
-  rangeKey: string,
-  range: { min: number; max: number },
-  shouldSelect: boolean,
-  sourceId: string
-) {
-  if (shouldSelect) {
-    selectedLegendItems.add(rangeKey);
-  } else {
-    selectedLegendItems.delete(rangeKey);
-  }
-  if (!currentGeoJSON) return;
-  for (const feature of currentGeoJSON.features) {
-    const value = Number(feature.properties?.[currentField!]);
-    if (Number.isFinite(value) && feature.id !== undefined) {
-      if (value >= range.min && value <= range.max) {
-        const parcelId = getParcelId(feature);
-        if (shouldSelect) {
-          selectedParcels.add(parcelId);
-        } else {
-          selectedParcels.delete(parcelId);
-        }
-        map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: shouldSelect }
-        );
-      }
-    }
-  }
-};
-
-// Also handle mouse events on the document to catch mouse up outside the map
-document.addEventListener('mouseup', handleRectangleMouseUp);
-document.addEventListener('mouseup', handleLassoMouseUp);
+/* ---------------- Selection (see ./selection.ts) ---------------- */
 
 
 /* ---------------- UI elements ---------------- */
@@ -809,7 +277,7 @@ updateBasemapButtonStates();
 
 // Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
-btnZoomTo.onclick = () => { if (currentGeoJSON) fitToData(currentGeoJSON); };
+btnZoomTo.onclick = () => { if (S.currentGeoJSON) fitToData(S.currentGeoJSON); };
 if (addLayerFromStoreButton) {
   addLayerFromStoreButton.addEventListener('click', () => {
     openAddLayerModal();
@@ -932,7 +400,7 @@ function createEyeButton(isHidden: boolean, title: string) {
 const btnQuality = document.createElement('button');
 btnQuality.id = 'btn-quality';
 btnQuality.textContent = 'Quality: Fast';
-btnQuality.onclick = () => setQuality(qualityMode === 'high' ? 'fast' : 'high');
+btnQuality.onclick = () => setQuality(S.qualityMode === 'high' ? 'fast' : 'high');
 if (settingsOtherActions) {
   settingsOtherActions.prepend(btnQuality);
 } else {
@@ -1042,279 +510,10 @@ const FAST_PR = window.devicePixelRatio;                  // normal speed
 const HIGH_PR = Math.min(3, window.devicePixelRatio * 2); // 2–3x is a good HQ target
 
 
-/* ---------------- State ---------------- */
-
-type FilterFieldType = 'numeric' | 'categorical';
-type FilterMode = 'none' | 'show' | 'hide';
-type FilterActionMode = 'none' | 'select' | 'show' | 'hide';
-type NumericFilterOperator = 'lt' | 'gt' | 'lte' | 'gte' | 'eq' | 'neq';
-type CategoricalFilterOperator = 'eq' | 'neq' | 'any' | 'not-any';
-type FilterOperator = NumericFilterOperator | CategoricalFilterOperator;
-
-type FilterRule = {
-  id: string;
-  field: string | null;
-  fieldType: FilterFieldType | null;
-  operator: FilterOperator | null;
-  value: number | string | string[] | null;
-  active: boolean;
-};
-
-type SavedFilterEntry = {
-  name: string;
-  filters: FilterRule[];
-  filterInvert: boolean;
-};
-
-type ParcelFieldPatch = {
-  original: any;
-  current: any;
-};
-
-type ParcelPatchMap = Map<string, Map<string, ParcelFieldPatch>>;
-
-type LayerState = {
-  id: string;
-  name: string;
-  dataStoreId: string;
-  sourceId: string;
-  layerId: string;
-  errorLayerId: string;
-  visible: boolean;
-  geojson: GeoJSON.FeatureCollection | null;
-  field: string | null;
-  fieldType: 'numeric' | 'categorical' | null;
-  stats: { min: number; max: number } | null;
-  normalizationMode: 'asis' | 'perLand' | 'perBuilding';
-  colorMode: ColorMode;
-  categoricalColorMode: CategoricalColorMode;
-  singleColorValue: string;
-  ramp: string;
-  colorDomain: { lo: number; hi: number; label: string } | null;
-  colorBreaks: number[] | null;
-  cachedExtrusionSettings: { multiplier: number; unit: string } | null;
-  chosenNumericFields: string[];
-  chosenCategoricalFields: string[];
-  landSizeField: string | null;
-  landSizeUnitLabel: string | null;
-  bldgSizeField: string | null;
-  bldgSizeUnitLabel: string | null;
-  hiddenLegendItems: Set<string>;
-  selectedLegendItems: Set<string>;
-  selectedParcels: Set<string>;
-  highlightColor: string;
-  legendSortField: 'name' | 'count' | null;
-  legendSortDirection: 'asc' | 'desc';
-  customColors: Map<string, string>;
-  opacity: number;
-  is3DMode: boolean;
-  filters: FilterRule[];
-  filterMode: FilterMode;
-  filterActionMode: FilterActionMode;
-  filterInvert: boolean;
-  parcelPatchMap: ParcelPatchMap;
-};
-
-type DataStore = {
-  id: string;
-  name: string;
-  file: File;
-  asyncBuffer: AsyncBuffer;
-  geojson: GeoJSON.FeatureCollection | null;
-  numericFieldsFromSchema: string[];
-  categoricalFieldsFromSchema: string[];
-  chosenNumericFields: string[];
-  chosenCategoricalFields: string[];
-  landSizeField: string | null;
-  landSizeUnitLabel: string | null;
-  bldgSizeField: string | null;
-  bldgSizeUnitLabel: string | null;
-};
-
-const layers = new Map<string, LayerState>();
-const layerOrder: string[] = [];
-let currentLayerId: string | null = null;
-let layerCounter = 0;
-const dataStores = new Map<string, DataStore>();
-const dataStoreOrder: string[] = [];
-let currentDataStoreId: string | null = null;
-
-
-let currentGeoJSON: GeoJSON.FeatureCollection | null = null;
-let currentField: string | null = null;
-let currentFieldType: 'numeric' | 'categorical' | null = null;
-let currentStats: { min: number; max: number } | null = null;
-let parcelPatchMap: ParcelPatchMap = new Map();
-
-let normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
-type ColorMode = 'continuous' | 'quantiles';
-let colorMode: ColorMode = 'quantiles';
-
-// For categorical fields
-type CategoricalColorMode = 'random' | 'single' | 'colorRamp';
-let categoricalColorMode: CategoricalColorMode = 'random';
-let singleColorValue: string = '#3b82f6'; // Default blue color
-
-// For continuous mode we may still show a domain label; optional
-let colorDomain: { lo: number; hi: number; label: string } | null = null;
-
-// For quantiles: thresholds between classes
-let colorBreaks: number[] | null = null;
-
-// 3D extrusion settings
-let is3DMode = false; // Default to 2D mode
-let cachedExtrusionSettings: { multiplier: number; unit: string } | null = null;
-
-// staged loading
-let lastFile: File | null = null;
-let lastAsyncBuffer: AsyncBuffer | null = null;
-let lastNumericFieldsFromSchema: string[] = [];
-let lastCategoricalFieldsFromSchema: string[] = [];
-let chosenNumericFields: string[] = [];
-let chosenCategoricalFields: string[] = [];
-let cancelRequested = false;
-
-// size identification
-let landSizeField: string | null = null;
-let landSizeUnitLabel: string | null = null;
-let bldgSizeField: string | null = null;
-let bldgSizeUnitLabel: string | null = null;
-
-// Welcome overlay (hide UI until a file is chosen)
-let welcomeEl: HTMLDivElement | null = null;
-
-// Non-blocking "Geometry is rendering..." toast
-let renderToastEl: HTMLDivElement | null = null;
-let dotsTimer: number | null = null;
-
-type QualityMode = 'fast' | 'high';
-let qualityMode: QualityMode = 'fast';
-
-
-// --- popup state ---
-let activePopup: maplibregl.Popup | null = null;
-let lastPicked: { props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string } | null = null;
-
-type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
-
-let _updTimer: number | null = null;
-let _pendingMode: UpdateMode = 'applyOnly';
-let _pendingRefreshLegend = false;
-
-type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
-
-// Window state
-let isLayersMinimized = false;
-let isSettingsMenuMinimized = false;
-let isPaintMinimized = false;
-let isLegendVisible = true;  // Start with legend visible
-let isLegendMinimized = false;
-let isStatisticsMinimized = true;
-let isScatterplotMinimized = true;
-let isFiltersMinimized = true;
-let isLandScheduleMinimized = true;
-let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
-
-// Statistics state
-type SubjectMode = 'all' | 'visible' | 'selected' | 'category' | 'filtered';
-let statsSubjectMode: SubjectMode = 'all';
-let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
-let statsCategoryField: string | null = null;
-let statsCategoryValueIndices: string[] = [];
-let statsField: string | null = null;
-let statsFieldType: 'numeric' | 'categorical' | null = null;
-let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
-let statsValuesCache: number[] = [];
-let statsOverflowPct = { min: 5, max: 95 };
-let statsLayerId: string | null = null;
-let statsFilteredName: string | null = null;
-
-// Scatterplot state
-let scatterSubjectMode: SubjectMode = 'all';
-let scatterCategoryValueMap: Array<{ label: string; value: unknown }> = [];
-let scatterCategoryField: string | null = null;
-let scatterCategoryValueIndices: string[] = [];
-let scatterXField: string | null = null;
-let scatterYField: string | null = null;
-let scatterRangeIsCustom = false;
-let scatterDefaultRange = { xMin: null as number | null, xMax: null as number | null, yMin: null as number | null, yMax: null as number | null };
-let isUpdatingScatterRangeInputs = false;
-let scatterLayerId: string | null = null;
-let scatterPlotRefreshTimer: number | null = null;
-let scatterFilteredName: string | null = null;
-
-type SubjectSelectorControls = {
-  buttons: HTMLButtonElement[];
-  categoryControls: HTMLDivElement;
-  categoryFieldSelect: HTMLSelectElement;
-  categoryValueSelect: HTMLSelectElement;
-  filterControls: HTMLDivElement;
-  filterSelect: HTMLSelectElement;
-  filterEmptyState: HTMLDivElement;
-};
-
-type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
-type LandScheduleBaseLot = {
-  min: number | null;
-  max: number | null;
-  value: number | null;
-  per: LandSchedulePerUnit | null;
-};
-
-const LAND_SCHEDULE_DEFAULT_KEY = '__default__';
-const LAND_SCHEDULE_DEFAULT_LABEL = 'Default Schedule';
-const landScheduleStore = new Map<string, Map<string, LandScheduleBaseLot>>();
-let currentLandScheduleField: string | null = null;
-let currentLandScheduleValue: string | null = null;
-let isUpdatingLandScheduleUI = false;
-
-// Selection state
-let selectedLegendItems = new Set<string>(); // Track which categories/ranges are selected
-
-// New parcel selection system
-let selectedParcels = new Set<string>(); // Track selected parcel IDs
-let highlightColor = '#FFFF00'; // Default bright yellow
-let selectionControlsPanel: HTMLDivElement | null = null;
-
-// Sorting state
-let legendSortField: 'name' | 'count' | null = 'count';
-let legendSortDirection: 'asc' | 'desc' = 'desc';
-
-// Drag state
-let isDragging = false;
-let dragTarget: HTMLElement | null = null;
-let dragOffset = { x: 0, y: 0 };
-
-// Filters state
-let filters: FilterRule[] = [];
-let filterMode: FilterMode = 'none';
-let filterActionMode: FilterActionMode = 'none';
-let filterInvert = false;
-const savedFiltersStore = new Map<string, SavedFilterEntry>();
-let savedFiltersPanelMode: 'none' | 'save' | 'load' = 'none';
-let savedFilterMatchName: string | null = null;
-(window as any).savedFiltersStore = savedFiltersStore;
-
-const NUMERIC_FILTER_OPERATORS: Array<{ value: NumericFilterOperator; label: string }> = [
-  { value: 'lt', label: '<' },
-  { value: 'gt', label: '>' },
-  { value: 'lte', label: '<=' },
-  { value: 'gte', label: '>=' },
-  { value: 'eq', label: '=' },
-  { value: 'neq', label: 'not =' }
-];
-
-const CATEGORICAL_FILTER_OPERATORS: Array<{ value: CategoricalFilterOperator; label: string }> = [
-  { value: 'eq', label: '=' },
-  { value: 'neq', label: 'not =' },
-  { value: 'any', label: 'any of...' },
-  { value: 'not-any', label: 'not any of...' }
-];
-
 /* ---------------- FUNCTIONS ----------------- */
 
 function getCurrentLayer(): LayerState | null {
-  return currentLayerId ? layers.get(currentLayerId) ?? null : null;
+  return S.currentLayerId ? S.layers.get(S.currentLayerId) ?? null : null;
 }
 
 function getCurrentLayerIds() {
@@ -1325,158 +524,6 @@ function getCurrentLayerIds() {
 
 function getCurrentSourceId() {
   return getCurrentLayerIds()?.sourceId ?? null;
-}
-
-function cloneFilters(source: FilterRule[]): FilterRule[] {
-  return source.map(filter => ({
-    ...filter,
-    value: Array.isArray(filter.value) ? [...filter.value] : filter.value
-  }));
-}
-
-function serializeFiltersForComparison(source: FilterRule[], invert: boolean): string {
-  return JSON.stringify({
-    invert,
-    rules: source.map(rule => ({
-      field: rule.field,
-      fieldType: rule.fieldType,
-      operator: rule.operator,
-      value: Array.isArray(rule.value) ? [...rule.value] : rule.value,
-      active: rule.active
-    }))
-  });
-}
-
-function getMatchingSavedFilterName(): string | null {
-  const current = serializeFiltersForComparison(filters, filterInvert);
-  for (const [name, entry] of savedFiltersStore.entries()) {
-    const candidate = serializeFiltersForComparison(entry.filters, entry.filterInvert);
-    if (candidate === current) return name;
-  }
-  return null;
-}
-
-function renderSavedFiltersOptions() {
-  if (!filtersLoadSelect) return;
-  filtersLoadSelect.replaceChildren();
-  const placeholder = new Option('Choose a saved filter', '');
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  filtersLoadSelect.appendChild(placeholder);
-  savedFiltersStore.forEach((entry, name) => {
-    filtersLoadSelect.appendChild(new Option(entry.name, name));
-  });
-
-  if (savedFilterMatchName) {
-    filtersLoadSelect.value = savedFilterMatchName;
-  }
-
-  filtersLoadSelect.disabled = savedFiltersStore.size === 0;
-}
-
-function setSavedFiltersPanelMode(nextMode: 'none' | 'save' | 'load') {
-  savedFiltersPanelMode = nextMode;
-  updateSavedFiltersUIState();
-}
-
-function updateSavedFiltersUIState() {
-  const hasConditions = filters.length > 0;
-  const hasSaved = savedFiltersStore.size > 0;
-  if (!hasConditions && savedFiltersPanelMode === 'save') {
-    savedFiltersPanelMode = 'none';
-  }
-  if (!hasSaved && savedFiltersPanelMode === 'load') {
-    savedFiltersPanelMode = 'none';
-  }
-
-  savedFilterMatchName = getMatchingSavedFilterName();
-
-  if (filtersSaveToggle) {
-    filtersSaveToggle.disabled = !hasConditions;
-    const isActive = savedFiltersPanelMode === 'save';
-    filtersSaveToggle.classList.toggle('active', isActive);
-    filtersSaveToggle.setAttribute('aria-selected', String(isActive));
-    filtersSaveToggle.tabIndex = isActive ? 0 : -1;
-  }
-  if (filtersLoadToggle) {
-    filtersLoadToggle.disabled = !hasSaved;
-    const isActive = savedFiltersPanelMode === 'load';
-    filtersLoadToggle.classList.toggle('active', isActive);
-    filtersLoadToggle.setAttribute('aria-selected', String(isActive));
-    filtersLoadToggle.tabIndex = isActive ? 0 : -1;
-  }
-
-  const showSave = savedFiltersPanelMode === 'save' && hasConditions;
-  const showLoad = savedFiltersPanelMode === 'load' && hasSaved;
-  const hasMatch = Boolean(savedFilterMatchName);
-
-  if (filtersSavePanel) {
-    filtersSavePanel.style.display = showSave ? 'grid' : 'none';
-  }
-  if (filtersLoadPanel) {
-    filtersLoadPanel.style.display = showLoad ? 'grid' : 'none';
-  }
-  if (filtersSaveControls) {
-    filtersSaveControls.style.display = showSave && !hasMatch ? 'grid' : 'none';
-  }
-  if (filtersSavedStatus) {
-    filtersSavedStatus.style.display = showSave && hasMatch ? 'block' : 'none';
-    if (showSave && hasMatch) {
-      filtersSavedStatus.textContent = `Saved as: "${savedFilterMatchName}"`;
-    }
-  }
-  if (filtersLoadControls) {
-    filtersLoadControls.style.display = showLoad ? 'grid' : 'none';
-  }
-
-  if (filtersSaveConfirmButton) {
-    const hasName = Boolean(filtersSaveNameInput?.value.trim());
-    filtersSaveConfirmButton.disabled = !showSave || !hasName;
-  }
-
-  if (showLoad) {
-    renderSavedFiltersOptions();
-  }
-
-  statsFilteredName = renderSubjectFilterOptions(statsSubjectControls, statsFilteredName);
-  scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, scatterFilteredName);
-  if (statsSubjectMode === 'filtered') {
-    updateStatisticsSectionVisibility();
-    updateStatisticsResults();
-  }
-  if (scatterSubjectMode === 'filtered') {
-    scheduleScatterPlotRefresh();
-  }
-}
-
-function saveCurrentFilters(name: string) {
-  const trimmedName = name.trim();
-  if (!trimmedName) return;
-  if (savedFiltersStore.has(trimmedName)) {
-    const overwrite = window.confirm('You already have a filter with this name. Overwrite? Yes/Cancel');
-    if (!overwrite) return;
-  }
-  savedFiltersStore.set(trimmedName, {
-    name: trimmedName,
-    filters: cloneFilters(filters),
-    filterInvert
-  });
-  savedFilterMatchName = trimmedName;
-  updateSavedFiltersUIState();
-}
-
-function applySavedFilter(name: string) {
-  const entry = savedFiltersStore.get(name);
-  if (!entry) return;
-  filters = cloneFilters(entry.filters);
-  filterInvert = entry.filterInvert;
-  if (filtersInvertToggle) {
-    filtersInvertToggle.checked = filterInvert;
-  }
-  renderFiltersList();
-  updateFiltersUIState();
-  applyActiveFilterAction();
-  persistCurrentLayerState();
 }
 
 function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore {
@@ -1503,7 +550,7 @@ function renderDataStoreList() {
   if (!dataStoreList) return;
   dataStoreList.replaceChildren();
 
-  if (dataStoreOrder.length === 0) {
+  if (S.dataStoreOrder.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'muted';
     empty.textContent = 'No data sources loaded yet.';
@@ -1511,8 +558,8 @@ function renderDataStoreList() {
     return;
   }
 
-  dataStoreOrder.forEach(storeId => {
-    const store = dataStores.get(storeId);
+  S.dataStoreOrder.forEach(storeId => {
+    const store = S.dataStores.get(storeId);
     if (!store) return;
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -1528,17 +575,17 @@ function renderDataStoreList() {
 }
 
 function getLayerPanelName(layerId: string): string {
-  const layer = layers.get(layerId);
+  const layer = S.layers.get(layerId);
   if (!layer) return '';
-  const index = layerOrder.indexOf(layerId);
+  const index = S.layerOrder.indexOf(layerId);
   return layer.field ?? `layer ${index + 1}`;
 }
 
 function getLayerSelectLabel(layerId: string): string {
-  const layer = layers.get(layerId);
+  const layer = S.layers.get(layerId);
   if (!layer) return '';
   const baseName = getLayerPanelName(layerId);
-  const store = dataStores.get(layer.dataStoreId);
+  const store = S.dataStores.get(layer.dataStoreId);
   const sourceLabel = store?.file?.name ?? store?.name ?? 'Unknown source';
   return `${baseName} (${sourceLabel})`;
 }
@@ -1554,21 +601,21 @@ function renderLayerSelectOptions(
   placeholder.selected = true;
   select.appendChild(placeholder);
 
-  if (layerOrder.length === 0) {
+  if (S.layerOrder.length === 0) {
     select.disabled = true;
     return null;
   }
 
-  layerOrder.forEach(layerId => {
+  S.layerOrder.forEach(layerId => {
     select.appendChild(new Option(getLayerSelectLabel(layerId), layerId));
   });
 
   select.disabled = false;
-  if (selectedId && layers.has(selectedId)) {
+  if (selectedId && S.layers.has(selectedId)) {
     select.value = selectedId;
     return selectedId;
   }
-  const fallback = currentLayerId ?? layerOrder[0] ?? null;
+  const fallback = S.currentLayerId ?? S.layerOrder[0] ?? null;
   if (fallback) {
     select.value = fallback;
     return fallback;
@@ -1577,15 +624,15 @@ function renderLayerSelectOptions(
 }
 
 function getStatsLayer(): LayerState | null {
-  return statsLayerId ? layers.get(statsLayerId) ?? null : null;
+  return S.statsLayerId ? S.layers.get(S.statsLayerId) ?? null : null;
 }
 
 function getScatterLayer(): LayerState | null {
-  return scatterLayerId ? layers.get(scatterLayerId) ?? null : null;
+  return S.scatterLayerId ? S.layers.get(S.scatterLayerId) ?? null : null;
 }
 
 function getLayerDataStore(layer: LayerState | null): DataStore | null {
-  return layer ? dataStores.get(layer.dataStoreId) ?? null : null;
+  return layer ? S.dataStores.get(layer.dataStoreId) ?? null : null;
 }
 
 function getLayerGeoJSON(layer: LayerState | null): GeoJSON.FeatureCollection | null {
@@ -1598,12 +645,12 @@ function getScatterDataStore(): DataStore | null {
 
 function renderStatsLayerOptions() {
   if (!statsLayerSelect) return;
-  statsLayerId = renderLayerSelectOptions(statsLayerSelect, statsLayerId, 'Choose a layer');
+  S.statsLayerId = renderLayerSelectOptions(statsLayerSelect, S.statsLayerId, 'Choose a layer');
 }
 
 function renderScatterLayerOptions() {
   if (!scatterLayerSelect) return;
-  scatterLayerId = renderLayerSelectOptions(scatterLayerSelect, scatterLayerId, 'Choose a layer');
+  S.scatterLayerId = renderLayerSelectOptions(scatterLayerSelect, S.scatterLayerId, 'Choose a layer');
 }
 
 function openAddLayerModal() {
@@ -1618,8 +665,8 @@ function closeAddLayerModal() {
 }
 
 function createLayerState(name: string, dataStoreId: string): LayerState {
-  layerCounter += 1;
-  const suffix = `layer-${layerCounter}`;
+  S.layerCounter += 1;
+  const suffix = `layer-${S.layerCounter}`;
   return {
     id: suffix,
     name,
@@ -1666,114 +713,114 @@ function createLayerState(name: string, dataStoreId: string): LayerState {
 function persistCurrentLayerState() {
   const layer = getCurrentLayer();
   if (!layer) return;
-  layer.geojson = currentGeoJSON;
-  layer.field = currentField;
-  layer.fieldType = currentFieldType;
-  layer.stats = currentStats;
-  layer.normalizationMode = normalizationMode;
-  layer.colorMode = colorMode;
-  layer.categoricalColorMode = categoricalColorMode;
-  layer.singleColorValue = singleColorValue;
+  layer.geojson = S.currentGeoJSON;
+  layer.field = S.currentField;
+  layer.fieldType = S.currentFieldType;
+  layer.stats = S.currentStats;
+  layer.normalizationMode = S.normalizationMode;
+  layer.colorMode = S.colorMode;
+  layer.categoricalColorMode = S.categoricalColorMode;
+  layer.singleColorValue = S.singleColorValue;
   layer.ramp = rampSelect?.value ?? layer.ramp;
-  layer.colorDomain = colorDomain;
-  layer.colorBreaks = colorBreaks;
-  layer.cachedExtrusionSettings = cachedExtrusionSettings;
-  layer.chosenNumericFields = [...chosenNumericFields];
-  layer.chosenCategoricalFields = [...chosenCategoricalFields];
-  layer.landSizeField = landSizeField;
-  layer.landSizeUnitLabel = landSizeUnitLabel;
-  layer.bldgSizeField = bldgSizeField;
-  layer.bldgSizeUnitLabel = bldgSizeUnitLabel;
-  layer.hiddenLegendItems = hiddenLegendItems;
-  layer.selectedLegendItems = selectedLegendItems;
-  layer.selectedParcels = selectedParcels;
-  layer.highlightColor = highlightColor;
-  layer.legendSortField = legendSortField;
-  layer.legendSortDirection = legendSortDirection;
-  layer.customColors = customColors;
+  layer.colorDomain = S.colorDomain;
+  layer.colorBreaks = S.colorBreaks;
+  layer.cachedExtrusionSettings = S.cachedExtrusionSettings;
+  layer.chosenNumericFields = [...S.chosenNumericFields];
+  layer.chosenCategoricalFields = [...S.chosenCategoricalFields];
+  layer.landSizeField = S.landSizeField;
+  layer.landSizeUnitLabel = S.landSizeUnitLabel;
+  layer.bldgSizeField = S.bldgSizeField;
+  layer.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
+  layer.hiddenLegendItems = S.hiddenLegendItems;
+  layer.selectedLegendItems = S.selectedLegendItems;
+  layer.selectedParcels = S.selectedParcels;
+  layer.highlightColor = S.highlightColor;
+  layer.legendSortField = S.legendSortField;
+  layer.legendSortDirection = S.legendSortDirection;
+  layer.customColors = S.customColors;
   layer.opacity = parseFloat(opacityInput.value);
-  layer.is3DMode = is3DMode;
-  layer.filters = cloneFilters(filters);
-  layer.filterMode = filterMode;
-  layer.filterActionMode = filterActionMode;
-  layer.filterInvert = filterInvert;
-  layer.parcelPatchMap = parcelPatchMap;
+  layer.is3DMode = S.is3DMode;
+  layer.filters = cloneFilters(S.filters);
+  layer.filterMode = S.filterMode;
+  layer.filterActionMode = S.filterActionMode;
+  layer.filterInvert = S.filterInvert;
+  layer.parcelPatchMap = S.parcelPatchMap;
 }
 
 function applyLayerState(layer: LayerState) {
-  currentGeoJSON = layer.geojson;
-  currentField = layer.field;
-  currentFieldType = layer.fieldType;
-  currentStats = layer.stats;
-  normalizationMode = layer.normalizationMode;
-  colorMode = layer.colorMode;
-  categoricalColorMode = layer.categoricalColorMode;
-  singleColorValue = layer.singleColorValue;
-  colorDomain = layer.colorDomain;
-  colorBreaks = layer.colorBreaks;
-  cachedExtrusionSettings = layer.cachedExtrusionSettings;
-  chosenNumericFields = [...layer.chosenNumericFields];
-  chosenCategoricalFields = [...layer.chosenCategoricalFields];
-  landSizeField = layer.landSizeField;
-  landSizeUnitLabel = layer.landSizeUnitLabel;
-  bldgSizeField = layer.bldgSizeField;
-  bldgSizeUnitLabel = layer.bldgSizeUnitLabel;
-  hiddenLegendItems = layer.hiddenLegendItems;
-  selectedLegendItems = layer.selectedLegendItems;
-  selectedParcels = layer.selectedParcels;
-  highlightColor = layer.highlightColor;
-  legendSortField = layer.legendSortField;
-  legendSortDirection = layer.legendSortDirection;
-  customColors = layer.customColors;
+  S.currentGeoJSON = layer.geojson;
+  S.currentField = layer.field;
+  S.currentFieldType = layer.fieldType;
+  S.currentStats = layer.stats;
+  S.normalizationMode = layer.normalizationMode;
+  S.colorMode = layer.colorMode;
+  S.categoricalColorMode = layer.categoricalColorMode;
+  S.singleColorValue = layer.singleColorValue;
+  S.colorDomain = layer.colorDomain;
+  S.colorBreaks = layer.colorBreaks;
+  S.cachedExtrusionSettings = layer.cachedExtrusionSettings;
+  S.chosenNumericFields = [...layer.chosenNumericFields];
+  S.chosenCategoricalFields = [...layer.chosenCategoricalFields];
+  S.landSizeField = layer.landSizeField;
+  S.landSizeUnitLabel = layer.landSizeUnitLabel;
+  S.bldgSizeField = layer.bldgSizeField;
+  S.bldgSizeUnitLabel = layer.bldgSizeUnitLabel;
+  S.hiddenLegendItems = layer.hiddenLegendItems;
+  S.selectedLegendItems = layer.selectedLegendItems;
+  S.selectedParcels = layer.selectedParcels;
+  S.highlightColor = layer.highlightColor;
+  S.legendSortField = layer.legendSortField;
+  S.legendSortDirection = layer.legendSortDirection;
+  S.customColors = layer.customColors;
   opacityInput.value = String(layer.opacity);
   if (opacityOut) opacityOut.value = Number(layer.opacity).toFixed(2);
-  is3DMode = layer.is3DMode;
-  filters = cloneFilters(layer.filters ?? []);
-  parcelPatchMap = layer.parcelPatchMap ?? new Map();
-  filterMode = layer.filterMode ?? 'none';
-  filterActionMode = layer.filterActionMode ?? 'none';
-  filterInvert = layer.filterInvert ?? false;
+  S.is3DMode = layer.is3DMode;
+  S.filters = cloneFilters(layer.filters ?? []);
+  S.parcelPatchMap = layer.parcelPatchMap ?? new Map();
+  S.filterMode = layer.filterMode ?? 'none';
+  S.filterActionMode = layer.filterActionMode ?? 'none';
+  S.filterInvert = layer.filterInvert ?? false;
   if (filtersInvertToggle) {
-    filtersInvertToggle.checked = filterInvert;
+    filtersInvertToggle.checked = S.filterInvert;
   }
-  currentDataStoreId = layer.dataStoreId;
-  const store = dataStores.get(layer.dataStoreId);
+  S.currentDataStoreId = layer.dataStoreId;
+  const store = S.dataStores.get(layer.dataStoreId);
   if (store) {
-    lastFile = store.file;
-    lastAsyncBuffer = store.asyncBuffer;
-    lastNumericFieldsFromSchema = [...store.numericFieldsFromSchema];
-    lastCategoricalFieldsFromSchema = [...store.categoricalFieldsFromSchema];
+    S.lastFile = store.file;
+    S.lastAsyncBuffer = store.asyncBuffer;
+    S.lastNumericFieldsFromSchema = [...store.numericFieldsFromSchema];
+    S.lastCategoricalFieldsFromSchema = [...store.categoricalFieldsFromSchema];
   }
 
-  setSizeState(bldgSizeField, bldgSizeUnitLabel, landSizeField, landSizeUnitLabel);
+  setSizeState(S.bldgSizeField, S.bldgSizeUnitLabel, S.landSizeField, S.landSizeUnitLabel);
 
   if (fieldSelect) {
-    if (!currentGeoJSON) {
+    if (!S.currentGeoJSON) {
       fieldSelect.replaceChildren(new Option('— load a file first —', ''));
       fieldSelect.value = '';
     } else {
       const allAvailableFields = [
-        ...chosenNumericFields.filter(k => currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))),
-        ...chosenCategoricalFields.filter(k => currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k)))
+        ...S.chosenNumericFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))),
+        ...S.chosenCategoricalFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k)))
       ];
       populateFieldDropdownFromList(allAvailableFields);
-      fieldSelect.value = currentField ?? '';
+      fieldSelect.value = S.currentField ?? '';
     }
   }
 
   if (normAsIs && normLand && normBldg) {
-    normAsIs.checked = normalizationMode === 'asis';
-    normLand.checked = normalizationMode === 'perLand';
-    normBldg.checked = normalizationMode === 'perBuilding';
+    normAsIs.checked = S.normalizationMode === 'asis';
+    normLand.checked = S.normalizationMode === 'perLand';
+    normBldg.checked = S.normalizationMode === 'perBuilding';
   }
 
   if (colorCont && colorQuant) {
-    colorCont.checked = colorMode === 'continuous';
-    colorQuant.checked = colorMode === 'quantiles';
+    colorCont.checked = S.colorMode === 'continuous';
+    colorQuant.checked = S.colorMode === 'quantiles';
   }
 
   document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(radio => {
-    radio.checked = radio.value === categoricalColorMode;
+    radio.checked = radio.value === S.categoricalColorMode;
   });
 
   if (rampSelect && layer.ramp) {
@@ -1781,10 +828,10 @@ function applyLayerState(layer: LayerState) {
   }
 
   if (colorPicker) {
-    colorPicker.value = singleColorValue;
+    colorPicker.value = S.singleColorValue;
   }
 
-  enable3DCheckbox.checked = is3DMode;
+  enable3DCheckbox.checked = S.is3DMode;
   updateCurrentLayerDetails();
   updateFieldTypeUI();
   update3DUI();
@@ -1795,61 +842,61 @@ function applyLayerState(layer: LayerState) {
   refreshScatterPanel();
   refreshLandSchedulePanel();
 
-  if (map.getLayer(layer.layerId)) {
+  if (S.map.getLayer(layer.layerId)) {
     setLayerVisibility(layer, layer.visible);
   }
 
-  if (selectionControlsPanel) {
-    const picker = selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement | null;
-    if (picker) picker.value = highlightColor;
+  if (S.selectionControlsPanel) {
+    const picker = S.selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement | null;
+    if (picker) picker.value = S.highlightColor;
   }
 
   refreshFiltersUI();
 }
 
 function registerLayer(layer: LayerState) {
-  layers.set(layer.id, layer);
-  layerOrder.unshift(layer.id);
-  currentLayerId = layer.id;
+  S.layers.set(layer.id, layer);
+  S.layerOrder.unshift(layer.id);
+  S.currentLayerId = layer.id;
   applyLayerState(layer);
   applyLayerOrderToMap();
   renderLayerList();
 }
 
 function moveLayerInOrder(layerId: string, direction: 'up' | 'down') {
-  const index = layerOrder.indexOf(layerId);
+  const index = S.layerOrder.indexOf(layerId);
   if (index === -1) return;
   const newIndex = direction === 'up' ? index - 1 : index + 1;
-  if (newIndex < 0 || newIndex >= layerOrder.length) return;
-  layerOrder.splice(index, 1);
-  layerOrder.splice(newIndex, 0, layerId);
+  if (newIndex < 0 || newIndex >= S.layerOrder.length) return;
+  S.layerOrder.splice(index, 1);
+  S.layerOrder.splice(newIndex, 0, layerId);
   applyLayerOrderToMap();
   renderLayerList();
 }
 
 function applyLayerOrderToMap() {
-  for (let i = layerOrder.length - 1; i >= 0; i -= 1) {
-    const layerId = layerOrder[i];
-    const layer = layers.get(layerId);
+  for (let i = S.layerOrder.length - 1; i >= 0; i -= 1) {
+    const layerId = S.layerOrder[i];
+    const layer = S.layers.get(layerId);
     if (!layer) continue;
-    if (map.getLayer(layer.layerId)) {
-      map.moveLayer(layer.layerId);
+    if (S.map.getLayer(layer.layerId)) {
+      S.map.moveLayer(layer.layerId);
     }
-    if (map.getLayer(layer.errorLayerId)) {
-      map.moveLayer(layer.errorLayerId);
+    if (S.map.getLayer(layer.errorLayerId)) {
+      S.map.moveLayer(layer.errorLayerId);
     }
   }
 }
 
 function addLayerFromDataStore(storeId: string): boolean {
-  const store = dataStores.get(storeId);
+  const store = S.dataStores.get(storeId);
   if (!store) return false;
   if (!store.geojson) {
     alert('That data set is not ready yet. Finish loading it first.');
     return false;
   }
   persistCurrentLayerState();
-  const layerName = `${store.name} (copy ${layerOrder.length + 1})`;
+  const layerName = `${store.name} (copy ${S.layerOrder.length + 1})`;
   const layer = createLayerState(layerName, store.id);
   layer.geojson = store.geojson;
   layer.chosenNumericFields = [...store.chosenNumericFields];
@@ -1866,16 +913,16 @@ function addLayerFromDataStore(storeId: string): boolean {
 }
 
 function setCurrentLayer(layerId: string) {
-  if (currentLayerId === layerId) return;
+  if (S.currentLayerId === layerId) return;
   persistCurrentLayerState();
-  const layer = layers.get(layerId);
+  const layer = S.layers.get(layerId);
   if (!layer) return;
-  currentLayerId = layerId;
+  S.currentLayerId = layerId;
   applyLayerState(layer);
   renderLayerList();
-  if (currentGeoJSON && currentField) {
+  if (S.currentGeoJSON && S.currentField) {
     applyExtrusionWithVisibility();
-  } else if (currentGeoJSON) {
+  } else if (S.currentGeoJSON) {
     applyGrayRendering();
   }
 }
@@ -1883,44 +930,44 @@ function setCurrentLayer(layerId: string) {
 function setLayerVisibility(layer: LayerState, visible: boolean) {
   layer.visible = visible;
   const visibility = visible ? 'visible' : 'none';
-  if (map.getLayer(layer.layerId)) {
-    map.setLayoutProperty(layer.layerId, 'visibility', visibility);
+  if (S.map.getLayer(layer.layerId)) {
+    S.map.setLayoutProperty(layer.layerId, 'visibility', visibility);
   }
-  if (map.getLayer(layer.errorLayerId)) {
-    map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
+  if (S.map.getLayer(layer.errorLayerId)) {
+    S.map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
   }
 }
 
 function removeLayer(layerId: string) {
-  const layer = layers.get(layerId);
+  const layer = S.layers.get(layerId);
   if (!layer) return;
-  if (map.getLayer(layer.layerId)) map.removeLayer(layer.layerId);
-  if (map.getLayer(layer.errorLayerId)) map.removeLayer(layer.errorLayerId);
-  if (map.getSource(layer.sourceId)) map.removeSource(layer.sourceId);
-  layers.delete(layerId);
-  const idx = layerOrder.indexOf(layerId);
-  if (idx >= 0) layerOrder.splice(idx, 1);
+  if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
+  if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
+  if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
+  S.layers.delete(layerId);
+  const idx = S.layerOrder.indexOf(layerId);
+  if (idx >= 0) S.layerOrder.splice(idx, 1);
 
-  if (currentLayerId === layerId) {
-    currentLayerId = layerOrder.length ? layerOrder[0] : null;
-    if (currentLayerId) {
-      applyLayerState(layers.get(currentLayerId)!);
+  if (S.currentLayerId === layerId) {
+    S.currentLayerId = S.layerOrder.length ? S.layerOrder[0] : null;
+    if (S.currentLayerId) {
+      applyLayerState(S.layers.get(S.currentLayerId)!);
     } else {
-      currentGeoJSON = null;
-      currentField = null;
-      currentFieldType = null;
-      currentStats = null;
-      colorBreaks = null;
-      colorDomain = null;
-      customColors = new Map();
-      hiddenLegendItems = new Set();
-      selectedLegendItems = new Set();
-      selectedParcels = new Set();
-      highlightColor = '#FFFF00';
-      filters = [];
-      filterMode = 'none';
-      filterActionMode = 'none';
-      filterInvert = false;
+      S.currentGeoJSON = null;
+      S.currentField = null;
+      S.currentFieldType = null;
+      S.currentStats = null;
+      S.colorBreaks = null;
+      S.colorDomain = null;
+      S.customColors = new Map();
+      S.hiddenLegendItems = new Set();
+      S.selectedLegendItems = new Set();
+      S.selectedParcels = new Set();
+      S.highlightColor = '#FFFF00';
+      S.filters = [];
+      S.filterMode = 'none';
+      S.filterActionMode = 'none';
+      S.filterInvert = false;
       if (filtersInvertToggle) {
         filtersInvertToggle.checked = false;
       }
@@ -1931,8 +978,8 @@ function removeLayer(layerId: string) {
       refreshStatisticsPanel();
       refreshScatterPanel();
       refreshLandSchedulePanel();
-      if (selectionControlsPanel) {
-        selectionControlsPanel.style.display = 'none';
+      if (S.selectionControlsPanel) {
+        S.selectionControlsPanel.style.display = 'none';
       }
     }
   }
@@ -1940,314 +987,163 @@ function removeLayer(layerId: string) {
   applyLayerOrderToMap();
 }
 
-// Window management functions
-function minimizeLayers() {
-  isLayersMinimized = true;
-  settingsContent.style.display = 'none';
-  controlsEl.style.display = 'none';
-  minimizePaint();
-  updateToolbarButtonStates();
-}
+// Window management — using createWindowManager from windows.ts
+// The paint window manager is declared first so layers can reference minimizePaint in its onMinimize.
+const paintWin = createWindowManager({
+  getMinimized: () => S.isPaintMinimized,
+  setMinimized: (v) => { S.isPaintMinimized = v; },
+  contentEl: paintContent,
+  controlsEl: paintControlsEl,
+  positionFn: positionPaintPanel,
+});
 
-function showLayers() {
-  isLayersMinimized = false;
-  settingsContent.style.display = 'block';
-  controlsEl.style.display = 'grid';
-  positionPaintPanel();
-  positionSettingsPanel();
-  updateToolbarButtonStates();
-}
+const layersWin = createWindowManager({
+  getMinimized: () => S.isLayersMinimized,
+  setMinimized: (v) => { S.isLayersMinimized = v; },
+  contentEl: settingsContent,
+  controlsEl: controlsEl,
+  contentDisplay: 'block',
+  positionFn: () => { positionPaintPanel(); positionSettingsPanel(); },
+  onMinimize: () => { paintWin.minimize(); },
+});
 
-function minimizeSettingsMenu() {
-  isSettingsMenuMinimized = true;
-  settingsMenuContent.style.display = 'none';
-  settingsControlsEl.style.display = 'none';
-  updateToolbarButtonStates();
-}
+const settingsMenuWin = createWindowManager({
+  getMinimized: () => S.isSettingsMenuMinimized,
+  setMinimized: (v) => { S.isSettingsMenuMinimized = v; },
+  contentEl: settingsMenuContent,
+  controlsEl: settingsControlsEl,
+  positionFn: positionSettingsPanel,
+});
 
-function showSettingsMenu() {
-  isSettingsMenuMinimized = false;
-  settingsMenuContent.style.display = 'grid';
-  settingsControlsEl.style.display = 'grid';
-  positionSettingsPanel();
-  updateToolbarButtonStates();
-}
+const legendWin = createWindowManager({
+  getMinimized: () => S.isLegendMinimized,
+  setMinimized: (v) => { S.isLegendMinimized = v; },
+  contentEl: legendContent,
+  controlsEl: floatingLegend,
+  contentDisplay: 'block',
+  onMinimize: () => {
+    S.isLegendVisible = false;
+    updateSelectionControlsPosition();
+    updateLegendPosition();
+  },
+  onShow: () => {
+    S.isLegendVisible = true;
+    // Override the default 'grid' — floating legend uses 'block'
+    floatingLegend.style.display = 'block';
+    updateFloatingLegend();
+    updateSelectionControlsPosition();
+    updateLegendPosition();
+  },
+});
 
-function toggleSettingsMenu() {
-  if (isSettingsMenuMinimized) {
-    showSettingsMenu();
-  } else {
-    minimizeSettingsMenu();
-  }
-}
+const statisticsWin = createWindowManager({
+  getMinimized: () => S.isStatisticsMinimized,
+  setMinimized: (v) => { S.isStatisticsMinimized = v; },
+  contentEl: statisticsContent,
+  controlsEl: statisticsControlsEl,
+  positionFn: positionStatisticsPanel,
+});
 
-function positionPaintPanel() {
-  if (!controlsEl || !paintControlsEl) return;
-  if (paintControlsEl.dataset.userPositioned === 'true') return;
-  const rect = controlsEl.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  paintControlsEl.style.left = `${rect.left}px`;
-  paintControlsEl.style.top = `${rect.bottom + gap}px`;
-  paintControlsEl.style.transform = 'none';
-}
+const scatterplotWin = createWindowManager({
+  getMinimized: () => S.isScatterplotMinimized,
+  setMinimized: (v) => { S.isScatterplotMinimized = v; },
+  contentEl: scatterplotContent,
+  controlsEl: scatterplotControlsEl,
+  positionFn: positionScatterplotPanel,
+  onShow: () => { scheduleScatterPlotRefresh(); },
+});
 
-function positionSettingsPanel() {
-  if (!controlsEl || !settingsControlsEl) return;
-  if (settingsControlsEl.dataset.userPositioned === 'true') return;
-  const rect = controlsEl.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  settingsControlsEl.style.left = `${rect.right + gap}px`;
-  settingsControlsEl.style.top = `${rect.top}px`;
-  settingsControlsEl.style.transform = 'none';
-}
+const filtersWin = createWindowManager({
+  getMinimized: () => S.isFiltersMinimized,
+  setMinimized: (v) => { S.isFiltersMinimized = v; },
+  contentEl: filtersContent,
+  controlsEl: filtersControlsEl,
+  positionFn: positionFiltersPanel,
+  onShow: () => { updateFiltersPanelLayout(); },
+});
 
-function minimizePaint() {
-  isPaintMinimized = true;
-  paintContent.style.display = 'none';
-  paintControlsEl.style.display = 'none';
-  updateToolbarButtonStates();
-}
+const landScheduleWin = createWindowManager({
+  getMinimized: () => S.isLandScheduleMinimized,
+  setMinimized: (v) => { S.isLandScheduleMinimized = v; },
+  contentEl: landScheduleContent,
+  controlsEl: landScheduleControlsEl,
+  positionFn: positionLandSchedulePanel,
+});
 
-function showPaint() {
-  isPaintMinimized = false;
-  paintContent.style.display = 'grid';
-  paintControlsEl.style.display = 'grid';
-  positionPaintPanel();
-  updateToolbarButtonStates();
-}
+// Convenience aliases matching the old function names
+const minimizeLayers = layersWin.minimize;
+const showLayers = layersWin.show;
+const minimizeSettingsMenu = settingsMenuWin.minimize;
+const showSettingsMenu = settingsMenuWin.show;
+const toggleSettingsMenu = settingsMenuWin.toggle;
+const minimizePaint = paintWin.minimize;
+const showPaint = paintWin.show;
+const togglePaint = paintWin.toggle;
+const minimizeLegend = legendWin.minimize;
+const showLegend = legendWin.show;
+const minimizeStatistics = statisticsWin.minimize;
+const showStatistics = statisticsWin.show;
+const toggleStatistics = statisticsWin.toggle;
+const minimizeScatterplot = scatterplotWin.minimize;
+const showScatterplot = scatterplotWin.show;
+const toggleScatterplot = scatterplotWin.toggle;
+const minimizeFilters = filtersWin.minimize;
+const showFilters = filtersWin.show;
+const toggleFilters = filtersWin.toggle;
+const minimizeLandSchedule = landScheduleWin.minimize;
+const showLandSchedule = landScheduleWin.show;
+const toggleLandSchedule = landScheduleWin.toggle;
 
-function togglePaint() {
-  if (isPaintMinimized) {
-    showPaint();
-  } else {
-    minimizePaint();
-  }
-}
+// Wire callbacks and DOM elements into the windows module
+initWindowCallbacks({
+  updateToolbarButtonStates,
+  updateLegendPosition,
+});
+initPositionElements({
+  controlsEl,
+  paintControlsEl,
+  settingsControlsEl,
+  statisticsControlsEl,
+  scatterplotControlsEl,
+  filtersControlsEl,
+  filtersContent,
+  filtersListEl,
+  landScheduleControlsEl,
+});
 
-function updatePaintButtonState() {
-  if (!btnPaintMenu) return;
-  if (isPaintMinimized) {
-    btnPaintMenu.classList.add('inactive');
-    btnPaintMenu.classList.remove('active');
-  } else {
-    btnPaintMenu.classList.remove('inactive');
-    btnPaintMenu.classList.add('active');
-  }
-}
-
-function minimizeLegend() {
-  isLegendMinimized = true;
-  legendContent.style.display = 'none';
-  floatingLegend.style.display = 'none';
-  isLegendVisible = false;
-  
-  // Update toolbar button states
-  updateToolbarButtonStates();
-  
-  // Update selection controls position
-  updateSelectionControlsPosition();
-  // Update legend position
-  updateLegendPosition();
-}
-
-function showLegend() {
-  isLegendMinimized = false;
-  isLegendVisible = true;
-  legendContent.style.display = 'block';
-  floatingLegend.style.display = 'block';
-  
-  // Update toolbar button states
-  updateToolbarButtonStates();
-  
-  updateFloatingLegend();
-  // Update selection controls position
-  updateSelectionControlsPosition();
-  // Update legend position
-  updateLegendPosition();
-}
-
-function positionStatisticsPanel() {
-  if (!statisticsControlsEl) return;
-  if (statisticsControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!isSettingsMenuMinimized && settingsControlsEl) ? settingsControlsEl : controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  statisticsControlsEl.style.left = `${rect.right + gap}px`;
-  statisticsControlsEl.style.top = `${rect.top}px`;
-  statisticsControlsEl.style.transform = 'none';
-}
-
-function positionScatterplotPanel() {
-  if (!scatterplotControlsEl) return;
-  if (scatterplotControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!isStatisticsMinimized && statisticsControlsEl)
-    ? statisticsControlsEl
-    : (!isSettingsMenuMinimized && settingsControlsEl)
-      ? settingsControlsEl
-      : controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  scatterplotControlsEl.style.left = `${rect.right + gap}px`;
-  scatterplotControlsEl.style.top = `${rect.top}px`;
-  scatterplotControlsEl.style.transform = 'none';
-}
-
-function positionFiltersPanel() {
-  if (!filtersControlsEl) return;
-  if (filtersControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!isScatterplotMinimized && scatterplotControlsEl)
-    ? scatterplotControlsEl
-    : (!isStatisticsMinimized && statisticsControlsEl)
-      ? statisticsControlsEl
-      : (!isSettingsMenuMinimized && settingsControlsEl)
-        ? settingsControlsEl
-        : controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  filtersControlsEl.style.left = `${rect.right + gap}px`;
-  filtersControlsEl.style.top = `${rect.top}px`;
-  filtersControlsEl.style.transform = 'none';
-  updateFiltersPanelLayout();
-}
-
-function updateFiltersPanelLayout() {
-  if (!filtersControlsEl || !filtersContent || !filtersListEl) return;
-  if (filtersControlsEl.style.display === 'none') return;
-  const panelRect = filtersControlsEl.getBoundingClientRect();
-  if (panelRect.height === 0 && panelRect.width === 0) return;
-  const viewportPadding = 16;
-  const maxPanelHeight = Math.max(220, window.innerHeight - panelRect.top - viewportPadding);
-  filtersControlsEl.style.maxHeight = `${maxPanelHeight}px`;
-
-  const contentRect = filtersContent.getBoundingClientRect();
-  const listRect = filtersListEl.getBoundingClientRect();
-  const nonListHeight = contentRect.height - listRect.height;
-  const availableListHeight = Math.max(140, maxPanelHeight - nonListHeight - 8);
-  filtersListEl.style.maxHeight = `${availableListHeight}px`;
-}
-
-function minimizeStatistics() {
-  isStatisticsMinimized = true;
-  statisticsContent.style.display = 'none';
-  statisticsControlsEl.style.display = 'none';
-  updateToolbarButtonStates();
-}
-
-function showStatistics() {
-  isStatisticsMinimized = false;
-  statisticsContent.style.display = 'grid';
-  statisticsControlsEl.style.display = 'grid';
-  positionStatisticsPanel();
-  updateToolbarButtonStates();
-}
-
-function toggleStatistics() {
-  if (isStatisticsMinimized) {
-    showStatistics();
-  } else {
-    minimizeStatistics();
-  }
-}
-
-function minimizeScatterplot() {
-  isScatterplotMinimized = true;
-  scatterplotContent.style.display = 'none';
-  scatterplotControlsEl.style.display = 'none';
-  updateToolbarButtonStates();
-}
-
-function showScatterplot() {
-  isScatterplotMinimized = false;
-  scatterplotContent.style.display = 'grid';
-  scatterplotControlsEl.style.display = 'grid';
-  positionScatterplotPanel();
-  updateToolbarButtonStates();
-  scheduleScatterPlotRefresh();
-}
-
-function toggleScatterplot() {
-  if (isScatterplotMinimized) {
-    showScatterplot();
-  } else {
-    minimizeScatterplot();
-  }
-}
-
-function minimizeFilters() {
-  isFiltersMinimized = true;
-  filtersContent.style.display = 'none';
-  filtersControlsEl.style.display = 'none';
-  updateToolbarButtonStates();
-}
-
-function showFilters() {
-  isFiltersMinimized = false;
-  filtersContent.style.display = 'grid';
-  filtersControlsEl.style.display = 'grid';
-  positionFiltersPanel();
-  updateFiltersPanelLayout();
-  updateToolbarButtonStates();
-}
-
-function toggleFilters() {
-  if (isFiltersMinimized) {
-    showFilters();
-  } else {
-    minimizeFilters();
-  }
-}
-
-function positionLandSchedulePanel() {
-  if (!landScheduleControlsEl) return;
-  if (landScheduleControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!isFiltersMinimized && filtersControlsEl)
-    ? filtersControlsEl
-    : (!isScatterplotMinimized && scatterplotControlsEl)
-      ? scatterplotControlsEl
-      : (!isStatisticsMinimized && statisticsControlsEl)
-        ? statisticsControlsEl
-        : (!isSettingsMenuMinimized && settingsControlsEl)
-          ? settingsControlsEl
-          : controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  landScheduleControlsEl.style.left = `${rect.right + gap}px`;
-  landScheduleControlsEl.style.top = `${rect.top}px`;
-  landScheduleControlsEl.style.transform = 'none';
-}
-
-function minimizeLandSchedule() {
-  isLandScheduleMinimized = true;
-  landScheduleContent.style.display = 'none';
-  landScheduleControlsEl.style.display = 'none';
-  updateToolbarButtonStates();
-}
-
-function showLandSchedule() {
-  isLandScheduleMinimized = false;
-  landScheduleContent.style.display = 'grid';
-  landScheduleControlsEl.style.display = 'grid';
-  positionLandSchedulePanel();
-  updateToolbarButtonStates();
-}
-
-function toggleLandSchedule() {
-  if (isLandScheduleMinimized) {
-    showLandSchedule();
-  } else {
-    minimizeLandSchedule();
-  }
-}
+// Wire DOM elements and callbacks into the filters module
+initFilterElements({
+  filtersListEl,
+  filtersInvertToggle,
+  addFilterButton,
+  filtersSaveToggle,
+  filtersLoadToggle,
+  filtersSavePanel,
+  filtersLoadPanel,
+  filtersSaveControls,
+  filtersSaveNameInput,
+  filtersSaveConfirmButton,
+  filtersSavedStatus,
+  filtersLoadControls,
+  filtersLoadSelect,
+  filtersSelectButton,
+  filtersShowButton,
+  filtersHideButton,
+});
+initFilterCallbacks({
+  persistCurrentLayerState,
+  updateStatisticsSectionVisibility,
+  updateStatisticsResults,
+  scheduleScatterPlotRefresh,
+  getCurrentLayerIds,
+  getCurrentSourceId,
+  clearLegendVisibility,
+  clearAllSelections,
+  updateSelectionControls,
+  getParcelId,
+  statsSubjectControls,
+  scatterSubjectControls,
+});
 
 function resetStatisticsDisplay() {
   statsParcelCount.textContent = '—';
@@ -2264,10 +1160,6 @@ function resetStatisticsDisplay() {
   statsCategoricalModalValue.textContent = '—';
   statsCategoricalValues.replaceChildren();
 }
-
-type SubjectSelectorOptions = {
-  title?: string | null;
-};
 
 function buildSubjectSelector(container: HTMLElement, options: SubjectSelectorOptions = {}): SubjectSelectorControls {
   container.replaceChildren();
@@ -2372,33 +1264,10 @@ function updateSubjectControls(
   if (!isFiltered) {
     return;
   }
-  const hasFilters = savedFiltersStore.size > 0;
+  const hasFilters = S.savedFiltersStore.size > 0;
   controls.filterSelect.disabled = !hasFilters;
   controls.filterSelect.style.display = hasFilters ? 'block' : 'none';
   controls.filterEmptyState.style.display = hasFilters ? 'none' : 'block';
-}
-
-function renderSubjectFilterOptions(controls: SubjectSelectorControls, selectedName: string | null): string | null {
-  controls.filterSelect.replaceChildren();
-  const placeholder = new Option('Choose a saved filter', '');
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  controls.filterSelect.appendChild(placeholder);
-
-  savedFiltersStore.forEach((entry, name) => {
-    controls.filterSelect.appendChild(new Option(entry.name, name));
-  });
-
-  if (selectedName && savedFiltersStore.has(selectedName)) {
-    controls.filterSelect.value = selectedName;
-  } else {
-    selectedName = null;
-  }
-
-  controls.filterSelect.disabled = savedFiltersStore.size === 0;
-  controls.filterSelect.style.display = savedFiltersStore.size === 0 ? 'none' : 'block';
-  controls.filterEmptyState.style.display = savedFiltersStore.size === 0 ? 'block' : 'none';
-  return selectedName;
 }
 
 function populateStatisticsCategoryFields() {
@@ -2412,7 +1281,7 @@ function populateStatisticsCategoryFields() {
 
   if (!dataStore?.geojson) {
     statsCategoryFieldSelect.disabled = true;
-    statsCategoryField = null;
+    S.statsCategoryField = null;
     return;
   }
 
@@ -2425,10 +1294,10 @@ function populateStatisticsCategoryFields() {
   });
 
   statsCategoryFieldSelect.disabled = availableCategorical.length === 0;
-  if (statsCategoryField && availableCategorical.includes(statsCategoryField)) {
-    statsCategoryFieldSelect.value = statsCategoryField;
+  if (S.statsCategoryField && availableCategorical.includes(S.statsCategoryField)) {
+    statsCategoryFieldSelect.value = S.statsCategoryField;
   } else {
-    statsCategoryField = null;
+    S.statsCategoryField = null;
   }
 }
 
@@ -2438,13 +1307,13 @@ function populateStatisticsCategoryValues(field: string | null) {
   statsCategoryValueSelect.replaceChildren();
   const placeholder = new Option('Choose value(s)', '');
   placeholder.disabled = true;
-  placeholder.selected = statsCategoryValueIndices.length === 0;
+  placeholder.selected = S.statsCategoryValueIndices.length === 0;
   statsCategoryValueSelect.appendChild(placeholder);
 
   if (!dataStore?.geojson || !field) {
     statsCategoryValueSelect.disabled = true;
-    statsCategoryValueMap = [];
-    statsCategoryValueIndices = [];
+    S.statsCategoryValueMap = [];
+    S.statsCategoryValueIndices = [];
     return;
   }
 
@@ -2458,21 +1327,21 @@ function populateStatisticsCategoryValues(field: string | null) {
     }
   });
 
-  statsCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  S.statsCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
-  statsCategoryValueMap.forEach((entry, index) => {
+  S.statsCategoryValueMap.forEach((entry, index) => {
     statsCategoryValueSelect.appendChild(new Option(entry.label, String(index)));
   });
 
   statsCategoryValueSelect.disabled = false;
   const validSelections = new Set(
-    statsCategoryValueIndices.filter(index => statsCategoryValueMap[Number(index)])
+    S.statsCategoryValueIndices.filter(index => S.statsCategoryValueMap[Number(index)])
   );
-  statsCategoryValueIndices = Array.from(validSelections);
+  S.statsCategoryValueIndices = Array.from(validSelections);
   Array.from(statsCategoryValueSelect.options).forEach(option => {
     option.selected = validSelections.has(option.value);
   });
-  if (statsCategoryValueIndices.length === 0) {
+  if (S.statsCategoryValueIndices.length === 0) {
     placeholder.selected = true;
   }
 }
@@ -2487,7 +1356,7 @@ function getStatsFieldType(field: string | null, numericFields: string[], catego
 function populateStatisticsFields() {
   const layer = getStatsLayer();
   const dataStore = getLayerDataStore(layer);
-  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
   const sourceGeoJSON = useDataSource ? dataStore?.geojson ?? null : getLayerGeoJSON(layer);
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
@@ -2500,8 +1369,8 @@ function populateStatisticsFields() {
 
   if (!sourceGeoJSON) {
     statsFieldSelect.disabled = true;
-    statsField = null;
-    statsFieldType = null;
+    S.statsField = null;
+    S.statsFieldType = null;
     return;
   }
 
@@ -2516,12 +1385,12 @@ function populateStatisticsFields() {
     statsFieldSelect.appendChild(new Option(field, field));
   });
   statsFieldSelect.disabled = availableFields.length === 0;
-  if (statsField && availableFields.includes(statsField)) {
-    statsFieldSelect.value = statsField;
-    statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
+  if (S.statsField && availableFields.includes(S.statsField)) {
+    statsFieldSelect.value = S.statsField;
+    S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
   } else {
-    statsField = null;
-    statsFieldType = null;
+    S.statsField = null;
+    S.statsFieldType = null;
   }
 }
 
@@ -2588,8 +1457,8 @@ function updateOverflowControls(values: number[]) {
   statsOverflowMinPct.disabled = false;
   statsOverflowMaxPct.disabled = false;
 
-  setPercentInputValue(statsOverflowMinPct, statsOverflowPct.min);
-  setPercentInputValue(statsOverflowMaxPct, statsOverflowPct.max);
+  setPercentInputValue(statsOverflowMinPct, S.statsOverflowPct.min);
+  setPercentInputValue(statsOverflowMaxPct, S.statsOverflowPct.max);
 }
 
 function renderStatisticsHistogram(values: number[]) {
@@ -2606,8 +1475,8 @@ function renderStatisticsHistogram(values: number[]) {
 
   updateOverflowControls(values);
   const domain = getHistogramDomain(values);
-  const minAbs = percentile(values, statsOverflowPct.min);
-  const maxAbs = percentile(values, statsOverflowPct.max);
+  const minAbs = percentile(values, S.statsOverflowPct.min);
+  const maxAbs = percentile(values, S.statsOverflowPct.max);
   const overflowMin = Math.min(minAbs, maxAbs);
   const overflowMax = Math.max(minAbs, maxAbs);
 
@@ -2702,7 +1571,7 @@ function getScatterSubjectSelection(
   }
   if (mode === 'filtered') {
     if (!dataGeoJSON || !filteredName) return [];
-    const entry = savedFiltersStore.get(filteredName);
+    const entry = S.savedFiltersStore.get(filteredName);
     if (!entry) return [];
     const filterExpr = buildSavedFilterExpression(entry);
     if (!filterExpr) return [];
@@ -2724,7 +1593,7 @@ function getStatsSourceContext() {
 
 function getStatsNormalizationContext() {
   const { layer, dataStore } = getStatsSourceContext();
-  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
   return {
     landField: useDataSource ? dataStore?.landSizeField ?? null : layer?.landSizeField ?? null,
     landUnit: useDataSource ? dataStore?.landSizeUnitLabel ?? null : layer?.landSizeUnitLabel ?? null,
@@ -2740,12 +1609,12 @@ function updateStatisticsNormalizationControls() {
   statsNormLandUnitEl.textContent = context.landField ? (context.landUnit ?? '(unit)') : '(unit)';
   statsNormBldgUnitEl.textContent = context.bldgField ? (context.bldgUnit ?? '(unit)') : '(unit)';
 
-  if (statsNormalizationMode === 'perLand' && !context.landField) {
-    statsNormalizationMode = 'asis';
+  if (S.statsNormalizationMode === 'perLand' && !context.landField) {
+    S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
   }
-  if (statsNormalizationMode === 'perBuilding' && !context.bldgField) {
-    statsNormalizationMode = 'asis';
+  if (S.statsNormalizationMode === 'perBuilding' && !context.bldgField) {
+    S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
   }
 }
@@ -2789,7 +1658,7 @@ function getStatsSubjectSelection(
   }
   if (mode === 'filtered') {
     if (!dataGeoJSON || !filteredName) return [];
-    const entry = savedFiltersStore.get(filteredName);
+    const entry = S.savedFiltersStore.get(filteredName);
     if (!entry) return [];
     const filterExpr = buildSavedFilterExpression(entry);
     if (!filterExpr) return [];
@@ -2800,41 +1669,41 @@ function getStatsSubjectSelection(
 
 function updateStatisticsResults() {
   const { layer, layerGeoJSON, dataGeoJSON, dataStore } = getStatsSourceContext();
-  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
   const sourceGeoJSON = useDataSource ? dataGeoJSON : layerGeoJSON;
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
 
   updateStatisticsNormalizationControls();
 
-  if (!sourceGeoJSON || !statsField) {
-    statsValuesCache = [];
+  if (!sourceGeoJSON || !S.statsField) {
+    S.statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
-  if (statsSubjectMode === 'category' && (!statsCategoryField || statsCategoryValueIndices.length === 0)) {
-    statsValuesCache = [];
+  if (S.statsSubjectMode === 'category' && (!S.statsCategoryField || S.statsCategoryValueIndices.length === 0)) {
+    S.statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
-  if (statsSubjectMode === 'filtered' && !statsFilteredName) {
-    statsValuesCache = [];
+  if (S.statsSubjectMode === 'filtered' && !S.statsFilteredName) {
+    S.statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
-  statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
-  if (!statsFieldType) {
-    statsValuesCache = [];
+  S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
+  if (!S.statsFieldType) {
+    S.statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
 
   const selection = getStatsSubjectSelection(
-    statsSubjectMode,
-    statsCategoryField,
-    statsCategoryValueIndices,
-    statsCategoryValueMap,
-    statsFilteredName
+    S.statsSubjectMode,
+    S.statsCategoryField,
+    S.statsCategoryValueIndices,
+    S.statsCategoryValueMap,
+    S.statsFilteredName
   );
 
   const totalCount = sourceGeoJSON.features.length;
@@ -2844,19 +1713,19 @@ function updateStatisticsResults() {
   statsParcelCount.textContent = parcelText;
   statsCategoricalParcelCount.textContent = parcelText;
 
-  if (statsFieldType === 'numeric') {
+  if (S.statsFieldType === 'numeric') {
     const values = selection
       .map(feature => {
         const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-        let base = numOrNull(props[statsField]);
+        let base = numOrNull(props[S.statsField]);
         if (base === null) return null;
 
         const normalizationContext = getStatsNormalizationContext();
-        if (statsNormalizationMode === 'perLand' && normalizationContext.landField) {
+        if (S.statsNormalizationMode === 'perLand' && normalizationContext.landField) {
           const denom = numOrNull(props[normalizationContext.landField]);
           if (denom === null || denom <= 0) return null;
           base = base / denom;
-        } else if (statsNormalizationMode === 'perBuilding' && normalizationContext.bldgField) {
+        } else if (S.statsNormalizationMode === 'perBuilding' && normalizationContext.bldgField) {
           const denom = numOrNull(props[normalizationContext.bldgField]);
           if (denom === null || denom <= 0) return null;
           base = base / denom;
@@ -2864,7 +1733,7 @@ function updateStatisticsResults() {
         return base;
       })
       .filter((value): value is number => value !== null);
-    statsValuesCache = values;
+    S.statsValuesCache = values;
 
     const stats = computeStatisticsValues(values);
     const percentileRows = [
@@ -2901,7 +1770,7 @@ function updateStatisticsResults() {
     return;
   }
 
-  statsValuesCache = [];
+  S.statsValuesCache = [];
   statsMedian.textContent = '—';
   statsMean.textContent = '—';
   statsStdDev.textContent = '—';
@@ -2914,7 +1783,7 @@ function updateStatisticsResults() {
   const counts = new Map<string, number>();
   selection.forEach(feature => {
     const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-    const raw = props[statsField];
+    const raw = props[S.statsField];
     if (raw === null || raw === undefined || raw === '') return;
     const key = String(raw);
     counts.set(key, (counts.get(key) ?? 0) + 1);
@@ -2959,18 +1828,18 @@ function updateStatisticsSubjectControls() {
   statsSubjectControls.buttons.forEach(button => { button.disabled = false; });
   updateSubjectControls(
     statsSubjectControls,
-    statsSubjectMode,
+    S.statsSubjectMode,
     statsCategoryFieldSelect.options.length > 1,
-    Boolean(statsCategoryField)
+    Boolean(S.statsCategoryField)
   );
 }
 
 function updateStatisticsSubjectButtons() {
-  updateSubjectButtons(statsSubjectControls, statsSubjectMode);
+  updateSubjectButtons(statsSubjectControls, S.statsSubjectMode);
 }
 
 function setStatsSubjectMode(mode: SubjectMode) {
-  statsSubjectMode = mode;
+  S.statsSubjectMode = mode;
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
@@ -2978,7 +1847,7 @@ function setStatsSubjectMode(mode: SubjectMode) {
 }
 
 function updateStatisticsSectionVisibility() {
-  const shouldShow = statsSubjectMode !== 'category' || statsCategoryValueIndices.length > 0;
+  const shouldShow = S.statsSubjectMode !== 'category' || S.statsCategoryValueIndices.length > 0;
   statisticsSection.style.display = shouldShow ? 'grid' : 'none';
   if (!shouldShow) {
     statsDetails.style.display = 'none';
@@ -2987,27 +1856,27 @@ function updateStatisticsSectionVisibility() {
     return;
   }
   populateStatisticsFields();
-  const hasField = Boolean(statsField);
+  const hasField = Boolean(S.statsField);
   statsDetails.style.display = hasField ? 'grid' : 'none';
   if (!hasField) {
-    statsFieldType = null;
+    S.statsFieldType = null;
     statsNumericBlock.style.display = 'none';
     statsCategoricalBlock.style.display = 'none';
     return;
   }
   const layer = getStatsLayer();
   const dataStore = getLayerDataStore(layer);
-  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
-  statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
-  if (!statsFieldType) {
+  S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
+  if (!S.statsFieldType) {
     statsNumericBlock.style.display = 'none';
     statsCategoricalBlock.style.display = 'none';
     statsNormalizationControls.style.display = 'none';
     return;
   }
-  const isNumeric = statsFieldType === 'numeric';
+  const isNumeric = S.statsFieldType === 'numeric';
   statsNumericBlock.style.display = isNumeric ? 'grid' : 'none';
   statsCategoricalBlock.style.display = isNumeric ? 'none' : 'grid';
   statsNormalizationControls.style.display = isNumeric ? 'grid' : 'none';
@@ -3016,14 +1885,14 @@ function updateStatisticsSectionVisibility() {
 
 function refreshStatisticsPanel() {
   populateStatisticsCategoryFields();
-  populateStatisticsCategoryValues(statsCategoryField);
+  populateStatisticsCategoryValues(S.statsCategoryField);
 
-  statsFilteredName = renderSubjectFilterOptions(statsSubjectControls, statsFilteredName);
+  S.statsFilteredName = renderSubjectFilterOptions(statsSubjectControls, S.statsFilteredName);
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
 
-  if (statsField) {
+  if (S.statsField) {
     updateStatisticsResults();
   } else {
     resetStatisticsDisplay();
@@ -3041,7 +1910,7 @@ function populateScatterCategoryFields() {
   const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON || !scatterStore) {
     scatterCategoryFieldSelect.disabled = true;
-    scatterCategoryField = null;
+    S.scatterCategoryField = null;
     return;
   }
 
@@ -3054,10 +1923,10 @@ function populateScatterCategoryFields() {
   });
 
   scatterCategoryFieldSelect.disabled = availableCategorical.length === 0;
-  if (scatterCategoryField && availableCategorical.includes(scatterCategoryField)) {
-    scatterCategoryFieldSelect.value = scatterCategoryField;
+  if (S.scatterCategoryField && availableCategorical.includes(S.scatterCategoryField)) {
+    scatterCategoryFieldSelect.value = S.scatterCategoryField;
   } else {
-    scatterCategoryField = null;
+    S.scatterCategoryField = null;
   }
 }
 
@@ -3065,15 +1934,15 @@ function populateScatterCategoryValues(field: string | null) {
   scatterCategoryValueSelect.replaceChildren();
   const placeholder = new Option('Choose value(s)', '');
   placeholder.disabled = true;
-  placeholder.selected = scatterCategoryValueIndices.length === 0;
+  placeholder.selected = S.scatterCategoryValueIndices.length === 0;
   scatterCategoryValueSelect.appendChild(placeholder);
 
   const scatterStore = getScatterDataStore();
   const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON || !field) {
     scatterCategoryValueSelect.disabled = true;
-    scatterCategoryValueMap = [];
-    scatterCategoryValueIndices = [];
+    S.scatterCategoryValueMap = [];
+    S.scatterCategoryValueIndices = [];
     return;
   }
 
@@ -3087,21 +1956,21 @@ function populateScatterCategoryValues(field: string | null) {
     }
   });
 
-  scatterCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  S.scatterCategoryValueMap = Array.from(valueMap.values()).sort((a, b) => a.label.localeCompare(b.label));
 
-  scatterCategoryValueMap.forEach((entry, index) => {
+  S.scatterCategoryValueMap.forEach((entry, index) => {
     scatterCategoryValueSelect.appendChild(new Option(entry.label, String(index)));
   });
 
   scatterCategoryValueSelect.disabled = false;
   const validSelections = new Set(
-    scatterCategoryValueIndices.filter(index => scatterCategoryValueMap[Number(index)])
+    S.scatterCategoryValueIndices.filter(index => S.scatterCategoryValueMap[Number(index)])
   );
-  scatterCategoryValueIndices = Array.from(validSelections);
+  S.scatterCategoryValueIndices = Array.from(validSelections);
   Array.from(scatterCategoryValueSelect.options).forEach(option => {
     option.selected = validSelections.has(option.value);
   });
-  if (scatterCategoryValueIndices.length === 0) {
+  if (S.scatterCategoryValueIndices.length === 0) {
     placeholder.selected = true;
   }
 }
@@ -3140,8 +2009,8 @@ function populateScatterFields() {
   const scatterStore = getScatterDataStore();
   const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON || !scatterStore) {
-    scatterXField = null;
-    scatterYField = null;
+    S.scatterXField = null;
+    S.scatterYField = null;
     scatterXFieldSelect.disabled = true;
     scatterYFieldSelect.disabled = true;
     return;
@@ -3149,8 +2018,8 @@ function populateScatterFields() {
   const availableNumeric = scatterStore.chosenNumericFields.filter(k =>
     scatterGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
-  scatterXField = populateScatterFieldSelect(scatterXFieldSelect, scatterXField, availableNumeric);
-  scatterYField = populateScatterFieldSelect(scatterYFieldSelect, scatterYField, availableNumeric);
+  S.scatterXField = populateScatterFieldSelect(scatterXFieldSelect, S.scatterXField, availableNumeric);
+  S.scatterYField = populateScatterFieldSelect(scatterYFieldSelect, S.scatterYField, availableNumeric);
 }
 
 function updateScatterSubjectControls() {
@@ -3168,21 +2037,21 @@ function updateScatterSubjectControls() {
   scatterSubjectControls.buttons.forEach(button => { button.disabled = false; });
   updateSubjectControls(
     scatterSubjectControls,
-    scatterSubjectMode,
+    S.scatterSubjectMode,
     scatterCategoryFieldSelect.options.length > 1,
-    Boolean(scatterCategoryField)
+    Boolean(S.scatterCategoryField)
   );
 }
 
 function updateScatterSubjectButtons() {
-  updateSubjectButtons(scatterSubjectControls, scatterSubjectMode);
+  updateSubjectButtons(scatterSubjectControls, S.scatterSubjectMode);
 }
 
 function setScatterSubjectMode(mode: SubjectMode) {
-  scatterSubjectMode = mode;
+  S.scatterSubjectMode = mode;
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
-  scatterRangeIsCustom = false;
+  S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
 }
 
@@ -3198,12 +2067,12 @@ function parseScatterRangeInput(input: HTMLInputElement): number | null {
 }
 
 function setScatterRangeInputs(range: { xMin: number | null; xMax: number | null; yMin: number | null; yMax: number | null }) {
-  isUpdatingScatterRangeInputs = true;
+  S.isUpdatingScatterRangeInputs = true;
   scatterXMinInput.value = range.xMin === null ? '' : String(range.xMin);
   scatterXMaxInput.value = range.xMax === null ? '' : String(range.xMax);
   scatterYMinInput.value = range.yMin === null ? '' : String(range.yMin);
   scatterYMaxInput.value = range.yMax === null ? '' : String(range.yMax);
-  isUpdatingScatterRangeInputs = false;
+  S.isUpdatingScatterRangeInputs = false;
 }
 
 function setScatterRangeControlsEnabled(enabled: boolean) {
@@ -3216,7 +2085,7 @@ function setScatterRangeControlsEnabled(enabled: boolean) {
 
 function clearScatterRangeControls() {
   setScatterRangeInputs({ xMin: null, xMax: null, yMin: null, yMax: null });
-  scatterRangeIsCustom = false;
+  S.scatterRangeIsCustom = false;
 }
 
 function resetScatterPlot(message: string) {
@@ -3248,19 +2117,19 @@ function updateScatterPlot() {
     resetScatterPlot('Load data to render the scatterplot.');
     return;
   }
-  if (scatterSubjectMode === 'category' && (!scatterCategoryField || scatterCategoryValueIndices.length === 0)) {
+  if (S.scatterSubjectMode === 'category' && (!S.scatterCategoryField || S.scatterCategoryValueIndices.length === 0)) {
     resetScatterPlot('Choose category values to render the scatterplot.');
     return;
   }
-  if (scatterSubjectMode === 'filtered' && !scatterFilteredName) {
-    if (savedFiltersStore.size === 0) {
+  if (S.scatterSubjectMode === 'filtered' && !S.scatterFilteredName) {
+    if (S.savedFiltersStore.size === 0) {
       resetScatterPlot('No saved filters available for the scatterplot.');
     } else {
       resetScatterPlot('Select a saved filter to render the scatterplot.');
     }
     return;
   }
-  if (!scatterXField || !scatterYField) {
+  if (!S.scatterXField || !S.scatterYField) {
     resetScatterPlot('Select X and Y fields to render the scatterplot.');
     return;
   }
@@ -3269,18 +2138,18 @@ function updateScatterPlot() {
     layer,
     layer.geojson,
     scatterGeoJSON,
-    scatterSubjectMode,
-    scatterCategoryField,
-    scatterCategoryValueIndices,
-    scatterCategoryValueMap,
-    scatterFilteredName
+    S.scatterSubjectMode,
+    S.scatterCategoryField,
+    S.scatterCategoryValueIndices,
+    S.scatterCategoryValueMap,
+    S.scatterFilteredName
   );
   const xValues: number[] = [];
   const yValues: number[] = [];
   selection.forEach(feature => {
     const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-    const xVal = numOrNull(props[scatterXField]);
-    const yVal = numOrNull(props[scatterYField]);
+    const xVal = numOrNull(props[S.scatterXField]);
+    const yVal = numOrNull(props[S.scatterYField]);
     if (xVal === null || yVal === null) return;
     xValues.push(xVal);
     yValues.push(yVal);
@@ -3297,14 +2166,14 @@ function updateScatterPlot() {
   const xMaxDefault = Math.max(...xValues);
   const yMinDefault = Math.min(...yValues);
   const yMaxDefault = Math.max(...yValues);
-  scatterDefaultRange = { xMin: xMinDefault, xMax: xMaxDefault, yMin: yMinDefault, yMax: yMaxDefault };
-  if (!scatterRangeIsCustom) {
-    setScatterRangeInputs(scatterDefaultRange);
+  S.scatterDefaultRange = { xMin: xMinDefault, xMax: xMaxDefault, yMin: yMinDefault, yMax: yMaxDefault };
+  if (!S.scatterRangeIsCustom) {
+    setScatterRangeInputs(S.scatterDefaultRange);
   }
-  const xMin = scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMinInput) ?? xMinDefault) : xMinDefault;
-  const xMax = scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMaxInput) ?? xMaxDefault) : xMaxDefault;
-  const yMin = scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMinInput) ?? yMinDefault) : yMinDefault;
-  const yMax = scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMaxInput) ?? yMaxDefault) : yMaxDefault;
+  const xMin = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMinInput) ?? xMinDefault) : xMinDefault;
+  const xMax = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMaxInput) ?? xMaxDefault) : xMaxDefault;
+  const yMin = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMinInput) ?? yMinDefault) : yMinDefault;
+  const yMax = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMaxInput) ?? yMaxDefault) : yMaxDefault;
   const trace = {
     x: xValues,
     y: yValues,
@@ -3315,20 +2184,20 @@ function updateScatterPlot() {
   const layout = {
     margin: { l: 48, r: 16, t: 8, b: 42 },
     height: 220,
-    xaxis: { title: scatterXField, range: [Math.min(xMin, xMax), Math.max(xMin, xMax)] },
-    yaxis: { title: scatterYField, range: [Math.min(yMin, yMax), Math.max(yMin, yMax)] }
+    xaxis: { title: S.scatterXField, range: [Math.min(xMin, xMax), Math.max(xMin, xMax)] },
+    yaxis: { title: S.scatterYField, range: [Math.min(yMin, yMax), Math.max(yMin, yMax)] }
   };
   const config = { displayModeBar: false, responsive: true, staticPlot: true };
   plotly.react(scatterPlot, [trace], layout, config);
 }
 
 function scheduleScatterPlotRefresh() {
-  if (scatterPlotRefreshTimer !== null) {
-    window.clearTimeout(scatterPlotRefreshTimer);
+  if (S.scatterPlotRefreshTimer !== null) {
+    window.clearTimeout(S.scatterPlotRefreshTimer);
   }
-  scatterPlotRefreshTimer = window.setTimeout(() => {
-    scatterPlotRefreshTimer = null;
-    if (isScatterplotMinimized) return;
+  S.scatterPlotRefreshTimer = window.setTimeout(() => {
+    S.scatterPlotRefreshTimer = null;
+    if (S.isScatterplotMinimized) return;
     updateScatterPlot();
   }, 250);
 }
@@ -3336,79 +2205,28 @@ function scheduleScatterPlotRefresh() {
 function refreshScatterPanel() {
   renderScatterLayerOptions();
   populateScatterCategoryFields();
-  populateScatterCategoryValues(scatterCategoryField);
+  populateScatterCategoryValues(S.scatterCategoryField);
   populateScatterFields();
-  scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, scatterFilteredName);
+  S.scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, S.scatterFilteredName);
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
   scheduleScatterPlotRefresh();
 }
 
 // Dragging functions
-function makeDraggable(element: HTMLElement) {
-  const header = element.querySelector('.window-header') as HTMLElement;
-  if (!header) return;
-
-  header.addEventListener('mousedown', (e) => {
-    isDragging = true;
-    dragTarget = element;
-    element.dataset.userPositioned = 'true';
-    const rect = element.getBoundingClientRect();
-    dragOffset.x = e.clientX - rect.left;
-    dragOffset.y = e.clientY - rect.top;
-    
-    // Prevent text selection during drag
-    e.preventDefault();
-    document.body.style.userSelect = 'none';
-  });
-}
-
-function handleMouseMove(e: MouseEvent) {
-  if (!isDragging || !dragTarget) return;
-  
-  const x = e.clientX - dragOffset.x;
-  const y = e.clientY - dragOffset.y;
-  
-  // Keep window within viewport bounds
-  const rect = dragTarget.getBoundingClientRect();
-  const maxX = window.innerWidth - rect.width;
-  const maxY = window.innerHeight - rect.height;
-  
-  const clampedX = Math.max(0, Math.min(x, maxX));
-  const clampedY = Math.max(0, Math.min(y, maxY));
-  
-  dragTarget.style.left = `${clampedX}px`;
-  dragTarget.style.top = `${clampedY}px`;
-  dragTarget.style.transform = 'none'; // Remove any transform when dragging
-  
-  // If dragging the selection controls panel, update legend position
-  if (dragTarget.id === 'selectionControlsPanel') {
-    updateLegendPosition();
-  }
-}
-
-function handleMouseUp() {
-  const releasedTarget = dragTarget;
-  isDragging = false;
-  dragTarget = null;
-  document.body.style.userSelect = '';
-  if (releasedTarget?.id === 'filtersControls') {
-    updateFiltersPanelLayout();
-  }
-}
 
 function updateCurrentLayerDetails() {
   if (!currentLayerSource) return;
-  if (!currentLayerId) {
+  if (!S.currentLayerId) {
     currentLayerSource.textContent = 'source: —';
     return;
   }
-  const layer = layers.get(currentLayerId);
+  const layer = S.layers.get(S.currentLayerId);
   if (!layer) {
     currentLayerSource.textContent = 'source: —';
     return;
   }
-  const store = dataStores.get(layer.dataStoreId);
+  const store = S.dataStores.get(layer.dataStoreId);
   const sourceName = store?.file?.name ?? store?.name ?? '—';
   currentLayerSource.textContent = `source: ${sourceName}`;
 }
@@ -3417,14 +2235,14 @@ function renderLayerList() {
   if (!layerList) return;
   layerList.replaceChildren();
 
-  if (layerOrder.length === 0) {
+  if (S.layerOrder.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'muted';
     empty.textContent = 'No layers loaded yet.';
     layerList.appendChild(empty);
     updateCurrentLayerDetails();
-    statsLayerId = null;
-    scatterLayerId = null;
+    S.statsLayerId = null;
+    S.scatterLayerId = null;
     renderStatsLayerOptions();
     renderScatterLayerOptions();
     refreshStatisticsPanel();
@@ -3432,12 +2250,12 @@ function renderLayerList() {
     return;
   }
 
-  layerOrder.forEach((layerId, index) => {
-    const layer = layers.get(layerId);
+  S.layerOrder.forEach((layerId, index) => {
+    const layer = S.layers.get(layerId);
     if (!layer) return;
 
     const row = document.createElement('div');
-    row.className = `layer-row${layerId === currentLayerId ? ' current' : ''}`;
+    row.className = `layer-row${layerId === S.currentLayerId ? ' current' : ''}`;
 
     const visibilityToggle = createEyeButton(!layer.visible, layer.visible ? 'Hide layer' : 'Show layer');
     visibilityToggle.addEventListener('click', () => {
@@ -3450,7 +2268,7 @@ function renderLayerList() {
     const currentRadio = document.createElement('input');
     currentRadio.type = 'radio';
     currentRadio.name = 'currentLayer';
-    currentRadio.checked = layerId === currentLayerId;
+    currentRadio.checked = layerId === S.currentLayerId;
     currentRadio.title = 'Set as current layer';
     currentRadio.addEventListener('change', () => {
       if (currentRadio.checked) setCurrentLayer(layerId);
@@ -3467,7 +2285,7 @@ function renderLayerList() {
     moveUpBtn.className = 'layer-action-btn';
     moveUpBtn.textContent = '▲';
     moveUpBtn.title = 'Move layer up';
-    moveUpBtn.disabled = layerOrder.indexOf(layerId) === 0;
+    moveUpBtn.disabled = S.layerOrder.indexOf(layerId) === 0;
     moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
 
     const moveDownBtn = document.createElement('button');
@@ -3475,7 +2293,7 @@ function renderLayerList() {
     moveDownBtn.className = 'layer-action-btn';
     moveDownBtn.textContent = '▼';
     moveDownBtn.title = 'Move layer down';
-    moveDownBtn.disabled = layerOrder.indexOf(layerId) === layerOrder.length - 1;
+    moveDownBtn.disabled = S.layerOrder.indexOf(layerId) === S.layerOrder.length - 1;
     moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
 
     const deleteBtn = document.createElement('button');
@@ -3494,85 +2312,31 @@ function renderLayerList() {
   });
 
   updateCurrentLayerDetails();
-  const prevStatsLayer = statsLayerId;
-  const prevScatterLayer = scatterLayerId;
+  const prevStatsLayer = S.statsLayerId;
+  const prevScatterLayer = S.scatterLayerId;
   renderStatsLayerOptions();
   renderScatterLayerOptions();
-  if (prevStatsLayer !== statsLayerId) {
-    statsCategoryField = null;
-    statsCategoryValueIndices = [];
-    statsField = null;
-    statsFieldType = null;
+  if (prevStatsLayer !== S.statsLayerId) {
+    S.statsCategoryField = null;
+    S.statsCategoryValueIndices = [];
+    S.statsField = null;
+    S.statsFieldType = null;
     refreshStatisticsPanel();
   }
-  if (prevScatterLayer !== scatterLayerId) {
-    scatterCategoryField = null;
-    scatterCategoryValueIndices = [];
-    scatterXField = null;
-    scatterYField = null;
-    scatterRangeIsCustom = false;
+  if (prevScatterLayer !== S.scatterLayerId) {
+    S.scatterCategoryField = null;
+    S.scatterCategoryValueIndices = [];
+    S.scatterXField = null;
+    S.scatterYField = null;
+    S.scatterRangeIsCustom = false;
     refreshScatterPanel();
   }
 }
 
-// Floating legend functions
-function hideFloatingLegend() {
-  isLegendVisible = false;
-  floatingLegend.style.display = 'none';
-}
+// Floating legend functions — see ./legend.ts
 
-function clearLegendVisibility() {
-  hiddenLegendItems.clear();
-  selectedLegendItems.clear();
-  customColors.clear();
-
-  // Reset to default sorting state
-  if (currentFieldType == 'categorical'){
-    legendSortField = 'count';
-    legendSortDirection = 'desc';
-  } else {
-    legendSortField = 'name';
-    legendSortDirection = 'asc';
-  }
-
-  // Clear cached extrusion settings when legend visibility is cleared
-  cachedExtrusionSettings = null;
-
-  // Reapply the current visualization to show all items
-  if (currentGeoJSON && currentField) {
-    applyExtrusionWithVisibility();
-  }
-  persistCurrentLayerState();
-  renderLayerList();
-  updateFloatingLegend();
-}
-
-function updateFloatingLegend() {
-  if (!isLegendVisible || !currentGeoJSON) return;
-  
-  // Clear previous content
-  legendContent.replaceChildren();
-  
-  // Update title to just "Legend"
-  legendTitle.textContent = 'Legend';
-  
-  if (!currentField) {
-    // Show "No field selected" message
-    const noFieldInfo = document.createElement('div');
-    noFieldInfo.style.cssText = `
-      font-size: 12px;
-      color: #666;
-      margin-bottom: 8px;
-      padding: 4px 0;
-      border-bottom: 1px solid #eee;
-    `;
-    noFieldInfo.innerHTML = `
-      <div style="font-weight: 600; color: #333;">No field selected</div>
-      <div>All parcels shown in gray</div>
-    `;
-    legendContent.appendChild(noFieldInfo);
-    return;
-  }
+// updateFloatingLegend, updateCategoricalFloatingLegend, updateNumericFloatingLegend,
+// openSwatchColorPicker, applyExtrusionWithCustomColors — moved to ./legend.ts
   
   // Add field name and type at the top of the legend content
   const fieldInfo = document.createElement('div');
@@ -3584,8 +2348,8 @@ function updateFloatingLegend() {
     border-bottom: 1px solid #eee;
   `;
   fieldInfo.innerHTML = `
-    <div style="font-weight: 600; color: #333;">${currentField}</div>
-    <div>Type: ${currentFieldType}</div>
+    <div style="font-weight: 600; color: #333;">${S.currentField}</div>
+    <div>Type: ${S.currentFieldType}</div>
   `;
   legendContent.appendChild(fieldInfo);
   
@@ -3612,13 +2376,13 @@ function updateFloatingLegend() {
   `;
   
   zoomBtn.onclick = () => {
-    if (selectedLegendItems.size === 0) {
+    if (S.selectedLegendItems.size === 0) {
       // Show a toast or alert that no items are selected
       return;
     }
     
     // Get the bounding box from the markup layer source
-    const markupSource = map.getSource('markup-source') as maplibregl.GeoJSONSource;
+    const markupSource = S.map.getSource('markup-source') as maplibregl.GeoJSONSource;
     if (markupSource) {
       const data = markupSource.serialize();
       if (data.data && typeof data.data === 'object' && 'features' in data.data && Array.isArray(data.data.features) && data.data.features.length > 0) {
@@ -3632,7 +2396,7 @@ function updateFloatingLegend() {
             Math.max(...bbox.map((coord: number[]) => coord[1]))
           ];
           
-          map.fitBounds(bounds, { padding: 50 });
+          S.map.fitBounds(bounds, { padding: 50 });
         }
       }
     }
@@ -3656,9 +2420,9 @@ function updateFloatingLegend() {
   
   function getLegendCategories() {
     const categories = new Set<string>();
-    if (!currentGeoJSON) return categories;
-    for (const feature of currentGeoJSON.features) {
-      const value = feature.properties?.[currentField!];
+    if (!S.currentGeoJSON) return categories;
+    for (const feature of S.currentGeoJSON.features) {
+      const value = feature.properties?.[S.currentField!];
       if (value != null && value !== '' && value !== undefined) {
         categories.add(String(value));
       }
@@ -3667,54 +2431,54 @@ function updateFloatingLegend() {
   }
 
   const isAllLegendHidden = () => {
-    if (currentFieldType === 'categorical') {
+    if (S.currentFieldType === 'categorical') {
       const categories = getLegendCategories();
-      return categories.size > 0 && Array.from(categories).every(cat => hiddenLegendItems.has(cat));
+      return categories.size > 0 && Array.from(categories).every(cat => S.hiddenLegendItems.has(cat));
     }
-    const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length
-      ? colorBreaks.length + 1
+    const ranges = S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length
+      ? S.colorBreaks.length + 1
       : 10;
-    return Array.from({ length: ranges }, (_, i) => `range_${i}`).every(rangeKey => hiddenLegendItems.has(rangeKey));
+    return Array.from({ length: ranges }, (_, i) => `range_${i}`).every(rangeKey => S.hiddenLegendItems.has(rangeKey));
   };
 
   // Eye toggle all button
   const eyeAllBtn = createEyeButton(isAllLegendHidden(), 'Toggle all visibility');
   
   eyeAllBtn.onclick = () => {
-    if (currentFieldType === 'categorical') {
+    if (S.currentFieldType === 'categorical') {
       // Toggle all categorical items
       const categories = new Set<string>();
-      for (const feature of currentGeoJSON!.features) {
-        const value = feature.properties?.[currentField!];
+      for (const feature of S.currentGeoJSON!.features) {
+        const value = feature.properties?.[S.currentField!];
         if (value != null && value !== '' && value !== undefined) {
           categories.add(String(value));
         }
       }
       
-      const allHidden = Array.from(categories).every(cat => hiddenLegendItems.has(cat));
+      const allHidden = Array.from(categories).every(cat => S.hiddenLegendItems.has(cat));
       if (allHidden) {
         // Show all
-        categories.forEach(cat => hiddenLegendItems.delete(cat));
+        categories.forEach(cat => S.hiddenLegendItems.delete(cat));
       } else {
         // Hide all
-        categories.forEach(cat => hiddenLegendItems.add(cat));
+        categories.forEach(cat => S.hiddenLegendItems.add(cat));
       }
     } else {
       // Toggle all numeric ranges
-      const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length 
-        ? colorBreaks.length + 1 
+      const ranges = S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length 
+        ? S.colorBreaks.length + 1 
         : 10;
       
-      const allHidden = Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => hiddenLegendItems.has(rangeKey));
+      const allHidden = Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => S.hiddenLegendItems.has(rangeKey));
       if (allHidden) {
         // Show all
         for (let i = 0; i < ranges; i++) {
-          hiddenLegendItems.delete(`range_${i}`);
+          S.hiddenLegendItems.delete(`range_${i}`);
         }
       } else {
         // Hide all
         for (let i = 0; i < ranges; i++) {
-          hiddenLegendItems.add(`range_${i}`);
+          S.hiddenLegendItems.add(`range_${i}`);
         }
       }
     }
@@ -3727,15 +2491,15 @@ function updateFloatingLegend() {
 
   const getLegendRanges = () => {
     const rangeBounds: { min: number; max: number; key: string }[] = [];
-    if (!currentStats) return rangeBounds;
-    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-      const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+    if (!S.currentStats) return rangeBounds;
+    if (S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length) {
+      const breaks = [S.currentStats.min, ...S.colorBreaks, S.currentStats.max];
       for (let i = 0; i < breaks.length - 1; i++) {
         rangeBounds.push({ min: breaks[i], max: breaks[i + 1], key: `range_${i}` });
       }
     } else {
-      const min = currentStats.min;
-      const max = currentStats.max;
+      const min = S.currentStats.min;
+      const max = S.currentStats.max;
       const step = (max - min) / 10;
       for (let i = 0; i < 10; i++) {
         rangeBounds.push({
@@ -3757,20 +2521,20 @@ function updateFloatingLegend() {
   `;
   
   // Set initial state based on current selections
-  if (currentFieldType === 'categorical') {
+  if (S.currentFieldType === 'categorical') {
     const categories = getLegendCategories();
-    checkboxAll.checked = categories.size > 0 && Array.from(categories).every(cat => selectedLegendItems.has(cat));
+    checkboxAll.checked = categories.size > 0 && Array.from(categories).every(cat => S.selectedLegendItems.has(cat));
   } else {
-    const ranges = colorMode === 'quantiles' && colorBreaks && colorBreaks.length
-      ? colorBreaks.length + 1
+    const ranges = S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length
+      ? S.colorBreaks.length + 1
       : 10;
-    checkboxAll.checked = ranges > 0 && Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => selectedLegendItems.has(rangeKey));
+    checkboxAll.checked = ranges > 0 && Array.from({length: ranges}, (_, i) => `range_${i}`).every(rangeKey => S.selectedLegendItems.has(rangeKey));
   }
   
   checkboxAll.onchange = () => {
     const sourceId = getCurrentSourceId();
     if (!sourceId) return;
-    if (currentFieldType === 'categorical') {
+    if (S.currentFieldType === 'categorical') {
       const categories = getLegendCategories();
       categories.forEach(category => applyCategorySelection(category, checkboxAll.checked, sourceId));
     } else {
@@ -3826,22 +2590,22 @@ function updateFloatingLegend() {
 
   // Add sorting functionality
   nameHeader.onclick = () => {
-    if (legendSortField === 'name') {
-      legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
+    if (S.legendSortField === 'name') {
+      S.legendSortDirection = S.legendSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      legendSortField = 'name';
-      legendSortDirection = 'asc';
+      S.legendSortField = 'name';
+      S.legendSortDirection = 'asc';
     }
     updateFloatingLegend();
     persistCurrentLayerState();
   };
 
   countHeader.onclick = () => {
-    if (legendSortField === 'count') {
-      legendSortDirection = legendSortDirection === 'asc' ? 'desc' : 'asc';
+    if (S.legendSortField === 'count') {
+      S.legendSortDirection = S.legendSortDirection === 'asc' ? 'desc' : 'asc';
     } else {
-      legendSortField = 'count';
-      legendSortDirection = 'asc';
+      S.legendSortField = 'count';
+      S.legendSortDirection = 'asc';
     }
     updateFloatingLegend();
     persistCurrentLayerState();
@@ -3877,10 +2641,10 @@ function updateFloatingLegend() {
     nameHeader.textContent = 'Name';
     countHeader.textContent = '#';
     
-    if (legendSortField === 'name') {
-      nameHeader.textContent += legendSortDirection === 'asc' ? ' ↑' : ' ↓';
-    } else if (legendSortField === 'count') {
-      countHeader.textContent += legendSortDirection === 'asc' ? ' ↑' : ' ↓';
+    if (S.legendSortField === 'name') {
+      nameHeader.textContent += S.legendSortDirection === 'asc' ? ' ↑' : ' ↓';
+    } else if (S.legendSortField === 'count') {
+      countHeader.textContent += S.legendSortDirection === 'asc' ? ' ↑' : ' ↓';
     }
   };
   
@@ -3898,7 +2662,7 @@ function updateFloatingLegend() {
   (legendContent as any)._countHeader = countHeader;
   (legendContent as any)._updateSortIndicators = updateSortIndicators;
   
-  if (currentFieldType === 'categorical') {
+  if (S.currentFieldType === 'categorical') {
     updateCategoricalFloatingLegend();
   } else {
     updateNumericFloatingLegend();
@@ -3906,12 +2670,12 @@ function updateFloatingLegend() {
 }
 
 function updateCategoricalFloatingLegend() {
-  if (!currentField || !currentGeoJSON) return;
+  if (!S.currentField || !S.currentGeoJSON) return;
   
   // Pre-calculate counts for all categories in a single pass
   const categoryCounts = new Map<string, number>();
-  for (const feature of currentGeoJSON.features) {
-    const value = feature.properties?.[currentField];
+  for (const feature of S.currentGeoJSON.features) {
+    const value = feature.properties?.[S.currentField];
     if (value != null && value !== '' && value !== undefined) {
       const category = String(value);
       categoryCounts.set(category, (categoryCounts.get(category) || 0) + 1);
@@ -3921,17 +2685,17 @@ function updateCategoricalFloatingLegend() {
   let sortedCategories = Array.from(categoryCounts.keys());
   
   // Apply sorting if specified
-  if (legendSortField === 'name') {
+  if (S.legendSortField === 'name') {
     sortedCategories.sort((a, b) => {
       const comparison = a.localeCompare(b);
-      return legendSortDirection === 'asc' ? comparison : -comparison;
+      return S.legendSortDirection === 'asc' ? comparison : -comparison;
     });
-  } else if (legendSortField === 'count') {
+  } else if (S.legendSortField === 'count') {
     sortedCategories.sort((a, b) => {
       const countA = categoryCounts.get(a) || 0;
       const countB = categoryCounts.get(b) || 0;
       const comparison = countA - countB;
-      return legendSortDirection === 'asc' ? comparison : -comparison;
+      return S.legendSortDirection === 'asc' ? comparison : -comparison;
     });
   } else {
     // Default alphabetical sort
@@ -3947,8 +2711,8 @@ function updateCategoricalFloatingLegend() {
   }
 
   let fallbackColor = '#888';
-  if (categoricalColorMode === 'single') {
-    fallbackColor = singleColorValue;
+  if (S.categoricalColorMode === 'single') {
+    fallbackColor = S.singleColorValue;
   }
   
 
@@ -3979,7 +2743,7 @@ function updateCategoricalFloatingLegend() {
   // Create legend items
   sortedCategories.forEach(category => {
     const color = categoryToColor.get(category) || fallbackColor;
-    const isHidden = hiddenLegendItems.has(category);
+    const isHidden = S.hiddenLegendItems.has(category);
     const count = categoryCounts.get(category) || 0;
     
     const item = document.createElement('div');
@@ -4029,10 +2793,10 @@ function updateCategoricalFloatingLegend() {
      const eyeBtn = createEyeButton(isHidden, isHidden ? 'Show this category' : 'Hide this category');
      
      eyeBtn.onclick = () => {
-       if (hiddenLegendItems.has(category)) {
-         hiddenLegendItems.delete(category);
+       if (S.hiddenLegendItems.has(category)) {
+         S.hiddenLegendItems.delete(category);
        } else {
-         hiddenLegendItems.add(category);
+         S.hiddenLegendItems.add(category);
        }
        updateFloatingLegend();
        applyExtrusionWithVisibility();
@@ -4041,7 +2805,7 @@ function updateCategoricalFloatingLegend() {
      // Selection checkbox
      const checkbox = document.createElement('input');
      checkbox.type = 'checkbox';
-     checkbox.checked = selectedLegendItems.has(category);
+     checkbox.checked = S.selectedLegendItems.has(category);
      checkbox.style.cssText = `
        margin: 0;
        flex-shrink: 0;
@@ -4090,7 +2854,7 @@ function updateCategoricalFloatingLegend() {
 }
 
 function updateNumericFloatingLegend() {
-  if (!currentField || !currentGeoJSON || !currentStats) return;
+  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return;
   
   const ranges = buildNumericColorRanges();
   if (ranges.length === 0) return;
@@ -4106,8 +2870,8 @@ function updateNumericFloatingLegend() {
   
   // Pre-calculate counts for all ranges in a single pass
   const rangeCounts = new Map<string, number>();
-  for (const feature of currentGeoJSON!.features) {
-    const value = feature.properties?.[currentField!];
+  for (const feature of S.currentGeoJSON!.features) {
+    const value = feature.properties?.[S.currentField!];
     if (value != null && value !== '' && value !== undefined) {
       const numValue = Number(value);
       if (!isNaN(numValue)) {
@@ -4132,16 +2896,16 @@ function updateNumericFloatingLegend() {
   });
   
   // Apply sorting if specified
-  if (legendSortField === 'name') {
+  if (S.legendSortField === 'name') {
     rangeData.sort((a, b) => {
       // For numeric fields, sort by the actual numeric values (min value of each range)
       const comparison = a.range.min - b.range.min;
-      return legendSortDirection === 'asc' ? comparison : -comparison;
+      return S.legendSortDirection === 'asc' ? comparison : -comparison;
     });
-  } else if (legendSortField === 'count') {
+  } else if (S.legendSortField === 'count') {
     rangeData.sort((a, b) => {
       const comparison = a.count - b.count;
-      return legendSortDirection === 'asc' ? comparison : -comparison;
+      return S.legendSortDirection === 'asc' ? comparison : -comparison;
     });
   }
   
@@ -4188,7 +2952,7 @@ function updateNumericFloatingLegend() {
   
   // Create legend items
   rangeData.forEach(({ range, index, rangeKey, count }) => {
-    const isHidden = hiddenLegendItems.has(rangeKey);
+    const isHidden = S.hiddenLegendItems.has(rangeKey);
     
     // Color is already applied from the inner function
     const color = range.color;
@@ -4239,10 +3003,10 @@ function updateNumericFloatingLegend() {
      const eyeBtn = createEyeButton(isHidden, isHidden ? 'Show this range' : 'Hide this range');
      
      eyeBtn.onclick = () => {
-       if (hiddenLegendItems.has(rangeKey)) {
-         hiddenLegendItems.delete(rangeKey);
+       if (S.hiddenLegendItems.has(rangeKey)) {
+         S.hiddenLegendItems.delete(rangeKey);
        } else {
-         hiddenLegendItems.add(rangeKey);
+         S.hiddenLegendItems.add(rangeKey);
        }
        updateFloatingLegend();
        applyExtrusionWithVisibility();
@@ -4251,7 +3015,7 @@ function updateNumericFloatingLegend() {
      // Selection checkbox
      const checkbox = document.createElement('input');
      checkbox.type = 'checkbox';
-     checkbox.checked = selectedLegendItems.has(rangeKey);
+     checkbox.checked = S.selectedLegendItems.has(rangeKey);
      checkbox.style.cssText = `
        margin: 0;
        flex-shrink: 0;
@@ -4304,7 +3068,6 @@ function updateNumericFloatingLegend() {
 }
 
 // Custom color overrides for individual legend items
-let customColors = new Map<string, string>();
 
 function openSwatchColorPicker(itemKey: string, currentColor: string, swatchElement: HTMLElement) {
   // Create a temporary color input
@@ -4329,7 +3092,7 @@ function openSwatchColorPicker(itemKey: string, currentColor: string, swatchElem
   
   colorInput.addEventListener('change', () => {
     const newColor = colorInput.value;
-    customColors.set(itemKey, newColor);
+    S.customColors.set(itemKey, newColor);
     
     // Update the visualization
     applyExtrusionWithCustomColors();
@@ -4350,36 +3113,36 @@ function openSwatchColorPicker(itemKey: string, currentColor: string, swatchElem
 }
 
 function applyExtrusionWithCustomColors() {
-  if (!currentGeoJSON || !currentField) return;
+  if (!S.currentGeoJSON || !S.currentField) return;
   const ids = getCurrentLayerIds();
   if (!ids) return;
   
   // If we have custom colors, we need to rebuild the color expression
-  if (customColors.size > 0) {
+  if (S.customColors.size > 0) {
     let colorExpr: any;
     
-    if (currentFieldType === 'categorical') {
+    if (S.currentFieldType === 'categorical') {
       colorExpr = buildCategoricalColorExpression();
     } else {
       colorExpr = buildNumericColorExpression();
     }
     
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     
     // Apply height and opacity for numeric fields
-    if (currentFieldType === 'numeric') {
+    if (S.currentFieldType === 'numeric') {
       const rawMult = Number(multInput.value);
       const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
       const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
       const valueExpr = buildValueExpression();
-      const heightExpr: any = is3DMode ? ['*', valueExpr, multiplier * unitFactor] : 0;
+      const heightExpr: any = S.is3DMode ? ['*', valueExpr, multiplier * unitFactor] : 0;
       
-      map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
     } else {
-      map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
     }
     
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   } else {
     // No custom colors, use normal extrusion
     applyExtrusion();
@@ -4387,48 +3150,11 @@ function applyExtrusionWithCustomColors() {
 }
 
 
-function getAvailableFilterFields() {
-  if (!currentGeoJSON) return [];
-  const availableNumeric = chosenNumericFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
-  const availableCategorical = chosenCategoricalFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
-  return [
-    ...availableNumeric.map(field => ({ field, type: 'numeric' as const })),
-    ...availableCategorical.map(field => ({ field, type: 'categorical' as const }))
-  ];
-}
-
-function syncFiltersWithAvailableFields() {
-  const availableFields = new Set(getAvailableFilterFields().map(item => item.field));
-  filters.forEach(filter => {
-    if (filter.field && !availableFields.has(filter.field)) {
-      filter.field = null;
-      filter.fieldType = null;
-      filter.operator = null;
-      filter.value = null;
-    }
-  });
-}
-
-function getCategoricalValues(field: string): string[] {
-  if (!currentGeoJSON) return [];
-  const values = new Set<string>();
-  for (const feature of currentGeoJSON.features) {
-    const raw = feature.properties?.[field];
-    if (raw === undefined || raw === null || raw === '') continue;
-    values.add(String(raw));
-  }
-  return Array.from(values).sort();
-}
-
 function getLandScheduleEntry(field: string, valueKey: string): LandScheduleBaseLot {
-  let fieldMap = landScheduleStore.get(field);
+  let fieldMap = S.landScheduleStore.get(field);
   if (!fieldMap) {
     fieldMap = new Map();
-    landScheduleStore.set(field, fieldMap);
+    S.landScheduleStore.set(field, fieldMap);
   }
   let entry = fieldMap.get(valueKey);
   if (!entry) {
@@ -4444,9 +3170,9 @@ function getLandScheduleEntry(field: string, valueKey: string): LandScheduleBase
 }
 
 function getAvailableLandScheduleFields(): string[] {
-  if (!currentGeoJSON) return [];
-  return chosenCategoricalFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  if (!S.currentGeoJSON) return [];
+  return S.chosenCategoricalFields.filter(k =>
+    S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
 }
 
@@ -4462,23 +3188,23 @@ function setLandScheduleInputValue(input: HTMLInputElement, value: number | null
 }
 
 function updateLandScheduleInputsFromStore() {
-  if (!currentLandScheduleField || !currentLandScheduleValue) {
+  if (!S.currentLandScheduleField || !S.currentLandScheduleValue) {
     landScheduleValuationSection.style.display = 'none';
     return;
   }
-  const entry = getLandScheduleEntry(currentLandScheduleField, currentLandScheduleValue);
-  isUpdatingLandScheduleUI = true;
+  const entry = getLandScheduleEntry(S.currentLandScheduleField, S.currentLandScheduleValue);
+  S.isUpdatingLandScheduleUI = true;
   setLandScheduleInputValue(landScheduleBaseMin, entry.min);
   setLandScheduleInputValue(landScheduleBaseMax, entry.max);
   setLandScheduleInputValue(landScheduleBaseValue, entry.value);
   landScheduleBasePer.value = entry.per ?? '';
   landScheduleValuationSection.style.display = 'grid';
-  isUpdatingLandScheduleUI = false;
+  S.isUpdatingLandScheduleUI = false;
 }
 
 function updateLandScheduleStoreFromInputs() {
-  if (isUpdatingLandScheduleUI || !currentLandScheduleField || !currentLandScheduleValue) return;
-  const entry = getLandScheduleEntry(currentLandScheduleField, currentLandScheduleValue);
+  if (S.isUpdatingLandScheduleUI || !S.currentLandScheduleField || !S.currentLandScheduleValue) return;
+  const entry = getLandScheduleEntry(S.currentLandScheduleField, S.currentLandScheduleValue);
   entry.min = parseOptionalNumber(landScheduleBaseMin.value);
   entry.max = parseOptionalNumber(landScheduleBaseMax.value);
   entry.value = parseOptionalNumber(landScheduleBaseValue.value);
@@ -4488,25 +3214,25 @@ function updateLandScheduleStoreFromInputs() {
 function updateLandScheduleValueOptions() {
   landScheduleValueSelect.replaceChildren();
   landScheduleValuationSection.style.display = 'none';
-  if (!currentLandScheduleField) {
+  if (!S.currentLandScheduleField) {
     landScheduleValueRow.style.display = 'none';
-    currentLandScheduleValue = null;
+    S.currentLandScheduleValue = null;
     return;
   }
 
-  landScheduleFieldLabel.textContent = currentLandScheduleField;
+  landScheduleFieldLabel.textContent = S.currentLandScheduleField;
   landScheduleValueRow.style.display = 'grid';
 
   landScheduleValueSelect.appendChild(new Option(LAND_SCHEDULE_DEFAULT_LABEL, LAND_SCHEDULE_DEFAULT_KEY));
-  const values = getCategoricalValues(currentLandScheduleField);
+  const values = getCategoricalValues(S.currentLandScheduleField);
   values.forEach(value => landScheduleValueSelect.appendChild(new Option(value, value)));
 
-  if (currentLandScheduleValue && (currentLandScheduleValue === LAND_SCHEDULE_DEFAULT_KEY || values.includes(currentLandScheduleValue))) {
-    landScheduleValueSelect.value = currentLandScheduleValue;
+  if (S.currentLandScheduleValue && (S.currentLandScheduleValue === LAND_SCHEDULE_DEFAULT_KEY || values.includes(S.currentLandScheduleValue))) {
+    landScheduleValueSelect.value = S.currentLandScheduleValue;
     updateLandScheduleInputsFromStore();
   } else {
     landScheduleValueSelect.selectedIndex = -1;
-    currentLandScheduleValue = null;
+    S.currentLandScheduleValue = null;
   }
 }
 
@@ -4519,8 +3245,8 @@ function refreshLandSchedulePanel() {
     landScheduleFieldSelect.appendChild(new Option('No categorical fields', ''));
     landScheduleFieldSelect.value = '';
     landScheduleFieldSelect.disabled = true;
-    currentLandScheduleField = null;
-    currentLandScheduleValue = null;
+    S.currentLandScheduleField = null;
+    S.currentLandScheduleValue = null;
     landScheduleValueRow.style.display = 'none';
     return;
   }
@@ -4531,276 +3257,22 @@ function refreshLandSchedulePanel() {
   landScheduleFieldSelect.appendChild(placeholder);
   availableFields.forEach(field => landScheduleFieldSelect.appendChild(new Option(field, field)));
 
-  if (currentLandScheduleField && availableFields.includes(currentLandScheduleField)) {
-    landScheduleFieldSelect.value = currentLandScheduleField;
+  if (S.currentLandScheduleField && availableFields.includes(S.currentLandScheduleField)) {
+    landScheduleFieldSelect.value = S.currentLandScheduleField;
   } else {
     landScheduleFieldSelect.value = '';
-    currentLandScheduleField = null;
-    currentLandScheduleValue = null;
+    S.currentLandScheduleField = null;
+    S.currentLandScheduleValue = null;
   }
 
   updateLandScheduleValueOptions();
 }
 
-function isFilterComplete(filter: FilterRule): boolean {
-  if (!filter.active || !filter.field || !filter.operator) return false;
-  if (filter.value === null || filter.value === undefined) return false;
-  if (Array.isArray(filter.value)) return filter.value.length > 0;
-  if (typeof filter.value === 'string') return filter.value.trim().length > 0;
-  return Number.isFinite(filter.value);
-}
-
-function getActiveFilters(): FilterRule[] {
-  return filters.filter(isFilterComplete);
-}
-
-function buildFilterExpression(filter: FilterRule): any | null {
-  if (!filter.field || !filter.operator || filter.value === null) return null;
-  if (filter.fieldType === 'numeric') {
-    if (!Number.isFinite(filter.value)) return null;
-    const value = Number(filter.value);
-    const fieldExpr: Expression = ['to-number', ['get', filter.field]] as any;
-    switch (filter.operator) {
-      case 'lt':
-        return ['<', fieldExpr, value];
-      case 'gt':
-        return ['>', fieldExpr, value];
-      case 'lte':
-        return ['<=', fieldExpr, value];
-      case 'gte':
-        return ['>=', fieldExpr, value];
-      case 'eq':
-        return ['==', fieldExpr, value];
-      case 'neq':
-        return ['!=', fieldExpr, value];
-      default:
-        return null;
-    }
-  }
-
-  if (filter.fieldType === 'categorical') {
-    const fieldExpr: Expression = ['to-string', ['get', filter.field]] as any;
-    if (filter.operator === 'eq') {
-      return ['==', fieldExpr, String(filter.value)];
-    }
-    if (filter.operator === 'neq') {
-      return ['!=', fieldExpr, String(filter.value)];
-    }
-    if ((filter.operator === 'any' || filter.operator === 'not-any') && Array.isArray(filter.value)) {
-      const expr: any = ['in', fieldExpr, ['literal', filter.value.map(String)]];
-      return filter.operator === 'not-any' ? ['!', expr] : expr;
-    }
-  }
-  return null;
-}
-
-function buildFiltersExpression(activeFilters: FilterRule[]): any | null {
-  if (!activeFilters.length) return null;
-  const expressions = activeFilters
-    .map(filter => buildFilterExpression(filter))
-    .filter(Boolean) as any[];
-  if (!expressions.length) return null;
-  return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
-}
-
-function buildSavedFilterExpression(entry: SavedFilterEntry): any | null {
-  const activeFilters = entry.filters.filter(isFilterComplete);
-  const baseExpr = buildFiltersExpression(activeFilters);
-  if (!baseExpr) return null;
-  return entry.filterInvert ? ['!', baseExpr] : baseExpr;
-}
-
-function buildFilterModeExpression(): any | null {
-  if (filterMode === 'none') return null;
-  const activeFilters = getActiveFilters();
-  const baseExpr = buildFiltersExpression(activeFilters);
-  if (!baseExpr) return null;
-  const modeExpr = filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
-  return filterInvert ? ['!', modeExpr] : modeExpr;
-}
-
-function resolveFilterValue(expr: any, feature: GeoJSON.Feature): any {
-  if (!Array.isArray(expr)) return expr;
-  const op = expr[0];
-  switch (op) {
-    case 'get': {
-      const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-      return props[expr[1]];
-    }
-    case 'literal':
-      return expr[1];
-    case 'to-number': {
-      const value = resolveFilterValue(expr[1], feature);
-      const numeric = Number(value);
-      return Number.isFinite(numeric) ? numeric : NaN;
-    }
-    case 'to-string': {
-      const value = resolveFilterValue(expr[1], feature);
-      return value === null || value === undefined ? '' : String(value);
-    }
-    default:
-      return expr;
-  }
-}
-
-function evaluateFilterExpression(expr: any, feature: GeoJSON.Feature): boolean {
-  if (!Array.isArray(expr)) return Boolean(expr);
-  const op = expr[0];
-  switch (op) {
-    case 'all':
-      return expr.slice(1).every((clause: any) => evaluateFilterExpression(clause, feature));
-    case '!':
-      return !evaluateFilterExpression(expr[1], feature);
-    case 'in': {
-      const value = resolveFilterValue(expr[1], feature);
-      const list = resolveFilterValue(expr[2], feature);
-      return Array.isArray(list) ? list.includes(value) : false;
-    }
-    case '==':
-      return resolveFilterValue(expr[1], feature) === resolveFilterValue(expr[2], feature);
-    case '!=':
-      return resolveFilterValue(expr[1], feature) !== resolveFilterValue(expr[2], feature);
-    case '<':
-      return resolveFilterValue(expr[1], feature) < resolveFilterValue(expr[2], feature);
-    case '>':
-      return resolveFilterValue(expr[1], feature) > resolveFilterValue(expr[2], feature);
-    case '<=':
-      return resolveFilterValue(expr[1], feature) <= resolveFilterValue(expr[2], feature);
-    case '>=':
-      return resolveFilterValue(expr[1], feature) >= resolveFilterValue(expr[2], feature);
-    default:
-      return false;
-  }
-}
-
-function buildStatisticsVisibilityExpression(): any | null {
-  const expressions: any[] = [];
-  const legendExpr = buildLegendVisibilityFilter();
-  if (legendExpr) expressions.push(legendExpr);
-  const filterExpr = buildFilterModeExpression();
-  if (filterExpr) expressions.push(filterExpr);
-  if (!expressions.length) return null;
-  return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
-}
-
-function buildLegendVisibilityFilterForState(
-  field: string | null,
-  fieldType: 'numeric' | 'categorical' | null,
-  stats: { min: number; max: number } | null,
-  mode: ColorMode,
-  breaks: number[] | null,
-  hiddenItems: Set<string>
-): any | null {
-  if (!field || hiddenItems.size === 0) return null;
-  const conditions: any[] = [];
-
-  if (fieldType === 'categorical') {
-    const hiddenCategories = Array.from(hiddenItems);
-    if (hiddenCategories.length > 0) {
-      conditions.push(['!', ['in', ['to-string', ['get', field]], ['literal', hiddenCategories]]]);
-    }
-  } else {
-    if (!stats) return null;
-    const ranges: { min: number; max: number }[] = [];
-    if (mode === 'quantiles' && breaks && breaks.length) {
-      const rangeBreaks = [stats.min, ...breaks, stats.max];
-      for (let i = 0; i < rangeBreaks.length - 1; i++) {
-        ranges.push({ min: rangeBreaks[i], max: rangeBreaks[i + 1] });
-      }
-    } else {
-      const min = stats.min;
-      const max = stats.max;
-      const step = (max - min) / 10;
-      for (let i = 0; i < 10; i++) {
-        ranges.push({
-          min: min + (step * i),
-          max: i === 9 ? max : min + (step * (i + 1))
-        });
-      }
-    }
-
-    hiddenItems.forEach(rangeKey => {
-      const index = parseInt(rangeKey.split('_')[1]);
-      if (ranges[index]) {
-        const range = ranges[index];
-        conditions.push(['!', ['all',
-          ['>=', ['get', field], range.min],
-          ['<=', ['get', field], range.max]
-        ]]);
-      }
-    });
-  }
-
-  if (!conditions.length) return null;
-  return conditions.length === 1 ? conditions[0] : ['all', ...conditions];
-}
-
-function buildLegendVisibilityFilter(): any | null {
-  return buildLegendVisibilityFilterForState(
-    currentField,
-    currentFieldType,
-    currentStats,
-    colorMode,
-    colorBreaks,
-    hiddenLegendItems
-  );
-}
-
-function buildFilterModeExpressionForLayer(layer: LayerState): any | null {
-  if (layer.filterMode === 'none') return null;
-  const activeFilters = layer.filters.filter(isFilterComplete);
-  const baseExpr = buildFiltersExpression(activeFilters);
-  if (!baseExpr) return null;
-  const modeExpr = layer.filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
-  return layer.filterInvert ? ['!', modeExpr] : modeExpr;
-}
-
-function buildLayerVisibilityExpression(layer: LayerState): any | null {
-  const expressions: any[] = [];
-  const legendExpr = buildLegendVisibilityFilterForState(
-    layer.field,
-    layer.fieldType,
-    layer.stats,
-    layer.colorMode,
-    layer.colorBreaks,
-    layer.hiddenLegendItems
-  );
-  if (legendExpr) expressions.push(legendExpr);
-  const filterExpr = buildFilterModeExpressionForLayer(layer);
-  if (filterExpr) expressions.push(filterExpr);
-  if (!expressions.length) return null;
-  return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
-}
-function applyMapFilters() {
-  const ids = getCurrentLayerIds();
-  if (!ids) return;
-  const expressions: any[] = ['all'];
-  const legendExpr = buildLegendVisibilityFilter();
-  if (legendExpr) expressions.push(legendExpr);
-  const filterExpr = buildFilterModeExpression();
-  if (filterExpr) expressions.push(filterExpr);
-  if (expressions.length > 1) {
-    map.setFilter(ids.layerId, expressions as any);
-  } else {
-    map.setFilter(ids.layerId, null);
-  }
-  if (statsSubjectMode === 'visible' && statsLayerId === currentLayerId) {
-    updateStatisticsResults();
-  }
-  if (scatterSubjectMode === 'visible' && scatterLayerId === currentLayerId) {
-    scheduleScatterPlotRefresh();
-  }
-}
-
-function applyVisibilityFilters() {
-  applyMapFilters();
-}
-
 function applyExtrusionWithVisibility() {
-  if (!currentGeoJSON || !currentField) return;
+  if (!S.currentGeoJSON || !S.currentField) return;
   
   // Use custom colors if available, otherwise normal extrusion
-  if (customColors.size > 0) {
+  if (S.customColors.size > 0) {
     applyExtrusionWithCustomColors();
   } else {
     applyExtrusion();
@@ -4809,639 +3281,28 @@ function applyExtrusionWithVisibility() {
 }
 
 
-// Minimal bounding polygon (convex hull) for Polygon/MultiPolygon features.
-// Uses Andrew's monotone chain (O(n log n) for sort, linear after).
-function minimalBoundingPolygon(
-  features: ReadonlyArray<GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>>
-): GeoJSON.Feature<GeoJSON.Polygon> {
-  type LngLat = [number, number];
-
-  // 1) Collect all [lng, lat] vertices from the input features
-  const pts: LngLat[] = [];
-  for (const f of features) {
-    if (!f?.geometry) continue;
-    if (f.geometry.type === 'Polygon') {
-      for (const ring of f.geometry.coordinates) {
-        for (const c of ring) pts.push([c[0], c[1]]);
-      }
-    } else if (f.geometry.type === 'MultiPolygon') {
-      for (const poly of f.geometry.coordinates) {
-        for (const ring of poly) {
-          for (const c of ring) pts.push([c[0], c[1]]);
-        }
-      }
-    }
-  }
-
-  // No points → empty polygon
-  if (pts.length === 0) {
-    return {
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [[]] },
-      properties: { empty: true }
-    };
-  }
-
-  // 2) Sort by lng, then lat and de-dup
-  pts.sort((a, b) => (a[0] === b[0] ? a[1] - b[1] : a[0] - b[0]));
-  const unique: LngLat[] = [];
-  for (const p of pts) {
-    const last = unique[unique.length - 1];
-    if (!last || last[0] !== p[0] || last[1] !== p[1]) unique.push(p);
-  }
-
-  // If fewer than 3 unique points, fall back to axis-aligned bbox polygon
-  if (unique.length < 3) {
-    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
-    for (const [lng, lat] of unique) {
-      if (lng < minLng) minLng = lng;
-      if (lat < minLat) minLat = lat;
-      if (lng > maxLng) maxLng = lng;
-      if (lat > maxLat) maxLat = lat;
-    }
-    // If still degenerate (e.g., a single point), this yields a zero-area ring
-    const ring: LngLat[] = [
-      [minLng, minLat],
-      [maxLng, minLat],
-      [maxLng, maxLat],
-      [minLng, maxLat],
-      [minLng, minLat]
-    ];
-    return {
-      type: 'Feature',
-      geometry: { type: 'Polygon', coordinates: [ring] },
-      properties: { algorithm: 'bbox_fallback' }
-    };
-  }
-
-  // 3) Monotone chain hull
-  const cross = (o: LngLat, a: LngLat, b: LngLat) =>
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
-
-  const lower: LngLat[] = [];
-  for (const p of unique) {
-    while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], p) <= 0) {
-      lower.pop();
-    }
-    lower.push(p);
-  }
-
-  const upper: LngLat[] = [];
-  for (let i = unique.length - 1; i >= 0; i--) {
-    const p = unique[i];
-    while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], p) <= 0) {
-      upper.pop();
-    }
-    upper.push(p);
-  }
-
-  // 4) Combine and close ring
-  const hull = lower.slice(0, -1).concat(upper.slice(0, -1));
-  const ring = hull.concat([hull[0]]);
-
-  return {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [ring] },
-    properties: { algorithm: 'monotone_chain' }
-  };
-}
-  
-
-// New parcel selection system functions
-function getParcelId(feature: any): string {
-  // Use the feature's unique ID, which is guaranteed to be unique
-  return feature.id.toString();
-}
-
-function toggleParcelSelection(feature: any) {
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  const parcelId = getParcelId(feature);
-  if (selectedParcels.has(parcelId)) {
-    selectedParcels.delete(parcelId);
-    map.setFeatureState(
-      { source: sourceId, id: feature.id },
-      { selected: false }
-    );
-  } else {
-    selectedParcels.add(parcelId);
-    map.setFeatureState(
-      { source: sourceId, id: feature.id },
-      { selected: true }
-    );
-  }
-  updateSelectionControls();
-}
-
-function addParcelToSelection(feature: any) {
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  const parcelId = getParcelId(feature);
-  selectedParcels.add(parcelId);
-  map.setFeatureState(
-    { source: sourceId, id: feature.id },
-    { selected: true }
-  );
-  updateSelectionControls();
-}
-
-function removeParcelFromSelection(feature: any) {
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  const parcelId = getParcelId(feature);
-  selectedParcels.delete(parcelId);
-  map.setFeatureState(
-    { source: sourceId, id: feature.id },
-    { selected: false }
-  );
-  updateSelectionControls();
-}
-
-function clearAllSelections() {
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  // Clear all feature states
-  if (currentGeoJSON) {
-    for (const feature of currentGeoJSON.features) {
-      if (feature.id !== undefined) {
-        map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: false }
-        );
-      }
-    }
-  }
-  selectedParcels.clear();
-  updateSelectionControls();
-}
-
-function updateSelectionControls() {
-  if (selectedParcels.size === 0) {
-    // Hide selection controls panel
-    if (selectionControlsPanel) {
-      selectionControlsPanel.style.display = 'none';
-    }
-  } else {
-    // Show selection controls panel
-    if (!selectionControlsPanel) {
-      createSelectionControlsPanel();
-    }
-    if (selectionControlsPanel) {
-      selectionControlsPanel.style.display = 'block';
-      // Update the count
-      const countElement = selectionControlsPanel.querySelector('#selectedCount');
-      if (countElement) {
-        countElement.textContent = selectedParcels.size.toString();
-      }
-    }
-  }
-  if (statsSubjectMode === 'selected') {
-    updateStatisticsResults();
-  }
-  if (scatterSubjectMode === 'selected') {
-    scheduleScatterPlotRefresh();
-  }
-}
-
-function createSelectionControlsPanel() {
-  // Remove existing panel if it exists
-  if (selectionControlsPanel) {
-    selectionControlsPanel.remove();
-  }
-
-  // Create new panel
-  selectionControlsPanel = document.createElement('div');
-  selectionControlsPanel.id = 'selectionControlsPanel';
-  
-  // Check if legend is visible and adjust positioning
-  const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';
-  const legendWidth = legendVisible ? 280 : 0; // Legend max-width is 280px
-  const legendRight = 20; // Legend right margin
-  const panelRight = legendVisible ? (legendWidth + legendRight + 10) : 20; // Add 10px gap
-  
-  selectionControlsPanel.style.cssText = `
-    position: absolute;
-    top: 60px;
-    right: ${panelRight}px;
-    background: rgba(255, 255, 255, 0.95);
-    border: 1px solid #ddd;
-    border-radius: 8px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    z-index: 15;
-    backdrop-filter: blur(4px);
-    min-width: 200px;
-    cursor: move;
-  `;
-
-  selectionControlsPanel.innerHTML = `
-    <div class="window-header" style="
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-bottom: 1px solid #eee;
-      background: rgba(248, 248, 248, 0.8);
-      border-radius: 8px 8px 0 0;
-      cursor: move;
-    ">
-      <div style="font-weight: 600; font-size: 13px;">Selection Controls</div>
-    </div>
-    <div style="padding: 12px;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-        <span style="font-size: 12px;">Selected:</span>
-        <span id="selectedCount" style="font-weight: 600;">${selectedParcels.size}</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-        <span style="font-size: 12px;">Highlight color:</span>
-        <input type="color" id="highlightColorPicker" value="${highlightColor}" style="width: 30px; height: 20px; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
-      </div>
-      <button id="unselectAllBtn" style="
-        width: 100%;
-        border: 1px solid #ddd;
-        background: #f8f8f8;
-        padding: 6px 8px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-      ">Unselect All</button>
-    </div>
-  `;
-
-  // Add event listeners
-  const unselectAllBtn = selectionControlsPanel.querySelector('#unselectAllBtn') as HTMLButtonElement;
-  const colorPicker = selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement;
-
-  unselectAllBtn.addEventListener('click', clearAllSelections);
-  
-  colorPicker.addEventListener('change', (e) => {
-    const target = e.target as HTMLInputElement;
-    highlightColor = target.value;
-    updateHighlightColors();
-    persistCurrentLayerState();
-  });
-
-  // Add to document
-  document.body.appendChild(selectionControlsPanel);
-  
-  // Make the panel draggable
-  makeDraggable(selectionControlsPanel);
-  
-  // Update legend position to be below the panel
-  updateLegendPosition();
-}
-
 function updateHighlightColors() {
-  // Update the fill color expression to include highlighting
   const ids = getCurrentLayerIds();
   if (!ids) return;
-  if (currentFieldType === 'categorical') {
-    // For categorical fields, rebuild the color expression with highlighting
+  if (S.currentFieldType === 'categorical') {
     const colorExpr = buildCategoricalColorExpression();
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
   } else {
     applyExtrusion();
   }
 }
 
-function updateSelectionControlsPosition() {
-  if (!selectionControlsPanel) return;
-  
-  const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';
-  const legendWidth = legendVisible ? 280 : 0;
-  const legendRight = 20;
-  const panelRight = legendVisible ? (legendWidth + legendRight + 10) : 20;
-  
-  selectionControlsPanel.style.right = `${panelRight}px`;
-}
-
 function updateLegendPosition() {
-  if (!floatingLegend || !selectionControlsPanel) return;
-  
-  // Position legend below the selection controls panel
-  const panelRect = selectionControlsPanel.getBoundingClientRect();
+  if (!floatingLegend || !S.selectionControlsPanel) return;
+  const panelRect = S.selectionControlsPanel.getBoundingClientRect();
   const panelBottom = panelRect.bottom;
-  const legendTop = panelBottom + 10; // 10px gap
-  
+  const legendTop = panelBottom + 10;
   floatingLegend.style.top = `${legendTop}px`;
 }
 
-function createFilterRule(): FilterRule {
-  return {
-    id: `filter-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    field: null,
-    fieldType: null,
-    operator: null,
-    value: null,
-    active: true
-  };
-}
+// Minimal bounding polygon (convex hull) for Polygon/MultiPolygon features.
+// Uses Andrew's monotone chain (O(n log n) for sort, linear after).
 
-function updateFiltersUIState() {
-  const hasData = Boolean(currentGeoJSON);
-  const hasActiveFilters = getActiveFilters().length > 0;
-  const canApply = hasData && hasActiveFilters;
-  if (addFilterButton) addFilterButton.disabled = false;
-  if (filtersSelectButton) filtersSelectButton.disabled = !canApply;
-  if (filtersShowButton) filtersShowButton.disabled = !canApply;
-  if (filtersHideButton) filtersHideButton.disabled = !canApply;
-  updateFilterActionButtons();
-  updateSavedFiltersUIState();
-}
-
-function renderFiltersList() {
-  if (!filtersListEl) return;
-  filtersListEl.replaceChildren();
-
-  const availableFields = getAvailableFilterFields();
-
-  filters.forEach(filter => {
-    const row = document.createElement('div');
-    row.className = 'filter-row';
-
-    const widget = document.createElement('div');
-    widget.className = 'filter-widget';
-
-    const headerRow = document.createElement('div');
-    headerRow.className = 'filter-widget-header';
-
-    const toggleLabel = document.createElement('label');
-    toggleLabel.className = 'filter-toggle';
-    const toggleInput = document.createElement('input');
-    toggleInput.type = 'checkbox';
-    toggleInput.checked = filter.active;
-    toggleInput.addEventListener('change', () => {
-      filter.active = toggleInput.checked;
-      updateFiltersUIState();
-      applyActiveFilterAction();
-      persistCurrentLayerState();
-    });
-    toggleLabel.append(toggleInput);
-
-    const deleteButton = document.createElement('button');
-    deleteButton.type = 'button';
-    deleteButton.className = 'filter-control-btn filter-delete-btn';
-    deleteButton.textContent = '❌';
-    deleteButton.title = 'Delete filter';
-    deleteButton.addEventListener('click', () => {
-      filters = filters.filter(existing => existing.id !== filter.id);
-      renderFiltersList();
-      updateFiltersUIState();
-      applyActiveFilterAction();
-      persistCurrentLayerState();
-    });
-
-    headerRow.append(toggleLabel, deleteButton);
-    widget.appendChild(headerRow);
-
-    const fieldRow = document.createElement('div');
-    fieldRow.className = 'filter-widget-row';
-
-    const fieldSelect = document.createElement('select');
-    const placeholderOption = new Option('Select field', '');
-    placeholderOption.disabled = true;
-    placeholderOption.selected = !filter.field;
-    fieldSelect.appendChild(placeholderOption);
-    availableFields.forEach(item => {
-      const option = new Option(item.field, item.field);
-      option.dataset.type = item.type;
-      fieldSelect.appendChild(option);
-    });
-    if (filter.field) {
-      fieldSelect.value = filter.field;
-    }
-
-    fieldSelect.addEventListener('change', () => {
-      const selected = fieldSelect.value;
-      const selectedOption = fieldSelect.selectedOptions[0];
-      filter.field = selected;
-      filter.fieldType = (selectedOption?.dataset.type as FilterFieldType) ?? null;
-      filter.operator = null;
-      filter.value = null;
-      renderFiltersList();
-      updateFiltersUIState();
-      applyActiveFilterAction();
-      persistCurrentLayerState();
-    });
-
-    fieldRow.appendChild(fieldSelect);
-    widget.appendChild(fieldRow);
-
-    if (filter.field && filter.fieldType) {
-      const operatorRow = document.createElement('div');
-      operatorRow.className = 'filter-widget-row split';
-
-      const operatorSelect = document.createElement('select');
-      const operatorPlaceholder = new Option('Select condition', '');
-      operatorPlaceholder.disabled = true;
-      operatorPlaceholder.selected = !filter.operator;
-      operatorSelect.appendChild(operatorPlaceholder);
-      const operatorOptions = filter.fieldType === 'numeric'
-        ? NUMERIC_FILTER_OPERATORS
-        : CATEGORICAL_FILTER_OPERATORS;
-      operatorOptions.forEach(option => {
-        operatorSelect.appendChild(new Option(option.label, option.value));
-      });
-      if (filter.operator) {
-        operatorSelect.value = filter.operator;
-      }
-      operatorSelect.addEventListener('change', () => {
-        filter.operator = operatorSelect.value as FilterOperator;
-        filter.value = null;
-        renderFiltersList();
-        updateFiltersUIState();
-        applyActiveFilterAction();
-        persistCurrentLayerState();
-      });
-      operatorRow.appendChild(operatorSelect);
-
-      if (filter.fieldType === 'numeric') {
-        const valueInput = document.createElement('input');
-        valueInput.type = 'number';
-        valueInput.placeholder = 'Value';
-        valueInput.value = typeof filter.value === 'number' ? String(filter.value) : '';
-        valueInput.disabled = !filter.operator;
-        valueInput.addEventListener('input', () => {
-          const parsed = Number(valueInput.value);
-          filter.value = Number.isFinite(parsed) ? parsed : null;
-          updateFiltersUIState();
-          applyActiveFilterAction();
-          persistCurrentLayerState();
-        });
-        operatorRow.appendChild(valueInput);
-      } else {
-        const categoricalValues = filter.field ? getCategoricalValues(filter.field) : [];
-        const valueSelect = document.createElement('select');
-        valueSelect.className = 'filter-value-select';
-        if (filter.operator === 'any' || filter.operator === 'not-any') {
-          valueSelect.multiple = true;
-        }
-        const needsPlaceholder = !valueSelect.multiple;
-        if (needsPlaceholder) {
-          const valuePlaceholder = new Option('Select value', '');
-          valuePlaceholder.disabled = true;
-          valuePlaceholder.selected = !filter.value;
-          valueSelect.appendChild(valuePlaceholder);
-        }
-        categoricalValues.forEach(value => {
-          valueSelect.appendChild(new Option(value, value));
-        });
-
-        if (Array.isArray(filter.value)) {
-          Array.from(valueSelect.options).forEach(option => {
-            option.selected = filter.value.includes(option.value);
-          });
-        } else if (typeof filter.value === 'string') {
-          valueSelect.value = filter.value;
-        }
-
-        valueSelect.disabled = !filter.operator;
-        valueSelect.addEventListener('change', () => {
-          if (valueSelect.multiple) {
-            const values = Array.from(valueSelect.selectedOptions).map(option => option.value);
-            filter.value = values;
-          } else {
-            filter.value = valueSelect.value || null;
-          }
-          updateFiltersUIState();
-          applyActiveFilterAction();
-          persistCurrentLayerState();
-        });
-        operatorRow.appendChild(valueSelect);
-      }
-
-      widget.appendChild(operatorRow);
-    }
-
-    row.append(widget);
-    filtersListEl.appendChild(row);
-  });
-  updateFiltersPanelLayout();
-}
-
-function refreshFiltersUI() {
-  syncFiltersWithAvailableFields();
-  renderFiltersList();
-  updateFiltersUIState();
-}
-
-function matchesFilterRule(feature: GeoJSON.Feature, filter: FilterRule): boolean {
-  if (!filter.field || !filter.operator) return false;
-  const rawValue = feature.properties?.[filter.field];
-  if (filter.fieldType === 'numeric') {
-    const numericValue = numOrNull(rawValue);
-    if (numericValue === null || filter.value === null || !Number.isFinite(filter.value)) return false;
-    const target = Number(filter.value);
-    switch (filter.operator) {
-      case 'lt':
-        return numericValue < target;
-      case 'gt':
-        return numericValue > target;
-      case 'lte':
-        return numericValue <= target;
-      case 'gte':
-        return numericValue >= target;
-      case 'eq':
-        return numericValue === target;
-      case 'neq':
-        return numericValue !== target;
-      default:
-        return false;
-    }
-  }
-
-  if (filter.fieldType === 'categorical') {
-    if (rawValue === null || rawValue === undefined) return false;
-    const value = String(rawValue);
-    if (filter.operator === 'eq') return value === String(filter.value);
-    if (filter.operator === 'neq') return value !== String(filter.value);
-    if ((filter.operator === 'any' || filter.operator === 'not-any') && Array.isArray(filter.value)) {
-      const hasValue = filter.value.map(String).includes(value);
-      return filter.operator === 'not-any' ? !hasValue : hasValue;
-    }
-  }
-
-  return false;
-}
-
-function matchesActiveFilters(feature: GeoJSON.Feature): boolean {
-  const activeFilters = getActiveFilters();
-  if (!activeFilters.length) return false;
-  const baseMatch = activeFilters.every(filter => matchesFilterRule(feature, filter));
-  return filterInvert ? !baseMatch : baseMatch;
-}
-
-function applyFilteredSelection() {
-  if (!currentGeoJSON) return;
-  const activeFilters = getActiveFilters();
-  if (!activeFilters.length) return;
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-
-  clearAllSelections();
-
-  for (const feature of currentGeoJSON.features) {
-    if (!matchesActiveFilters(feature)) continue;
-    if (feature.id === undefined) continue;
-    const parcelId = getParcelId(feature);
-    selectedParcels.add(parcelId);
-    map.setFeatureState(
-      { source: sourceId, id: feature.id },
-      { selected: true }
-    );
-  }
-  updateSelectionControls();
-}
-
-function applyFilterMode(mode: FilterMode) {
-  if (!currentGeoJSON) return;
-  filterMode = mode;
-  if (mode !== 'none') {
-    clearLegendVisibility();
-  }
-  applyMapFilters();
-  updateFiltersUIState();
-  persistCurrentLayerState();
-}
-
-function updateFilterActionButtons() {
-  filtersSelectButton.classList.toggle('active', filterActionMode === 'select');
-  filtersShowButton.classList.toggle('active', filterActionMode === 'show');
-  filtersHideButton.classList.toggle('active', filterActionMode === 'hide');
-}
-
-function applyActiveFilterAction() {
-  if (filterActionMode === 'select') {
-    applyFilteredSelection();
-    return;
-  }
-  if (filterActionMode === 'show') {
-    applyFilterMode('show');
-    return;
-  }
-  if (filterActionMode === 'hide') {
-    applyFilterMode('hide');
-    return;
-  }
-}
-
-function setFilterActionMode(nextMode: FilterActionMode) {
-  const next = filterActionMode === nextMode ? 'none' : nextMode;
-  filterActionMode = next;
-
-  if (next === 'select') {
-    applyFilterMode('none');
-    applyFilteredSelection();
-  } else if (next === 'show' || next === 'hide') {
-    applyFilterMode(next);
-  } else {
-    if (filterMode !== 'none') {
-      applyFilterMode('none');
-    }
-  }
-
-  updateFilterActionButtons();
-  persistCurrentLayerState();
-}
 
 function installWelcome() {
   minimizeLayers();
@@ -5449,9 +3310,9 @@ function installWelcome() {
   minimizePaint();
   minimizeFilters();
 
-  welcomeEl = document.createElement('div');
-  welcomeEl.id = 'welcomeOverlay';
-  welcomeEl.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,#f9fafb,transparent 55%);z-index:20;';
+  S.welcomeEl = document.createElement('div');
+  S.welcomeEl.id = 'welcomeOverlay';
+  S.welcomeEl.style.cssText = 'position:absolute;inset:0;display:grid;place-items:center;background:linear-gradient(180deg,#f9fafb,transparent 55%);z-index:20;';
   const card = document.createElement('div');
   card.style.cssText = 'background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.12);padding:18px 20px;max-width:560px;width:min(92vw,560px);display:grid;gap:12px;text-align:center;';
   card.innerHTML = `
@@ -5469,44 +3330,44 @@ function installWelcome() {
 
   row.append(btnBrowse);
   card.append(row);
-  welcomeEl.append(card);
-  document.body.append(welcomeEl);
+  S.welcomeEl.append(card);
+  document.body.append(S.welcomeEl);
 }
 
 function revealUI() {
-  if (welcomeEl) { welcomeEl.remove(); welcomeEl = null; }
+  if (S.welcomeEl) { S.welcomeEl.remove(); S.welcomeEl = null; }
   showLayers();
   showPaint();
   minimizeSettingsMenu();
 }
 
 function ensureRenderToast() {
-  if (renderToastEl) return;
-  renderToastEl = document.createElement('div');
-  renderToastEl.style.cssText = `
+  if (S.renderToastEl) return;
+  S.renderToastEl = document.createElement('div');
+  S.renderToastEl.style.cssText = `
     position:absolute; top:12px; left:50%; transform:translateX(-50%);
     background:#111; color:#fff; padding:6px 10px; border-radius:999px;
     font-size:12px; opacity:0; transition:opacity .2s; z-index:25; pointer-events:none;
   `;
-  renderToastEl.textContent = 'Geometry is rendering...';
-  document.body.append(renderToastEl);
+  S.renderToastEl.textContent = 'Geometry is rendering...';
+  document.body.append(S.renderToastEl);
 }
 
 function showRenderingToast(msg = 'Geometry is rendering') {
   ensureRenderToast();
   let i = 0;
-  if (dotsTimer) { clearInterval(dotsTimer); dotsTimer = null; }
-  renderToastEl!.style.opacity = '0.92';
-  renderToastEl!.textContent = `${msg}`;
-  dotsTimer = window.setInterval(() => {
+  if (S.dotsTimer) { clearInterval(S.dotsTimer); S.dotsTimer = null; }
+  S.renderToastEl!.style.opacity = '0.92';
+  S.renderToastEl!.textContent = `${msg}`;
+  S.dotsTimer = window.setInterval(() => {
     i = (i + 1) % 4;
-    renderToastEl!.textContent = `${msg}${'.'.repeat(i)}`;
+    S.renderToastEl!.textContent = `${msg}${'.'.repeat(i)}`;
   }, 400);
 }
 
 function hideRenderingToast() {
-  if (dotsTimer) { clearInterval(dotsTimer); dotsTimer = null; }
-  if (renderToastEl) renderToastEl.style.opacity = '0';
+  if (S.dotsTimer) { clearInterval(S.dotsTimer); S.dotsTimer = null; }
+  if (S.renderToastEl) S.renderToastEl.style.opacity = '0';
 }
 
 function awaitFirstRenderedFeature(layerId: string) {
@@ -5515,8 +3376,8 @@ function awaitFirstRenderedFeature(layerId: string) {
   const maxTries = 600; // ~10s at 60fps
   const tick = () => {
     tries++;
-    if (!map.getLayer(layerId)) { if (tries < maxTries) return requestAnimationFrame(tick); else return hideRenderingToast(); }
-    const feats = map.queryRenderedFeatures({ layers: [layerId] });
+    if (!S.map.getLayer(layerId)) { if (tries < maxTries) return requestAnimationFrame(tick); else return hideRenderingToast(); }
+    const feats = S.map.queryRenderedFeatures({ layers: [layerId] });
     if (feats && feats.length > 0) {
       hideRenderingToast();
     } else if (tries < maxTries) {
@@ -5728,26 +3589,26 @@ function openNumericFieldChooserModal(opts: {
   btnCancelNumericModal.onclick = () => { numericModalOverlay.classList.remove('show'); clearData(); };
   btnConfirmNumericModal.onclick = () => {
     const allCheckboxes = numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
-    chosenNumericFields = [];
+    S.chosenNumericFields = [];
     
     allCheckboxes.forEach(c => {
       if (c.checked) {
-        chosenNumericFields.push(c.name);
+        S.chosenNumericFields.push(c.name);
       }
     });
     
     numericModalOverlay.classList.remove('show');
     
     // If there are categorical fields available, show that modal next
-    if (lastCategoricalFieldsFromSchema.length > 0) {
+    if (S.lastCategoricalFieldsFromSchema.length > 0) {
       openCategoricalFieldChooserModal({ 
         rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'), 
         geometryCol: geomColEl.textContent || 'geometry', 
-        categoricalFields: lastCategoricalFieldsFromSchema
+        categoricalFields: S.lastCategoricalFieldsFromSchema
       });
     } else {
       // No categorical fields, proceed to size modal
-      if (chosenNumericFields.length === 0) {
+      if (S.chosenNumericFields.length === 0) {
         alert('Please select at least one numeric field.');
         numericModalOverlay.classList.add('show');
         return;
@@ -5794,16 +3655,16 @@ function openCategoricalFieldChooserModal(opts: {
   btnCancelCategoricalModal.onclick = () => { categoricalModalOverlay.classList.remove('show'); clearData(); };
   btnConfirmCategoricalModal.onclick = () => {
     const allCheckboxes = categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]');
-    chosenCategoricalFields = [];
+    S.chosenCategoricalFields = [];
     
     allCheckboxes.forEach(c => {
       if (c.checked) {
-        chosenCategoricalFields.push(c.name);
+        S.chosenCategoricalFields.push(c.name);
       }
     });
     
     // Check if at least one field is selected (either numeric or categorical)
-    if (chosenNumericFields.length === 0 && chosenCategoricalFields.length === 0) {
+    if (S.chosenNumericFields.length === 0 && S.chosenCategoricalFields.length === 0) {
       alert('Please select at least one field (numeric or categorical).');
       categoricalModalOverlay.classList.add('show');
       return;
@@ -5828,7 +3689,7 @@ function openCategoricalFieldChooserModal(opts: {
     openNumericFieldChooserModal({ 
       rowCount: Number(categoricalRowCountEl.textContent?.replace(/,/g, '') || '0'), 
       geometryCol: categoricalGeomColEl.textContent || 'geometry', 
-      numericFields: lastNumericFieldsFromSchema
+      numericFields: S.lastNumericFieldsFromSchema
     });
   };
   
@@ -5865,14 +3726,14 @@ function guessAreaUnitFromFieldName(name: string | null): string | null {
 }
 function openSizeModal() {
   // options: only among the fields the user kept
-  fillFieldSelect(bldgFieldSel, chosenNumericFields);
-  fillFieldSelect(landFieldSel, chosenNumericFields);
+  fillFieldSelect(bldgFieldSel, S.chosenNumericFields);
+  fillFieldSelect(landFieldSel, S.chosenNumericFields);
   fillUnitSelect(bldgUnitSel);
   fillUnitSelect(landUnitSel);
   
   // --- AUTO-PICK using heuristic ---
-  const bGuess = autoPickOne('building', chosenNumericFields);
-  const lGuess = autoPickOne('land', chosenNumericFields);
+  const bGuess = autoPickOne('building', S.chosenNumericFields);
+  const lGuess = autoPickOne('land', S.chosenNumericFields);
 
   if (bGuess.field) {
     bldgFieldSel.value = bGuess.field;
@@ -5897,17 +3758,17 @@ function openSizeModal() {
   btnSizeBack.onclick = () => { 
     sizeOverlay.classList.remove('show'); 
     // Go back to the appropriate modal based on what was shown
-    if (lastCategoricalFieldsFromSchema.length > 0) {
+    if (S.lastCategoricalFieldsFromSchema.length > 0) {
       openCategoricalFieldChooserModal({ 
         rowCount: Number(categoricalRowCountEl.textContent?.replace(/,/g, '') || '0'), 
         geometryCol: categoricalGeomColEl.textContent || 'geometry', 
-        categoricalFields: lastCategoricalFieldsFromSchema
+        categoricalFields: S.lastCategoricalFieldsFromSchema
       });
     } else {
       openNumericFieldChooserModal({ 
         rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'), 
         geometryCol: geomColEl.textContent || 'geometry', 
-        numericFields: lastNumericFieldsFromSchema
+        numericFields: S.lastNumericFieldsFromSchema
       });
     }
   };
@@ -5930,48 +3791,48 @@ function valueToUnitLabel(key: string): string | null {
   return item ? item.label : null;
 }
 function setSizeState(bField: string | null, bUnit: string | null, lField: string | null, lUnit: string | null) {
-  bldgSizeField = bField || null;
-  bldgSizeUnitLabel = bUnit || null;
-  landSizeField = lField || null;
-  landSizeUnitLabel = lUnit || null;
+  S.bldgSizeField = bField || null;
+  S.bldgSizeUnitLabel = bUnit || null;
+  S.landSizeField = lField || null;
+  S.landSizeUnitLabel = lUnit || null;
   const activeLayer = getCurrentLayer();
   if (activeLayer) {
-    activeLayer.bldgSizeField = bldgSizeField;
-    activeLayer.bldgSizeUnitLabel = bldgSizeUnitLabel;
-    activeLayer.landSizeField = landSizeField;
-    activeLayer.landSizeUnitLabel = landSizeUnitLabel;
+    activeLayer.bldgSizeField = S.bldgSizeField;
+    activeLayer.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
+    activeLayer.landSizeField = S.landSizeField;
+    activeLayer.landSizeUnitLabel = S.landSizeUnitLabel;
   }
-  const activeStore = activeLayer ? dataStores.get(activeLayer.dataStoreId) : null;
+  const activeStore = activeLayer ? S.dataStores.get(activeLayer.dataStoreId) : null;
   if (activeStore) {
-    activeStore.bldgSizeField = bldgSizeField;
-    activeStore.bldgSizeUnitLabel = bldgSizeUnitLabel;
-    activeStore.landSizeField = landSizeField;
-    activeStore.landSizeUnitLabel = landSizeUnitLabel;
+    activeStore.bldgSizeField = S.bldgSizeField;
+    activeStore.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
+    activeStore.landSizeField = S.landSizeField;
+    activeStore.landSizeUnitLabel = S.landSizeUnitLabel;
   }
   // enable/disable normalization radios
-  normLand.disabled = !landSizeField;
-  normBldg.disabled = !bldgSizeField;
-  normLandUnitEl.textContent = landSizeField ? (landSizeUnitLabel ?? '(unit)') : '(unit)';
-  normBldgUnitEl.textContent = bldgSizeField ? (bldgSizeUnitLabel ?? '(unit)') : '(unit)';
+  normLand.disabled = !S.landSizeField;
+  normBldg.disabled = !S.bldgSizeField;
+  normLandUnitEl.textContent = S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)';
+  normBldgUnitEl.textContent = S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)';
 
-  statsNormLand.disabled = !landSizeField;
-  statsNormBldg.disabled = !bldgSizeField;
-  statsNormLandUnitEl.textContent = landSizeField ? (landSizeUnitLabel ?? '(unit)') : '(unit)';
-  statsNormBldgUnitEl.textContent = bldgSizeField ? (bldgSizeUnitLabel ?? '(unit)') : '(unit)';
+  statsNormLand.disabled = !S.landSizeField;
+  statsNormBldg.disabled = !S.bldgSizeField;
+  statsNormLandUnitEl.textContent = S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)';
+  statsNormBldgUnitEl.textContent = S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)';
 
-  if (statsNormalizationMode === 'perLand' && !landSizeField) {
-    statsNormalizationMode = 'asis';
+  if (S.statsNormalizationMode === 'perLand' && !S.landSizeField) {
+    S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
   }
-  if (statsNormalizationMode === 'perBuilding' && !bldgSizeField) {
-    statsNormalizationMode = 'asis';
+  if (S.statsNormalizationMode === 'perBuilding' && !S.bldgSizeField) {
+    S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
   }
 }
 
 /* ---------------- Loading overlay helpers ---------------- */
 function showLoading(msg = 'Parsing GeoParquet…', determinate = false) {
-  cancelRequested = false;
+  S.cancelRequested = false;
   progressMsg.textContent = msg;
   progressEl.classList.toggle('indeterminate', !determinate);
   progressBar.style.width = determinate ? '0%' : '30%';
@@ -5979,19 +3840,19 @@ function showLoading(msg = 'Parsing GeoParquet…', determinate = false) {
 }
 function hideLoading() { loadingOverlay.classList.remove('show'); }
 (document.getElementById('btnCancelLoading') as HTMLButtonElement).onclick = () => {
-  cancelRequested = true;
+  S.cancelRequested = true;
   hideLoading();
   clearData();
 };
 
 /* ---------------- Load selected columns (+ geometry) ---------------- */
 async function loadSelectedColumns() {
-  if (!lastAsyncBuffer || !lastFile) return;
+  if (!S.lastAsyncBuffer || !S.lastFile) return;
   showLoading('Reading geometry + selected fields…');
 
   try {
-    const result: any = await toGeoJson({ file: lastAsyncBuffer, compressors });
-    if (cancelRequested) return;
+    const result: any = await toGeoJson({ file: S.lastAsyncBuffer, compressors });
+    if (S.cancelRequested) return;
 
     const fc: GeoJSON.FeatureCollection | undefined =
       result?.type === 'FeatureCollection' ? result : result?.geojson;
@@ -6004,10 +3865,10 @@ async function loadSelectedColumns() {
 
     const keep = new Set<string>([
       'id','ID','fid','FID','name','NAME', 
-      ...chosenNumericFields, 
-      ...chosenCategoricalFields,
-      bldgSizeField || '', 
-      landSizeField || ''
+      ...S.chosenNumericFields,
+      ...S.chosenCategoricalFields,
+      S.bldgSizeField || '', 
+      S.landSizeField || ''
     ]);
     trimPropertiesInPlace(features, keep);
 
@@ -6020,37 +3881,37 @@ async function loadSelectedColumns() {
       }
     });
 
-    if (cancelRequested) return;
-    currentGeoJSON = { type: 'FeatureCollection', features };
-    parcelPatchMap = new Map();
+    if (S.cancelRequested) return;
+    S.currentGeoJSON = { type: 'FeatureCollection', features };
+    S.parcelPatchMap = new Map();
     const activeLayer = getCurrentLayer();
     if (activeLayer) {
-      activeLayer.geojson = currentGeoJSON;
-      activeLayer.parcelPatchMap = parcelPatchMap;
-      activeLayer.chosenNumericFields = [...chosenNumericFields];
-      activeLayer.chosenCategoricalFields = [...chosenCategoricalFields];
-      activeLayer.landSizeField = landSizeField;
-      activeLayer.landSizeUnitLabel = landSizeUnitLabel;
-      activeLayer.bldgSizeField = bldgSizeField;
-      activeLayer.bldgSizeUnitLabel = bldgSizeUnitLabel;
+      activeLayer.geojson = S.currentGeoJSON;
+      activeLayer.parcelPatchMap = S.parcelPatchMap;
+      activeLayer.chosenNumericFields = [...S.chosenNumericFields];
+      activeLayer.chosenCategoricalFields = [...S.chosenCategoricalFields];
+      activeLayer.landSizeField = S.landSizeField;
+      activeLayer.landSizeUnitLabel = S.landSizeUnitLabel;
+      activeLayer.bldgSizeField = S.bldgSizeField;
+      activeLayer.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
     }
-    const activeStore = activeLayer ? dataStores.get(activeLayer.dataStoreId) : null;
+    const activeStore = activeLayer ? S.dataStores.get(activeLayer.dataStoreId) : null;
     if (activeStore) {
-      activeStore.geojson = currentGeoJSON;
-      activeStore.chosenNumericFields = [...chosenNumericFields];
-      activeStore.chosenCategoricalFields = [...chosenCategoricalFields];
-      activeStore.landSizeField = landSizeField;
-      activeStore.landSizeUnitLabel = landSizeUnitLabel;
-      activeStore.bldgSizeField = bldgSizeField;
-      activeStore.bldgSizeUnitLabel = bldgSizeUnitLabel;
+      activeStore.geojson = S.currentGeoJSON;
+      activeStore.chosenNumericFields = [...S.chosenNumericFields];
+      activeStore.chosenCategoricalFields = [...S.chosenCategoricalFields];
+      activeStore.landSizeField = S.landSizeField;
+      activeStore.landSizeUnitLabel = S.landSizeUnitLabel;
+      activeStore.bldgSizeField = S.bldgSizeField;
+      activeStore.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
     }
 
     // Check which fields actually exist in the data
-    const availableNumeric = chosenNumericFields.filter(k => {
+    const availableNumeric = S.chosenNumericFields.filter(k => {
       return features.some(f => f?.properties?.hasOwnProperty(k));
     });
     
-    const availableCategorical = chosenCategoricalFields.filter(k => {
+    const availableCategorical = S.chosenCategoricalFields.filter(k => {
       return features.some(f => f?.properties?.hasOwnProperty(k));
     });
 
@@ -6059,13 +3920,13 @@ async function loadSelectedColumns() {
     populateFieldDropdownFromList(allAvailableFields);
 
     // Don't auto-select a field - let user choose
-    currentField = null;
-    currentFieldType = null;
+    S.currentField = null;
+    S.currentFieldType = null;
     
     // Set field select to "-- choose --" (empty value)
     fieldSelect.value = '';
 
-    addOrUpdateSource(currentGeoJSON);
+    addOrUpdateSource(S.currentGeoJSON);
 
     // Apply gray rendering when no field is selected
     applyGrayRendering();
@@ -6073,11 +3934,11 @@ async function loadSelectedColumns() {
     refreshScatterPanel();
     refreshLandSchedulePanel();
 
-    fitToData(currentGeoJSON);
+    fitToData(S.currentGeoJSON);
     persistCurrentLayerState();
   } catch (err: any) {
     console.error('GeoParquet load failed:', err);
-    if (!cancelRequested) alert(`GeoParquet load failed: ${err?.message ?? err}`);
+    if (!S.cancelRequested) alert(`GeoParquet load failed: ${err?.message ?? err}`);
   } finally {
     hideLoading();
   }
@@ -6085,8 +3946,8 @@ async function loadSelectedColumns() {
 
 /* ---------------- Map helpers ---------------- */
 function ensureErrorLayer(layer: LayerState) {
-  if (map.getLayer(layer.errorLayerId)) return;
-  map.addLayer({
+  if (S.map.getLayer(layer.errorLayerId)) return;
+  S.map.addLayer({
     id: layer.errorLayerId,
     type: 'line',
     source: layer.sourceId,
@@ -6098,46 +3959,46 @@ function ensureErrorLayer(layer: LayerState) {
     }
   });
   // keep it above extrusions for visibility
-  try { map.moveLayer(layer.errorLayerId); } catch {}
+  try { S.map.moveLayer(layer.errorLayerId); } catch {}
   setLayerVisibility(layer, layer.visible);
 }
 
 function updateErrorLayer() {
   const layer = getCurrentLayer();
-  if (!layer || !map.getSource(layer.sourceId)) return;
+  if (!layer || !S.map.getSource(layer.sourceId)) return;
   ensureErrorLayer(layer);
 
   let filter: any = ['==', ['literal', 1], 2]; // matches nothing by default
 
-  if (normalizationMode === 'perLand' && landSizeField) {
+  if (S.normalizationMode === 'perLand' && S.landSizeField) {
     // land invalid when ≤ 0  (zero not allowed)
-    filter = ['<=', ['to-number', ['get', landSizeField]], 0];
-  } else if (normalizationMode === 'perBuilding' && bldgSizeField) {
+    filter = ['<=', ['to-number', ['get', S.landSizeField]], 0];
+  } else if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
     // building invalid when negative (zero is allowed and not flagged)
-    filter = ['<', ['to-number', ['get', bldgSizeField]], 0];
+    filter = ['<', ['to-number', ['get', S.bldgSizeField]], 0];
   }
 
-  map.setFilter(layer.errorLayerId, filter);
+  S.map.setFilter(layer.errorLayerId, filter);
 }
 function clearData() {
-  if (currentLayerId) {
-    removeLayer(currentLayerId);
+  if (S.currentLayerId) {
+    removeLayer(S.currentLayerId);
   }
-  if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
-  if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
-  if (map.getSource('markup-source')) map.removeSource('markup-source');
-  parcelPatchMap = new Map();
+  if (S.map.getLayer('markup-layer')) S.map.removeLayer('markup-layer');
+  if (S.map.getLayer('markup-layer-outline')) S.map.removeLayer('markup-layer-outline');
+  if (S.map.getSource('markup-source')) S.map.removeSource('markup-source');
+  S.parcelPatchMap = new Map();
   hideRenderingToast();
 }
 function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
   const layer = getCurrentLayer();
   if (!layer) return;
   showRenderingToast('Geometry is rendering');
-  const existing = map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
+  const existing = S.map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
   if (existing) {
     existing.setData(fc);
   } else {
-    map.addSource(layer.sourceId, { type: 'geojson', data: fc });
+    S.map.addSource(layer.sourceId, { type: 'geojson', data: fc });
     addExtrusionLayer(layer);
   }
   awaitFirstRenderedFeature(layer.layerId);
@@ -6146,8 +4007,8 @@ function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
 let keyHandlersInstalled = false;
 
 function addExtrusionLayer(layer: LayerState) {
-  if (map.getLayer(layer.layerId)) return;
-  map.addLayer({
+  if (S.map.getLayer(layer.layerId)) return;
+  S.map.addLayer({
     id: layer.layerId, type: 'fill-extrusion', source: layer.sourceId,
     paint: {
       'fill-extrusion-color': '#888',
@@ -6159,15 +4020,15 @@ function addExtrusionLayer(layer: LayerState) {
   setLayerVisibility(layer, layer.visible);
 
   // NEW: parcel selection and inspection
-  map.on('click', layer.layerId, (e) => {
+  S.map.on('click', layer.layerId, (e) => {
     const f = e.features?.[0];
     if (!f) return;
-    if (currentLayerId !== layer.id) {
+    if (S.currentLayerId !== layer.id) {
       setCurrentLayer(layer.id);
     }
     
     // Handle info tool
-    if (isInfoToolActive) {
+    if (S.isInfoToolActive) {
       const props = (f.properties || {}) as Record<string, any>;
       const parcelId = getParcelId(f);
       showPopup(props, e.lngLat, parcelId);
@@ -6175,7 +4036,7 @@ function addExtrusionLayer(layer: LayerState) {
     }
     
     // Handle selection tools
-    if (currentSelectionMode === 'select-one') {
+    if (S.currentSelectionMode === 'select-one') {
       // Handle different click modes
       if (e.originalEvent.shiftKey) {
         // Shift-click: always add to selection
@@ -6192,20 +4053,20 @@ function addExtrusionLayer(layer: LayerState) {
   });
   
   // Right-click to close popup
-  map.on('contextmenu', layer.layerId, (e) => {
-    if (activePopup) {
-      activePopup.remove();
-      activePopup = null;
-      lastPicked = null;
+  S.map.on('contextmenu', layer.layerId, (e) => {
+    if (S.activePopup) {
+      S.activePopup.remove();
+      S.activePopup = null;
+      S.lastPicked = null;
     }
   });
   
-  map.on('mouseenter', layer.layerId, () => { 
-    if (isInfoToolActive) {
-      map.getCanvas().style.cursor = 'pointer';
+  S.map.on('mouseenter', layer.layerId, () => { 
+    if (S.isInfoToolActive) {
+      S.map.getCanvas().style.cursor = 'pointer';
     }
   });
-  map.on('mouseleave', layer.layerId, () => { 
+  S.map.on('mouseleave', layer.layerId, () => { 
     updateCursor();
   });
   
@@ -6213,10 +4074,10 @@ function addExtrusionLayer(layer: LayerState) {
   if (!keyHandlersInstalled) {
     document.addEventListener('keydown', (e) => {
       // ESC key to close popup
-      if (e.key === 'Escape' && activePopup) {
-        activePopup.remove();
-        activePopup = null;
-        lastPicked = null;
+      if (e.key === 'Escape' && S.activePopup) {
+        S.activePopup.remove();
+        S.activePopup = null;
+        S.lastPicked = null;
       }
 
       const activeElement = document.activeElement;
@@ -6245,18 +4106,18 @@ function addExtrusionLayer(layer: LayerState) {
 
 function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) {
   // Only show popup if info tool is active
-  if (!isInfoToolActive) return;
+  if (!S.isInfoToolActive) return;
   
-  if (activePopup) activePopup.remove();
-  activePopup = new maplibregl.Popup({
+  if (S.activePopup) S.activePopup.remove();
+  S.activePopup = new maplibregl.Popup({
     closeButton: true,
     closeOnClick: true,
     maxWidth: '460px'          // ← wider than default 240px
   })
     .setLngLat(lngLat)
     .setHTML(buildPopupHTML(props, parcelId))
-    .addTo(map);
-  lastPicked = { props, lngLat, parcelId };
+    .addTo(S.map);
+  S.lastPicked = { props, lngLat, parcelId };
   
   // Add search functionality to the popup
   addPopupSearchFunctionality();
@@ -6293,7 +4154,7 @@ function isTextInputElement(element: Element | null): boolean {
 
 function addPopupSearchFunctionality() {
   setTimeout(() => {
-    const popupElement = activePopup?.getElement();
+    const popupElement = S.activePopup?.getElement();
     if (popupElement) {
       const searchInput = popupElement.querySelector('#popupSearch') as HTMLInputElement;
       const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement;
@@ -6330,7 +4191,7 @@ function escapeHtml(value: string): string {
 }
 
 function getPopupFieldType(field: string): 'numeric' | 'categorical' {
-  if (chosenNumericFields.includes(field) || field === landSizeField || field === bldgSizeField) {
+  if (S.chosenNumericFields.includes(field) || field === S.landSizeField || field === S.bldgSizeField) {
     return 'numeric';
   }
   return 'categorical';
@@ -6357,24 +4218,24 @@ function normalizeFieldValue(fieldType: 'numeric' | 'categorical', value: any): 
 }
 
 function getParcelPatchEntry(parcelId: string, field: string): ParcelFieldPatch | undefined {
-  return parcelPatchMap.get(parcelId)?.get(field);
+  return S.parcelPatchMap.get(parcelId)?.get(field);
 }
 
 function setParcelPatchEntry(parcelId: string, field: string, original: any, current: any) {
-  let parcelEntry = parcelPatchMap.get(parcelId);
+  let parcelEntry = S.parcelPatchMap.get(parcelId);
   if (!parcelEntry) {
     parcelEntry = new Map();
-    parcelPatchMap.set(parcelId, parcelEntry);
+    S.parcelPatchMap.set(parcelId, parcelEntry);
   }
   parcelEntry.set(field, { original, current });
 }
 
 function clearParcelPatchEntry(parcelId: string, field: string) {
-  const parcelEntry = parcelPatchMap.get(parcelId);
+  const parcelEntry = S.parcelPatchMap.get(parcelId);
   if (!parcelEntry) return;
   parcelEntry.delete(field);
   if (parcelEntry.size === 0) {
-    parcelPatchMap.delete(parcelId);
+    S.parcelPatchMap.delete(parcelId);
   }
 }
 
@@ -6384,24 +4245,21 @@ function isFieldChanged(parcelId: string, field: string, fieldType: 'numeric' | 
   return !valuesEqualForField(fieldType, patch.original, patch.current);
 }
 
-function findFeatureByParcelId(parcelId: string): GeoJSON.Feature | null {
-  if (!currentGeoJSON) return null;
-  return currentGeoJSON.features.find(feature => getParcelId(feature) === parcelId) ?? null;
-}
+
 
 function updateMapSourceData() {
-  if (!currentGeoJSON) return;
+  if (!S.currentGeoJSON) return;
   const layer = getCurrentLayer();
   if (!layer) return;
-  const source = map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
+  const source = S.map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
   if (source) {
-    source.setData(currentGeoJSON);
+    source.setData(S.currentGeoJSON);
   }
 }
 
 function updateLastPickedProps(parcelId: string, field: string, value: any) {
-  if (lastPicked && lastPicked.parcelId === parcelId) {
-    lastPicked.props[field] = value;
+  if (S.lastPicked && S.lastPicked.parcelId === parcelId) {
+    S.lastPicked.props[field] = value;
   }
 }
 
@@ -6416,7 +4274,7 @@ function formatPopupValue(fieldType: 'numeric' | 'categorical', value: any): str
 
 function addPopupEditFunctionality(parcelId: string) {
   setTimeout(() => {
-    const popupElement = activePopup?.getElement();
+    const popupElement = S.activePopup?.getElement();
     if (!popupElement) return;
     const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement | null;
     if (!tableBody || tableBody.dataset.editHandlersAttached === 'true') return;
@@ -6606,11 +4464,11 @@ function addPopupEditFunctionality(parcelId: string) {
 
 /* --- value expression builder (handles normalization) --- */
 function buildValueExpression(): Expression {
-  if (!currentField) return ['literal', 0] as any;
-  const base: Expression = ['to-number', ['get', currentField]] as any;
+  if (!S.currentField) return ['literal', 0] as any;
+  const base: Expression = ['to-number', ['get', S.currentField]] as any;
 
-  if (normalizationMode === 'perLand' && landSizeField) {
-    const den: Expression = ['to-number', ['get', landSizeField]] as any;
+  if (S.normalizationMode === 'perLand' && S.landSizeField) {
+    const den: Expression = ['to-number', ['get', S.landSizeField]] as any;
     // Land invalid when ≤ 0 ⇒ height 0 (flat); outline layer will flag it.
     return ['case',
       ['<=', den, 0], 0,
@@ -6618,8 +4476,8 @@ function buildValueExpression(): Expression {
     ] as any;
   }
 
-  if (normalizationMode === 'perBuilding' && bldgSizeField) {
-    const den: Expression = ['to-number', ['get', bldgSizeField]] as any;
+  if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
+    const den: Expression = ['to-number', ['get', S.bldgSizeField]] as any;
     // Building invalid when < 0 ⇒ height 0 (flat) and flagged.
     // Building == 0 is allowed conceptually (no building) but we can't divide by 0 ⇒ also 0 height (not flagged).
     return ['case',
@@ -6634,45 +4492,45 @@ function buildValueExpression(): Expression {
 
 
 function applyGrayRendering() {
-  if (!currentGeoJSON) return;
+  if (!S.currentGeoJSON) return;
   const ids = getCurrentLayerIds();
   if (!ids) return;
   
   // Apply gray color and no extrusion when no field is selected
-  map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
-  map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-  map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
 
   applyMapFilters();
   
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
 
-  if (activePopup && lastPicked) {
-    activePopup.setHTML(buildPopupHTML(lastPicked.props, lastPicked.parcelId)).setLngLat(lastPicked.lngLat);
+  if (S.activePopup && S.lastPicked) {
+    S.activePopup.setHTML(buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId)).setLngLat(S.lastPicked.lngLat);
     addPopupSearchFunctionality();
-    addPopupEditFunctionality(lastPicked.parcelId);
+    addPopupEditFunctionality(S.lastPicked.parcelId);
   }
 }
 
 function applyExtrusion() {
-  if (!currentGeoJSON) return;
+  if (!S.currentGeoJSON) return;
   const ids = getCurrentLayerIds();
   if (!ids) return;
   
   // If no field is selected, apply gray rendering
-  if (!currentField) {
+  if (!S.currentField) {
     applyGrayRendering();
     return;
   }
 
-  if (currentFieldType === 'categorical') {
+  if (S.currentFieldType === 'categorical') {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
     
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   } else {
     // For numeric fields, use the new color expression builder
     const colorExpr = buildNumericColorExpression();
@@ -6681,20 +4539,20 @@ function applyExtrusion() {
     const rawMult = Number(multInput.value);
     const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
     const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-    const heightExpr: Expression = is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
+    const heightExpr: Expression = S.is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
 
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
-    map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
   }
 
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
 
-  if (activePopup && lastPicked) {
-    activePopup.setHTML(buildPopupHTML(lastPicked.props, lastPicked.parcelId)).setLngLat(lastPicked.lngLat);
+  if (S.activePopup && S.lastPicked) {
+    S.activePopup.setHTML(buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId)).setLngLat(S.lastPicked.lngLat);
     addPopupSearchFunctionality();
-    addPopupEditFunctionality(lastPicked.parcelId);
+    addPopupEditFunctionality(S.lastPicked.parcelId);
   }
 }
 
@@ -6790,12 +4648,12 @@ function generatePseudoRandomColor(n: number, max_n: number, seed: string): stri
 
 
 function buildCategoricalColorPairs(): Array<[string, string]> {
-  if (!currentField || !currentGeoJSON) return [];
+  if (!S.currentField || !S.currentGeoJSON) return [];
   
   // Collect unique categories
   const categories = new Set<string>();
-  for (const feature of currentGeoJSON.features) {
-    const value = feature.properties?.[currentField];
+  for (const feature of S.currentGeoJSON.features) {
+    const value = feature.properties?.[S.currentField];
     if (value != null && value !== '' && value !== undefined) {
       categories.add(String(value));
     }
@@ -6809,10 +4667,10 @@ function buildCategoricalColorPairs(): Array<[string, string]> {
   
   const pairs: Array<[string, string]> = [];
   
-  if (categoricalColorMode === 'single') {
+  if (S.categoricalColorMode === 'single') {
     // Single color mode: map empty string to the single color
-    pairs.push(['', singleColorValue]);
-  } else if (categoricalColorMode === 'colorRamp') {
+    pairs.push(['', S.singleColorValue]);
+  } else if (S.categoricalColorMode === 'colorRamp') {
     // Color ramp: sort categories alphabetically and assign colors linearly
     const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
     const denom = Math.max(1, sortedCategories.length - 1);
@@ -6835,7 +4693,7 @@ function buildCategoricalColorPairs(): Array<[string, string]> {
   // Apply custom colors if they exist
   const finalPairs: any[] = [];
   for (const [category, defaultColor] of pairs) {
-    const color = customColors.has(category) ? customColors.get(category)! : defaultColor;
+    const color = S.customColors.has(category) ? S.customColors.get(category)! : defaultColor;
     finalPairs.push([category, color]);
   }
   
@@ -6843,25 +4701,25 @@ function buildCategoricalColorPairs(): Array<[string, string]> {
 }
 
 function buildCategoricalColorExpression(): Expression {
-  if (!currentField || !currentGeoJSON) return ['literal', '#888'] as any;
+  if (!S.currentField || !S.currentGeoJSON) return ['literal', '#888'] as any;
   
   // Get the base color pairs from the inner function
   const pairs = buildCategoricalColorPairs();
   // flatten pairs into an array of strings
   let fallbackColor = '#888';
-  if (categoricalColorMode === 'single') {
-    fallbackColor = singleColorValue;
+  if (S.categoricalColorMode === 'single') {
+    fallbackColor = S.singleColorValue;
   }
 
-  if (customColors.size === 0) {
+  if (S.customColors.size === 0) {
     if (pairs.length === 0) {
       return ['literal', '#888'] as any;
     }
-    if (categoricalColorMode === 'single') {
+    if (S.categoricalColorMode === 'single') {
       return ['literal', fallbackColor] as any;
     }
   }
-  const val = ['to-string', ['coalesce', ['get', currentField], '']] as any;
+  const val = ['to-string', ['coalesce', ['get', S.currentField], '']] as any;
 
   // Build the final expression with fallback
   const flattenedPairs = pairs.flat();
@@ -6872,7 +4730,7 @@ function buildCategoricalColorExpression(): Expression {
   
   // Add highlighting for selected parcels
   const result = ['case',
-    ['boolean', ['feature-state', 'selected'], false], highlightColor,
+    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
     baseResult
   ] as any;
   
@@ -6881,19 +4739,19 @@ function buildCategoricalColorExpression(): Expression {
 
 function fitToData(fc: GeoJSON.FeatureCollection) {
   const b = bbox(fc); if (!b) return;
-  map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 800 });
+  S.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 800 });
 }
 
 // ---- Quality toggle (runtime supersampling) ----
 function setQuality(mode: QualityMode) {
-  qualityMode = mode;
+  S.qualityMode = mode;
   const pr = (mode === 'high') ? HIGH_PR : FAST_PR;
 
   // setPixelRatio is available on MapLibre >= 2; fall back with a warn otherwise
-  const anyMap = map as any;
+  const anyMap = S.map as any;
   if (typeof anyMap.setPixelRatio === 'function') {
     anyMap.setPixelRatio(pr);
-    map.resize(); // apply immediately
+    S.map.resize(); // apply immediately
     // optional debug of effective value (after clamping)
     if (typeof anyMap.getPixelRatio === 'function') {
       console.debug('pixelRatio applied:', anyMap.getPixelRatio());
@@ -6908,29 +4766,29 @@ function setQuality(mode: QualityMode) {
 }
 
 /* ---------------- Camera presets ---------------- */
-function setPerspective() { map.easeTo({ pitch: 60, duration: 600 }); }
-function setOrtho() { map.easeTo({ pitch: 0, duration: 600 }); }
+function setPerspective() { S.map.easeTo({ pitch: 60, duration: 600 }); }
+function setOrtho() { S.map.easeTo({ pitch: 0, duration: 600 }); }
 function setView(which: string) {
   const views: Record<string, Partial<maplibregl.CameraOptions>> = {
     top: { pitch: 0, bearing: 0 }, perspective: { pitch: 60, bearing: -30 },
     north: { pitch: 60, bearing: 0 }, east: { pitch: 60, bearing: 90 },
     south: { pitch: 60, bearing: 180 }, west: { pitch: 60, bearing: 270 }
   };
-  map.easeTo({ duration: 700, ...(views[which] || views.perspective) });
+  S.map.easeTo({ duration: 700, ...(views[which] || views.perspective) });
 }
 
 /* ---------------- Helpers ---------------- */
 function computeDisplayedMetricFromProps(props: Record<string, any>): number | null {
-  if (!currentField) return null;
-  let base = numOrNull(props[currentField]);
+  if (!S.currentField) return null;
+  let base = numOrNull(props[S.currentField]);
   if (base == null) return null;
 
-  if (normalizationMode === 'perLand' && landSizeField) {
-    const d = numOrNull(props[landSizeField]);
+  if (S.normalizationMode === 'perLand' && S.landSizeField) {
+    const d = numOrNull(props[S.landSizeField]);
     if (d == null || d <= 0) return null;
     base = base / d;
-  } else if (normalizationMode === 'perBuilding' && bldgSizeField) {
-    const d = numOrNull(props[bldgSizeField]);
+  } else if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
+    const d = numOrNull(props[S.bldgSizeField]);
     if (d == null || d <= 0) return null;
     base = base / d;
   }
@@ -6946,26 +4804,26 @@ function computeExtrusionHeightMeters(metricValue: number): number {
 
 // Queue an update; newer calls replace older ones.
 function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
-  if (!currentGeoJSON) return;   // <- hard stop until data exists
+  if (!S.currentGeoJSON) return;   // <- hard stop until data exists
 
-  _pendingMode = mode;
-  _pendingRefreshLegend = refreshLegend;
-  if (_updTimer) clearTimeout(_updTimer);
-  _updTimer = window.setTimeout(() => {
-    _updTimer = null;
+  S._pendingMode = mode;
+  S._pendingRefreshLegend = refreshLegend;
+  if (S._updTimer) clearTimeout(S._updTimer);
+  S._updTimer = window.setTimeout(() => {
+    S._updTimer = null;
     // Clear legend visibility when refreshing colorization
-    if (_pendingRefreshLegend) {
+    if (S._pendingRefreshLegend) {
       clearLegendVisibility();
     }
     
-    if (_pendingMode === 'recomputeAndAutoScale') {
+    if (S._pendingMode === 'recomputeAndAutoScale') {
       computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
-      if (_pendingRefreshLegend) {
+      if (S._pendingRefreshLegend) {
         updateFloatingLegend();
       }
     } else {
       applyExtrusionWithVisibility();
-      if (_pendingRefreshLegend) {
+      if (S._pendingRefreshLegend) {
         updateFloatingLegend();
       }
     }
@@ -7021,11 +4879,6 @@ function detectNumericFieldsFromFeatures(features: GeoJSON.Feature[]): string[] 
     .sort();
 }
 
-function polygonsOnly(fc: GeoJSON.FeatureCollection) {
-  return fc.features.filter(
-    f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
-  );
-}
 
 function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding'): number[] {
   const vals: number[] = [];
@@ -7034,12 +4887,12 @@ function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string
     let base = Number(p?.[field]);
     if (!Number.isFinite(base)) continue;
 
-    if (mode === 'perLand' && landSizeField) {
-      const d = Number(p?.[landSizeField]);
+    if (mode === 'perLand' && S.landSizeField) {
+      const d = Number(p?.[S.landSizeField]);
       if (!Number.isFinite(d) || d <= 0) continue;
       base = base / d;
-    } else if (mode === 'perBuilding' && bldgSizeField) {
-      const d = Number(p?.[bldgSizeField]);
+    } else if (mode === 'perBuilding' && S.bldgSizeField) {
+      const d = Number(p?.[S.bldgSizeField]);
       if (!Number.isFinite(d) || d <= 0) continue;
       base = base / d;
     }
@@ -7076,18 +4929,18 @@ function computeAndApplyAutoMultiplier(
   capMeters = 1000,
   p = 99
 ) {
-  if (!currentGeoJSON || !currentField) return;
+  if (!S.currentGeoJSON || !S.currentField) return;
 
   // values for the CURRENT normalization mode
-  const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
+  const vals = getNumericValuesNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
   const pVal = percentile(vals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
   // ---- Color domain / breaks ----
-  if (colorMode === 'quantiles') {
+  if (S.colorMode === 'quantiles') {
     const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-    colorBreaks = quantileBreaks(vals, ramp.length, 1, 99); // p1..p99 equal-frequency bins
-    colorDomain = null;
+    S.colorBreaks = quantileBreaks(vals, ramp.length, 1, 99); // p1..p99 equal-frequency bins
+    S.colorDomain = null;
   } else {
     // continuous = EQUAL INTERVAL classes across p1..p99
     const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
@@ -7096,14 +4949,14 @@ function computeAndApplyAutoMultiplier(
     let lo = Number.isFinite(pLow) ? pLow : 0;
     let hi = Number.isFinite(pHigh) ? pHigh : 1;
     if (!(hi > lo)) { lo = 0; hi = 1; }
-    colorDomain = { lo, hi, label: 'p1–p99' };
+    S.colorDomain = { lo, hi, label: 'p1–p99' };
    
     // build equal-interval thresholds: colors => k classes => k-1 breaks
     const classes = Math.max(2, ramp.length);
     const step = (hi - lo) / classes;
     const breaks: number[] = [];
     for (let i = 1; i < classes; i++) breaks.push(lo + step * i);
-    colorBreaks = breaks;
+    S.colorBreaks = breaks;
   }
 
   // ---- Height autoscale: anchor p-th percentile to capMeters ----
@@ -7123,19 +4976,19 @@ function computeAndApplyAutoMultiplier(
   multInput.value = String(multiplier);
 
   // stats for legend fallback
-  currentStats = computeStatsNormalized(currentGeoJSON, currentField, normalizationMode);
+  S.currentStats = computeStatsNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
 
   console.debug('autoScale', {
-    mode: normalizationMode,
-    field: currentField,
+    mode: S.normalizationMode,
+    field: S.currentField,
     pctl: p,
     pVal,
     unit: unitKey,
     multiplier,
-    colorMode,
-    colorBreaks,
-    colorDomain,
-    stats: currentStats
+    colorMode: S.colorMode,
+    colorBreaks: S.colorBreaks,
+    colorDomain: S.colorDomain,
+    stats: S.currentStats
   });
 
   applyExtrusionWithVisibility();
@@ -7155,11 +5008,11 @@ function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], mi
 
 
 function currentModeErrorMessage(props: Record<string, any>): string | null {
-  if (normalizationMode === 'perLand' && landSizeField) {
-    const v = Number((props as any)[landSizeField]);
+  if (S.normalizationMode === 'perLand' && S.landSizeField) {
+    const v = Number((props as any)[S.landSizeField]);
     if (!Number.isFinite(v) || v <= 0) return '⚠ Invalid land size (≤ 0 or missing)';
-  } else if (normalizationMode === 'perBuilding' && bldgSizeField) {
-    const v = Number((props as any)[bldgSizeField]);
+  } else if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
+    const v = Number((props as any)[S.bldgSizeField]);
     if (Number.isFinite(v) && v < 0) return '⚠ Negative building size';
     if (v === 0) return 'ℹ Building size is 0 — shown flat (not an error)';
   }
@@ -7175,10 +5028,10 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   const unitText = (unitsSelect.options[unitsSelect.selectedIndex]?.text || unitKey);
 
   const fieldsToShow = Array.from(new Set([
-    ...chosenNumericFields,
-    ...chosenCategoricalFields,
-    ...(landSizeField ? [landSizeField] : []),
-    ...(bldgSizeField ? [bldgSizeField] : []),
+    ...S.chosenNumericFields,
+    ...S.chosenCategoricalFields,
+    ...(S.landSizeField ? [S.landSizeField] : []),
+    ...(S.bldgSizeField ? [S.bldgSizeField] : []),
   ]));
 
   const rows = fieldsToShow.map(k => {
@@ -7209,19 +5062,19 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   }).join('');
 
   const modeLabel =
-    normalizationMode === 'perLand' ? `per ${landSizeField || 'land size'}` :
-    normalizationMode === 'perBuilding' ? `per ${bldgSizeField || 'building size'}` :
+    S.normalizationMode === 'perLand' ? `per ${S.landSizeField || 'land size'}` :
+    S.normalizationMode === 'perBuilding' ? `per ${S.bldgSizeField || 'building size'}` :
     'as-is';
 
-  const metricRow = currentFieldType === 'categorical' 
-    ? `<div><strong>Category</strong>: ${currentField ? (props[currentField] ?? '—') : '—'}</div>`
+  const metricRow = S.currentFieldType === 'categorical' 
+    ? `<div><strong>Category</strong>: ${S.currentField ? (props[S.currentField] ?? '—') : '—'}</div>`
     : (metric != null)
       ? `<div><strong>Display metric (${modeLabel})</strong>: ${fmt(metric)}</div>`
       : `<div><strong>Display metric</strong>: —</div>`;
 
-  const heightRow = currentFieldType === 'categorical'
+  const heightRow = S.currentFieldType === 'categorical'
     ? `<div><strong>Extrusion height</strong>: Flat (no extrusion for categorical fields)</div>`
-    : !is3DMode
+    : !S.is3DMode
       ? `<div><strong>Extrusion height</strong>: Flat (3D mode disabled)</div>`
       : (heightM != null)
         ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
@@ -7236,7 +5089,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
       ${metricRow}
       ${heightRow}
 	  ${errRow}
-      ${is3DMode && currentFieldType === 'numeric' ? 
+      ${S.is3DMode && S.currentFieldType === 'numeric' ? 
         `<div style="margin-top:6px; font-size:12px; color:#666">
           Multiplier × unit: ${fmt(Number(multInput.value))} × ${unitKey}
         </div>` : ''}
@@ -7269,17 +5122,17 @@ function onMultInput() {
 
 
 function update3DUI() {
-  if (currentFieldType === 'numeric') {
-    extrusionOptions.style.display = is3DMode ? 'grid' : 'none';
+  if (S.currentFieldType === 'numeric') {
+    extrusionOptions.style.display = S.is3DMode ? 'grid' : 'none';
   } else {
     extrusionOptions.style.display = 'none';
   }
 }
 
 function computeAndSetGoodExtrusionDefaults() {
-  if (!currentGeoJSON || !currentField || currentFieldType !== 'numeric') return;
+  if (!S.currentGeoJSON || !S.currentField || S.currentFieldType !== 'numeric') return;
   
-  const vals = getNumericValuesNormalized(currentGeoJSON, currentField, normalizationMode);
+  const vals = getNumericValuesNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
   if (vals.length === 0) return;
   
   // Sort values and get p99
@@ -7294,14 +5147,14 @@ function computeAndSetGoodExtrusionDefaults() {
   unitsSelect.value = unit;
   
   // Cache the settings
-  cachedExtrusionSettings = { multiplier, unit };
+  S.cachedExtrusionSettings = { multiplier, unit };
 }
 
 function updateFieldTypeUI() {
   const numericOptions = document.getElementById('numericOptions');
   const categoricalOptions = document.getElementById('categoricalOptions');
   
-  if (!currentField) {
+  if (!S.currentField) {
     // Hide all options when no field is selected
     if (numericOptions) numericOptions.style.display = 'none';
     if (categoricalOptions) categoricalOptions.style.display = 'none';
@@ -7315,9 +5168,9 @@ function updateFieldTypeUI() {
     if (paintDividerScaling) paintDividerScaling.style.display = 'none';
     extrusionOptions.style.display = 'none';
   } else {
-    const showNumericOptions = currentFieldType === 'numeric';
-    const showCategoricalOptions = currentFieldType === 'categorical';
-    const showColorRampOptions = showNumericOptions || (showCategoricalOptions && categoricalColorMode === 'colorRamp');
+    const showNumericOptions = S.currentFieldType === 'numeric';
+    const showCategoricalOptions = S.currentFieldType === 'categorical';
+    const showColorRampOptions = showNumericOptions || (showCategoricalOptions && S.categoricalColorMode === 'colorRamp');
     const showColorScalingOptions = showNumericOptions;
     const showOpacityOptions = true;
     
@@ -7338,7 +5191,7 @@ function updateFieldTypeUI() {
       
       // Show/hide color options based on selected mode
       if (colorOptions) {
-        colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+        colorOptions.style.display = S.categoricalColorMode === 'single' ? 'block' : 'none';
       }
     }
 
@@ -7384,19 +5237,19 @@ fileInput.addEventListener('change', async () => {
 
   persistCurrentLayerState();
   const dataStore = createDataStore(file, fileToAsyncBuffer(file));
-  dataStores.set(dataStore.id, dataStore);
-  dataStoreOrder.push(dataStore.id);
-  currentDataStoreId = dataStore.id;
+  S.dataStores.set(dataStore.id, dataStore);
+  S.dataStoreOrder.push(dataStore.id);
+  S.currentDataStoreId = dataStore.id;
   renderDataStoreList();
   registerLayer(createLayerState(dataStore.name, dataStore.id));
   closeAddLayerModal();
 
   revealUI();
   try {
-    lastFile = dataStore.file;
-    lastAsyncBuffer = dataStore.asyncBuffer;
+    S.lastFile = dataStore.file;
+    S.lastAsyncBuffer = dataStore.asyncBuffer;
 
-    const md = await parquetMetadataAsync(lastAsyncBuffer);
+    const md = await parquetMetadataAsync(S.lastAsyncBuffer);
     const numRows = Number(md.num_rows ?? 0);
 
     const kv = (md as any).key_value_metadata || (md as any).keyValueMetadata || [];
@@ -7434,23 +5287,23 @@ fileInput.addEventListener('change', async () => {
       else if (isCategorical) categorical.push(name);
     }
 
-    lastNumericFieldsFromSchema = numeric.sort();
-    lastCategoricalFieldsFromSchema = categorical.sort();
-    dataStore.numericFieldsFromSchema = [...lastNumericFieldsFromSchema];
-    dataStore.categoricalFieldsFromSchema = [...lastCategoricalFieldsFromSchema];
+    S.lastNumericFieldsFromSchema = numeric.sort();
+    S.lastCategoricalFieldsFromSchema = categorical.sort();
+    dataStore.numericFieldsFromSchema = [...S.lastNumericFieldsFromSchema];
+    dataStore.categoricalFieldsFromSchema = [...S.lastCategoricalFieldsFromSchema];
 
     // Show numeric fields modal first, then categorical if needed
-    if (lastNumericFieldsFromSchema.length > 0) {
+    if (S.lastNumericFieldsFromSchema.length > 0) {
       openNumericFieldChooserModal({ 
         rowCount: numRows, 
         geometryCol: primaryGeom, 
-        numericFields: lastNumericFieldsFromSchema
+        numericFields: S.lastNumericFieldsFromSchema
       });
-    } else if (lastCategoricalFieldsFromSchema.length > 0) {
+    } else if (S.lastCategoricalFieldsFromSchema.length > 0) {
       openCategoricalFieldChooserModal({ 
         rowCount: numRows, 
         geometryCol: primaryGeom, 
-        categoricalFields: lastCategoricalFieldsFromSchema
+        categoricalFields: S.lastCategoricalFieldsFromSchema
       });
     } else {
       alert('No numeric or categorical fields found in the file.');
@@ -7464,10 +5317,10 @@ fileInput.addEventListener('change', async () => {
 // Only recompute after data is loaded
 [colorCont, colorQuant].forEach(el =>
   el?.addEventListener('change', () => {
-    if (!currentGeoJSON) return;
+    if (!S.currentGeoJSON) return;
     const val = (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value;
     if (val === 'continuous' || val === 'quantiles') {
-      colorMode = val;
+      S.colorMode = val;
       scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
       persistCurrentLayerState();
     }
@@ -7478,20 +5331,20 @@ fileInput.addEventListener('change', async () => {
 document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(el =>
   el.addEventListener('change', () => {
     
-    if (!currentGeoJSON || currentFieldType !== 'categorical') return;
+    if (!S.currentGeoJSON || S.currentFieldType !== 'categorical') return;
     const val = (document.querySelector('input[name="categoricalColorMode"]:checked') as HTMLInputElement)?.value;
     if (val === 'random' || val === 'single' || val === 'colorRamp') {
-      categoricalColorMode = val;
+      S.categoricalColorMode = val;
       
       // Show/hide color options
       if (colorOptions) {
-        colorOptions.style.display = categoricalColorMode === 'single' ? 'block' : 'none';
+        colorOptions.style.display = S.categoricalColorMode === 'single' ? 'block' : 'none';
       }
       
       // Show/hide color ramp widget based on categorical color mode
       const rampContainer = rampSelect.parentElement?.parentElement;
       if (rampContainer) {
-        rampContainer.style.display = (categoricalColorMode === 'colorRamp' || currentFieldType !== 'categorical') ? 'block' : 'none';
+        rampContainer.style.display = (S.categoricalColorMode === 'colorRamp' || S.currentFieldType !== 'categorical') ? 'block' : 'none';
       }
       
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);
@@ -7503,14 +5356,14 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
 // Color picker event listeners
 btnCancelColorPicker.addEventListener('click', () => {
   // Reset color picker to current value
-  colorPicker.value = singleColorValue;
+  colorPicker.value = S.singleColorValue;
 });
 
 btnConfirmColorPicker.addEventListener('click', () => {
-  singleColorValue = colorPicker.value;
+  S.singleColorValue = colorPicker.value;
   
   // Update the map if we're currently using single color mode
-  if (currentFieldType === 'categorical' && categoricalColorMode === 'single') {
+  if (S.currentFieldType === 'categorical' && S.categoricalColorMode === 'single') {
     scheduleUpdate('applyOnly', /*refreshLegend*/ true);
   }
   persistCurrentLayerState();
@@ -7519,8 +5372,8 @@ btnConfirmColorPicker.addEventListener('click', () => {
 // Update color picker when single color mode is selected
 colorPicker.addEventListener('input', () => {
   // Update the map in real-time as user changes color
-  if (currentFieldType === 'categorical' && categoricalColorMode === 'single') {
-    singleColorValue = colorPicker.value;
+  if (S.currentFieldType === 'categorical' && S.categoricalColorMode === 'single') {
+    S.singleColorValue = colorPicker.value;
     scheduleUpdate('applyOnly', /*refreshLegend*/ true);
   }
   persistCurrentLayerState();
@@ -7538,13 +5391,13 @@ btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnPaintMenu.addEventListener('click', togglePaint);
 
 landScheduleFieldSelect.addEventListener('change', () => {
-  currentLandScheduleField = landScheduleFieldSelect.value || null;
-  currentLandScheduleValue = null;
+  S.currentLandScheduleField = landScheduleFieldSelect.value || null;
+  S.currentLandScheduleValue = null;
   updateLandScheduleValueOptions();
 });
 
 landScheduleValueSelect.addEventListener('change', () => {
-  currentLandScheduleValue = landScheduleValueSelect.value || null;
+  S.currentLandScheduleValue = landScheduleValueSelect.value || null;
   updateLandScheduleInputsFromStore();
 });
 
@@ -7580,7 +5433,7 @@ filtersLoadSelect.addEventListener('change', () => {
 });
 
 addFilterButton.addEventListener('click', () => {
-  filters.push(createFilterRule());
+  S.filters.push(createFilterRule());
   renderFiltersList();
   updateFiltersUIState();
   persistCurrentLayerState();
@@ -7599,7 +5452,7 @@ filtersHideButton.addEventListener('click', () => {
 });
 
 filtersInvertToggle.addEventListener('change', () => {
-  filterInvert = filtersInvertToggle.checked;
+  S.filterInvert = filtersInvertToggle.checked;
   applyActiveFilterAction();
   applyMapFilters();
   updateSavedFiltersUIState();
@@ -7607,22 +5460,22 @@ filtersInvertToggle.addEventListener('change', () => {
 });
 
 statsLayerSelect.addEventListener('change', () => {
-  statsLayerId = statsLayerSelect.value || null;
-  statsCategoryField = null;
-  statsCategoryValueIndices = [];
-  statsField = null;
-  statsFieldType = null;
+  S.statsLayerId = statsLayerSelect.value || null;
+  S.statsCategoryField = null;
+  S.statsCategoryValueIndices = [];
+  S.statsField = null;
+  S.statsFieldType = null;
   refreshStatisticsPanel();
   resetStatisticsDisplay();
 });
 
 scatterLayerSelect.addEventListener('change', () => {
-  scatterLayerId = scatterLayerSelect.value || null;
-  scatterCategoryField = null;
-  scatterCategoryValueIndices = [];
-  scatterXField = null;
-  scatterYField = null;
-  scatterRangeIsCustom = false;
+  S.scatterLayerId = scatterLayerSelect.value || null;
+  S.scatterCategoryField = null;
+  S.scatterCategoryValueIndices = [];
+  S.scatterXField = null;
+  S.scatterYField = null;
+  S.scatterRangeIsCustom = false;
   refreshScatterPanel();
 });
 
@@ -7643,32 +5496,32 @@ scatterSubjectButtons.forEach(button => {
 });
 
 statsSubjectControls.filterSelect.addEventListener('change', () => {
-  statsFilteredName = statsSubjectControls.filterSelect.value || null;
+  S.statsFilteredName = statsSubjectControls.filterSelect.value || null;
   updateStatisticsSectionVisibility();
   updateStatisticsResults();
 });
 
 scatterSubjectControls.filterSelect.addEventListener('change', () => {
-  scatterFilteredName = scatterSubjectControls.filterSelect.value || null;
-  scatterRangeIsCustom = false;
+  S.scatterFilteredName = scatterSubjectControls.filterSelect.value || null;
+  S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
 });
 
 statsCategoryFieldSelect.addEventListener('change', () => {
-  statsCategoryField = statsCategoryFieldSelect.value || null;
-  statsCategoryValueIndices = [];
-  populateStatisticsCategoryValues(statsCategoryField);
+  S.statsCategoryField = statsCategoryFieldSelect.value || null;
+  S.statsCategoryValueIndices = [];
+  populateStatisticsCategoryValues(S.statsCategoryField);
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
   resetStatisticsDisplay();
 });
 
 statsCategoryValueSelect.addEventListener('change', () => {
-  statsCategoryValueIndices = Array.from(statsCategoryValueSelect.selectedOptions)
+  S.statsCategoryValueIndices = Array.from(statsCategoryValueSelect.selectedOptions)
     .map(option => option.value)
     .filter(value => value);
   updateStatisticsSectionVisibility();
-  if (statsCategoryValueIndices.length > 0 && statsField) {
+  if (S.statsCategoryValueIndices.length > 0 && S.statsField) {
     updateStatisticsResults();
     return;
   }
@@ -7676,33 +5529,33 @@ statsCategoryValueSelect.addEventListener('change', () => {
 });
 
 scatterCategoryFieldSelect.addEventListener('change', () => {
-  scatterCategoryField = scatterCategoryFieldSelect.value || null;
-  scatterCategoryValueIndices = [];
-  populateScatterCategoryValues(scatterCategoryField);
+  S.scatterCategoryField = scatterCategoryFieldSelect.value || null;
+  S.scatterCategoryValueIndices = [];
+  populateScatterCategoryValues(S.scatterCategoryField);
   updateScatterSubjectControls();
-  scatterRangeIsCustom = false;
+  S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
 });
 
 scatterCategoryValueSelect.addEventListener('change', () => {
-  scatterCategoryValueIndices = Array.from(scatterCategoryValueSelect.selectedOptions)
+  S.scatterCategoryValueIndices = Array.from(scatterCategoryValueSelect.selectedOptions)
     .map(option => option.value)
     .filter(value => value);
   updateScatterSubjectControls();
-  scatterRangeIsCustom = false;
+  S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
 });
 
 statsFieldSelect.addEventListener('change', () => {
-  statsField = statsFieldSelect.value || null;
+  S.statsField = statsFieldSelect.value || null;
   const layer = getStatsLayer();
   const dataStore = getLayerDataStore(layer);
-  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
-  statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
+  S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
   updateStatisticsSectionVisibility();
-  if (statsField) {
+  if (S.statsField) {
     updateStatisticsResults();
   } else {
     resetStatisticsDisplay();
@@ -7710,20 +5563,20 @@ statsFieldSelect.addEventListener('change', () => {
 });
 
 scatterXFieldSelect.addEventListener('change', () => {
-  scatterXField = scatterXFieldSelect.value || null;
-  scatterRangeIsCustom = false;
+  S.scatterXField = scatterXFieldSelect.value || null;
+  S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
 });
 
 scatterYFieldSelect.addEventListener('change', () => {
-  scatterYField = scatterYFieldSelect.value || null;
-  scatterRangeIsCustom = false;
+  S.scatterYField = scatterYFieldSelect.value || null;
+  S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
 });
 
 function handleScatterRangeInput() {
-  if (isUpdatingScatterRangeInputs) return;
-  scatterRangeIsCustom = true;
+  if (S.isUpdatingScatterRangeInputs) return;
+  S.scatterRangeIsCustom = true;
   scheduleScatterPlotRefresh();
 }
 
@@ -7732,14 +5585,14 @@ scatterXMaxInput.addEventListener('input', handleScatterRangeInput);
 scatterYMinInput.addEventListener('input', handleScatterRangeInput);
 scatterYMaxInput.addEventListener('input', handleScatterRangeInput);
 scatterResetExtentsButton.addEventListener('click', () => {
-  scatterRangeIsCustom = false;
-  setScatterRangeInputs(scatterDefaultRange);
+  S.scatterRangeIsCustom = false;
+  setScatterRangeInputs(S.scatterDefaultRange);
   scheduleScatterPlotRefresh();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {
   radio.addEventListener('change', () => {
-    statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
+    S.statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
       ?.value as 'asis' | 'perLand' | 'perBuilding';
     updateStatisticsResults();
   });
@@ -7751,13 +5604,13 @@ function clampOverflowPercent(minValue: number, maxValue: number) {
   if (minPct > maxPct) {
     [minPct, maxPct] = [maxPct, minPct];
   }
-  statsOverflowPct = { min: minPct, max: maxPct };
-  setPercentInputValue(statsOverflowMinPct, statsOverflowPct.min);
-  setPercentInputValue(statsOverflowMaxPct, statsOverflowPct.max);
+  S.statsOverflowPct = { min: minPct, max: maxPct };
+  setPercentInputValue(statsOverflowMinPct, S.statsOverflowPct.min);
+  setPercentInputValue(statsOverflowMaxPct, S.statsOverflowPct.max);
 }
 
 function applyOverflowFromPercent() {
-  if (!statsValuesCache.length) return;
+  if (!S.statsValuesCache.length) return;
   updateStatisticsResults();
 }
 
@@ -7824,13 +5677,13 @@ positionPaintPanel();
 positionSettingsPanel();
 positionFiltersPanel();
 positionLandSchedulePanel();
-updatePaintButtonState();
+updatePaintButtonState(btnPaintMenu);
 
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks
-  const needsRecompute = (colorMode === 'quantiles');
+  const needsRecompute = (S.colorMode === 'quantiles');
   // Also update if using categorical color ramp
-  const needsCategoricalUpdate = (currentFieldType === 'categorical' && categoricalColorMode === 'colorRamp');
+  const needsCategoricalUpdate = (S.currentFieldType === 'categorical' && S.categoricalColorMode === 'colorRamp');
   scheduleUpdate(needsRecompute || needsCategoricalUpdate ? 'recomputeAndAutoScale' : 'applyOnly', /*refreshLegend*/ true);
   persistCurrentLayerState();
 });
@@ -7840,8 +5693,8 @@ multInput.addEventListener('input', onMultInput);
 multInput.addEventListener('change', () => {
   onMultInput();
   // Cache the current extrusion settings
-  if (is3DMode && currentFieldType === 'numeric') {
-    cachedExtrusionSettings = {
+  if (S.is3DMode && S.currentFieldType === 'numeric') {
+    S.cachedExtrusionSettings = {
       multiplier: Number(multInput.value),
       unit: unitsSelect.value
     };
@@ -7852,8 +5705,8 @@ multInput.addEventListener('change', () => {
 unitsSelect.addEventListener('change', () => {
   scheduleUpdate('applyOnly');
   // Cache the current extrusion settings
-  if (is3DMode && currentFieldType === 'numeric') {
-    cachedExtrusionSettings = {
+  if (S.is3DMode && S.currentFieldType === 'numeric') {
+    S.cachedExtrusionSettings = {
       multiplier: Number(multInput.value),
       unit: unitsSelect.value
     };
@@ -7868,61 +5721,61 @@ opacityInput.addEventListener('input', () => {
 });
 
 fieldSelect.addEventListener('change', () => {
-  currentField = fieldSelect.value || null;
-  if (!currentGeoJSON) return;
+  S.currentField = fieldSelect.value || null;
+  if (!S.currentGeoJSON) return;
   
-  if (!currentField) {
+  if (!S.currentField) {
     // No field selected - apply gray rendering
-    currentFieldType = null;
-    currentStats = null;
+    S.currentFieldType = null;
+    S.currentStats = null;
     updateFieldTypeUI();
     applyGrayRendering();
     updateFloatingLegend();
     // Clear markup layer when no field is selected
-    if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
-    if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
-    if (map.getSource('markup-source')) map.removeSource('markup-source');
+    if (S.map.getLayer('markup-layer')) S.map.removeLayer('markup-layer');
+    if (S.map.getLayer('markup-layer-outline')) S.map.removeLayer('markup-layer-outline');
+    if (S.map.getSource('markup-source')) S.map.removeSource('markup-source');
     persistCurrentLayerState();
     return;
   }
   
   // Determine field type
-  if (chosenNumericFields.includes(currentField)) {
-    currentFieldType = 'numeric';
-  } else if (chosenCategoricalFields.includes(currentField)) {
-    currentFieldType = 'categorical';
+  if (S.chosenNumericFields.includes(S.currentField)) {
+    S.currentFieldType = 'numeric';
+  } else if (S.chosenCategoricalFields.includes(S.currentField)) {
+    S.currentFieldType = 'categorical';
   }
   
   // Update UI based on field type
   updateFieldTypeUI();
   
   // Ensure categorical color mode is properly set if switching to categorical
-  if (currentFieldType === 'categorical') {
+  if (S.currentFieldType === 'categorical') {
     // Make sure the radio button is checked
-    const radioButton = document.querySelector(`input[name="categoricalColorMode"][value="${categoricalColorMode}"]`) as HTMLInputElement;
+    const radioButton = document.querySelector(`input[name="categoricalColorMode"][value="${S.categoricalColorMode}"]`) as HTMLInputElement;
     if (radioButton) {
       radioButton.checked = true;
     }
   }
   
   // Clear legend selections when field changes, but preserve parcel selections
-  selectedLegendItems.clear();
+  S.selectedLegendItems.clear();
   // Note: selectedParcels is preserved so highlighting continues to work
   
   // Clear cached extrusion settings when field changes
-  cachedExtrusionSettings = null;
+  S.cachedExtrusionSettings = null;
   
   // Reset to default sorting state when field changes
-  if (currentFieldType === 'categorical') {
-    legendSortField = 'name';
+  if (S.currentFieldType === 'categorical') {
+    S.legendSortField = 'name';
   } else {
-    legendSortField = 'count';
+    S.legendSortField = 'count';
   }
-  legendSortDirection = 'desc';
+  S.legendSortDirection = 'desc';
   
-  if (map.getLayer('markup-layer')) map.removeLayer('markup-layer');
-  if (map.getLayer('markup-layer-outline')) map.removeLayer('markup-layer-outline');
-  if (map.getSource('markup-source')) map.removeSource('markup-source');
+  if (S.map.getLayer('markup-layer')) S.map.removeLayer('markup-layer');
+  if (S.map.getLayer('markup-layer-outline')) S.map.removeLayer('markup-layer-outline');
+  if (S.map.getSource('markup-source')) S.map.removeSource('markup-source');
   
   scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
   persistCurrentLayerState();
@@ -7931,10 +5784,10 @@ fieldSelect.addEventListener('change', () => {
 
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
   r.addEventListener('change', () => {
-    normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
+    S.normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
     // Clear cached extrusion settings when normalization mode changes
-    cachedExtrusionSettings = null;
-    if (!currentGeoJSON || !currentField) return;
+    S.cachedExtrusionSettings = null;
+    if (!S.currentGeoJSON || !S.currentField) return;
     scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
     persistCurrentLayerState();
   });
@@ -7942,20 +5795,20 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
 
 // 3D checkbox event listener
 enable3DCheckbox.addEventListener('change', () => {
-  is3DMode = enable3DCheckbox.checked;
+  S.is3DMode = enable3DCheckbox.checked;
   update3DUI();
   
-  if (is3DMode && !cachedExtrusionSettings) {
+  if (S.is3DMode && !S.cachedExtrusionSettings) {
     // First time enabling 3D - compute good defaults
     computeAndSetGoodExtrusionDefaults();
-  } else if (is3DMode && cachedExtrusionSettings) {
+  } else if (S.is3DMode && S.cachedExtrusionSettings) {
     // Restore cached settings
-    multInput.value = String(cachedExtrusionSettings.multiplier);
-    unitsSelect.value = cachedExtrusionSettings.unit;
+    multInput.value = String(S.cachedExtrusionSettings.multiplier);
+    unitsSelect.value = S.cachedExtrusionSettings.unit;
   }
   
   // Apply the current visualization
-  if (currentGeoJSON && currentField) {
+  if (S.currentGeoJSON && S.currentField) {
     applyExtrusion();
   }
   persistCurrentLayerState();
@@ -7978,26 +5831,26 @@ refreshScatterPanel();
 refreshLandSchedulePanel();
 
 function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
-  if (!currentField || !currentGeoJSON || !currentStats) return [];
+  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return [];
   
   const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
   let ranges: Array<{ min: number; max: number; color: string; rangeKey: string }> = [];
   
-  if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
+  if (S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length) {
     // Use quantile breaks for ranges
-    const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
+    const breaks = [S.currentStats.min, ...S.colorBreaks, S.currentStats.max];
     for (let i = 0; i < breaks.length - 1; i++) {
       const min = breaks[i];
       const max = breaks[i + 1];
       const rangeKey = `range_${i}`;
       const defaultColor = ramp[Math.min(i, ramp.length - 1)];
-      const color = customColors.get(rangeKey) || defaultColor;
+      const color = S.customColors.get(rangeKey) || defaultColor;
       ranges.push({ min, max, color, rangeKey });
     }
   } else {
     // Linear intervals - create 10 ranges
-    const min = currentStats.min;
-    const max = currentStats.max;
+    const min = S.currentStats.min;
+    const max = S.currentStats.max;
     const step = (max - min) / 10;
     
     for (let i = 0; i < 10; i++) {
@@ -8006,7 +5859,7 @@ function buildNumericColorRanges(): Array<{ min: number; max: number; color: str
       const rangeKey = `range_${i}`;
       const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
       const defaultColor = ramp[colorIndex];
-      const color = customColors.get(rangeKey) || defaultColor;
+      const color = S.customColors.get(rangeKey) || defaultColor;
       ranges.push({ min: rangeMin, max: rangeMax, color, rangeKey });
     }
   }
@@ -8015,7 +5868,7 @@ function buildNumericColorRanges(): Array<{ min: number; max: number; color: str
 }
 
 function buildNumericColorExpression(): Expression {
-  if (!currentField || !currentGeoJSON || !currentStats) return ['literal', '#888'] as any;
+  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return ['literal', '#888'] as any;
   
   const ranges = buildNumericColorRanges();
   if (ranges.length === 0) {
@@ -8049,7 +5902,7 @@ function buildNumericColorExpression(): Expression {
   // Add highlighting for selected parcels
   const baseResult = cases as any;
   const result = ['case',
-    ['boolean', ['feature-state', 'selected'], false], highlightColor,
+    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
     baseResult
   ] as any;
   
@@ -8059,7 +5912,6 @@ function buildNumericColorExpression(): Expression {
 /* ---------------- Vertical Toolbar ---------------- */
 
 // Toolbar state
-let currentSelectionMode: 'select-one' | 'select-rectangle' | 'select-lasso' | 'select-polygon' = 'select-one';
 
 // Toolbar elements
 const selectToolButton = document.getElementById('selectToolButton') as HTMLButtonElement;
@@ -8071,8 +5923,6 @@ const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 
 // Tool state
-let isInfoToolActive = false;
-let isPanToolActive = false;
 
 // Hotkey definitions - easily changeable
 const HOTKEYS = {
@@ -8092,7 +5942,7 @@ const cornerTriangleIcon = new URL('./svg/corner_triangle.svg', import.meta.url)
 
 // Update the main toolbar button icon based on current selection mode
 function updateToolbarIcon() {
-  const iconPath = selectionModeIcons[currentSelectionMode];
+  const iconPath = selectionModeIcons[S.currentSelectionMode];
   selectToolButton.innerHTML = `<img src="${iconPath}" alt="Select" />
           <span class="hotkey">V</span>
           <img src="${cornerTriangleIcon}" alt="" class="corner-triangle" />`;
@@ -8102,7 +5952,7 @@ function updateToolbarIcon() {
 function updateSubmenuActiveStates() {
   submenuButtons.forEach(button => {
     const mode = button.getAttribute('data-mode');
-    if (mode === currentSelectionMode) {
+    if (mode === S.currentSelectionMode) {
       button.classList.add('active-tool');
     } else {
       button.classList.remove('active-tool');
@@ -8113,8 +5963,8 @@ function updateSubmenuActiveStates() {
 // Function to activate a specific tool and deactivate others
 function activateTool(tool: 'pan' | 'info' | 'select') {
   // Deactivate all tools first
-  isPanToolActive = false;
-  isInfoToolActive = false;
+  S.isPanToolActive = false;
+  S.isInfoToolActive = false;
   
   // Remove active-tool class from all buttons
   panToolButton.classList.remove('active-tool');
@@ -8124,21 +5974,21 @@ function activateTool(tool: 'pan' | 'info' | 'select') {
   // Activate the specified tool
   switch (tool) {
     case 'pan':
-      isPanToolActive = true;
+      S.isPanToolActive = true;
       panToolButton.classList.add('active-tool');
       // Enable drag pan for pan tool
-      map.dragPan.enable();
+      S.map.dragPan.enable();
       break;
     case 'info':
-      isInfoToolActive = true;
+      S.isInfoToolActive = true;
       infoToolButton.classList.add('active-tool');
       // Disable drag pan for info tool
-      map.dragPan.disable();
+      S.map.dragPan.disable();
       break;
     case 'select':
       selectToolButton.classList.add('active-tool');
       // Disable drag pan for select tool
-      map.dragPan.disable();
+      S.map.dragPan.disable();
       break;
   }
   
@@ -8149,16 +5999,16 @@ function activateTool(tool: 'pan' | 'info' | 'select') {
   updateCursor();
   
   // Close popup if info tool is deactivated
-  if (!isInfoToolActive && activePopup) {
-    activePopup.remove();
-    activePopup = null;
-    lastPicked = null;
+  if (!S.isInfoToolActive && S.activePopup) {
+    S.activePopup.remove();
+    S.activePopup = null;
+    S.lastPicked = null;
   }
 }
 
 // Handle submenu button clicks
 function handleSubmenuButtonClick(mode: string) {
-  currentSelectionMode = mode as any;
+  S.currentSelectionMode = mode as any;
   updateToolbarIcon();
   updateSubmenuActiveStates();
   selectSubmenu.classList.remove('show');
@@ -8171,7 +6021,7 @@ function handleSubmenuButtonClick(mode: string) {
 
 // Set up event handlers based on current selection mode
 function setupSelectionModeHandlers() {
-  const mapContainer = map.getContainer();
+  const mapContainer = S.map.getContainer();
   
   // Remove all existing mouse event listeners
   mapContainer.removeEventListener('mousedown', handleRectangleMouseDown);
@@ -8188,7 +6038,7 @@ function setupSelectionModeHandlers() {
   mapContainer.removeEventListener('mouseup', handlePanMouseUp);
   
   // Add pan tool event listeners if pan tool is active
-  if (isPanToolActive) {
+  if (S.isPanToolActive) {
     mapContainer.addEventListener('mousedown', handlePanMouseDown);
     mapContainer.addEventListener('mousemove', handlePanMouseMove);
     mapContainer.addEventListener('mouseup', handlePanMouseUp);
@@ -8196,12 +6046,12 @@ function setupSelectionModeHandlers() {
   }
   
   // If info tool is active, don't add any selection event listeners
-  if (isInfoToolActive) {
+  if (S.isInfoToolActive) {
     return;
   }
   
   // Add event listeners based on current mode
-  switch (currentSelectionMode) {
+  switch (S.currentSelectionMode) {
     case 'select-rectangle':
       mapContainer.addEventListener('mousedown', handleRectangleMouseDown);
       mapContainer.addEventListener('mousemove', handleRectangleMouseMove);
@@ -8274,9 +6124,9 @@ function initializeToolbar() {
       selectButtonHoldTimer = null;
       
       // Toggle the current selection mode
-      const currentButton = selectSubmenu.querySelector(`[data-mode="${currentSelectionMode}"]`) as HTMLButtonElement;
+      const currentButton = selectSubmenu.querySelector(`[data-mode="${S.currentSelectionMode}"]`) as HTMLButtonElement;
       if (currentButton) {
-        handleSubmenuButtonClick(currentSelectionMode);
+        handleSubmenuButtonClick(S.currentSelectionMode);
       }
       // Close submenu after toggling
       closeAllSubmenus();
@@ -8295,7 +6145,7 @@ function initializeToolbar() {
   layersToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
-    if (isLayersMinimized) {
+    if (S.isLayersMinimized) {
       showLayers();
     } else {
       minimizeLayers();
@@ -8319,7 +6169,7 @@ function initializeToolbar() {
     e.stopPropagation();
     closeAllSubmenus();
     
-    if (isPanToolActive) {
+    if (S.isPanToolActive) {
       // If pan is already active, deactivate it
       activateTool('select');
     } else {
@@ -8333,7 +6183,7 @@ function initializeToolbar() {
     e.stopPropagation();
     closeAllSubmenus();
     
-    if (isInfoToolActive) {
+    if (S.isInfoToolActive) {
       // If info is already active, deactivate it
       activateTool('select');
     } else {
@@ -8346,7 +6196,7 @@ function initializeToolbar() {
   legendToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
-    if (isLegendMinimized) {
+    if (S.isLegendMinimized) {
       showLegend();
     } else {
       minimizeLegend();
@@ -8396,7 +6246,7 @@ function initializeToolbar() {
 // Update toolbar button states based on window visibility
 function updateToolbarButtonStates() {
   // Settings button state
-  if (isLayersMinimized) {
+  if (S.isLayersMinimized) {
     layersToolButton.classList.add('inactive');
     layersToolButton.classList.remove('active');
   } else {
@@ -8404,7 +6254,7 @@ function updateToolbarButtonStates() {
     layersToolButton.classList.add('active');
   }
 
-  if (isSettingsMenuMinimized) {
+  if (S.isSettingsMenuMinimized) {
     settingsToolButton.classList.add('inactive');
     settingsToolButton.classList.remove('active');
   } else {
@@ -8413,7 +6263,7 @@ function updateToolbarButtonStates() {
   }
   
   // Legend button state
-  if (isLegendMinimized) {
+  if (S.isLegendMinimized) {
     legendToolButton.classList.add('inactive');
     legendToolButton.classList.remove('active');
   } else {
@@ -8421,7 +6271,7 @@ function updateToolbarButtonStates() {
     legendToolButton.classList.add('active');
   }
 
-  if (isStatisticsMinimized) {
+  if (S.isStatisticsMinimized) {
     statisticsToolButton.classList.add('inactive');
     statisticsToolButton.classList.remove('active');
   } else {
@@ -8429,7 +6279,7 @@ function updateToolbarButtonStates() {
     statisticsToolButton.classList.add('active');
   }
 
-  if (isScatterplotMinimized) {
+  if (S.isScatterplotMinimized) {
     scatterplotToolButton.classList.add('inactive');
     scatterplotToolButton.classList.remove('active');
   } else {
@@ -8437,7 +6287,7 @@ function updateToolbarButtonStates() {
     scatterplotToolButton.classList.add('active');
   }
 
-  if (isFiltersMinimized) {
+  if (S.isFiltersMinimized) {
     filtersToolButton.classList.add('inactive');
     filtersToolButton.classList.remove('active');
   } else {
@@ -8445,7 +6295,7 @@ function updateToolbarButtonStates() {
     filtersToolButton.classList.add('active');
   }
 
-  if (isLandScheduleMinimized) {
+  if (S.isLandScheduleMinimized) {
     landScheduleToolButton.classList.add('inactive');
     landScheduleToolButton.classList.remove('active');
   } else {
@@ -8453,7 +6303,7 @@ function updateToolbarButtonStates() {
     landScheduleToolButton.classList.add('active');
   }
 
-  updatePaintButtonState();
+  updatePaintButtonState(btnPaintMenu);
 }
 
 // Initialize toolbar when DOM is ready
@@ -8465,662 +6315,16 @@ if (document.readyState === 'loading') {
 
 installWelcome();
 
-
-/* ---------------- Lasso Selection Tool ---------------- */
-
-// Lasso selection state
-let isLassoSelecting = false;
-let isLassoUnselecting = false;
-let lassoPoints: maplibregl.Point[] = [];
-let lassoElement: HTMLDivElement | null = null;
-let lassoSVG: SVGElement | null = null;
-let lassoPath: SVGPathElement | null = null;
-
-// Create lasso drawing element
-function createLassoElement(): HTMLDivElement {
-  const lasso = document.createElement('div');
-  lasso.className = 'lasso-selection';
-  lasso.style.cssText = `
-    position: absolute;
-    pointer-events: none;
-    z-index: 1000;
-    display: none;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  `;
-  
-  // Create SVG for lasso path
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-  `;
-  
-  // Create fill path (for the colored background)
-  const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  fillPath.setAttribute('class', 'lasso-fill');
-  
-  // Create background path (for the white dashes)
-  const bgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  bgPath.setAttribute('class', 'lasso-path-bg select');
-  
-  // Create foreground path (for the black/red dashes)
-  const fgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  fgPath.setAttribute('class', 'lasso-path select');
-  
-  svg.appendChild(fillPath);
-  svg.appendChild(bgPath);
-  svg.appendChild(fgPath);
-  lasso.appendChild(svg);
-  document.body.appendChild(lasso);
-  
-  return lasso;
-}
-
-// Initialize lasso element
-lassoElement = createLassoElement();
-lassoSVG = lassoElement.querySelector('svg') as SVGElement;
-lassoPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
-
-// Lasso selection mouse handlers
-function handleLassoMouseDown(e: MouseEvent) {
-  // Only activate on left click (select only), shift+left click (add), or alt+left click (remove)
-  if (e.button !== 0) return;
-  
-  // Prevent default behavior
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // Determine mode based on modifier keys
-  const isAddMode = e.shiftKey && !e.altKey;
-  const isRemoveMode = e.altKey && !e.shiftKey;
-  const isSelectOnlyMode = !e.shiftKey && !e.altKey;
-  
-  // Start lasso selection/unselection
-  if (isRemoveMode) {
-    isLassoUnselecting = true;
-  } else {
-    isLassoSelecting = true;
-  }
-  
-  // Initialize lasso points (viewport coordinates for visual positioning)
-  lassoPoints = [getViewportPoint(e)];
-  
-  // Temporarily disable map drag pan
-  originalDragPan = map.dragPan.isEnabled();
-  map.dragPan.disable();
-  
-  // Show lasso element
-  if (lassoElement) {
-    lassoElement.style.display = 'block';
-    
-    // Get all path elements
-    const fillPath = lassoElement.querySelector('.lasso-fill') as SVGPathElement;
-    const bgPath = lassoElement.querySelector('.lasso-path-bg') as SVGPathElement;
-    const fgPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
-    
-    // Apply styling based on mode
-    if (isRemoveMode) {
-      fillPath?.setAttribute('class', 'lasso-fill unselect');
-      bgPath?.setAttribute('class', 'lasso-path-bg unselect');
-      fgPath?.setAttribute('class', 'lasso-path unselect');
-    } else {
-      fillPath?.setAttribute('class', 'lasso-fill');
-      bgPath?.setAttribute('class', 'lasso-path-bg select');
-      fgPath?.setAttribute('class', 'lasso-path select');
-    }
-  }
-  
-  // Change cursor to arrow for SELECT mode
-  map.getCanvas().style.cursor = 'default';
-}
-
-function handleLassoMouseMove(e: MouseEvent) {
-  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoElement) return;
-  
-  // Sample points every 5 pixels to avoid too many points (viewport coordinates for visual positioning)
-  const currentPoint = getViewportPoint(e);
-  const lastPoint = lassoPoints[lassoPoints.length - 1];
-  
-  if (currentPoint.dist(lastPoint) >= 5) {
-    lassoPoints.push(currentPoint);
-    updateLassoPath();
-  }
-}
-
-function updateLassoPath() {
-  if (!lassoElement || lassoPoints.length < 2) return;
-  
-  // Get all path elements
-  const fillPath = lassoElement.querySelector('.lasso-fill') as SVGPathElement;
-  const bgPath = lassoElement.querySelector('.lasso-path-bg') as SVGPathElement;
-  const fgPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
-  
-  if (!fillPath || !bgPath || !fgPath) return;
-  
-  // Build SVG path
-  let pathData = `M ${lassoPoints[0].x} ${lassoPoints[0].y}`;
-  
-  for (let i = 1; i < lassoPoints.length; i++) {
-    pathData += ` L ${lassoPoints[i].x} ${lassoPoints[i].y}`;
-  }
-  
-  // Close the path by connecting to the first point
-  if (lassoPoints.length > 2) {
-    pathData += ` Z`;
-  }
-  
-  // Update all three paths with the same path data
-  fillPath.setAttribute('d', pathData);
-  bgPath.setAttribute('d', pathData);
-  fgPath.setAttribute('d', pathData);
-}
-
-function handleLassoMouseUp(e: MouseEvent) {
-  if ((!isLassoSelecting && !isLassoUnselecting) || !lassoElement) return;
-  
-  // Close the lasso by adding the first point again if we have enough points
-  if (lassoPoints.length >= 3) {
-    lassoPoints.push(lassoPoints[0]);
-    updateLassoPath();
-    
-    // Convert viewport coordinates to map coordinates for selection logic
-    const mapCoordinates = lassoPoints.map(point => {
-      // Convert viewport coordinates to map container coordinates first
-      const canvas = map.getCanvas();
-      const rect = canvas.getBoundingClientRect();
-      const mapPoint = new maplibregl.Point(
-        point.x - rect.left,
-        point.y - rect.top
-      );
-      return map.unproject([mapPoint.x, mapPoint.y]);
-    });
-    
-    // Create a polygon from the coordinates
-    const polygon = mapCoordinates.map(coord => [coord.lng, coord.lat]);
-    
-    // Log coordinates to console
-    const mode = isLassoUnselecting ? 'Unselect' : 'Select';
-    console.log(`Lasso ${mode} Coordinates:`, polygon);
-    
-    // Handle different selection modes
-    if (isLassoUnselecting) {
-      // Remove parcels from selection
-      unselectParcelsInPolygon(polygon);
-    } else {
-      // Check if this is select-only mode (no modifiers)
-      const isSelectOnlyMode = !e.shiftKey && !e.altKey;
-      if (isSelectOnlyMode) {
-        // Select only these parcels, unselect all others
-        clearAllSelections();
-      }
-      // Add parcels to selection
-      selectParcelsInPolygon(polygon);
-    }
-  }
-  
-  // Clean up
-  isLassoSelecting = false;
-  isLassoUnselecting = false;
-  lassoPoints = [];
-  
-  // Hide lasso element
-  if (lassoElement) {
-    lassoElement.style.display = 'none';
-  }
-  
-  // Restore map drag pan
-  if (originalDragPan !== undefined) {
-    if (originalDragPan) {
-      map.dragPan.enable();
-    }
-    originalDragPan = undefined;
-  }
-  
-  // Restore cursor
-  updateCursor();
-}
-
-// Function to select parcels within a polygon
-function selectParcelsInPolygon(polygon: number[][]) {
-  if (!currentGeoJSON) {
-    console.log('No data loaded to select from');
-    return;
-  }
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  
-  // Calculate bounding box for the lasso polygon
-  const bbox = calculatePolygonBbox(polygon);
-  
-  let selectedCount = 0;
-  
-  // First, filter features by bounding box intersection (broad-phase collision detection)
-  const candidateFeatures = currentGeoJSON.features.filter(feature => {
-    if (!feature.geometry || !feature.id) return false;
-    return featureIntersectsBbox(feature, bbox);
-  });
-  
-  console.log(`Broad-phase filtering: ${candidateFeatures.length} features out of ${currentGeoJSON.features.length} candidates`);
-  
-  // Then, perform detailed polygon intersection checks only on the filtered subset
-  for (const feature of candidateFeatures) {
-    if (!feature.geometry || !feature.id) continue;
-    
-    // Check if the feature intersects with our lasso polygon
-    if (featureIntersectsPolygon(feature, polygon)) {
-      const parcelId = getParcelId(feature);
-      selectedParcels.add(parcelId);
-      
-      // Set feature state for highlighting
-      map.setFeatureState(
-        { source: sourceId, id: feature.id },
-        { selected: true }
-      );
-      
-      selectedCount++;
-    }
-  }
-  
-  console.log(`Selected ${selectedCount} parcels within the lasso`);
-  
-  // Update the selection controls UI
-  updateSelectionControls();
-}
-
-// Function to unselect parcels within a polygon
-function unselectParcelsInPolygon(polygon: number[][]) {
-  if (!currentGeoJSON) {
-    console.log('No data loaded to unselect from');
-    return;
-  }
-  const sourceId = getCurrentSourceId();
-  if (!sourceId) return;
-  
-  // Calculate bounding box for the lasso polygon
-  const bbox = calculatePolygonBbox(polygon);
-  
-  let unselectedCount = 0;
-  
-  // First, filter features by bounding box intersection (broad-phase collision detection)
-  const candidateFeatures = currentGeoJSON.features.filter(feature => {
-    if (!feature.geometry || !feature.id) return false;
-    return featureIntersectsBbox(feature, bbox);
-  });
-  
-  console.log(`Broad-phase filtering: ${candidateFeatures.length} features out of ${currentGeoJSON.features.length} candidates`);
-  
-  // Then, perform detailed polygon intersection checks only on the filtered subset
-  for (const feature of candidateFeatures) {
-    if (!feature.geometry || !feature.id) continue;
-    
-    // Check if the feature intersects with our lasso polygon
-    if (featureIntersectsPolygon(feature, polygon)) {
-      const parcelId = getParcelId(feature);
-      
-      // Only unselect if it was previously selected
-      if (selectedParcels.has(parcelId)) {
-        selectedParcels.delete(parcelId);
-        
-        // Set feature state to remove highlighting
-        map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: false }
-        );
-        
-        unselectedCount++;
-      }
-    }
-  }
-  
-  console.log(`Unselected ${unselectedCount} parcels within the lasso`);
-  
-  // Update the selection controls UI
-  updateSelectionControls();
-}
-
-// Helper function to check if a feature intersects with a polygon
-function featureIntersectsPolygon(feature: GeoJSON.Feature, polygon: number[][]): boolean {
-  if (feature.geometry.type === 'Polygon') {
-    return polygonIntersectsPolygon(feature.geometry.coordinates, polygon);
-  } else if (feature.geometry.type === 'MultiPolygon') {
-    return feature.geometry.coordinates.some(poly => 
-      polygonIntersectsPolygon(poly, polygon)
-    );
-  }
-  
-  return false;
-}
-
-// Helper function to check if a polygon intersects with another polygon
-function polygonIntersectsPolygon(polygon1: number[][][], polygon2: number[][]): boolean {
-  // Check if any point of polygon1 is inside polygon2
-  for (const ring of polygon1) {
-    for (const coord of ring) {
-      const [lng, lat] = coord;
-      if (pointInPolygon([lng, lat], polygon2)) {
-        return true;
-      }
-    }
-  }
-  
-  // Also check if any point of polygon2 is inside polygon1
-  for (const coord of polygon2) {
-    const [lng, lat] = coord;
-    if (pointInPolygon([lng, lat], polygon1[0])) {
-      return true;
-    }
-  }
-  
-  return false;
-}
-
-// Helper function to calculate bounding box for a polygon
-function calculatePolygonBbox(polygon: number[][]): [number, number, number, number] {
-  let minLng = Infinity;
-  let minLat = Infinity;
-  let maxLng = -Infinity;
-  let maxLat = -Infinity;
-  
-  for (const coord of polygon) {
-    const [lng, lat] = coord;
-    minLng = Math.min(minLng, lng);
-    minLat = Math.min(minLat, lat);
-    maxLng = Math.max(maxLng, lng);
-    maxLat = Math.max(maxLat, lat);
-  }
-  
-  return [minLng, minLat, maxLng, maxLat];
-}
-
-
-/* ---------------- Polygon Selection Tool ---------------- */
-
-// Polygon selection state
-let isPolygonSelecting = false;
-let isPolygonUnselecting = false;
-let polygonPoints: maplibregl.Point[] = [];
-let polygonElement: HTMLDivElement | null = null;
-let polygonSVG: SVGElement | null = null;
-let polygonPath: SVGPathElement | null = null;
-let polygonStartPoint: maplibregl.Point | null = null;
-let isPolygonClosing = false;
-let polygonSelectionMode: 'select-only' | 'add' | 'remove' = 'select-only';
-
-// Create polygon drawing element (reuses lasso element structure)
-function createPolygonElement(): HTMLDivElement {
-  const polygon = document.createElement('div');
-  polygon.className = 'polygon-selection';
-  polygon.style.cssText = `
-    position: absolute;
-    pointer-events: none;
-    z-index: 1000;
-    display: none;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-  `;
-  
-  // Create SVG for polygon path
-  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.style.cssText = `
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-  `;
-  
-  // Create fill path (for the colored background)
-  const fillPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  fillPath.setAttribute('class', 'polygon-fill');
-  
-  // Create background path (for the white dashes)
-  const bgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  bgPath.setAttribute('class', 'polygon-path-bg select');
-  
-  // Create foreground path (for the black/red dashes)
-  const fgPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  fgPath.setAttribute('class', 'polygon-path select');
-  
-  // Create closing indicator circle
-  const closingIndicator = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-  closingIndicator.setAttribute('class', 'polygon-closing-indicator');
-  closingIndicator.setAttribute('r', '8'); // Slightly bigger than the 10px close detection radius
-  closingIndicator.style.display = 'none';
-  
-  svg.appendChild(fillPath);
-  svg.appendChild(bgPath);
-  svg.appendChild(fgPath);
-  svg.appendChild(closingIndicator);
-  polygon.appendChild(svg);
-  document.body.appendChild(polygon);
-  
-  return polygon;
-}
-
-// Initialize polygon element
-polygonElement = createPolygonElement();
-polygonSVG = polygonElement.querySelector('svg') as SVGElement;
-polygonPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
-
-// Polygon selection mouse handlers
-function handlePolygonMouseDown(e: MouseEvent) {
-  // Only activate on left click (select only), shift+left click (add), or alt+left click (remove)
-  if (e.button !== 0) return;
-  
-  // Prevent default behavior
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // Determine mode based on modifier keys
-  const isAddMode = e.shiftKey && !e.altKey;
-  const isRemoveMode = e.altKey && !e.shiftKey;
-  const isSelectOnlyMode = !e.shiftKey && !e.altKey;
-  const currentPoint = getViewportPoint(e);
-  
-  // If this is the first click, start polygon selection
-  if (polygonPoints.length === 0) {
-    isPolygonSelecting = !isRemoveMode;
-    isPolygonUnselecting = isRemoveMode;
-    
-    // Store the selection mode
-    if (isRemoveMode) {
-      polygonSelectionMode = 'remove';
-    } else if (isAddMode) {
-      polygonSelectionMode = 'add';
-    } else {
-      polygonSelectionMode = 'select-only';
-    }
-    
-    polygonStartPoint = currentPoint;
-    polygonPoints = [currentPoint];
-    
-    // Temporarily disable map drag pan
-    originalDragPan = map.dragPan.isEnabled();
-    map.dragPan.disable();
-    
-    // Show polygon element
-    if (polygonElement) {
-      polygonElement.style.display = 'block';
-      
-      // Get all path elements
-      const fillPath = polygonElement.querySelector('.polygon-fill') as SVGPathElement;
-      const bgPath = polygonElement.querySelector('.polygon-path-bg') as SVGPathElement;
-      const fgPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
-      
-      // Apply styling based on mode
-      if (isRemoveMode) {
-        fillPath?.setAttribute('class', 'polygon-fill unselect');
-        bgPath?.setAttribute('class', 'polygon-path-bg unselect');
-        fgPath?.setAttribute('class', 'polygon-path unselect');
-      } else {
-        fillPath?.setAttribute('class', 'polygon-fill');
-        bgPath?.setAttribute('class', 'polygon-path-bg select');
-        fgPath?.setAttribute('class', 'polygon-path select');
-      }
-    }
-    
-    // Change cursor to arrow for SELECT mode
-    map.getCanvas().style.cursor = 'default';
-  } else {
-    // Check if clicking near the start point to close the polygon
-    if (polygonStartPoint && currentPoint.dist(polygonStartPoint) <= 10) {
-      closePolygon();
-    } else {
-      // Add a new point to the polygon
-      polygonPoints.push(currentPoint);
-      updatePolygonPath();
-    }
-  }
-}
-
-function handlePolygonMouseMove(e: MouseEvent) {
-  if ((!isPolygonSelecting && !isPolygonUnselecting) || !polygonElement || polygonPoints.length === 0) return;
-  
-  const currentPoint = getViewportPoint(e);
-  
-  // Check if we're near the start point for closing indication
-  if (polygonStartPoint && currentPoint.dist(polygonStartPoint) <= 10) {
-    if (!isPolygonClosing) {
-      isPolygonClosing = true;
-      // Show closing indicator
-      const closingIndicator = polygonElement.querySelector('.polygon-closing-indicator') as SVGCircleElement;
-      if (closingIndicator) {
-        const isUnselectMode = isPolygonUnselecting;
-        closingIndicator.setAttribute('cx', polygonStartPoint.x.toString());
-        closingIndicator.setAttribute('cy', polygonStartPoint.y.toString());
-        closingIndicator.setAttribute('class', `polygon-closing-indicator ${isUnselectMode ? 'unselect' : 'select'}`);
-        closingIndicator.style.display = 'block';
-      }
-    }
-  } else {
-    if (isPolygonClosing) {
-      isPolygonClosing = false;
-      // Hide closing indicator
-      const closingIndicator = polygonElement.querySelector('.polygon-closing-indicator') as SVGCircleElement;
-      if (closingIndicator) {
-        closingIndicator.style.display = 'none';
-      }
-    }
-  }
-  
-  // Update the path to show line from last point to current mouse position
-  updatePolygonPath(currentPoint);
-}
-
-function updatePolygonPath(currentMousePoint?: maplibregl.Point) {
-  if (!polygonElement || polygonPoints.length === 0) return;
-  
-  // Get all path elements
-  const fillPath = polygonElement.querySelector('.polygon-fill') as SVGPathElement;
-  const bgPath = polygonElement.querySelector('.polygon-path-bg') as SVGPathElement;
-  const fgPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
-  
-  if (!fillPath || !bgPath || !fgPath) return;
-  
-  // Build SVG path
-  let pathData = `M ${polygonPoints[0].x} ${polygonPoints[0].y}`;
-  
-  // Add lines between committed points
-  for (let i = 1; i < polygonPoints.length; i++) {
-    pathData += ` L ${polygonPoints[i].x} ${polygonPoints[i].y}`;
-  }
-  
-  // Add line from last committed point to current mouse position
-  if (currentMousePoint && polygonPoints.length > 0) {
-    pathData += ` L ${currentMousePoint.x} ${currentMousePoint.y}`;
-  }
-  
-  // Close the path if we have enough points
-  if (polygonPoints.length >= 3) {
-    pathData += ` Z`;
-  }
-  
-  // Update all three paths with the same path data
-  fillPath.setAttribute('d', pathData);
-  bgPath.setAttribute('d', pathData);
-  fgPath.setAttribute('d', pathData);
-}
-
-function handlePolygonDoubleClick(e: MouseEvent) {
-  if ((!isPolygonSelecting && !isPolygonUnselecting) || polygonPoints.length < 3) return;
-  
-  // Prevent default behavior
-  e.preventDefault();
-  e.stopPropagation();
-  
-  // Close the polygon
-  closePolygon();
-}
-
-function closePolygon() {
-  if ((!isPolygonSelecting && !isPolygonUnselecting) || !polygonElement || polygonPoints.length < 3) return;
-  
-  // Convert viewport coordinates to map coordinates for selection logic
-  const mapCoordinates = polygonPoints.map(point => {
-    // Convert viewport coordinates to map container coordinates first
-    const canvas = map.getCanvas();
-    const rect = canvas.getBoundingClientRect();
-    const mapPoint = new maplibregl.Point(
-      point.x - rect.left,
-      point.y - rect.top
-    );
-    return map.unproject([mapPoint.x, mapPoint.y]);
-  });
-  
-  // Create a polygon from the coordinates
-  const polygon = mapCoordinates.map(coord => [coord.lng, coord.lat]);
-  
-  // Log coordinates to console
-  const mode = isPolygonUnselecting ? 'Unselect' : 'Select';
-  console.log(`Polygon ${mode} Coordinates:`, polygon);
-  
-  // Handle different selection modes
-  if (polygonSelectionMode === 'remove') {
-    // Remove parcels from selection
-    unselectParcelsInPolygon(polygon);
-  } else if (polygonSelectionMode === 'select-only') {
-    // Select only these parcels, unselect all others
-    clearAllSelections();
-    selectParcelsInPolygon(polygon);
-  } else {
-    // Add parcels to selection
-    selectParcelsInPolygon(polygon);
-  }
-  
-  // Clean up
-  isPolygonSelecting = false;
-  isPolygonUnselecting = false;
-  polygonPoints = [];
-  polygonStartPoint = null;
-  isPolygonClosing = false;
-  
-  // Hide polygon element and closing indicator
-  if (polygonElement) {
-    polygonElement.style.display = 'none';
-    const closingIndicator = polygonElement.querySelector('.polygon-closing-indicator') as SVGCircleElement;
-    if (closingIndicator) {
-      closingIndicator.style.display = 'none';
-    }
-  }
-  
-  // Restore map drag pan
-  if (originalDragPan !== undefined) {
-    if (originalDragPan) {
-      map.dragPan.enable();
-    }
-    originalDragPan = undefined;
-  }
-  
-  // Restore cursor
-  updateCursor();
-}
+// Initialize selection module with callbacks into main.ts
+initSelection({
+  getCurrentSourceId,
+  updateCursor,
+  makeDraggable,
+  updateStatisticsResults,
+  scheduleScatterPlotRefresh,
+  updateHighlightColors,
+  persistCurrentLayerState,
+  updateLegendPosition,
+  getFloatingLegend: () => floatingLegend,
+});
+initSelectionElements();

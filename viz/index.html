@@ -438,6 +438,7 @@
     }
 
     #filtersControls select,
+    #filtersControls input[type="text"],
     #filtersControls input[type="number"] {
       width: 100%;
       padding: 6px 8px;
@@ -477,6 +478,27 @@
       border-color: #3b82f6;
       box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
       background: #eef2ff;
+    }
+
+    .filters-saved-section {
+      display: grid;
+      gap: 8px;
+    }
+
+    .filters-save-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .filters-load-row {
+      display: grid;
+    }
+
+    .filters-saved-status {
+      font-size: 12px;
+      color: #333;
     }
 
     .stats-subject-actions {
@@ -817,6 +839,23 @@
       </button>
     </div>
     <div id="filtersContent" style="padding: 12px; display: grid; gap: 12px;">
+      <div class="filters-saved-section">
+        <div class="filters-actions">
+          <button id="filtersSaveToggle" type="button">Save filter</button>
+          <button id="filtersLoadToggle" type="button">Load filter</button>
+        </div>
+        <div id="filtersSaveControls" class="filters-save-row" style="display: none;">
+          <input id="filtersSaveName" type="text" placeholder="type a name" />
+          <button id="filtersSaveConfirm" type="button" title="Save">💾</button>
+        </div>
+        <div id="filtersSavedStatus" class="filters-saved-status" style="display: none;"></div>
+        <div id="filtersLoadControls" class="filters-load-row" style="display: none;">
+          <select id="filtersLoadSelect"></select>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
       <div class="filters-actions">
         <button id="filtersSelectButton" type="button">Select filtered</button>
         <button id="filtersShowButton" type="button">Show filtered</button>
@@ -832,7 +871,7 @@
         </label>
       </div>
       <div id="filtersList" class="filters-list"></div>
-      <button id="addFilterButton" type="button">Add filter</button>
+      <button id="addFilterButton" type="button">Add condition</button>
     </div>
   </div>
 

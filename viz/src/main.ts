@@ -844,6 +844,14 @@ const filtersContent = document.getElementById('filtersContent') as HTMLDivEleme
 const filtersListEl = document.getElementById('filtersList') as HTMLDivElement;
 const filtersInvertToggle = document.getElementById('filtersInvertToggle') as HTMLInputElement;
 const addFilterButton = document.getElementById('addFilterButton') as HTMLButtonElement;
+const filtersSaveToggle = document.getElementById('filtersSaveToggle') as HTMLButtonElement;
+const filtersLoadToggle = document.getElementById('filtersLoadToggle') as HTMLButtonElement;
+const filtersSaveControls = document.getElementById('filtersSaveControls') as HTMLDivElement;
+const filtersSaveNameInput = document.getElementById('filtersSaveName') as HTMLInputElement;
+const filtersSaveConfirmButton = document.getElementById('filtersSaveConfirm') as HTMLButtonElement;
+const filtersSavedStatus = document.getElementById('filtersSavedStatus') as HTMLDivElement;
+const filtersLoadControls = document.getElementById('filtersLoadControls') as HTMLDivElement;
+const filtersLoadSelect = document.getElementById('filtersLoadSelect') as HTMLSelectElement;
 const filtersSelectButton = document.getElementById('filtersSelectButton') as HTMLButtonElement;
 const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
 const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
@@ -1047,6 +1055,12 @@ type FilterRule = {
   operator: FilterOperator | null;
   value: number | string | string[] | null;
   active: boolean;
+};
+
+type SavedFilterEntry = {
+  name: string;
+  filters: FilterRule[];
+  filterInvert: boolean;
 };
 
 type ParcelFieldPatch = {
@@ -1267,6 +1281,10 @@ let filters: FilterRule[] = [];
 let filterMode: FilterMode = 'none';
 let filterActionMode: FilterActionMode = 'none';
 let filterInvert = false;
+const savedFiltersStore = new Map<string, SavedFilterEntry>();
+let savedFiltersPanelMode: 'none' | 'save' | 'load' = 'none';
+let savedFilterMatchName: string | null = null;
+(window as any).savedFiltersStore = savedFiltersStore;
 
 const NUMERIC_FILTER_OPERATORS: Array<{ value: NumericFilterOperator; label: string }> = [
   { value: 'lt', label: '<' },
@@ -1305,6 +1323,129 @@ function cloneFilters(source: FilterRule[]): FilterRule[] {
     ...filter,
     value: Array.isArray(filter.value) ? [...filter.value] : filter.value
   }));
+}
+
+function serializeFiltersForComparison(source: FilterRule[], invert: boolean): string {
+  return JSON.stringify({
+    invert,
+    rules: source.map(rule => ({
+      field: rule.field,
+      fieldType: rule.fieldType,
+      operator: rule.operator,
+      value: Array.isArray(rule.value) ? [...rule.value] : rule.value,
+      active: rule.active
+    }))
+  });
+}
+
+function getMatchingSavedFilterName(): string | null {
+  const current = serializeFiltersForComparison(filters, filterInvert);
+  for (const [name, entry] of savedFiltersStore.entries()) {
+    const candidate = serializeFiltersForComparison(entry.filters, entry.filterInvert);
+    if (candidate === current) return name;
+  }
+  return null;
+}
+
+function renderSavedFiltersOptions() {
+  if (!filtersLoadSelect) return;
+  filtersLoadSelect.replaceChildren();
+  const placeholder = new Option('Choose a saved filter', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  filtersLoadSelect.appendChild(placeholder);
+  savedFiltersStore.forEach((entry, name) => {
+    filtersLoadSelect.appendChild(new Option(entry.name, name));
+  });
+
+  if (savedFilterMatchName) {
+    filtersLoadSelect.value = savedFilterMatchName;
+  }
+
+  filtersLoadSelect.disabled = savedFiltersStore.size === 0;
+}
+
+function setSavedFiltersPanelMode(nextMode: 'none' | 'save' | 'load') {
+  savedFiltersPanelMode = savedFiltersPanelMode === nextMode ? 'none' : nextMode;
+  updateSavedFiltersUIState();
+}
+
+function updateSavedFiltersUIState() {
+  const hasConditions = filters.length > 0;
+  const hasSaved = savedFiltersStore.size > 0;
+  if (!hasConditions && savedFiltersPanelMode === 'save') {
+    savedFiltersPanelMode = 'none';
+  }
+  if (!hasSaved && savedFiltersPanelMode === 'load') {
+    savedFiltersPanelMode = 'none';
+  }
+
+  savedFilterMatchName = getMatchingSavedFilterName();
+
+  if (filtersSaveToggle) {
+    filtersSaveToggle.disabled = !hasConditions;
+    filtersSaveToggle.classList.toggle('active', savedFiltersPanelMode === 'save');
+  }
+  if (filtersLoadToggle) {
+    filtersLoadToggle.disabled = !hasSaved;
+    filtersLoadToggle.classList.toggle('active', savedFiltersPanelMode === 'load');
+  }
+
+  const showSave = savedFiltersPanelMode === 'save' && hasConditions;
+  const showLoad = savedFiltersPanelMode === 'load' && hasSaved;
+  const hasMatch = Boolean(savedFilterMatchName);
+
+  if (filtersSaveControls) {
+    filtersSaveControls.style.display = showSave && !hasMatch ? 'grid' : 'none';
+  }
+  if (filtersSavedStatus) {
+    filtersSavedStatus.style.display = showSave && hasMatch ? 'block' : 'none';
+    if (showSave && hasMatch) {
+      filtersSavedStatus.textContent = `Saved as: "${savedFilterMatchName}"`;
+    }
+  }
+  if (filtersLoadControls) {
+    filtersLoadControls.style.display = showLoad ? 'grid' : 'none';
+  }
+
+  if (filtersSaveConfirmButton) {
+    const hasName = Boolean(filtersSaveNameInput?.value.trim());
+    filtersSaveConfirmButton.disabled = !showSave || !hasName;
+  }
+
+  if (showLoad) {
+    renderSavedFiltersOptions();
+  }
+}
+
+function saveCurrentFilters(name: string) {
+  const trimmedName = name.trim();
+  if (!trimmedName) return;
+  if (savedFiltersStore.has(trimmedName)) {
+    const overwrite = window.confirm('You already have a filter with this name. Overwrite? Yes/Cancel');
+    if (!overwrite) return;
+  }
+  savedFiltersStore.set(trimmedName, {
+    name: trimmedName,
+    filters: cloneFilters(filters),
+    filterInvert
+  });
+  savedFilterMatchName = trimmedName;
+  updateSavedFiltersUIState();
+}
+
+function applySavedFilter(name: string) {
+  const entry = savedFiltersStore.get(name);
+  if (!entry) return;
+  filters = cloneFilters(entry.filters);
+  filterInvert = entry.filterInvert;
+  if (filtersInvertToggle) {
+    filtersInvertToggle.checked = filterInvert;
+  }
+  renderFiltersList();
+  updateFiltersUIState();
+  applyActiveFilterAction();
+  persistCurrentLayerState();
 }
 
 function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore {
@@ -4668,6 +4809,7 @@ function updateFiltersUIState() {
   if (filtersShowButton) filtersShowButton.disabled = !canApply;
   if (filtersHideButton) filtersHideButton.disabled = !canApply;
   updateFilterActionButtons();
+  updateSavedFiltersUIState();
 }
 
 function renderFiltersList() {
@@ -7044,6 +7186,30 @@ landScheduleBasePer.addEventListener('change', () => {
   updateLandScheduleStoreFromInputs();
 });
 
+filtersSaveToggle.addEventListener('click', () => {
+  if (filtersSaveToggle.disabled) return;
+  setSavedFiltersPanelMode('save');
+});
+
+filtersLoadToggle.addEventListener('click', () => {
+  if (filtersLoadToggle.disabled) return;
+  setSavedFiltersPanelMode('load');
+});
+
+filtersSaveNameInput.addEventListener('input', () => {
+  updateSavedFiltersUIState();
+});
+
+filtersSaveConfirmButton.addEventListener('click', () => {
+  saveCurrentFilters(filtersSaveNameInput.value);
+});
+
+filtersLoadSelect.addEventListener('change', () => {
+  const selected = filtersLoadSelect.value;
+  if (!selected) return;
+  applySavedFilter(selected);
+});
+
 addFilterButton.addEventListener('click', () => {
   filters.push(createFilterRule());
   renderFiltersList();
@@ -7067,6 +7233,7 @@ filtersInvertToggle.addEventListener('change', () => {
   filterInvert = filtersInvertToggle.checked;
   applyActiveFilterAction();
   applyMapFilters();
+  updateSavedFiltersUIState();
   persistCurrentLayerState();
 });
 

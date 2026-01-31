@@ -826,9 +826,10 @@ const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
 const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
 const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
+const statsLayerSelect = document.getElementById('statsLayerSelect') as HTMLSelectElement;
 const scatterplotControlsEl = document.getElementById('scatterplotControls') as HTMLDivElement;
 const scatterplotContent = document.getElementById('scatterplotContent') as HTMLDivElement;
-const scatterDataSourceSelect = document.getElementById('scatterDataSourceSelect') as HTMLSelectElement;
+const scatterLayerSelect = document.getElementById('scatterLayerSelect') as HTMLSelectElement;
 const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
 const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
 const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
@@ -1215,7 +1216,7 @@ let isLandScheduleMinimized = true;
 let hiddenLegendItems = new Set<string>(); // Track which categories/ranges are hidden
 
 // Statistics state
-type SubjectMode = 'all' | 'visible' | 'selected' | 'category';
+type SubjectMode = 'all' | 'visible' | 'selected' | 'category' | 'filtered';
 let statsSubjectMode: SubjectMode = 'all';
 let statsCategoryValueMap: Array<{ label: string; value: unknown }> = [];
 let statsCategoryField: string | null = null;
@@ -1225,6 +1226,8 @@ let statsFieldType: 'numeric' | 'categorical' | null = null;
 let statsNormalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis';
 let statsValuesCache: number[] = [];
 let statsOverflowPct = { min: 5, max: 95 };
+let statsLayerId: string | null = null;
+let statsFilteredName: string | null = null;
 
 // Scatterplot state
 let scatterSubjectMode: SubjectMode = 'all';
@@ -1236,14 +1239,18 @@ let scatterYField: string | null = null;
 let scatterRangeIsCustom = false;
 let scatterDefaultRange = { xMin: null as number | null, xMax: null as number | null, yMin: null as number | null, yMax: null as number | null };
 let isUpdatingScatterRangeInputs = false;
-let scatterDataStoreId: string | null = null;
+let scatterLayerId: string | null = null;
 let scatterPlotRefreshTimer: number | null = null;
+let scatterFilteredName: string | null = null;
 
 type SubjectSelectorControls = {
   buttons: HTMLButtonElement[];
   categoryControls: HTMLDivElement;
   categoryFieldSelect: HTMLSelectElement;
   categoryValueSelect: HTMLSelectElement;
+  filterControls: HTMLDivElement;
+  filterSelect: HTMLSelectElement;
+  filterEmptyState: HTMLDivElement;
 };
 
 type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
@@ -1430,6 +1437,16 @@ function updateSavedFiltersUIState() {
   if (showLoad) {
     renderSavedFiltersOptions();
   }
+
+  statsFilteredName = renderSubjectFilterOptions(statsSubjectControls, statsFilteredName);
+  scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, scatterFilteredName);
+  if (statsSubjectMode === 'filtered') {
+    updateStatisticsSectionVisibility();
+    updateStatisticsResults();
+  }
+  if (scatterSubjectMode === 'filtered') {
+    scheduleScatterPlotRefresh();
+  }
 }
 
 function saveCurrentFilters(name: string) {
@@ -1508,40 +1525,85 @@ function renderDataStoreList() {
     });
     dataStoreList.appendChild(btn);
   });
+}
 
-  renderScatterDataSourceOptions();
+function getLayerPanelName(layerId: string): string {
+  const layer = layers.get(layerId);
+  if (!layer) return '';
+  const index = layerOrder.indexOf(layerId);
+  return layer.field ?? `layer ${index + 1}`;
+}
+
+function getLayerSelectLabel(layerId: string): string {
+  const layer = layers.get(layerId);
+  if (!layer) return '';
+  const baseName = getLayerPanelName(layerId);
+  const store = dataStores.get(layer.dataStoreId);
+  const sourceLabel = store?.file?.name ?? store?.name ?? 'Unknown source';
+  return `${baseName} (${sourceLabel})`;
+}
+
+function renderLayerSelectOptions(
+  select: HTMLSelectElement,
+  selectedId: string | null,
+  placeholderText: string
+): string | null {
+  select.replaceChildren();
+  const placeholder = new Option(placeholderText, '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  select.appendChild(placeholder);
+
+  if (layerOrder.length === 0) {
+    select.disabled = true;
+    return null;
+  }
+
+  layerOrder.forEach(layerId => {
+    select.appendChild(new Option(getLayerSelectLabel(layerId), layerId));
+  });
+
+  select.disabled = false;
+  if (selectedId && layers.has(selectedId)) {
+    select.value = selectedId;
+    return selectedId;
+  }
+  const fallback = currentLayerId ?? layerOrder[0] ?? null;
+  if (fallback) {
+    select.value = fallback;
+    return fallback;
+  }
+  return null;
+}
+
+function getStatsLayer(): LayerState | null {
+  return statsLayerId ? layers.get(statsLayerId) ?? null : null;
+}
+
+function getScatterLayer(): LayerState | null {
+  return scatterLayerId ? layers.get(scatterLayerId) ?? null : null;
+}
+
+function getLayerDataStore(layer: LayerState | null): DataStore | null {
+  return layer ? dataStores.get(layer.dataStoreId) ?? null : null;
+}
+
+function getLayerGeoJSON(layer: LayerState | null): GeoJSON.FeatureCollection | null {
+  return layer?.geojson ?? null;
 }
 
 function getScatterDataStore(): DataStore | null {
-  return scatterDataStoreId ? dataStores.get(scatterDataStoreId) ?? null : null;
+  return getLayerDataStore(getScatterLayer());
 }
 
-function getScatterGeoJSON(): GeoJSON.FeatureCollection | null {
-  return getScatterDataStore()?.geojson ?? null;
+function renderStatsLayerOptions() {
+  if (!statsLayerSelect) return;
+  statsLayerId = renderLayerSelectOptions(statsLayerSelect, statsLayerId, 'Choose a layer');
 }
 
-function renderScatterDataSourceOptions() {
-  if (!scatterDataSourceSelect) return;
-  scatterDataSourceSelect.replaceChildren();
-
-  const placeholder = new Option('Choose a data source', '');
-  placeholder.disabled = true;
-  placeholder.selected = scatterDataStoreId === null;
-  scatterDataSourceSelect.appendChild(placeholder);
-
-  dataStoreOrder.forEach(storeId => {
-    const store = dataStores.get(storeId);
-    if (!store) return;
-    scatterDataSourceSelect.appendChild(new Option(store.name, store.id));
-  });
-
-  if (scatterDataStoreId && dataStores.has(scatterDataStoreId)) {
-    scatterDataSourceSelect.value = scatterDataStoreId;
-  } else {
-    scatterDataStoreId = null;
-  }
-
-  scatterDataSourceSelect.disabled = dataStoreOrder.length === 0;
+function renderScatterLayerOptions() {
+  if (!scatterLayerSelect) return;
+  scatterLayerId = renderLayerSelectOptions(scatterLayerSelect, scatterLayerId, 'Choose a layer');
 }
 
 function openAddLayerModal() {
@@ -2230,7 +2292,8 @@ function buildSubjectSelector(container: HTMLElement, options: SubjectSelectorOp
     { mode: 'all', label: 'All' },
     { mode: 'visible', label: 'Visible' },
     { mode: 'selected', label: 'Selected' },
-    { mode: 'category', label: 'Category' }
+    { mode: 'category', label: 'Category' },
+    { mode: 'filtered', label: 'Filtered' }
   ];
   modes.forEach(({ mode, label }) => {
     const button = document.createElement('button');
@@ -2267,9 +2330,25 @@ function buildSubjectSelector(container: HTMLElement, options: SubjectSelectorOp
   categoryValueSelect.appendChild(valuePlaceholder);
 
   categoryControls.append(categoryFieldSelect, categoryValueSelect);
-  container.append(subjectBlock, categoryControls);
+  const filterControls = document.createElement('div');
+  filterControls.style.display = 'none';
+  filterControls.style.gap = '6px';
+  filterControls.style.marginTop = '8px';
 
-  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect };
+  const filterSelect = document.createElement('select');
+  const filterPlaceholder = new Option('Choose a saved filter', '');
+  filterPlaceholder.disabled = true;
+  filterPlaceholder.selected = true;
+  filterSelect.appendChild(filterPlaceholder);
+
+  const filterEmptyState = document.createElement('div');
+  filterEmptyState.className = 'muted';
+  filterEmptyState.textContent = "You haven't saved any filters yet.";
+
+  filterControls.append(filterSelect, filterEmptyState);
+  container.append(subjectBlock, categoryControls, filterControls);
+
+  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect, filterControls, filterSelect, filterEmptyState };
 }
 
 function updateSubjectButtons(controls: SubjectSelectorControls, mode: SubjectMode) {
@@ -2285,26 +2364,60 @@ function updateSubjectControls(
   hasFieldSelected: boolean
 ) {
   const isCategory = mode === 'category';
+  const isFiltered = mode === 'filtered';
   controls.categoryControls.style.display = isCategory ? 'grid' : 'none';
   controls.categoryFieldSelect.disabled = !isCategory || !hasFieldOptions;
   controls.categoryValueSelect.disabled = !isCategory || !hasFieldSelected;
+  controls.filterControls.style.display = isFiltered ? 'grid' : 'none';
+  if (!isFiltered) {
+    return;
+  }
+  const hasFilters = savedFiltersStore.size > 0;
+  controls.filterSelect.disabled = !hasFilters;
+  controls.filterSelect.style.display = hasFilters ? 'block' : 'none';
+  controls.filterEmptyState.style.display = hasFilters ? 'none' : 'block';
+}
+
+function renderSubjectFilterOptions(controls: SubjectSelectorControls, selectedName: string | null): string | null {
+  controls.filterSelect.replaceChildren();
+  const placeholder = new Option('Choose a saved filter', '');
+  placeholder.disabled = true;
+  placeholder.selected = true;
+  controls.filterSelect.appendChild(placeholder);
+
+  savedFiltersStore.forEach((entry, name) => {
+    controls.filterSelect.appendChild(new Option(entry.name, name));
+  });
+
+  if (selectedName && savedFiltersStore.has(selectedName)) {
+    controls.filterSelect.value = selectedName;
+  } else {
+    selectedName = null;
+  }
+
+  controls.filterSelect.disabled = savedFiltersStore.size === 0;
+  controls.filterSelect.style.display = savedFiltersStore.size === 0 ? 'none' : 'block';
+  controls.filterEmptyState.style.display = savedFiltersStore.size === 0 ? 'block' : 'none';
+  return selectedName;
 }
 
 function populateStatisticsCategoryFields() {
+  const layer = getStatsLayer();
+  const dataStore = getLayerDataStore(layer);
   statsCategoryFieldSelect.replaceChildren();
   const placeholder = new Option('Choose a field', '');
   placeholder.disabled = true;
   placeholder.selected = true;
   statsCategoryFieldSelect.appendChild(placeholder);
 
-  if (!currentGeoJSON) {
+  if (!dataStore?.geojson) {
     statsCategoryFieldSelect.disabled = true;
     statsCategoryField = null;
     return;
   }
 
-  const availableCategorical = chosenCategoricalFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  const availableCategorical = dataStore.chosenCategoricalFields.filter(k =>
+    dataStore.geojson?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
 
   availableCategorical.forEach(field => {
@@ -2320,13 +2433,15 @@ function populateStatisticsCategoryFields() {
 }
 
 function populateStatisticsCategoryValues(field: string | null) {
+  const layer = getStatsLayer();
+  const dataStore = getLayerDataStore(layer);
   statsCategoryValueSelect.replaceChildren();
   const placeholder = new Option('Choose value(s)', '');
   placeholder.disabled = true;
   placeholder.selected = statsCategoryValueIndices.length === 0;
   statsCategoryValueSelect.appendChild(placeholder);
 
-  if (!currentGeoJSON || !field) {
+  if (!dataStore?.geojson || !field) {
     statsCategoryValueSelect.disabled = true;
     statsCategoryValueMap = [];
     statsCategoryValueIndices = [];
@@ -2334,7 +2449,7 @@ function populateStatisticsCategoryValues(field: string | null) {
   }
 
   const valueMap = new Map<string, { label: string; value: unknown }>();
-  currentGeoJSON.features.forEach(feature => {
+  dataStore.geojson.features.forEach(feature => {
     const raw = (feature.properties as Record<string, unknown> | undefined)?.[field];
     if (raw === null || raw === undefined) return;
     const key = `${typeof raw}:${String(raw)}`;
@@ -2362,32 +2477,39 @@ function populateStatisticsCategoryValues(field: string | null) {
   }
 }
 
-function getStatsFieldType(field: string | null) {
+function getStatsFieldType(field: string | null, numericFields: string[], categoricalFields: string[]) {
   if (!field) return null;
-  if (chosenNumericFields.includes(field)) return 'numeric';
-  if (chosenCategoricalFields.includes(field)) return 'categorical';
+  if (numericFields.includes(field)) return 'numeric';
+  if (categoricalFields.includes(field)) return 'categorical';
   return null;
 }
 
 function populateStatisticsFields() {
+  const layer = getStatsLayer();
+  const dataStore = getLayerDataStore(layer);
+  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const sourceGeoJSON = useDataSource ? dataStore?.geojson ?? null : getLayerGeoJSON(layer);
+  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
+  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+
   statsFieldSelect.replaceChildren();
   const placeholder = new Option('Choose a field', '');
   placeholder.disabled = true;
   placeholder.selected = true;
   statsFieldSelect.appendChild(placeholder);
 
-  if (!currentGeoJSON) {
+  if (!sourceGeoJSON) {
     statsFieldSelect.disabled = true;
     statsField = null;
     statsFieldType = null;
     return;
   }
 
-  const availableNumeric = chosenNumericFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  const availableNumeric = numericFields.filter(k =>
+    sourceGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
-  const availableCategorical = chosenCategoricalFields.filter(k =>
-    currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  const availableCategorical = categoricalFields.filter(k =>
+    sourceGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
   );
   const availableFields = [...availableNumeric, ...availableCategorical];
   availableFields.forEach(field => {
@@ -2396,7 +2518,7 @@ function populateStatisticsFields() {
   statsFieldSelect.disabled = availableFields.length === 0;
   if (statsField && availableFields.includes(statsField)) {
     statsFieldSelect.value = statsField;
-    statsFieldType = getStatsFieldType(statsField);
+    statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
   } else {
     statsField = null;
     statsFieldType = null;
@@ -2544,78 +2666,148 @@ function renderStatisticsHistogram(values: number[]) {
   });
 }
 
-function getSubjectSelection(
+function getScatterSubjectSelection(
+  layer: LayerState,
+  layerGeoJSON: GeoJSON.FeatureCollection | null,
+  dataGeoJSON: GeoJSON.FeatureCollection | null,
   mode: SubjectMode,
   categoryField: string | null,
   categoryValueIndices: string[],
-  categoryValueMap: Array<{ label: string; value: unknown }>
+  categoryValueMap: Array<{ label: string; value: unknown }>,
+  filteredName: string | null
 ): GeoJSON.Feature[] {
-  if (!currentGeoJSON) return [];
   if (mode === 'visible') {
-    const visibilityExpr = buildStatisticsVisibilityExpression();
+    if (!layerGeoJSON) return [];
+    const visibilityExpr = buildLayerVisibilityExpression(layer);
     return visibilityExpr
-      ? currentGeoJSON.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
-      : currentGeoJSON.features;
+      ? layerGeoJSON.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
+      : layerGeoJSON.features;
   }
   if (mode === 'selected') {
-    return currentGeoJSON.features.filter(feature => selectedParcels.has(getParcelId(feature)));
+    if (!layerGeoJSON) return [];
+    return layerGeoJSON.features.filter(feature => layer.selectedParcels.has(getParcelId(feature)));
   }
   if (mode === 'category') {
-    if (!categoryField || categoryValueIndices.length === 0) return [];
+    if (!dataGeoJSON || !categoryField || categoryValueIndices.length === 0) return [];
     const selectedValues = new Set(
       categoryValueIndices
         .map(index => categoryValueMap[Number(index)])
         .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
         .map(entry => entry.value)
     );
-    return currentGeoJSON.features.filter(feature => {
+    return dataGeoJSON.features.filter(feature => {
       const value = (feature.properties as Record<string, unknown> | undefined)?.[categoryField];
       return selectedValues.has(value);
     });
   }
-  return currentGeoJSON.features;
+  if (mode === 'filtered') {
+    if (!dataGeoJSON || !filteredName) return [];
+    const entry = savedFiltersStore.get(filteredName);
+    if (!entry) return [];
+    const filterExpr = buildSavedFilterExpression(entry);
+    if (!filterExpr) return [];
+    return dataGeoJSON.features.filter(feature => evaluateFilterExpression(filterExpr, feature));
+  }
+  return layerGeoJSON?.features ?? [];
 }
 
-function getScatterSubjectSelection(
-  geojson: GeoJSON.FeatureCollection,
+function getStatsSourceContext() {
+  const layer = getStatsLayer();
+  const dataStore = getLayerDataStore(layer);
+  return {
+    layer,
+    layerGeoJSON: getLayerGeoJSON(layer),
+    dataStore,
+    dataGeoJSON: dataStore?.geojson ?? null
+  };
+}
+
+function getStatsNormalizationContext() {
+  const { layer, dataStore } = getStatsSourceContext();
+  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  return {
+    landField: useDataSource ? dataStore?.landSizeField ?? null : layer?.landSizeField ?? null,
+    landUnit: useDataSource ? dataStore?.landSizeUnitLabel ?? null : layer?.landSizeUnitLabel ?? null,
+    bldgField: useDataSource ? dataStore?.bldgSizeField ?? null : layer?.bldgSizeField ?? null,
+    bldgUnit: useDataSource ? dataStore?.bldgSizeUnitLabel ?? null : layer?.bldgSizeUnitLabel ?? null
+  };
+}
+
+function updateStatisticsNormalizationControls() {
+  const context = getStatsNormalizationContext();
+  statsNormLand.disabled = !context.landField;
+  statsNormBldg.disabled = !context.bldgField;
+  statsNormLandUnitEl.textContent = context.landField ? (context.landUnit ?? '(unit)') : '(unit)';
+  statsNormBldgUnitEl.textContent = context.bldgField ? (context.bldgUnit ?? '(unit)') : '(unit)';
+
+  if (statsNormalizationMode === 'perLand' && !context.landField) {
+    statsNormalizationMode = 'asis';
+    statsNormAsIs.checked = true;
+  }
+  if (statsNormalizationMode === 'perBuilding' && !context.bldgField) {
+    statsNormalizationMode = 'asis';
+    statsNormAsIs.checked = true;
+  }
+}
+
+function getStatsSubjectSelection(
   mode: SubjectMode,
   categoryField: string | null,
   categoryValueIndices: string[],
-  categoryValueMap: Array<{ label: string; value: unknown }>
+  categoryValueMap: Array<{ label: string; value: unknown }>,
+  filteredName: string | null
 ): GeoJSON.Feature[] {
+  const { layer, layerGeoJSON, dataGeoJSON } = getStatsSourceContext();
+  if (!layer) return [];
+  if (!layerGeoJSON && (mode === 'all' || mode === 'visible' || mode === 'selected')) {
+    return [];
+  }
+
   if (mode === 'visible') {
-    if (geojson !== currentGeoJSON) {
-      return geojson.features;
-    }
-    const visibilityExpr = buildStatisticsVisibilityExpression();
+    if (!layerGeoJSON) return [];
+    const visibilityExpr = buildLayerVisibilityExpression(layer);
     return visibilityExpr
-      ? geojson.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
-      : geojson.features;
+      ? layerGeoJSON.features.filter(feature => evaluateFilterExpression(visibilityExpr, feature))
+      : layerGeoJSON.features;
   }
   if (mode === 'selected') {
-    if (geojson !== currentGeoJSON) {
-      return [];
-    }
-    return geojson.features.filter(feature => selectedParcels.has(getParcelId(feature)));
+    if (!layerGeoJSON) return [];
+    return layerGeoJSON.features.filter(feature => layer.selectedParcels.has(getParcelId(feature)));
   }
   if (mode === 'category') {
-    if (!categoryField || categoryValueIndices.length === 0) return [];
+    if (!dataGeoJSON || !categoryField || categoryValueIndices.length === 0) return [];
     const selectedValues = new Set(
       categoryValueIndices
         .map(index => categoryValueMap[Number(index)])
         .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
         .map(entry => entry.value)
     );
-    return geojson.features.filter(feature => {
+    return dataGeoJSON.features.filter(feature => {
       const value = (feature.properties as Record<string, unknown> | undefined)?.[categoryField];
       return selectedValues.has(value);
     });
   }
-  return geojson.features;
+  if (mode === 'filtered') {
+    if (!dataGeoJSON || !filteredName) return [];
+    const entry = savedFiltersStore.get(filteredName);
+    if (!entry) return [];
+    const filterExpr = buildSavedFilterExpression(entry);
+    if (!filterExpr) return [];
+    return dataGeoJSON.features.filter(feature => evaluateFilterExpression(filterExpr, feature));
+  }
+  return layerGeoJSON?.features ?? [];
 }
 
 function updateStatisticsResults() {
-  if (!currentGeoJSON || !statsField) {
+  const { layer, layerGeoJSON, dataGeoJSON, dataStore } = getStatsSourceContext();
+  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const sourceGeoJSON = useDataSource ? dataGeoJSON : layerGeoJSON;
+  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
+  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+
+  updateStatisticsNormalizationControls();
+
+  if (!sourceGeoJSON || !statsField) {
     statsValuesCache = [];
     resetStatisticsDisplay();
     return;
@@ -2625,21 +2817,27 @@ function updateStatisticsResults() {
     resetStatisticsDisplay();
     return;
   }
-  statsFieldType = getStatsFieldType(statsField);
+  if (statsSubjectMode === 'filtered' && !statsFilteredName) {
+    statsValuesCache = [];
+    resetStatisticsDisplay();
+    return;
+  }
+  statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
   if (!statsFieldType) {
     statsValuesCache = [];
     resetStatisticsDisplay();
     return;
   }
 
-  const selection = getSubjectSelection(
+  const selection = getStatsSubjectSelection(
     statsSubjectMode,
     statsCategoryField,
     statsCategoryValueIndices,
-    statsCategoryValueMap
+    statsCategoryValueMap,
+    statsFilteredName
   );
 
-  const totalCount = currentGeoJSON.features.length;
+  const totalCount = sourceGeoJSON.features.length;
   const selectionCount = selection.length;
   const percent = totalCount > 0 ? (selectionCount / totalCount) * 100 : 0;
   const parcelText = `${selectionCount.toLocaleString()} (${percent.toFixed(1)}%)`;
@@ -2653,12 +2851,13 @@ function updateStatisticsResults() {
         let base = numOrNull(props[statsField]);
         if (base === null) return null;
 
-        if (statsNormalizationMode === 'perLand' && landSizeField) {
-          const denom = numOrNull(props[landSizeField]);
+        const normalizationContext = getStatsNormalizationContext();
+        if (statsNormalizationMode === 'perLand' && normalizationContext.landField) {
+          const denom = numOrNull(props[normalizationContext.landField]);
           if (denom === null || denom <= 0) return null;
           base = base / denom;
-        } else if (statsNormalizationMode === 'perBuilding' && bldgSizeField) {
-          const denom = numOrNull(props[bldgSizeField]);
+        } else if (statsNormalizationMode === 'perBuilding' && normalizationContext.bldgField) {
+          const denom = numOrNull(props[normalizationContext.bldgField]);
           if (denom === null || denom <= 0) return null;
           base = base / denom;
         }
@@ -2747,6 +2946,17 @@ function updateStatisticsResults() {
 }
 
 function updateStatisticsSubjectControls() {
+  const layer = getStatsLayer();
+  const hasLayerData = Boolean(layer?.geojson);
+  if (!hasLayerData) {
+    statsSubjectControls.buttons.forEach(button => { button.disabled = true; });
+    statsSubjectControls.categoryControls.style.display = 'none';
+    statsSubjectControls.filterControls.style.display = 'none';
+    statsCategoryFieldSelect.disabled = true;
+    statsCategoryValueSelect.disabled = true;
+    return;
+  }
+  statsSubjectControls.buttons.forEach(button => { button.disabled = false; });
   updateSubjectControls(
     statsSubjectControls,
     statsSubjectMode,
@@ -2785,7 +2995,12 @@ function updateStatisticsSectionVisibility() {
     statsCategoricalBlock.style.display = 'none';
     return;
   }
-  statsFieldType = getStatsFieldType(statsField);
+  const layer = getStatsLayer();
+  const dataStore = getLayerDataStore(layer);
+  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
+  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+  statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
   if (!statsFieldType) {
     statsNumericBlock.style.display = 'none';
     statsCategoricalBlock.style.display = 'none';
@@ -2796,12 +3011,14 @@ function updateStatisticsSectionVisibility() {
   statsNumericBlock.style.display = isNumeric ? 'grid' : 'none';
   statsCategoricalBlock.style.display = isNumeric ? 'none' : 'grid';
   statsNormalizationControls.style.display = isNumeric ? 'grid' : 'none';
+  updateStatisticsNormalizationControls();
 }
 
 function refreshStatisticsPanel() {
   populateStatisticsCategoryFields();
   populateStatisticsCategoryValues(statsCategoryField);
 
+  statsFilteredName = renderSubjectFilterOptions(statsSubjectControls, statsFilteredName);
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
@@ -2820,8 +3037,8 @@ function populateScatterCategoryFields() {
   placeholder.selected = true;
   scatterCategoryFieldSelect.appendChild(placeholder);
 
-  const scatterGeoJSON = getScatterGeoJSON();
   const scatterStore = getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON || !scatterStore) {
     scatterCategoryFieldSelect.disabled = true;
     scatterCategoryField = null;
@@ -2851,7 +3068,8 @@ function populateScatterCategoryValues(field: string | null) {
   placeholder.selected = scatterCategoryValueIndices.length === 0;
   scatterCategoryValueSelect.appendChild(placeholder);
 
-  const scatterGeoJSON = getScatterGeoJSON();
+  const scatterStore = getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON || !field) {
     scatterCategoryValueSelect.disabled = true;
     scatterCategoryValueMap = [];
@@ -2899,7 +3117,8 @@ function populateScatterFieldSelect(
   placeholder.selected = true;
   select.appendChild(placeholder);
 
-  const scatterGeoJSON = getScatterGeoJSON();
+  const scatterStore = getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON) {
     select.disabled = true;
     return null;
@@ -2918,8 +3137,8 @@ function populateScatterFieldSelect(
 }
 
 function populateScatterFields() {
-  const scatterGeoJSON = getScatterGeoJSON();
   const scatterStore = getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
   if (!scatterGeoJSON || !scatterStore) {
     scatterXField = null;
     scatterYField = null;
@@ -2935,10 +3154,13 @@ function populateScatterFields() {
 }
 
 function updateScatterSubjectControls() {
-  const scatterGeoJSON = getScatterGeoJSON();
-  if (!scatterDataStoreId || !scatterGeoJSON) {
+  const layer = getScatterLayer();
+  const scatterStore = getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
+  if (!layer || !scatterGeoJSON) {
     scatterSubjectControls.buttons.forEach(button => { button.disabled = true; });
     scatterSubjectControls.categoryControls.style.display = 'none';
+    scatterSubjectControls.filterControls.style.display = 'none';
     scatterCategoryFieldSelect.disabled = true;
     scatterCategoryValueSelect.disabled = true;
     return;
@@ -3015,17 +3237,27 @@ function updateScatterPlot() {
     resetScatterPlot('Plotly is still loading. Please try again in a moment.');
     return;
   }
-  if (!scatterDataStoreId) {
-    resetScatterPlot('Select a data source to render the scatterplot.');
+  const layer = getScatterLayer();
+  if (!layer) {
+    resetScatterPlot('Select a layer to render the scatterplot.');
     return;
   }
-  const scatterGeoJSON = getScatterGeoJSON();
-  if (!scatterGeoJSON) {
+  const scatterStore = getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
+  if (!scatterGeoJSON || !layer.geojson) {
     resetScatterPlot('Load data to render the scatterplot.');
     return;
   }
   if (scatterSubjectMode === 'category' && (!scatterCategoryField || scatterCategoryValueIndices.length === 0)) {
     resetScatterPlot('Choose category values to render the scatterplot.');
+    return;
+  }
+  if (scatterSubjectMode === 'filtered' && !scatterFilteredName) {
+    if (savedFiltersStore.size === 0) {
+      resetScatterPlot('No saved filters available for the scatterplot.');
+    } else {
+      resetScatterPlot('Select a saved filter to render the scatterplot.');
+    }
     return;
   }
   if (!scatterXField || !scatterYField) {
@@ -3034,11 +3266,14 @@ function updateScatterPlot() {
   }
 
   const selection = getScatterSubjectSelection(
+    layer,
+    layer.geojson,
     scatterGeoJSON,
     scatterSubjectMode,
     scatterCategoryField,
     scatterCategoryValueIndices,
-    scatterCategoryValueMap
+    scatterCategoryValueMap,
+    scatterFilteredName
   );
   const xValues: number[] = [];
   const yValues: number[] = [];
@@ -3099,10 +3334,11 @@ function scheduleScatterPlotRefresh() {
 }
 
 function refreshScatterPanel() {
-  renderScatterDataSourceOptions();
+  renderScatterLayerOptions();
   populateScatterCategoryFields();
   populateScatterCategoryValues(scatterCategoryField);
   populateScatterFields();
+  scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, scatterFilteredName);
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
   scheduleScatterPlotRefresh();
@@ -3187,6 +3423,12 @@ function renderLayerList() {
     empty.textContent = 'No layers loaded yet.';
     layerList.appendChild(empty);
     updateCurrentLayerDetails();
+    statsLayerId = null;
+    scatterLayerId = null;
+    renderStatsLayerOptions();
+    renderScatterLayerOptions();
+    refreshStatisticsPanel();
+    refreshScatterPanel();
     return;
   }
 
@@ -3252,6 +3494,25 @@ function renderLayerList() {
   });
 
   updateCurrentLayerDetails();
+  const prevStatsLayer = statsLayerId;
+  const prevScatterLayer = scatterLayerId;
+  renderStatsLayerOptions();
+  renderScatterLayerOptions();
+  if (prevStatsLayer !== statsLayerId) {
+    statsCategoryField = null;
+    statsCategoryValueIndices = [];
+    statsField = null;
+    statsFieldType = null;
+    refreshStatisticsPanel();
+  }
+  if (prevScatterLayer !== scatterLayerId) {
+    scatterCategoryField = null;
+    scatterCategoryValueIndices = [];
+    scatterXField = null;
+    scatterYField = null;
+    scatterRangeIsCustom = false;
+    refreshScatterPanel();
+  }
 }
 
 // Floating legend functions
@@ -4342,6 +4603,13 @@ function buildFiltersExpression(activeFilters: FilterRule[]): any | null {
   return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
 }
 
+function buildSavedFilterExpression(entry: SavedFilterEntry): any | null {
+  const activeFilters = entry.filters.filter(isFilterComplete);
+  const baseExpr = buildFiltersExpression(activeFilters);
+  if (!baseExpr) return null;
+  return entry.filterInvert ? ['!', baseExpr] : baseExpr;
+}
+
 function buildFilterModeExpression(): any | null {
   if (filterMode === 'none') return null;
   const activeFilters = getActiveFilters();
@@ -4415,26 +4683,33 @@ function buildStatisticsVisibilityExpression(): any | null {
   return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
 }
 
-function buildLegendVisibilityFilter(): any | null {
-  if (!currentField || hiddenLegendItems.size === 0) return null;
+function buildLegendVisibilityFilterForState(
+  field: string | null,
+  fieldType: 'numeric' | 'categorical' | null,
+  stats: { min: number; max: number } | null,
+  mode: ColorMode,
+  breaks: number[] | null,
+  hiddenItems: Set<string>
+): any | null {
+  if (!field || hiddenItems.size === 0) return null;
   const conditions: any[] = [];
 
-  if (currentFieldType === 'categorical') {
-    const hiddenCategories = Array.from(hiddenLegendItems);
+  if (fieldType === 'categorical') {
+    const hiddenCategories = Array.from(hiddenItems);
     if (hiddenCategories.length > 0) {
-      conditions.push(['!', ['in', ['to-string', ['get', currentField]], ['literal', hiddenCategories]]]);
+      conditions.push(['!', ['in', ['to-string', ['get', field]], ['literal', hiddenCategories]]]);
     }
   } else {
-    if (!currentStats) return null;
+    if (!stats) return null;
     const ranges: { min: number; max: number }[] = [];
-    if (colorMode === 'quantiles' && colorBreaks && colorBreaks.length) {
-      const breaks = [currentStats.min, ...colorBreaks, currentStats.max];
-      for (let i = 0; i < breaks.length - 1; i++) {
-        ranges.push({ min: breaks[i], max: breaks[i + 1] });
+    if (mode === 'quantiles' && breaks && breaks.length) {
+      const rangeBreaks = [stats.min, ...breaks, stats.max];
+      for (let i = 0; i < rangeBreaks.length - 1; i++) {
+        ranges.push({ min: rangeBreaks[i], max: rangeBreaks[i + 1] });
       }
     } else {
-      const min = currentStats.min;
-      const max = currentStats.max;
+      const min = stats.min;
+      const max = stats.max;
       const step = (max - min) / 10;
       for (let i = 0; i < 10; i++) {
         ranges.push({
@@ -4444,13 +4719,13 @@ function buildLegendVisibilityFilter(): any | null {
       }
     }
 
-    hiddenLegendItems.forEach(rangeKey => {
+    hiddenItems.forEach(rangeKey => {
       const index = parseInt(rangeKey.split('_')[1]);
       if (ranges[index]) {
         const range = ranges[index];
         conditions.push(['!', ['all',
-          ['>=', ['get', currentField], range.min],
-          ['<=', ['get', currentField], range.max]
+          ['>=', ['get', field], range.min],
+          ['<=', ['get', field], range.max]
         ]]);
       }
     });
@@ -4460,6 +4735,42 @@ function buildLegendVisibilityFilter(): any | null {
   return conditions.length === 1 ? conditions[0] : ['all', ...conditions];
 }
 
+function buildLegendVisibilityFilter(): any | null {
+  return buildLegendVisibilityFilterForState(
+    currentField,
+    currentFieldType,
+    currentStats,
+    colorMode,
+    colorBreaks,
+    hiddenLegendItems
+  );
+}
+
+function buildFilterModeExpressionForLayer(layer: LayerState): any | null {
+  if (layer.filterMode === 'none') return null;
+  const activeFilters = layer.filters.filter(isFilterComplete);
+  const baseExpr = buildFiltersExpression(activeFilters);
+  if (!baseExpr) return null;
+  const modeExpr = layer.filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
+  return layer.filterInvert ? ['!', modeExpr] : modeExpr;
+}
+
+function buildLayerVisibilityExpression(layer: LayerState): any | null {
+  const expressions: any[] = [];
+  const legendExpr = buildLegendVisibilityFilterForState(
+    layer.field,
+    layer.fieldType,
+    layer.stats,
+    layer.colorMode,
+    layer.colorBreaks,
+    layer.hiddenLegendItems
+  );
+  if (legendExpr) expressions.push(legendExpr);
+  const filterExpr = buildFilterModeExpressionForLayer(layer);
+  if (filterExpr) expressions.push(filterExpr);
+  if (!expressions.length) return null;
+  return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
+}
 function applyMapFilters() {
   const ids = getCurrentLayerIds();
   if (!ids) return;
@@ -4473,10 +4784,10 @@ function applyMapFilters() {
   } else {
     map.setFilter(ids.layerId, null);
   }
-  if (statsSubjectMode === 'visible') {
+  if (statsSubjectMode === 'visible' && statsLayerId === currentLayerId) {
     updateStatisticsResults();
   }
-  if (scatterSubjectMode === 'visible') {
+  if (scatterSubjectMode === 'visible' && scatterLayerId === currentLayerId) {
     scheduleScatterPlotRefresh();
   }
 }
@@ -7295,6 +7606,26 @@ filtersInvertToggle.addEventListener('change', () => {
   persistCurrentLayerState();
 });
 
+statsLayerSelect.addEventListener('change', () => {
+  statsLayerId = statsLayerSelect.value || null;
+  statsCategoryField = null;
+  statsCategoryValueIndices = [];
+  statsField = null;
+  statsFieldType = null;
+  refreshStatisticsPanel();
+  resetStatisticsDisplay();
+});
+
+scatterLayerSelect.addEventListener('change', () => {
+  scatterLayerId = scatterLayerSelect.value || null;
+  scatterCategoryField = null;
+  scatterCategoryValueIndices = [];
+  scatterXField = null;
+  scatterYField = null;
+  scatterRangeIsCustom = false;
+  refreshScatterPanel();
+});
+
 statsSubjectButtons.forEach(button => {
   button.addEventListener('click', () => {
     const mode = button.dataset.subjectMode as SubjectMode | undefined;
@@ -7311,14 +7642,16 @@ scatterSubjectButtons.forEach(button => {
   });
 });
 
-scatterDataSourceSelect.addEventListener('change', () => {
-  scatterDataStoreId = scatterDataSourceSelect.value || null;
-  scatterCategoryField = null;
-  scatterCategoryValueIndices = [];
-  scatterXField = null;
-  scatterYField = null;
+statsSubjectControls.filterSelect.addEventListener('change', () => {
+  statsFilteredName = statsSubjectControls.filterSelect.value || null;
+  updateStatisticsSectionVisibility();
+  updateStatisticsResults();
+});
+
+scatterSubjectControls.filterSelect.addEventListener('change', () => {
+  scatterFilteredName = scatterSubjectControls.filterSelect.value || null;
   scatterRangeIsCustom = false;
-  refreshScatterPanel();
+  scheduleScatterPlotRefresh();
 });
 
 statsCategoryFieldSelect.addEventListener('change', () => {
@@ -7362,7 +7695,12 @@ scatterCategoryValueSelect.addEventListener('change', () => {
 
 statsFieldSelect.addEventListener('change', () => {
   statsField = statsFieldSelect.value || null;
-  statsFieldType = getStatsFieldType(statsField);
+  const layer = getStatsLayer();
+  const dataStore = getLayerDataStore(layer);
+  const useDataSource = statsSubjectMode === 'category' || statsSubjectMode === 'filtered';
+  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
+  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+  statsFieldType = getStatsFieldType(statsField, numericFields, categoricalFields);
   updateStatisticsSectionVisibility();
   if (statsField) {
     updateStatisticsResults();

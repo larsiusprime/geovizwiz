@@ -1070,6 +1070,12 @@
       </button>
     </div>
     <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
+      <div id="statsLayerSection" class="stats-section" style="display: grid; gap: 8px;">
+        <div style="font-weight: 600; font-size: 12px;">Layer:</div>
+        <select id="statsLayerSelect">
+          <option value="" selected disabled>Choose a layer</option>
+        </select>
+      </div>
       <div id="statsSubjectSection" class="stats-section"></div>
 
       <div class="divider"></div>
@@ -1180,9 +1186,9 @@
     <div id="scatterplotContent" style="padding: 12px; display: grid; gap: 12px;">
       <div style="display: grid; gap: 12px;">
         <div id="scatterDataSourceSection" class="stats-section" style="display: grid; gap: 8px;">
-          <div style="font-weight: 600; font-size: 12px;">Data source:</div>
-          <select id="scatterDataSourceSelect">
-            <option value="" selected disabled>Choose a data source</option>
+          <div style="font-weight: 600; font-size: 12px;">Layer:</div>
+          <select id="scatterLayerSelect">
+            <option value="" selected disabled>Choose a layer</option>
           </select>
           <div id="scatterSubjectSection" class="stats-section"></div>
         </div>

@@ -4,12 +4,10 @@
  */
 import type { Expression } from 'maplibre-gl';
 import { S } from './state';
-import { UNIT_TO_METERS } from './config';
 import { fmt } from './utils.number';
 import {
   applyCategorySelection, applyRangeSelection,
-  clearAllSelections,
-  updateSelectionControls, updateSelectionControlsPosition,
+  updateSelectionControls,
 } from './selection';
 import { applyVisibilityFilters } from './filters';
 
@@ -759,7 +757,7 @@ function updateNumericFloatingLegend() {
   legendContent.appendChild(searchContainer);
 
   // Create legend items
-  rangeData.forEach(({ range, index, rangeKey, count }) => {
+  rangeData.forEach(({ range, rangeKey, count }) => {
     const isHidden = S.hiddenLegendItems.has(rangeKey);
 
     // Color is already applied from the inner function

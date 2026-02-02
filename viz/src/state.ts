@@ -112,6 +112,9 @@ export const S = {
   scatterLayerId: null as string | null,
   scatterPlotRefreshTimer: null as number | null,
   scatterFilteredName: null as string | null,
+  scatterColorByField: null as string | null,
+  scatterSelectedParcelIds: new Set<string>(),
+  scatterHoveredParcelId: null as string | null,
 
   // --- Land schedule ---
   landScheduleStore: new Map<string, Map<string, LandScheduleBaseLot>>(),

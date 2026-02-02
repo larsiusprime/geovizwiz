@@ -1234,12 +1234,28 @@
               <input id="scatterYMax" type="number" inputmode="decimal" style="width: 86px;" disabled />
             </label>
           </div>
+          <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px;">
+            <label style="display: flex; align-items: center; gap: 6px; flex: 1 1 200px;">
+              <span class="muted">Color by:</span>
+              <select id="scatterColorByField" style="flex: 1;">
+                <option value="">None</option>
+              </select>
+            </label>
+          </div>
 
           <div style="display: flex; justify-content: flex-end;">
             <button id="scatterResetExtents" type="button" class="toolbar-button" style="width: revert; height: 28px; padding: 0 10px; font-size: 12px;" disabled>
               Reset extents
             </button>
           </div>
+        </div>
+        <div id="scatterSelectionControls" style="display: none; align-items: center; justify-content: space-between; gap: 8px;">
+          <button id="scatterZoomToSelection" type="button" class="toolbar-button" style="width: revert; height: 28px; padding: 0 10px; font-size: 12px;">
+            Zoom to point(s)
+          </button>
+          <button id="scatterClearSelection" type="button" class="toolbar-button" style="width: revert; height: 28px; padding: 0 10px; font-size: 12px;">
+            Clear selection
+          </button>
         </div>
         <div id="scatterPlotEmpty" class="muted" style="display: none;">Select X and Y fields to render the scatterplot.</div>
         <div id="scatterPlot" style="height: 220px; width: 100%;"></div>

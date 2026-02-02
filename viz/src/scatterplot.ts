@@ -5,7 +5,9 @@
  * selection, compute range controls, and render the Plotly scatter chart
  * live here.
  */
+import maplibregl from 'maplibre-gl';
 import { S } from './state';
+import { generatePseudoRandomColor } from './rendering';
 import { numOrNull } from './utils.number';
 import {
   buildLayerVisibilityExpression,
@@ -41,6 +43,10 @@ let scatterXMaxInput: HTMLInputElement;
 let scatterYMinInput: HTMLInputElement;
 let scatterYMaxInput: HTMLInputElement;
 let scatterResetExtentsButton: HTMLButtonElement;
+let scatterColorByFieldSelect: HTMLSelectElement;
+let scatterSelectionControls: HTMLDivElement;
+let scatterZoomToSelectionButton: HTMLButtonElement;
+let scatterClearSelectionButton: HTMLButtonElement;
 let scatterPlot: HTMLDivElement;
 let scatterPlotEmpty: HTMLDivElement;
 
@@ -54,6 +60,10 @@ export function initScatterplotElements(els: {
   scatterYMinInput: HTMLInputElement;
   scatterYMaxInput: HTMLInputElement;
   scatterResetExtentsButton: HTMLButtonElement;
+  scatterColorByFieldSelect: HTMLSelectElement;
+  scatterSelectionControls: HTMLDivElement;
+  scatterZoomToSelectionButton: HTMLButtonElement;
+  scatterClearSelectionButton: HTMLButtonElement;
   scatterPlot: HTMLDivElement;
   scatterPlotEmpty: HTMLDivElement;
 }) {
@@ -68,6 +78,10 @@ export function initScatterplotElements(els: {
   scatterYMinInput = els.scatterYMinInput;
   scatterYMaxInput = els.scatterYMaxInput;
   scatterResetExtentsButton = els.scatterResetExtentsButton;
+  scatterColorByFieldSelect = els.scatterColorByFieldSelect;
+  scatterSelectionControls = els.scatterSelectionControls;
+  scatterZoomToSelectionButton = els.scatterZoomToSelectionButton;
+  scatterClearSelectionButton = els.scatterClearSelectionButton;
   scatterPlot = els.scatterPlot;
   scatterPlotEmpty = els.scatterPlotEmpty;
 }
@@ -107,6 +121,22 @@ export function initScatterplotCallbacks(cbs: {
 /* ------------------------------------------------------------------ */
 /*  Scatterplot functions                                             */
 /* ------------------------------------------------------------------ */
+
+type ScatterPoint = {
+  index: number;
+  parcelId: string;
+  coordinates: [number, number] | null;
+  categoryValue: string | null;
+};
+
+const SCATTER_HOVER_SOURCE_ID = 'scatterplot-hover';
+const SCATTER_SELECTED_SOURCE_ID = 'scatterplot-selected';
+const SCATTER_HOVER_LAYER_ID = 'scatterplot-hover-layer';
+const SCATTER_SELECTED_LAYER_ID = 'scatterplot-selected-layer';
+
+let scatterPlotPoints: ScatterPoint[] = [];
+let scatterPlotPointsByParcelId = new Map<string, ScatterPoint>();
+let scatterPlotEventsBound = false;
 
 export function populateScatterCategoryFields() {
   const scatterStore = _getScatterDataStore();
@@ -181,6 +211,35 @@ export function populateScatterFields() {
   S.scatterYField = populateScatterFieldSelect(scatterYFieldSelect, S.scatterYField, availableNumeric);
 }
 
+export function populateScatterColorByFields() {
+  const scatterStore = _getScatterDataStore();
+  const scatterGeoJSON = scatterStore?.geojson ?? null;
+  scatterColorByFieldSelect.replaceChildren();
+  scatterColorByFieldSelect.appendChild(new Option('None', ''));
+
+  if (!scatterGeoJSON || !scatterStore) {
+    S.scatterColorByField = null;
+    scatterColorByFieldSelect.disabled = true;
+    return;
+  }
+
+  const availableCategorical = scatterStore.chosenCategoricalFields.filter(k =>
+    scatterGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
+  );
+
+  availableCategorical.forEach(field => {
+    scatterColorByFieldSelect.appendChild(new Option(field, field));
+  });
+
+  scatterColorByFieldSelect.disabled = availableCategorical.length === 0;
+  if (S.scatterColorByField && availableCategorical.includes(S.scatterColorByField)) {
+    scatterColorByFieldSelect.value = S.scatterColorByField;
+  } else {
+    S.scatterColorByField = null;
+    scatterColorByFieldSelect.value = '';
+  }
+}
+
 export function updateScatterSubjectControls() {
   const layer = _getScatterLayer();
   const scatterStore = _getScatterDataStore();
@@ -247,6 +306,197 @@ export function clearScatterRangeControls() {
   S.scatterRangeIsCustom = false;
 }
 
+function updateScatterSelectionControls() {
+  if (!scatterSelectionControls) return;
+  const hasSelection = S.scatterSelectedParcelIds.size > 0;
+  scatterSelectionControls.style.display = hasSelection ? 'flex' : 'none';
+  if (scatterZoomToSelectionButton) {
+    scatterZoomToSelectionButton.disabled = !hasSelection;
+  }
+  if (scatterClearSelectionButton) {
+    scatterClearSelectionButton.disabled = !hasSelection;
+  }
+}
+
+function getFeatureCenter(feature: GeoJSON.Feature): [number, number] | null {
+  const geometry = feature.geometry;
+  if (!geometry) return null;
+  if (geometry.type === 'Point') {
+    const coords = geometry.coordinates as [number, number];
+    return [coords[0], coords[1]];
+  }
+
+  let minLng = Infinity;
+  let minLat = Infinity;
+  let maxLng = -Infinity;
+  let maxLat = -Infinity;
+
+  const walk = (coords: any) => {
+    if (!Array.isArray(coords)) return;
+    if (typeof coords[0] === 'number') {
+      const [lng, lat] = coords as [number, number];
+      minLng = Math.min(minLng, lng);
+      minLat = Math.min(minLat, lat);
+      maxLng = Math.max(maxLng, lng);
+      maxLat = Math.max(maxLat, lat);
+    } else {
+      coords.forEach(walk);
+    }
+  };
+
+  walk(geometry.coordinates);
+  if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) {
+    return null;
+  }
+  return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
+}
+
+function ensureScatterPinLayers() {
+  if (!S.map || !S.map.isStyleLoaded()) return;
+  if (!S.map.getSource(SCATTER_SELECTED_SOURCE_ID)) {
+    S.map.addSource(SCATTER_SELECTED_SOURCE_ID, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+  }
+  if (!S.map.getSource(SCATTER_HOVER_SOURCE_ID)) {
+    S.map.addSource(SCATTER_HOVER_SOURCE_ID, {
+      type: 'geojson',
+      data: { type: 'FeatureCollection', features: [] }
+    });
+  }
+  if (!S.map.getLayer(SCATTER_SELECTED_LAYER_ID)) {
+    S.map.addLayer({
+      id: SCATTER_SELECTED_LAYER_ID,
+      type: 'circle',
+      source: SCATTER_SELECTED_SOURCE_ID,
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#22c55e',
+        'circle-stroke-color': '#0f172a',
+        'circle-stroke-width': 1.5,
+        'circle-opacity': 0.9
+      }
+    });
+  }
+  if (!S.map.getLayer(SCATTER_HOVER_LAYER_ID)) {
+    S.map.addLayer({
+      id: SCATTER_HOVER_LAYER_ID,
+      type: 'circle',
+      source: SCATTER_HOVER_SOURCE_ID,
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#f97316',
+        'circle-stroke-color': '#0f172a',
+        'circle-stroke-width': 1.5,
+        'circle-opacity': 0.9
+      }
+    });
+  }
+}
+
+function setScatterPinSourceData(sourceId: string, features: GeoJSON.Feature[]) {
+  if (!S.map || !S.map.isStyleLoaded()) return;
+  const source = S.map.getSource(sourceId) as maplibregl.GeoJSONSource | undefined;
+  if (!source) return;
+  source.setData({
+    type: 'FeatureCollection',
+    features
+  });
+}
+
+function updateScatterPinSources() {
+  if (S.isScatterplotMinimized) {
+    setScatterPinSourceData(SCATTER_SELECTED_SOURCE_ID, []);
+    setScatterPinSourceData(SCATTER_HOVER_SOURCE_ID, []);
+    return;
+  }
+  ensureScatterPinLayers();
+
+  const selectedFeatures: GeoJSON.Feature[] = [];
+  S.scatterSelectedParcelIds.forEach(parcelId => {
+    const point = scatterPlotPointsByParcelId.get(parcelId);
+    if (!point?.coordinates) return;
+    selectedFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: point.coordinates },
+      properties: { parcelId }
+    });
+  });
+
+  const hoveredId = S.scatterHoveredParcelId;
+  const hoveredPoint = hoveredId ? scatterPlotPointsByParcelId.get(hoveredId) : null;
+  const hoverFeatures: GeoJSON.Feature[] = [];
+  if (hoveredPoint?.coordinates && !S.scatterSelectedParcelIds.has(hoveredPoint.parcelId)) {
+    hoverFeatures.push({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: hoveredPoint.coordinates },
+      properties: { parcelId: hoveredPoint.parcelId }
+    });
+  }
+
+  setScatterPinSourceData(SCATTER_SELECTED_SOURCE_ID, selectedFeatures);
+  setScatterPinSourceData(SCATTER_HOVER_SOURCE_ID, hoverFeatures);
+}
+
+function updateScatterPlotSelectionDisplay() {
+  updateScatterSelectionControls();
+  updateScatterPinSources();
+  const plotly = getPlotly();
+  if (!plotly) return;
+  const indices: number[] = [];
+  S.scatterSelectedParcelIds.forEach(parcelId => {
+    const point = scatterPlotPointsByParcelId.get(parcelId);
+    if (point) indices.push(point.index);
+  });
+  if (scatterPlot && scatterPlotPoints.length > 0) {
+    plotly.restyle(scatterPlot, { selectedpoints: [indices] });
+  }
+}
+
+function syncScatterSelectionWithPlot() {
+  const available = new Set(scatterPlotPoints.map(point => point.parcelId));
+  for (const parcelId of Array.from(S.scatterSelectedParcelIds)) {
+    if (!available.has(parcelId)) {
+      S.scatterSelectedParcelIds.delete(parcelId);
+    }
+  }
+  if (S.scatterHoveredParcelId && !available.has(S.scatterHoveredParcelId)) {
+    S.scatterHoveredParcelId = null;
+  }
+}
+
+export function clearScatterSelection() {
+  S.scatterSelectedParcelIds.clear();
+  updateScatterPlotSelectionDisplay();
+}
+
+export function clearScatterHover() {
+  if (!S.scatterHoveredParcelId) return;
+  S.scatterHoveredParcelId = null;
+  updateScatterPinSources();
+}
+
+export function zoomToScatterSelection() {
+  if (S.scatterSelectedParcelIds.size === 0) return;
+  const coords: [number, number][] = [];
+  S.scatterSelectedParcelIds.forEach(parcelId => {
+    const point = scatterPlotPointsByParcelId.get(parcelId);
+    if (point?.coordinates) coords.push(point.coordinates);
+  });
+  if (coords.length === 0) return;
+  const bounds = coords.reduce(
+    (acc, coord) => acc.extend(coord),
+    new maplibregl.LngLatBounds(coords[0], coords[0])
+  );
+  S.map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
+}
+
+export function initScatterplotMapLayers() {
+  ensureScatterPinLayers();
+  updateScatterPinSources();
+}
+
 export function resetScatterPlot(message: string) {
   scatterPlotEmpty.textContent = message;
   scatterPlotEmpty.style.display = 'block';
@@ -257,6 +507,86 @@ export function resetScatterPlot(message: string) {
     plotly.purge(scatterPlot);
   }
   scatterPlot.innerHTML = '';
+  scatterPlotEventsBound = false;
+  scatterPlotPoints = [];
+  scatterPlotPointsByParcelId.clear();
+  clearScatterHover();
+  clearScatterSelection();
+}
+
+function getSelectionMode(event: any): 'add' | 'remove' | 'replace' {
+  const sourceEvent = event?.event as MouseEvent | undefined;
+  if (sourceEvent?.altKey) return 'remove';
+  if (sourceEvent?.shiftKey) return 'add';
+  return 'replace';
+}
+
+function applyScatterSelection(parcelIds: string[], mode: 'add' | 'remove' | 'replace') {
+  if (mode === 'replace') {
+    S.scatterSelectedParcelIds.clear();
+  }
+  if (mode === 'remove') {
+    parcelIds.forEach(id => S.scatterSelectedParcelIds.delete(id));
+  } else {
+    parcelIds.forEach(id => S.scatterSelectedParcelIds.add(id));
+  }
+  updateScatterPlotSelectionDisplay();
+}
+
+function handleScatterPlotClick(event: any) {
+  const pointIndex = event?.points?.[0]?.pointIndex as number | undefined;
+  if (pointIndex === undefined) return;
+  const point = scatterPlotPoints[pointIndex];
+  if (!point) return;
+  const mode = getSelectionMode(event);
+  if (mode === 'add') {
+    S.scatterSelectedParcelIds.add(point.parcelId);
+  } else if (mode === 'remove') {
+    S.scatterSelectedParcelIds.delete(point.parcelId);
+  } else {
+    if (S.scatterSelectedParcelIds.has(point.parcelId)) {
+      S.scatterSelectedParcelIds.delete(point.parcelId);
+    } else {
+      S.scatterSelectedParcelIds.clear();
+      S.scatterSelectedParcelIds.add(point.parcelId);
+    }
+  }
+  updateScatterPlotSelectionDisplay();
+}
+
+function handleScatterPlotSelected(event: any) {
+  const mode = getSelectionMode(event);
+  const parcelIds = (event?.points ?? [])
+    .map((pt: any) => scatterPlotPoints[pt.pointIndex]?.parcelId)
+    .filter((id: string | undefined): id is string => Boolean(id));
+  if (parcelIds.length === 0) return;
+  applyScatterSelection(parcelIds, mode);
+}
+
+function handleScatterPlotHover(event: any) {
+  const pointIndex = event?.points?.[0]?.pointIndex as number | undefined;
+  if (pointIndex === undefined) return;
+  const point = scatterPlotPoints[pointIndex];
+  if (!point) return;
+  S.scatterHoveredParcelId = point.parcelId;
+  updateScatterPinSources();
+}
+
+function handleScatterPlotUnhover() {
+  clearScatterHover();
+}
+
+function attachScatterPlotEvents() {
+  if (scatterPlotEventsBound) return;
+  const plotly = getPlotly();
+  if (!plotly || !scatterPlot) return;
+  if (typeof (scatterPlot as any).on !== 'function') return;
+  (scatterPlot as any).on('plotly_click', handleScatterPlotClick);
+  (scatterPlot as any).on('plotly_selected', handleScatterPlotSelected);
+  (scatterPlot as any).on('plotly_deselect', clearScatterSelection);
+  (scatterPlot as any).on('plotly_hover', handleScatterPlotHover);
+  (scatterPlot as any).on('plotly_unhover', handleScatterPlotUnhover);
+  scatterPlotEventsBound = true;
 }
 
 function getScatterSubjectSelection(
@@ -350,19 +680,44 @@ export function updateScatterPlot() {
   );
   const xValues: number[] = [];
   const yValues: number[] = [];
+  const pointData: ScatterPoint[] = [];
+  const categoryLabels: string[] = [];
+  const colorByField = S.scatterColorByField;
   selection.forEach(feature => {
     const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
     const xVal = numOrNull(props[S.scatterXField]);
     const yVal = numOrNull(props[S.scatterYField]);
     if (xVal === null || yVal === null) return;
+    const index = xValues.length;
     xValues.push(xVal);
     yValues.push(yVal);
+    const parcelId = _getParcelId(feature);
+    const coordinates = getFeatureCenter(feature);
+    const rawCategoryValue = colorByField ? props[colorByField] : null;
+    const categoryLabel = colorByField
+      ? (rawCategoryValue === null || rawCategoryValue === undefined || rawCategoryValue === '' ? 'Unknown' : String(rawCategoryValue))
+      : null;
+    if (categoryLabel) {
+      categoryLabels.push(categoryLabel);
+    }
+    pointData.push({
+      index,
+      parcelId,
+      coordinates,
+      categoryValue: categoryLabel,
+    });
   });
 
   if (xValues.length === 0) {
     resetScatterPlot('No data available for the current selection.');
     return;
   }
+
+  scatterPlotPoints = pointData;
+  scatterPlotPointsByParcelId = new Map(
+    pointData.map(point => [point.parcelId, point])
+  );
+  syncScatterSelectionWithPlot();
 
   scatterPlotEmpty.style.display = 'none';
   setScatterRangeControlsEnabled(true);
@@ -378,21 +733,53 @@ export function updateScatterPlot() {
   const xMax = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterXMaxInput) ?? xMaxDefault) : xMaxDefault;
   const yMin = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMinInput) ?? yMinDefault) : yMinDefault;
   const yMax = S.scatterRangeIsCustom ? (parseScatterRangeInput(scatterYMaxInput) ?? yMaxDefault) : yMaxDefault;
+  const selectedPoints: number[] = [];
+  S.scatterSelectedParcelIds.forEach(parcelId => {
+    const point = scatterPlotPointsByParcelId.get(parcelId);
+    if (point) selectedPoints.push(point.index);
+  });
+  let markerColor: string | string[] = 'rgba(59, 130, 246, 0.7)';
+  let customdata: (string | null)[] | undefined;
+  let hoverTemplate = 'X: %{x}<br>Y: %{y}<extra></extra>';
+  if (colorByField) {
+    const uniqueCategories = Array.from(new Set(categoryLabels)).sort();
+    const categoryColorMap = new Map<string, string>();
+    const total = Math.max(1, uniqueCategories.length);
+    uniqueCategories.forEach((category, idx) => {
+      categoryColorMap.set(category, generatePseudoRandomColor(idx, total, 'scatterplot-color'));
+    });
+    const colors = pointData.map(point => {
+      const key = point.categoryValue ?? 'Unknown';
+      return categoryColorMap.get(key) ?? 'rgba(148, 163, 184, 0.8)';
+    });
+    markerColor = colors;
+    customdata = pointData.map(point => point.categoryValue ?? 'Unknown');
+    hoverTemplate = `X: %{x}<br>Y: %{y}<br>${colorByField}: %{customdata}<extra></extra>`;
+  }
   const trace = {
     x: xValues,
     y: yValues,
     type: 'scatter',
     mode: 'markers',
-    marker: { size: 6, color: 'rgba(59, 130, 246, 0.7)' }
+    marker: { size: 6, color: markerColor },
+    customdata,
+    hovertemplate: hoverTemplate,
+    selectedpoints: selectedPoints,
+    selected: { marker: { size: 8, opacity: 1, line: { color: '#0f172a', width: 1 } } },
+    unselected: { marker: { opacity: 0.55 } }
   };
   const layout = {
     margin: { l: 48, r: 16, t: 8, b: 42 },
     height: 220,
+    dragmode: 'select',
+    hovermode: 'closest',
     xaxis: { title: S.scatterXField, range: [Math.min(xMin, xMax), Math.max(xMin, xMax)] },
     yaxis: { title: S.scatterYField, range: [Math.min(yMin, yMax), Math.max(yMin, yMax)] }
   };
-  const config = { displayModeBar: false, responsive: true, staticPlot: true };
+  const config = { displayModeBar: false, responsive: true, staticPlot: false };
   plotly.react(scatterPlot, [trace], layout, config);
+  attachScatterPlotEvents();
+  updateScatterPlotSelectionDisplay();
 }
 
 export function scheduleScatterPlotRefresh() {
@@ -411,6 +798,7 @@ export function refreshScatterPanel() {
   populateScatterCategoryFields();
   populateScatterCategoryValues(S.scatterCategoryField);
   populateScatterFields();
+  populateScatterColorByFields();
   S.scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, S.scatterFilteredName);
   updateScatterSubjectButtons();
   updateScatterSubjectControls();

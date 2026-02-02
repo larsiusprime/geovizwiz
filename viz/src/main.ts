@@ -38,6 +38,8 @@ import {
   setScatterRangeInputs,
   scheduleScatterPlotRefresh,
   refreshScatterPanel, renderScatterLayerOptions,
+  clearScatterSelection, clearScatterHover, zoomToScatterSelection,
+  initScatterplotMapLayers,
 } from './scatterplot';
 
 
@@ -144,6 +146,9 @@ S.map = new maplibregl.Map({
   pixelRatio: HQ_PR // supersample: render at higher internal resolution (smooth lines)
 });
 S.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
+S.map.on('load', () => {
+  initScatterplotMapLayers();
+});
 
 
 function updateBasemapButtonStates() {
@@ -334,6 +339,10 @@ const scatterXMaxInput = document.getElementById('scatterXMax') as HTMLInputElem
 const scatterYMinInput = document.getElementById('scatterYMin') as HTMLInputElement;
 const scatterYMaxInput = document.getElementById('scatterYMax') as HTMLInputElement;
 const scatterResetExtentsButton = document.getElementById('scatterResetExtents') as HTMLButtonElement;
+const scatterColorByFieldSelect = document.getElementById('scatterColorByField') as HTMLSelectElement;
+const scatterSelectionControls = document.getElementById('scatterSelectionControls') as HTMLDivElement;
+const scatterZoomToSelectionButton = document.getElementById('scatterZoomToSelection') as HTMLButtonElement;
+const scatterClearSelectionButton = document.getElementById('scatterClearSelection') as HTMLButtonElement;
 const scatterPlot = document.getElementById('scatterPlot') as HTMLDivElement;
 const scatterPlotEmpty = document.getElementById('scatterPlotEmpty') as HTMLDivElement;
 const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
@@ -546,6 +555,10 @@ const scatterplotWin = createWindowManager({
   controlsEl: scatterplotControlsEl,
   positionFn: positionScatterplotPanel,
   onShow: () => { scheduleScatterPlotRefresh(); },
+  onMinimize: () => {
+    clearScatterHover();
+    clearScatterSelection();
+  },
 });
 
 const filtersWin = createWindowManager({
@@ -793,6 +806,10 @@ initScatterplotElements({
   scatterYMinInput,
   scatterYMaxInput,
   scatterResetExtentsButton,
+  scatterColorByFieldSelect,
+  scatterSelectionControls,
+  scatterZoomToSelectionButton,
+  scatterClearSelectionButton,
   scatterPlot,
   scatterPlotEmpty,
 });
@@ -1892,6 +1909,9 @@ scatterLayerSelect.addEventListener('change', () => {
   S.scatterXField = null;
   S.scatterYField = null;
   S.scatterRangeIsCustom = false;
+  S.scatterColorByField = null;
+  clearScatterHover();
+  clearScatterSelection();
   refreshScatterPanel();
 });
 
@@ -1962,6 +1982,11 @@ scatterCategoryValueSelect.addEventListener('change', () => {
   scheduleScatterPlotRefresh();
 });
 
+scatterColorByFieldSelect.addEventListener('change', () => {
+  S.scatterColorByField = scatterColorByFieldSelect.value || null;
+  scheduleScatterPlotRefresh();
+});
+
 statsFieldSelect.addEventListener('change', () => {
   S.statsField = statsFieldSelect.value || null;
   const layer = getStatsLayer();
@@ -2004,6 +2029,14 @@ scatterResetExtentsButton.addEventListener('click', () => {
   S.scatterRangeIsCustom = false;
   setScatterRangeInputs(S.scatterDefaultRange);
   scheduleScatterPlotRefresh();
+});
+
+scatterZoomToSelectionButton.addEventListener('click', () => {
+  zoomToScatterSelection();
+});
+
+scatterClearSelectionButton.addEventListener('click', () => {
+  clearScatterSelection();
 });
 
 document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {

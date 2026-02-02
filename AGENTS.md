@@ -14,6 +14,26 @@ util/
 
 There is a deploy-local.js node script that is ONLY there to be used to deploy the app locally for testing. A github actions workflow does the actual live deployment.
 
+VIZ APP
+-------
+
+The VIZ app is a visualization tool that allows the user to visualize GIS data on a map. Think of it as "Photoshop for GIS", a lightweight alternative to QGIS and ArcGIS.
+
+There are two main components to the VIZ app: the toolbar and the map.
+
+## Toolbar
+
+The toolbar contains various tools the user can use. These are buttons with SVG icons and hovertext. Only one tool can be active at a time. Tools may optionally have hotkeys assigned to them,
+and certain tools (such as the select tool) have sub-tools. Any tool button with sub-tools allows access to the sub tools by clicking and holding it, which will open a sub menu exposing the sub tools.
+
+Most tools will simply open a menu. All Menus should inherit the same basic windowing behavior:
+  - The menu should have a draggable top bar, and a minimize/hide button that closes the menu (makes it invisible)
+  - The menu should be hidden by default on start
+  - The menu can be moved around the screen
+  - The menu should not overlap any other menu or go off the screen or overlap the toolbar
+
+
+
 UTIL APPS
 ---------
 These apps share styling and code. They have the following things in common:

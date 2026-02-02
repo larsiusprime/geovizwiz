@@ -8,9 +8,8 @@ import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 
 
 // Local imports
-import { OSM_STYLE, SATELLITE_STYLE, SOURCE_ID, LAYER_ID, ERROR_LAYER_ID, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
 import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
-import { type AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 import type {
@@ -19,7 +18,6 @@ import type {
   ParcelFieldPatch,
   QualityMode, UpdateMode, MetricUnitKey,
   SubjectMode,
-  LayerState, DataStore
 } from './types';
 import {
   buildSubjectSelector,
@@ -46,7 +44,6 @@ import {
 import { S } from './state';
 import {
   initFilterElements, initFilterCallbacks,
-  cloneFilters,
   setSavedFiltersPanelMode, updateSavedFiltersUIState,
   saveCurrentFilters, applySavedFilter,
   getCategoricalValues,
@@ -91,11 +88,21 @@ import {
   initToolbarCallbacks, initializeToolbar,
   updateToolbarButtonStates, updateCursor,
 } from './toolbar';
+import { addOrUpdateSource } from './rendering';
 import {
   initLandScheduleElements,
   updateLandScheduleValueOptions, updateLandScheduleInputsFromStore,
   updateLandScheduleStoreFromInputs, refreshLandSchedulePanel,
 } from './land-schedule';
+import {
+  initLayerElements, initLayerCallbacks,
+  getCurrentLayer, getCurrentLayerIds, getCurrentSourceId,
+  createLayerState, persistCurrentLayerState,
+  registerLayer, removeLayer,
+  renderLayerList, renderLayerSelectOptions,
+  getStatsLayer, getScatterLayer, getLayerDataStore, getLayerGeoJSON, getScatterDataStore,
+  createDataStore, renderDataStoreList,
+} from './layers';
 (window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Map Bootstrap ----------------- */
@@ -452,461 +459,7 @@ for (const key of Object.keys(COLOR_RAMPS)) {
 rampSelect.value = 'Viridis';
 
 
-/* ---------------- FUNCTIONS ----------------- */
-
-function getCurrentLayer(): LayerState | null {
-  return S.currentLayerId ? S.layers.get(S.currentLayerId) ?? null : null;
-}
-
-function getCurrentLayerIds() {
-  const layer = getCurrentLayer();
-  if (!layer) return null;
-  return { sourceId: layer.sourceId, layerId: layer.layerId, errorLayerId: layer.errorLayerId };
-}
-
-function getCurrentSourceId() {
-  return getCurrentLayerIds()?.sourceId ?? null;
-}
-
-function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore {
-  const id = `store-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  const name = file.name.replace(/\.[^/.]+$/, '') || file.name;
-  return {
-    id,
-    name,
-    file,
-    asyncBuffer,
-    geojson: null,
-    numericFieldsFromSchema: [],
-    categoricalFieldsFromSchema: [],
-    chosenNumericFields: [],
-    chosenCategoricalFields: [],
-    landSizeField: null,
-    landSizeUnitLabel: null,
-    bldgSizeField: null,
-    bldgSizeUnitLabel: null
-  };
-}
-
-function renderDataStoreList() {
-  if (!dataStoreList) return;
-  dataStoreList.replaceChildren();
-
-  if (S.dataStoreOrder.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'muted';
-    empty.textContent = 'No data sources loaded yet.';
-    dataStoreList.appendChild(empty);
-    return;
-  }
-
-  S.dataStoreOrder.forEach(storeId => {
-    const store = S.dataStores.get(storeId);
-    if (!store) return;
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'data-store-button';
-    btn.textContent = store.name;
-    btn.addEventListener('click', () => {
-      if (addLayerFromDataStore(store.id)) {
-        closeAddLayerModal();
-      }
-    });
-    dataStoreList.appendChild(btn);
-  });
-}
-
-function getLayerPanelName(layerId: string): string {
-  const layer = S.layers.get(layerId);
-  if (!layer) return '';
-  const index = S.layerOrder.indexOf(layerId);
-  return layer.field ?? `layer ${index + 1}`;
-}
-
-function getLayerSelectLabel(layerId: string): string {
-  const layer = S.layers.get(layerId);
-  if (!layer) return '';
-  const baseName = getLayerPanelName(layerId);
-  const store = S.dataStores.get(layer.dataStoreId);
-  const sourceLabel = store?.file?.name ?? store?.name ?? 'Unknown source';
-  return `${baseName} (${sourceLabel})`;
-}
-
-function renderLayerSelectOptions(
-  select: HTMLSelectElement,
-  selectedId: string | null,
-  placeholderText: string
-): string | null {
-  select.replaceChildren();
-  const placeholder = new Option(placeholderText, '');
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  select.appendChild(placeholder);
-
-  if (S.layerOrder.length === 0) {
-    select.disabled = true;
-    return null;
-  }
-
-  S.layerOrder.forEach(layerId => {
-    select.appendChild(new Option(getLayerSelectLabel(layerId), layerId));
-  });
-
-  select.disabled = false;
-  if (selectedId && S.layers.has(selectedId)) {
-    select.value = selectedId;
-    return selectedId;
-  }
-  const fallback = S.currentLayerId ?? S.layerOrder[0] ?? null;
-  if (fallback) {
-    select.value = fallback;
-    return fallback;
-  }
-  return null;
-}
-
-function getStatsLayer(): LayerState | null {
-  return S.statsLayerId ? S.layers.get(S.statsLayerId) ?? null : null;
-}
-
-function getScatterLayer(): LayerState | null {
-  return S.scatterLayerId ? S.layers.get(S.scatterLayerId) ?? null : null;
-}
-
-function getLayerDataStore(layer: LayerState | null): DataStore | null {
-  return layer ? S.dataStores.get(layer.dataStoreId) ?? null : null;
-}
-
-function getLayerGeoJSON(layer: LayerState | null): GeoJSON.FeatureCollection | null {
-  return layer?.geojson ?? null;
-}
-
-function getScatterDataStore(): DataStore | null {
-  return getLayerDataStore(getScatterLayer());
-}
-
-function createLayerState(name: string, dataStoreId: string): LayerState {
-  S.layerCounter += 1;
-  const suffix = `layer-${S.layerCounter}`;
-  return {
-    id: suffix,
-    name,
-    dataStoreId,
-    sourceId: `${SOURCE_ID}-${suffix}`,
-    layerId: `${LAYER_ID}-${suffix}`,
-    errorLayerId: `${ERROR_LAYER_ID}-${suffix}`,
-    visible: true,
-    geojson: null,
-    field: null,
-    fieldType: null,
-    stats: null,
-    normalizationMode: 'asis',
-    colorMode: 'quantiles',
-    categoricalColorMode: 'random',
-    singleColorValue: '#3b82f6',
-    ramp: rampSelect?.value ?? 'Viridis',
-    colorDomain: null,
-    colorBreaks: null,
-    cachedExtrusionSettings: null,
-    chosenNumericFields: [],
-    chosenCategoricalFields: [],
-    landSizeField: null,
-    landSizeUnitLabel: null,
-    bldgSizeField: null,
-    bldgSizeUnitLabel: null,
-    hiddenLegendItems: new Set(),
-    selectedLegendItems: new Set(),
-    selectedParcels: new Set(),
-    highlightColor: '#FFFF00',
-    legendSortField: 'count',
-    legendSortDirection: 'desc',
-    customColors: new Map(),
-    opacity: parseFloat(opacityInput.value),
-    is3DMode: false,
-    filters: [],
-    filterMode: 'none',
-    filterActionMode: 'none',
-    filterInvert: false,
-    parcelPatchMap: new Map()
-  };
-}
-
-function persistCurrentLayerState() {
-  const layer = getCurrentLayer();
-  if (!layer) return;
-  layer.geojson = S.currentGeoJSON;
-  layer.field = S.currentField;
-  layer.fieldType = S.currentFieldType;
-  layer.stats = S.currentStats;
-  layer.normalizationMode = S.normalizationMode;
-  layer.colorMode = S.colorMode;
-  layer.categoricalColorMode = S.categoricalColorMode;
-  layer.singleColorValue = S.singleColorValue;
-  layer.ramp = rampSelect?.value ?? layer.ramp;
-  layer.colorDomain = S.colorDomain;
-  layer.colorBreaks = S.colorBreaks;
-  layer.cachedExtrusionSettings = S.cachedExtrusionSettings;
-  layer.chosenNumericFields = [...S.chosenNumericFields];
-  layer.chosenCategoricalFields = [...S.chosenCategoricalFields];
-  layer.landSizeField = S.landSizeField;
-  layer.landSizeUnitLabel = S.landSizeUnitLabel;
-  layer.bldgSizeField = S.bldgSizeField;
-  layer.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
-  layer.hiddenLegendItems = S.hiddenLegendItems;
-  layer.selectedLegendItems = S.selectedLegendItems;
-  layer.selectedParcels = S.selectedParcels;
-  layer.highlightColor = S.highlightColor;
-  layer.legendSortField = S.legendSortField;
-  layer.legendSortDirection = S.legendSortDirection;
-  layer.customColors = S.customColors;
-  layer.opacity = parseFloat(opacityInput.value);
-  layer.is3DMode = S.is3DMode;
-  layer.filters = cloneFilters(S.filters);
-  layer.filterMode = S.filterMode;
-  layer.filterActionMode = S.filterActionMode;
-  layer.filterInvert = S.filterInvert;
-  layer.parcelPatchMap = S.parcelPatchMap;
-}
-
-function applyLayerState(layer: LayerState) {
-  S.currentGeoJSON = layer.geojson;
-  S.currentField = layer.field;
-  S.currentFieldType = layer.fieldType;
-  S.currentStats = layer.stats;
-  S.normalizationMode = layer.normalizationMode;
-  S.colorMode = layer.colorMode;
-  S.categoricalColorMode = layer.categoricalColorMode;
-  S.singleColorValue = layer.singleColorValue;
-  S.colorDomain = layer.colorDomain;
-  S.colorBreaks = layer.colorBreaks;
-  S.cachedExtrusionSettings = layer.cachedExtrusionSettings;
-  S.chosenNumericFields = [...layer.chosenNumericFields];
-  S.chosenCategoricalFields = [...layer.chosenCategoricalFields];
-  S.landSizeField = layer.landSizeField;
-  S.landSizeUnitLabel = layer.landSizeUnitLabel;
-  S.bldgSizeField = layer.bldgSizeField;
-  S.bldgSizeUnitLabel = layer.bldgSizeUnitLabel;
-  S.hiddenLegendItems = layer.hiddenLegendItems;
-  S.selectedLegendItems = layer.selectedLegendItems;
-  S.selectedParcels = layer.selectedParcels;
-  S.highlightColor = layer.highlightColor;
-  S.legendSortField = layer.legendSortField;
-  S.legendSortDirection = layer.legendSortDirection;
-  S.customColors = layer.customColors;
-  opacityInput.value = String(layer.opacity);
-  if (opacityOut) opacityOut.value = Number(layer.opacity).toFixed(2);
-  S.is3DMode = layer.is3DMode;
-  S.filters = cloneFilters(layer.filters ?? []);
-  S.parcelPatchMap = layer.parcelPatchMap ?? new Map();
-  S.filterMode = layer.filterMode ?? 'none';
-  S.filterActionMode = layer.filterActionMode ?? 'none';
-  S.filterInvert = layer.filterInvert ?? false;
-  if (filtersInvertToggle) {
-    filtersInvertToggle.checked = S.filterInvert;
-  }
-  S.currentDataStoreId = layer.dataStoreId;
-  const store = S.dataStores.get(layer.dataStoreId);
-  if (store) {
-    S.lastFile = store.file;
-    S.lastAsyncBuffer = store.asyncBuffer;
-    S.lastNumericFieldsFromSchema = [...store.numericFieldsFromSchema];
-    S.lastCategoricalFieldsFromSchema = [...store.categoricalFieldsFromSchema];
-  }
-
-  setSizeState(S.bldgSizeField, S.bldgSizeUnitLabel, S.landSizeField, S.landSizeUnitLabel);
-
-  if (fieldSelect) {
-    if (!S.currentGeoJSON) {
-      fieldSelect.replaceChildren(new Option('— load a file first —', ''));
-      fieldSelect.value = '';
-    } else {
-      const allAvailableFields = [
-        ...S.chosenNumericFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))),
-        ...S.chosenCategoricalFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k)))
-      ];
-      populateFieldDropdownFromList(allAvailableFields);
-      fieldSelect.value = S.currentField ?? '';
-    }
-  }
-
-  if (normAsIs && normLand && normBldg) {
-    normAsIs.checked = S.normalizationMode === 'asis';
-    normLand.checked = S.normalizationMode === 'perLand';
-    normBldg.checked = S.normalizationMode === 'perBuilding';
-  }
-
-  if (colorCont && colorQuant) {
-    colorCont.checked = S.colorMode === 'continuous';
-    colorQuant.checked = S.colorMode === 'quantiles';
-  }
-
-  document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(radio => {
-    radio.checked = radio.value === S.categoricalColorMode;
-  });
-
-  if (rampSelect && layer.ramp) {
-    rampSelect.value = layer.ramp;
-  }
-
-  if (colorPicker) {
-    colorPicker.value = S.singleColorValue;
-  }
-
-  enable3DCheckbox.checked = S.is3DMode;
-  updateCurrentLayerDetails();
-  updateFieldTypeUI();
-  update3DUI();
-  updateFloatingLegend();
-  updateSelectionControls();
-  renderDataStoreList();
-  refreshStatisticsPanel();
-  refreshScatterPanel();
-  refreshLandSchedulePanel();
-
-  if (S.map.getLayer(layer.layerId)) {
-    setLayerVisibility(layer, layer.visible);
-  }
-
-  if (S.selectionControlsPanel) {
-    const picker = S.selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement | null;
-    if (picker) picker.value = S.highlightColor;
-  }
-
-  refreshFiltersUI();
-}
-
-function registerLayer(layer: LayerState) {
-  S.layers.set(layer.id, layer);
-  S.layerOrder.unshift(layer.id);
-  S.currentLayerId = layer.id;
-  applyLayerState(layer);
-  applyLayerOrderToMap();
-  renderLayerList();
-}
-
-function moveLayerInOrder(layerId: string, direction: 'up' | 'down') {
-  const index = S.layerOrder.indexOf(layerId);
-  if (index === -1) return;
-  const newIndex = direction === 'up' ? index - 1 : index + 1;
-  if (newIndex < 0 || newIndex >= S.layerOrder.length) return;
-  S.layerOrder.splice(index, 1);
-  S.layerOrder.splice(newIndex, 0, layerId);
-  applyLayerOrderToMap();
-  renderLayerList();
-}
-
-function applyLayerOrderToMap() {
-  for (let i = S.layerOrder.length - 1; i >= 0; i -= 1) {
-    const layerId = S.layerOrder[i];
-    const layer = S.layers.get(layerId);
-    if (!layer) continue;
-    if (S.map.getLayer(layer.layerId)) {
-      S.map.moveLayer(layer.layerId);
-    }
-    if (S.map.getLayer(layer.errorLayerId)) {
-      S.map.moveLayer(layer.errorLayerId);
-    }
-  }
-}
-
-function addLayerFromDataStore(storeId: string): boolean {
-  const store = S.dataStores.get(storeId);
-  if (!store) return false;
-  if (!store.geojson) {
-    alert('That data set is not ready yet. Finish loading it first.');
-    return false;
-  }
-  persistCurrentLayerState();
-  const layerName = `${store.name} (copy ${S.layerOrder.length + 1})`;
-  const layer = createLayerState(layerName, store.id);
-  layer.geojson = store.geojson;
-  layer.chosenNumericFields = [...store.chosenNumericFields];
-  layer.chosenCategoricalFields = [...store.chosenCategoricalFields];
-  layer.landSizeField = store.landSizeField;
-  layer.landSizeUnitLabel = store.landSizeUnitLabel;
-  layer.bldgSizeField = store.bldgSizeField;
-  layer.bldgSizeUnitLabel = store.bldgSizeUnitLabel;
-  registerLayer(layer);
-  addOrUpdateSource(layer.geojson);
-  applyGrayRendering();
-  applyLayerOrderToMap();
-  return true;
-}
-
-function setCurrentLayer(layerId: string) {
-  if (S.currentLayerId === layerId) return;
-  persistCurrentLayerState();
-  const layer = S.layers.get(layerId);
-  if (!layer) return;
-  S.currentLayerId = layerId;
-  applyLayerState(layer);
-  renderLayerList();
-  if (S.currentGeoJSON && S.currentField) {
-    applyExtrusionWithVisibility();
-  } else if (S.currentGeoJSON) {
-    applyGrayRendering();
-  }
-}
-
-function setLayerVisibility(layer: LayerState, visible: boolean) {
-  layer.visible = visible;
-  const visibility = visible ? 'visible' : 'none';
-  if (S.map.getLayer(layer.layerId)) {
-    S.map.setLayoutProperty(layer.layerId, 'visibility', visibility);
-  }
-  if (S.map.getLayer(layer.errorLayerId)) {
-    S.map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
-  }
-}
-
-function removeLayer(layerId: string) {
-  const layer = S.layers.get(layerId);
-  if (!layer) return;
-  if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
-  if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
-  if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
-  S.layers.delete(layerId);
-  const idx = S.layerOrder.indexOf(layerId);
-  if (idx >= 0) S.layerOrder.splice(idx, 1);
-
-  if (S.currentLayerId === layerId) {
-    S.currentLayerId = S.layerOrder.length ? S.layerOrder[0] : null;
-    if (S.currentLayerId) {
-      applyLayerState(S.layers.get(S.currentLayerId)!);
-    } else {
-      S.currentGeoJSON = null;
-      S.currentField = null;
-      S.currentFieldType = null;
-      S.currentStats = null;
-      S.colorBreaks = null;
-      S.colorDomain = null;
-      S.customColors = new Map();
-      S.hiddenLegendItems = new Set();
-      S.selectedLegendItems = new Set();
-      S.selectedParcels = new Set();
-      S.highlightColor = '#FFFF00';
-      S.filters = [];
-      S.filterMode = 'none';
-      S.filterActionMode = 'none';
-      S.filterInvert = false;
-      if (filtersInvertToggle) {
-        filtersInvertToggle.checked = false;
-      }
-      fieldSelect.replaceChildren(new Option('— load a file first —', ''));
-      updateFieldTypeUI();
-      updateFloatingLegend();
-      refreshFiltersUI();
-      refreshStatisticsPanel();
-      refreshScatterPanel();
-      refreshLandSchedulePanel();
-      if (S.selectionControlsPanel) {
-        S.selectionControlsPanel.style.display = 'none';
-      }
-    }
-  }
-  renderLayerList();
-  applyLayerOrderToMap();
-}
+/* ---------------- Layer & Data Store functions — see ./layers.ts ----------------- */
 
 // Window management — using createWindowManager from windows.ts
 // The paint window manager is declared first so layers can reference minimizePaint in its onMinimize.
@@ -1208,130 +761,47 @@ initLandScheduleElements({
   landScheduleValueRow,
 });
 
+// Wire DOM elements and callbacks into the layers module
+initLayerElements({
+  layerList,
+  dataStoreList,
+  currentLayerSource,
+  fieldSelect,
+  rampSelect,
+  opacityInput,
+  opacityOut,
+  normAsIs,
+  normLand,
+  normBldg,
+  colorCont,
+  colorQuant,
+  colorPicker,
+  enable3DCheckbox: enable3DCheckbox,
+  filtersInvertToggle,
+});
+initLayerCallbacks({
+  setSizeState,
+  populateFieldDropdownFromList,
+  updateFieldTypeUI,
+  update3DUI,
+  updateFloatingLegend,
+  updateSelectionControls,
+  refreshStatisticsPanel,
+  refreshScatterPanel,
+  refreshFiltersUI,
+  renderStatsLayerOptions,
+  renderScatterLayerOptions,
+  addOrUpdateSource,
+  applyGrayRendering,
+  applyExtrusionWithVisibility,
+  closeAddLayerModal,
+  createEyeButton,
+  setEyeButtonIcon,
+});
 
-// Dragging functions
-
-function updateCurrentLayerDetails() {
-  if (!currentLayerSource) return;
-  if (!S.currentLayerId) {
-    currentLayerSource.textContent = 'source: —';
-    return;
-  }
-  const layer = S.layers.get(S.currentLayerId);
-  if (!layer) {
-    currentLayerSource.textContent = 'source: —';
-    return;
-  }
-  const store = S.dataStores.get(layer.dataStoreId);
-  const sourceName = store?.file?.name ?? store?.name ?? '—';
-  currentLayerSource.textContent = `source: ${sourceName}`;
-}
-
-function renderLayerList() {
-  if (!layerList) return;
-  layerList.replaceChildren();
-
-  if (S.layerOrder.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'muted';
-    empty.textContent = 'No layers loaded yet.';
-    layerList.appendChild(empty);
-    updateCurrentLayerDetails();
-    S.statsLayerId = null;
-    S.scatterLayerId = null;
-    renderStatsLayerOptions();
-    renderScatterLayerOptions();
-    refreshStatisticsPanel();
-    refreshScatterPanel();
-    return;
-  }
-
-  S.layerOrder.forEach((layerId, index) => {
-    const layer = S.layers.get(layerId);
-    if (!layer) return;
-
-    const row = document.createElement('div');
-    row.className = `layer-row${layerId === S.currentLayerId ? ' current' : ''}`;
-
-    const visibilityToggle = createEyeButton(!layer.visible, layer.visible ? 'Hide layer' : 'Show layer');
-    visibilityToggle.addEventListener('click', () => {
-      const nextVisible = !layer.visible;
-      setLayerVisibility(layer, nextVisible);
-      visibilityToggle.title = nextVisible ? 'Hide layer' : 'Show layer';
-      setEyeButtonIcon(visibilityToggle, !nextVisible);
-    });
-
-    const currentRadio = document.createElement('input');
-    currentRadio.type = 'radio';
-    currentRadio.name = 'currentLayer';
-    currentRadio.checked = layerId === S.currentLayerId;
-    currentRadio.title = 'Set as current layer';
-    currentRadio.addEventListener('change', () => {
-      if (currentRadio.checked) setCurrentLayer(layerId);
-    });
-
-    const nameButton = document.createElement('button');
-    nameButton.type = 'button';
-    nameButton.className = 'layer-name';
-    nameButton.textContent = layer.field ?? `layer ${index + 1}`
-    nameButton.addEventListener('click', () => setCurrentLayer(layerId));
-
-    const moveUpBtn = document.createElement('button');
-    moveUpBtn.type = 'button';
-    moveUpBtn.className = 'layer-action-btn';
-    moveUpBtn.textContent = '▲';
-    moveUpBtn.title = 'Move layer up';
-    moveUpBtn.disabled = S.layerOrder.indexOf(layerId) === 0;
-    moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
-
-    const moveDownBtn = document.createElement('button');
-    moveDownBtn.type = 'button';
-    moveDownBtn.className = 'layer-action-btn';
-    moveDownBtn.textContent = '▼';
-    moveDownBtn.title = 'Move layer down';
-    moveDownBtn.disabled = S.layerOrder.indexOf(layerId) === S.layerOrder.length - 1;
-    moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'layer-action-btn';
-    deleteBtn.textContent = '❌';
-    deleteBtn.title = 'Delete layer';
-    deleteBtn.addEventListener('click', () => {
-      if (!confirm(`Delete layer "${layer.name}"?`)) return;
-      removeLayer(layerId);
-      applyLayerOrderToMap();
-    });
-
-    row.append(visibilityToggle, currentRadio, nameButton, moveUpBtn, moveDownBtn, deleteBtn);
-    layerList.appendChild(row);
-  });
-
-  updateCurrentLayerDetails();
-  const prevStatsLayer = S.statsLayerId;
-  const prevScatterLayer = S.scatterLayerId;
-  renderStatsLayerOptions();
-  renderScatterLayerOptions();
-  if (prevStatsLayer !== S.statsLayerId) {
-    S.statsCategoryField = null;
-    S.statsCategoryValueIndices = [];
-    S.statsField = null;
-    S.statsFieldType = null;
-    refreshStatisticsPanel();
-  }
-  if (prevScatterLayer !== S.scatterLayerId) {
-    S.scatterCategoryField = null;
-    S.scatterCategoryValueIndices = [];
-    S.scatterXField = null;
-    S.scatterYField = null;
-    S.scatterRangeIsCustom = false;
-    refreshScatterPanel();
-  }
-}
+// renderLayerList, updateCurrentLayerDetails — see ./layers.ts
 
 // Floating legend functions — see ./legend.ts
-
-
 
 // Land schedule functions — see ./land-schedule.ts
 

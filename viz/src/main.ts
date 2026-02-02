@@ -123,6 +123,7 @@ import {
   getStatsLayer, getScatterLayer, getLayerDataStore, getLayerGeoJSON, getScatterDataStore,
   createDataStore, renderDataStoreList,
 } from './layers';
+import { initMetadataModule } from './metadata.js';
 (window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Map Bootstrap ----------------- */
@@ -854,6 +855,9 @@ initLayerCallbacks({
   setEyeButtonIcon,
 });
 
+// Initialize metadata module for project save/load
+initMetadataModule();
+
 // renderLayerList, updateCurrentLayerDetails — see ./layers.ts
 
 // Floating legend functions — see ./legend.ts
@@ -896,7 +900,7 @@ function installWelcome() {
   document.body.append(S.welcomeEl);
 }
 
-function revealUI() {
+export function revealUI() {
   if (S.welcomeEl) { S.welcomeEl.remove(); S.welcomeEl = null; }
   showLayers();
   showPaint();
@@ -1656,21 +1660,69 @@ fileInput.addEventListener('change', async () => {
     dataStore.numericFieldsFromSchema = [...S.lastNumericFieldsFromSchema];
     dataStore.categoricalFieldsFromSchema = [...S.lastCategoricalFieldsFromSchema];
 
-    // Show numeric fields modal first, then categorical if needed
-    if (S.lastNumericFieldsFromSchema.length > 0) {
-      openNumericFieldChooserModal({ 
-        rowCount: numRows, 
-        geometryCol: primaryGeom, 
-        numericFields: S.lastNumericFieldsFromSchema
+    // Check if this parquet matches a placeholder from a loaded project
+    const matchingPlaceholder = Array.from(S.dataStores.values()).find(
+      ds => (ds as any)._expectedParquetFile === file.name && ds.id !== dataStore.id
+    );
+
+    if (matchingPlaceholder) {
+      // This parquet was referenced in a loaded project - apply saved configuration
+      dataStore.chosenNumericFields = [...matchingPlaceholder.chosenNumericFields];
+      dataStore.chosenCategoricalFields = [...matchingPlaceholder.chosenCategoricalFields];
+      dataStore.landSizeField = matchingPlaceholder.landSizeField;
+      dataStore.landSizeUnitLabel = matchingPlaceholder.landSizeUnitLabel;
+      dataStore.bldgSizeField = matchingPlaceholder.bldgSizeField;
+      dataStore.bldgSizeUnitLabel = matchingPlaceholder.bldgSizeUnitLabel;
+
+      // Handle "all fields" mode
+      if ((matchingPlaceholder as any)._allNumericFields) {
+        dataStore.chosenNumericFields = [...dataStore.numericFieldsFromSchema];
+      }
+      if ((matchingPlaceholder as any)._allCategoricalFields) {
+        dataStore.chosenCategoricalFields = [...dataStore.categoricalFieldsFromSchema];
+      }
+
+      // Copy to S state
+      S.chosenNumericFields = [...dataStore.chosenNumericFields];
+      S.chosenCategoricalFields = [...dataStore.chosenCategoricalFields];
+      S.landSizeField = dataStore.landSizeField;
+      S.landSizeUnitLabel = dataStore.landSizeUnitLabel;
+      S.bldgSizeField = dataStore.bldgSizeField;
+      S.bldgSizeUnitLabel = dataStore.bldgSizeUnitLabel;
+
+      // Remove the placeholder and replace with real dataStore
+      S.dataStores.delete(matchingPlaceholder.id);
+      const placeholderIndex = S.dataStoreOrder.indexOf(matchingPlaceholder.id);
+      if (placeholderIndex >= 0) {
+        S.dataStoreOrder[placeholderIndex] = dataStore.id;
+      }
+
+      // Update layers that referenced the placeholder
+      S.layers.forEach(layer => {
+        if (layer.dataStoreId === matchingPlaceholder.id) {
+          layer.dataStoreId = dataStore.id;
+        }
       });
-    } else if (S.lastCategoricalFieldsFromSchema.length > 0) {
-      openCategoricalFieldChooserModal({ 
-        rowCount: numRows, 
-        geometryCol: primaryGeom, 
-        categoricalFields: S.lastCategoricalFieldsFromSchema
-      });
+
+      // Skip wizard, load data directly
+      await loadSelectedColumns();
     } else {
-      alert('No numeric or categorical fields found in the file.');
+      // Normal flow: show wizard
+      if (S.lastNumericFieldsFromSchema.length > 0) {
+        openNumericFieldChooserModal({
+          rowCount: numRows,
+          geometryCol: primaryGeom,
+          numericFields: S.lastNumericFieldsFromSchema
+        });
+      } else if (S.lastCategoricalFieldsFromSchema.length > 0) {
+        openCategoricalFieldChooserModal({
+          rowCount: numRows,
+          geometryCol: primaryGeom,
+          categoricalFields: S.lastCategoricalFieldsFromSchema
+        });
+      } else {
+        alert('No numeric or categorical fields found in the file.');
+      }
     }
   } catch (err: any) {
     console.error('Metadata read failed:', err);

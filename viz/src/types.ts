@@ -117,3 +117,55 @@ export type SubjectSelectorControls = {
 export type SubjectSelectorOptions = {
   title?: string | null;
 };
+
+// Project file serialization types
+export type SerializedDataSource = {
+  id: string;
+  name: string;
+  parquetFile: string;
+  chosenNumericFields: string[];
+  chosenCategoricalFields: string[];
+  allNumericFields: boolean;
+  allCategoricalFields: boolean;
+  landSizeField: string | null;
+  landSizeUnitLabel: string | null;
+  bldgSizeField: string | null;
+  bldgSizeUnitLabel: string | null;
+};
+
+export type SerializedLayer = {
+  id: string;
+  name: string;
+  dataStoreId: string;
+  visible: boolean;
+  field: string | null;
+  fieldType: 'numeric' | 'categorical' | null;
+  normalizationMode: 'asis' | 'perLand' | 'perBuilding';
+  colorMode: ColorMode;
+  categoricalColorMode: CategoricalColorMode;
+  singleColorValue: string;
+  ramp: string;
+  colorDomain: { lo: number; hi: number; label: string } | null;
+  colorBreaks: number[] | null;
+  opacity: number;
+  is3DMode: boolean;
+  cachedExtrusionSettings: { multiplier: number; unit: string } | null;
+  highlightColor: string;
+  legendSortField: 'name' | 'count' | null;
+  legendSortDirection: 'asc' | 'desc';
+  hiddenLegendItems: string[];
+  customColors: Record<string, string>;
+  filters: FilterRule[];
+  filterMode: FilterMode;
+  filterActionMode: FilterActionMode;
+  filterInvert: boolean;
+};
+
+export type ProjectFileV1 = {
+  version: '1.0';
+  created: string;
+  projectName?: string;
+  dataSources: SerializedDataSource[];
+  layers: SerializedLayer[];
+  savedFilters: SavedFilterEntry[];
+};

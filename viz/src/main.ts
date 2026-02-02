@@ -87,8 +87,27 @@ import {
 import {
   initToolbarCallbacks, initializeToolbar,
   updateToolbarButtonStates, updateCursor,
+  activateTool, HOTKEYS,
 } from './toolbar';
-import { addOrUpdateSource } from './rendering';
+import {
+  addOrUpdateSource,
+  initRenderingElements, initRenderingCallbacks,
+  applyGrayRendering, applyExtrusion,
+  generatePseudoRandomColor,
+  buildCategoricalColorPairs, buildCategoricalColorExpression,
+  buildNumericColorRanges, buildNumericColorExpression,
+  buildValueExpression,
+  fitToData, setQuality,
+  computeDisplayedMetricFromProps, computeExtrusionHeightMeters,
+  scheduleUpdate, chooseBestMetricUnitForMultiplier,
+  populateFieldDropdownFromList, detectNumericFieldsFromFeatures,
+  getNumericValuesNormalized, computeStatsNormalized,
+  makeStepColorExpression, computeAndApplyAutoMultiplier,
+  makeColorExpressionFromExpr,
+  update3DUI, updateFieldTypeUI,
+  setPerspective, setOrtho, setView,
+  getMultiplierValue, getUnitFactor, getOpacityValue,
+} from './rendering';
 import {
   initLandScheduleElements,
   updateLandScheduleValueOptions, updateLandScheduleInputsFromStore,
@@ -97,6 +116,7 @@ import {
 import {
   initLayerElements, initLayerCallbacks,
   getCurrentLayer, getCurrentLayerIds, getCurrentSourceId,
+  setCurrentLayer, setLayerVisibility,
   createLayerState, persistCurrentLayerState,
   registerLayer, removeLayer,
   renderLayerList, renderLayerSelectOptions,
@@ -617,6 +637,41 @@ initFilterCallbacks({
   getParcelId,
   statsSubjectControls,
   scatterSubjectControls,
+});
+
+// Wire DOM elements and callbacks into the rendering module
+initRenderingElements({
+  fieldSelect,
+  rampSelect,
+  opacityInput,
+  multInput,
+  unitsSelect,
+  extrusionOptions,
+  colorRampOptions,
+  colorScalingOptions,
+  opacityOptions,
+  colorOptions,
+  paintDividerNumeric,
+  paintDividerCategorical,
+  paintDividerRamp,
+  paintDividerScaling,
+});
+initRenderingCallbacks({
+  getCurrentLayer,
+  getCurrentLayerIds,
+  setLayerVisibility,
+  setCurrentLayer,
+  showRenderingToast,
+  hideRenderingToast,
+  awaitFirstRenderedFeature,
+  showPopup,
+  buildPopupHTML,
+  addPopupSearchFunctionality,
+  addPopupEditFunctionality,
+  updateCursor,
+  isTextInputElement,
+  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select'),
+  hotkeys: HOTKEYS,
 });
 
 // Wire DOM elements and callbacks into the legend module
@@ -1383,523 +1438,7 @@ function addPopupEditFunctionality(parcelId: string) {
   }, 0);
 }
 
-/* --- value expression builder → see rendering.ts --- */
-
-
-function applyGrayRendering() {
-  if (!S.currentGeoJSON) return;
-  const ids = getCurrentLayerIds();
-  if (!ids) return;
-  
-  // Apply gray color and no extrusion when no field is selected
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-
-  applyMapFilters();
-  
-  // refresh which features are flagged as erroneous for current mode
-  updateErrorLayer();
-
-  if (S.activePopup && S.lastPicked) {
-    S.activePopup.setHTML(buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId)).setLngLat(S.lastPicked.lngLat);
-    addPopupSearchFunctionality();
-    addPopupEditFunctionality(S.lastPicked.parcelId);
-  }
-}
-
-function applyExtrusion() {
-  if (!S.currentGeoJSON) return;
-  const ids = getCurrentLayerIds();
-  if (!ids) return;
-  
-  // If no field is selected, apply gray rendering
-  if (!S.currentField) {
-    applyGrayRendering();
-    return;
-  }
-
-  if (S.currentFieldType === 'categorical') {
-    // For categorical fields, no extrusion - just color
-    const colorExpr = buildCategoricalColorExpression();
-    
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-  } else {
-    // For numeric fields, use the new color expression builder
-    const colorExpr = buildNumericColorExpression();
-    const valueExpr = buildValueExpression();
-    
-    const rawMult = Number(multInput.value);
-    const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
-    const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-    const heightExpr: Expression = S.is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
-
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(opacityInput.value));
-  }
-
-  // refresh which features are flagged as erroneous for current mode
-  updateErrorLayer();
-
-  if (S.activePopup && S.lastPicked) {
-    S.activePopup.setHTML(buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId)).setLngLat(S.lastPicked.lngLat);
-    addPopupSearchFunctionality();
-    addPopupEditFunctionality(S.lastPicked.parcelId);
-  }
-}
-
-
-/**
- * Pseudo-random, bright, saturated color for item `n` out of `max_n`, seeded by `seed`.
- * - Successive n are far apart via a coprime "golden step" permutation mod max_n
- * - High saturation & mid/high lightness for vivid, easy-to-tell-apart colors
- * - Deterministic across runs for the same (n, max_n, seed)
- */
-function generatePseudoRandomColor(n: number, max_n: number, seed: string): string {
-  if (max_n <= 0) throw new Error("max_n must be > 0");
-
-  // --- small helpers ---
-  const frac = (x: number) => x - Math.floor(x);
-  const clamp01 = (x: number) => Math.min(1, Math.max(0, x));
-  const gcd = (a: number, b: number): number => {
-    a = Math.abs(a) | 0;
-    b = Math.abs(b) | 0;
-    while (b !== 0) {
-      const t = a % b;
-      a = b; b = t;
-    }
-    return a || 1;
-  };
-
-  // FNV-1a 32-bit string hash → uint32
-  const fnv1a = (str: string): number => {
-    let h = 0x811c9dc5;
-    for (let i = 0; i < str.length; i++) {
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 0x01000193);
-    }
-    return h >>> 0;
-  };
-
-  // One-shot 32-bit mix -> [0,1)
-  const rand01 = (seedHash: number, i: number, salt: number): number => {
-    // Murmur-ish finalizer chain
-    let x = (seedHash ^ Math.imul(i + 0x9e3779b1, 0x85ebca6b) ^ salt) >>> 0;
-    x ^= x >>> 16; x = Math.imul(x, 0x7feb352d);
-    x ^= x >>> 15; x = Math.imul(x, 0x846ca68b);
-    x ^= x >>> 16;
-    return (x >>> 0) / 0x100000000;
-  };
-
-  // HSL → RGB [0..255] integers
-  const hslToRgb = (h: number, s: number, l: number): [number, number, number] => {
-    h = frac(h); s = clamp01(s); l = clamp01(l);
-    if (s === 0) {
-      const v = Math.round(l * 255);
-      return [v, v, v];
-    }
-    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-    const p = 2 * l - q;
-    const hue2rgb = (t: number) => {
-      t = frac(t);
-      if (t < 1/6) return p + (q - p) * 6 * t;
-      if (t < 1/2) return q;
-      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
-      return p;
-    };
-    const r = Math.round(hue2rgb(h + 1/3) * 255);
-    const g = Math.round(hue2rgb(h) * 255);
-    const b = Math.round(hue2rgb(h - 1/3) * 255);
-    return [r, g, b];
-  };
-
-  // --- core logic ---
-  const hash = fnv1a(seed);
-
-  // Permute index with a "golden step" that is coprime to max_n
-  // This spreads nearby n far apart around the hue wheel.
-  const phi = 0.618033988749895; // golden ratio conjugate
-  let step = Math.floor(max_n * phi) || 1;
-  // ensure step and max_n are coprime for a full cycle permutation
-  while (gcd(step, max_n) !== 1) step = (step + 1) % max_n || 1;
-
-  const start = hash % Math.max(1, max_n); // seed-dependent start
-  const idx = ((start + (n % max_n + max_n) % max_n * step) % max_n) >>> 0;
-
-  // Hue: uniformly cover [0,1) with a seed offset; center of each "bin" to avoid overlaps
-  const hOffset = ((hash >>> 8) & 0xFFFFFF) / 0x1000000; // [0,1)
-  const h = frac(hOffset + (idx + 0.5) / max_n);
-
-  // Keep colors vivid: high S, mid/high L with tiny seed+index jitter for variety
-  const s = 0.45 + 0.10 * rand01(hash, idx, 0xA8F1);         
-  const l = 0.56 + 0.16 * (rand01(hash, idx, 0xC0FFEE) - 0.5); 
-
-  const [r, g, b] = hslToRgb(h, s, l);
-  return `rgb(${r}, ${g}, ${b})`;
-}
-
-
-function buildCategoricalColorPairs(): Array<[string, string]> {
-  if (!S.currentField || !S.currentGeoJSON) return [];
-  
-  // Collect unique categories
-  const categories = new Set<string>();
-  for (const feature of S.currentGeoJSON.features) {
-    const value = feature.properties?.[S.currentField];
-    if (value != null && value !== '' && value !== undefined) {
-      categories.add(String(value));
-    }
-  }
-  
-  const sortedCategories = Array.from(categories).sort();
-  
-  if (sortedCategories.length === 0) {
-    return [];
-  }
-  
-  const pairs: Array<[string, string]> = [];
-  
-  if (S.categoricalColorMode === 'single') {
-    // Single color mode: map empty string to the single color
-    pairs.push(['', S.singleColorValue]);
-  } else if (S.categoricalColorMode === 'colorRamp') {
-    // Color ramp: sort categories alphabetically and assign colors linearly
-    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-    const denom = Math.max(1, sortedCategories.length - 1);
-    
-    for (let i = 0; i < sortedCategories.length; i++) {
-      const category = sortedCategories[i];
-      const colorIndex = Math.round((i / denom) * (ramp.length - 1));
-      const color = ramp[colorIndex];
-      pairs.push([category, color]);
-    }
-  } else {
-    // Random colors mode
-    for (let i = 0; i < sortedCategories.length; i++) {
-      const category = sortedCategories[i];
-      const color = generatePseudoRandomColor(i, sortedCategories.length, "my-random-seed");
-      pairs.push([category, color]);
-    }
-  }
-  
-  // Apply custom colors if they exist
-  const finalPairs: any[] = [];
-  for (const [category, defaultColor] of pairs) {
-    const color = S.customColors.has(category) ? S.customColors.get(category)! : defaultColor;
-    finalPairs.push([category, color]);
-  }
-  
-  return finalPairs;
-}
-
-function buildCategoricalColorExpression(): Expression {
-  if (!S.currentField || !S.currentGeoJSON) return ['literal', '#888'] as any;
-  
-  // Get the base color pairs from the inner function
-  const pairs = buildCategoricalColorPairs();
-  // flatten pairs into an array of strings
-  let fallbackColor = '#888';
-  if (S.categoricalColorMode === 'single') {
-    fallbackColor = S.singleColorValue;
-  }
-
-  if (S.customColors.size === 0) {
-    if (pairs.length === 0) {
-      return ['literal', '#888'] as any;
-    }
-    if (S.categoricalColorMode === 'single') {
-      return ['literal', fallbackColor] as any;
-    }
-  }
-  const val = ['to-string', ['coalesce', ['get', S.currentField], '']] as any;
-
-  // Build the final expression with fallback
-  const flattenedPairs = pairs.flat();
-  const baseResult = ['case',
-    ['==', val, ''], fallbackColor,
-    ['match', val, ...flattenedPairs, fallbackColor]
-  ] as any;
-  
-  // Add highlighting for selected parcels
-  const result = ['case',
-    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
-    baseResult
-  ] as any;
-  
-  return result;
-}
-
-function fitToData(fc: GeoJSON.FeatureCollection) {
-  const b = bbox(fc); if (!b) return;
-  S.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 800 });
-}
-
-// ---- Quality toggle (runtime supersampling) ----
-function setQuality(mode: QualityMode) {
-  S.qualityMode = mode;
-  const pr = (mode === 'high') ? HIGH_PR : FAST_PR;
-
-  // setPixelRatio is available on MapLibre >= 2; fall back with a warn otherwise
-  const anyMap = S.map as any;
-  if (typeof anyMap.setPixelRatio === 'function') {
-    anyMap.setPixelRatio(pr);
-    S.map.resize(); // apply immediately
-    // optional debug of effective value (after clamping)
-    if (typeof anyMap.getPixelRatio === 'function') {
-      console.debug('pixelRatio applied:', anyMap.getPixelRatio());
-    }
-  } else {
-    console.warn('setPixelRatio() not available in this MapLibre build; toggle requires recreating the map.');
-  }
-
-  // reflect in UI button, if present
-  const btn = document.getElementById('btn-quality') as HTMLButtonElement | null;
-  if (btn) btn.textContent = (mode === 'high') ? 'Quality: High' : 'Quality: Fast';
-}
-
-/* ---------------- Camera presets ---------------- */
-function setPerspective() { S.map.easeTo({ pitch: 60, duration: 600 }); }
-function setOrtho() { S.map.easeTo({ pitch: 0, duration: 600 }); }
-function setView(which: string) {
-  const views: Record<string, Partial<maplibregl.CameraOptions>> = {
-    top: { pitch: 0, bearing: 0 }, perspective: { pitch: 60, bearing: -30 },
-    north: { pitch: 60, bearing: 0 }, east: { pitch: 60, bearing: 90 },
-    south: { pitch: 60, bearing: 180 }, west: { pitch: 60, bearing: 270 }
-  };
-  S.map.easeTo({ duration: 700, ...(views[which] || views.perspective) });
-}
-
-/* ---------------- Helpers ---------------- */
-function computeDisplayedMetricFromProps(props: Record<string, any>): number | null {
-  if (!S.currentField) return null;
-  let base = numOrNull(props[S.currentField]);
-  if (base == null) return null;
-
-  if (S.normalizationMode === 'perLand' && S.landSizeField) {
-    const d = numOrNull(props[S.landSizeField]);
-    if (d == null || d <= 0) return null;
-    base = base / d;
-  } else if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
-    const d = numOrNull(props[S.bldgSizeField]);
-    if (d == null || d <= 0) return null;
-    base = base / d;
-  }
-  return base;
-}
-
-function computeExtrusionHeightMeters(metricValue: number): number {
-  const unitFactor = UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-  const mult = Number(multInput.value);
-  const multiplier = Number.isFinite(mult) ? mult : 0;
-  return metricValue * multiplier * unitFactor;
-}
-
-// Queue an update; newer calls replace older ones.
-function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
-  if (!S.currentGeoJSON) return;   // <- hard stop until data exists
-
-  S._pendingMode = mode;
-  S._pendingRefreshLegend = refreshLegend;
-  if (S._updTimer) clearTimeout(S._updTimer);
-  S._updTimer = window.setTimeout(() => {
-    S._updTimer = null;
-    // Clear legend visibility when refreshing colorization
-    if (S._pendingRefreshLegend) {
-      clearLegendVisibility();
-    }
-    
-    if (S._pendingMode === 'recomputeAndAutoScale') {
-      computeAndApplyAutoMultiplier('auto', HEIGHT_CAP_METERS, HEIGHT_PCTL);
-      if (S._pendingRefreshLegend) {
-        updateFloatingLegend();
-      }
-    } else {
-      applyExtrusionWithVisibility();
-      if (S._pendingRefreshLegend) {
-        updateFloatingLegend();
-      }
-    }
-  }, debounceMs);
-}
-
-function chooseBestMetricUnitForMultiplier(p99: number, capMeters = 1000): { unit: MetricUnitKey; multiplier: number } {
-  const candidates: MetricUnitKey[] = ['centimeters', 'meters', 'kilometers'];
-  const RANGE_MIN = 1, RANGE_MAX = 100;
-
-  let best = { unit: 'centimeters' as MetricUnitKey, multiplier: Infinity, score: Infinity };
-
-  for (const u of candidates) {
-    const unitFactor = UNIT_TO_METERS[u]; // meters per unit
-    const mult = capMeters / (unitFactor * p99);
-
-    const inRange = mult >= RANGE_MIN && mult <= RANGE_MAX;
-    const distToRange = inRange ? 0 : Math.min(Math.abs(mult - RANGE_MIN), Math.abs(mult - RANGE_MAX));
-    const tieBias = Math.abs(Math.log10(Math.max(1e-12, mult)) - 1); // prefer closer to ~10 if inside
-
-    // Primary: be inside [1,100]; Secondary: closer to the band; Tertiary: closer to 10 within the band
-    const score = (inRange ? 0 : 1) * 1e6 + distToRange * 1e3 + (inRange ? tieBias : 0);
-
-    if (score < best.score) best = { unit: u, multiplier: mult, score };
-  }
-  return { unit: best.unit, multiplier: best.multiplier };
-}
-
-function populateFieldDropdownFromList(list: string[]) {
-  fieldSelect.replaceChildren();
-  if (!list.length) fieldSelect.append(new Option('No fields selected', ''));
-  else {
-    fieldSelect.append(new Option('— choose —', ''));
-    for (const n of list) fieldSelect.append(new Option(n, n));
-  }
-}
-
-function detectNumericFieldsFromFeatures(features: GeoJSON.Feature[]): string[] {
-  const counts: Record<string, number> = {}, nums: Record<string, number> = {};
-  const isNumLike = (v: any) =>
-    (typeof v === 'number' && Number.isFinite(v)) ||
-    (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)));
-
-  for (const f of features) {
-    const p = (f.properties || {}) as Record<string, unknown>;
-    for (const [k, v] of Object.entries(p)) {
-      counts[k] = (counts[k] ?? 0) + 1;
-      if (isNumLike(v)) nums[k] = (nums[k] ?? 0) + 1;
-    }
-  }
-  return Object.keys(counts)
-    .filter(k => (nums[k] ?? 0) >= Math.max(1, Math.ceil(0.6 * (counts[k] || 0))))
-    .sort();
-}
-
-
-function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding'): number[] {
-  const vals: number[] = [];
-  for (const f of fc.features) {
-    const p = (f.properties as any) || {};
-    let base = Number(p?.[field]);
-    if (!Number.isFinite(base)) continue;
-
-    if (mode === 'perLand' && S.landSizeField) {
-      const d = Number(p?.[S.landSizeField]);
-      if (!Number.isFinite(d) || d <= 0) continue;
-      base = base / d;
-    } else if (mode === 'perBuilding' && S.bldgSizeField) {
-      const d = Number(p?.[S.bldgSizeField]);
-      if (!Number.isFinite(d) || d <= 0) continue;
-      base = base / d;
-    }
-    vals.push(base);
-  }
-  return vals;
-}
-
-function computeStatsNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding') {
-  const vals = getNumericValuesNormalized(fc, field, mode);
-  let min = Infinity, max = -Infinity;
-  for (const v of vals) { if (v < min) min = v; if (v > max) max = v; }
-  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) { min = 0; max = min + 1; }
-  return { min, max };
-}
-
-// Build a step expression: first color is < break1, then each break raises the color.
-function makeStepColorExpression(valueExpr: Expression, colors: string[], breaks: number[]): Expression {
-  const c = colors.slice();                 // copy
-  const b = breaks.slice();                 // copy
-  if (b.length === 0) return ['step', valueExpr, c[0]] as any;
-
-  const out: (string | number | Expression)[] = ['step', valueExpr, c[0]];
-  // pair up thresholds with subsequent colors
-  for (let i = 0; i < b.length && i + 1 < c.length; i++) {
-    out.push(b[i], c[i + 1]);
-  }
-  return out as any;
-}
-
-// Auto-multiplier so p-th percentile reaches capMeters, in given units
-function computeAndApplyAutoMultiplier(
-  unitsKeyOrAuto: 'auto' | keyof typeof UNIT_TO_METERS = 'auto',
-  capMeters = 1000,
-  p = 99
-) {
-  if (!S.currentGeoJSON || !S.currentField) return;
-
-  // values for the CURRENT normalization mode
-  const vals = getNumericValuesNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
-  const pVal = percentile(vals, p);
-  if (!Number.isFinite(pVal) || pVal <= 0) return;
-
-  // ---- Color domain / breaks ----
-  if (S.colorMode === 'quantiles') {
-    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-    S.colorBreaks = quantileBreaks(vals, ramp.length, 1, 99); // p1..p99 equal-frequency bins
-    S.colorDomain = null;
-  } else {
-    // continuous = EQUAL INTERVAL classes across p1..p99
-    const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-    const pLow = percentile(vals, 1);
-    const pHigh = percentile(vals, 99);
-    let lo = Number.isFinite(pLow) ? pLow : 0;
-    let hi = Number.isFinite(pHigh) ? pHigh : 1;
-    if (!(hi > lo)) { lo = 0; hi = 1; }
-    S.colorDomain = { lo, hi, label: 'p1–p99' };
-   
-    // build equal-interval thresholds: colors => k classes => k-1 breaks
-    const classes = Math.max(2, ramp.length);
-    const step = (hi - lo) / classes;
-    const breaks: number[] = [];
-    for (let i = 1; i < classes; i++) breaks.push(lo + step * i);
-    S.colorBreaks = breaks;
-  }
-
-  // ---- Height autoscale: anchor p-th percentile to capMeters ----
-  let unitKey: keyof typeof UNIT_TO_METERS;
-  let multiplier: number;
-  if (unitsKeyOrAuto === 'auto') {
-    const best = chooseBestMetricUnitForMultiplier(pVal, capMeters);
-    unitKey = best.unit;
-    multiplier = best.multiplier;
-  } else {
-    unitKey = unitsKeyOrAuto;
-    const unitFactor = UNIT_TO_METERS[unitKey];
-    multiplier = capMeters / (unitFactor * pVal);
-  }
-
-  unitsSelect.value = unitKey;
-  multInput.value = String(multiplier);
-
-  // stats for legend fallback
-  S.currentStats = computeStatsNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
-
-  console.debug('autoScale', {
-    mode: S.normalizationMode,
-    field: S.currentField,
-    pctl: p,
-    pVal,
-    unit: unitKey,
-    multiplier,
-    colorMode: S.colorMode,
-    colorBreaks: S.colorBreaks,
-    colorDomain: S.colorDomain,
-    stats: S.currentStats
-  });
-
-  applyExtrusionWithVisibility();
-}
-
-function makeColorExpressionFromExpr(valueExpr: Expression, colors: string[], min: number, max: number): Expression {
-  const n = colors.length - 1;
-  const stops: (number | string)[] = [];
-  for (let i = 0; i < colors.length; i++) {
-    const t = i / n;
-    stops.push(min + t * (max - min), colors[i]);
-  }
-  // Clamp value into [min,max] to avoid outliers crushing the ramp
-  const clamped: Expression = ['max', min, ['min', max, valueExpr]] as any;
-  return ['interpolate', ['linear'], clamped, ...stops] as any;
-}
+/* --- rendering functions → see rendering.ts --- */
 
 
 function currentModeErrorMessage(props: Record<string, any>): string | null {
@@ -2016,14 +1555,6 @@ function onMultInput() {
 }
 
 
-function update3DUI() {
-  if (S.currentFieldType === 'numeric') {
-    extrusionOptions.style.display = S.is3DMode ? 'grid' : 'none';
-  } else {
-    extrusionOptions.style.display = 'none';
-  }
-}
-
 function computeAndSetGoodExtrusionDefaults() {
   if (!S.currentGeoJSON || !S.currentField || S.currentFieldType !== 'numeric') return;
   
@@ -2043,68 +1574,6 @@ function computeAndSetGoodExtrusionDefaults() {
   
   // Cache the settings
   S.cachedExtrusionSettings = { multiplier, unit };
-}
-
-function updateFieldTypeUI() {
-  const numericOptions = document.getElementById('numericOptions');
-  const categoricalOptions = document.getElementById('categoricalOptions');
-  
-  if (!S.currentField) {
-    // Hide all options when no field is selected
-    if (numericOptions) numericOptions.style.display = 'none';
-    if (categoricalOptions) categoricalOptions.style.display = 'none';
-    if (colorOptions) colorOptions.style.display = 'none';
-    if (colorRampOptions) colorRampOptions.style.display = 'none';
-    if (colorScalingOptions) colorScalingOptions.style.display = 'none';
-    if (opacityOptions) opacityOptions.style.display = 'none';
-    if (paintDividerNumeric) paintDividerNumeric.style.display = 'none';
-    if (paintDividerCategorical) paintDividerCategorical.style.display = 'none';
-    if (paintDividerRamp) paintDividerRamp.style.display = 'none';
-    if (paintDividerScaling) paintDividerScaling.style.display = 'none';
-    extrusionOptions.style.display = 'none';
-  } else {
-    const showNumericOptions = S.currentFieldType === 'numeric';
-    const showCategoricalOptions = S.currentFieldType === 'categorical';
-    const showColorRampOptions = showNumericOptions || (showCategoricalOptions && S.categoricalColorMode === 'colorRamp');
-    const showColorScalingOptions = showNumericOptions;
-    const showOpacityOptions = true;
-    
-    if (colorRampOptions) colorRampOptions.style.display = showColorRampOptions ? 'grid' : 'none';
-    if (colorScalingOptions) colorScalingOptions.style.display = showColorScalingOptions ? 'grid' : 'none';
-    if (opacityOptions) opacityOptions.style.display = showOpacityOptions ? 'grid' : 'none';
-    
-    if (showNumericOptions) {
-      if (numericOptions) numericOptions.style.display = 'grid';
-      if (categoricalOptions) categoricalOptions.style.display = 'none';
-      if (colorOptions) colorOptions.style.display = 'none';
-      update3DUI(); // This will show/hide extrusion options based on 3D mode
-    } else if (showCategoricalOptions) {
-      if (numericOptions) numericOptions.style.display = 'none';
-      if (categoricalOptions) categoricalOptions.style.display = 'grid';
-      if (colorOptions) colorOptions.style.display = 'none';
-      extrusionOptions.style.display = 'none';
-      
-      // Show/hide color options based on selected mode
-      if (colorOptions) {
-        colorOptions.style.display = S.categoricalColorMode === 'single' ? 'block' : 'none';
-      }
-    }
-
-    const sectionVisibility = [
-      showNumericOptions,
-      showCategoricalOptions,
-      showColorRampOptions,
-      showColorScalingOptions,
-      showOpacityOptions
-    ];
-    const dividers = [paintDividerNumeric, paintDividerCategorical, paintDividerRamp, paintDividerScaling];
-    dividers.forEach((divider, index) => {
-      if (!divider) return;
-      const hasPrev = sectionVisibility[index];
-      const hasNext = sectionVisibility.slice(index + 1).some(Boolean);
-      divider.style.display = hasPrev && hasNext ? 'block' : 'none';
-    });
-  }
 }
 
 /* ---------------- Events ---------------- */
@@ -2724,85 +2193,6 @@ renderDataStoreList();
 refreshStatisticsPanel();
 refreshScatterPanel();
 refreshLandSchedulePanel();
-
-function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
-  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return [];
-  
-  const ramp = COLOR_RAMPS[rampSelect.value] || COLOR_RAMPS['Viridis'];
-  let ranges: Array<{ min: number; max: number; color: string; rangeKey: string }> = [];
-  
-  if (S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length) {
-    // Use quantile breaks for ranges
-    const breaks = [S.currentStats.min, ...S.colorBreaks, S.currentStats.max];
-    for (let i = 0; i < breaks.length - 1; i++) {
-      const min = breaks[i];
-      const max = breaks[i + 1];
-      const rangeKey = `range_${i}`;
-      const defaultColor = ramp[Math.min(i, ramp.length - 1)];
-      const color = S.customColors.get(rangeKey) || defaultColor;
-      ranges.push({ min, max, color, rangeKey });
-    }
-  } else {
-    // Linear intervals - create 10 ranges
-    const min = S.currentStats.min;
-    const max = S.currentStats.max;
-    const step = (max - min) / 10;
-    
-    for (let i = 0; i < 10; i++) {
-      const rangeMin = min + (step * i);
-      const rangeMax = i === 9 ? max : min + (step * (i + 1));
-      const rangeKey = `range_${i}`;
-      const colorIndex = Math.floor((i / 9) * (ramp.length - 1));
-      const defaultColor = ramp[colorIndex];
-      const color = S.customColors.get(rangeKey) || defaultColor;
-      ranges.push({ min: rangeMin, max: rangeMax, color, rangeKey });
-    }
-  }
-  
-  return ranges;
-}
-
-function buildNumericColorExpression(): Expression {
-  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return ['literal', '#888'] as any;
-  
-  const ranges = buildNumericColorRanges();
-  if (ranges.length === 0) {
-    return ['literal', '#888'] as any;
-  }
-  
-  const valueExpr = buildValueExpression();
-  
-  // Build a step expression with the ranges
-  const cases: any[] = ['case'];
-  
-  for (let i = 0; i < ranges.length; i++) {
-    const range = ranges[i];
-    if (i === ranges.length - 1) {
-      // Last range includes the max value
-      cases.push(['all',
-        ['>=', valueExpr, range.min],
-        ['<=', valueExpr, range.max]
-      ], ['literal', range.color]);
-    } else {
-      cases.push(['all',
-        ['>=', valueExpr, range.min],
-        ['<', valueExpr, range.max]
-      ], ['literal', range.color]);
-    }
-  }
-  
-  // Default color
-  cases.push(['literal', '#888']);
-  
-  // Add highlighting for selected parcels
-  const baseResult = cases as any;
-  const result = ['case',
-    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
-    baseResult
-  ] as any;
-  
-  return result;
-}
 
 /* ---------------- Vertical Toolbar (see ./toolbar.ts) ---------------- */
 

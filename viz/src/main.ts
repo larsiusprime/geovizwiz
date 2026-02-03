@@ -57,7 +57,7 @@ import {
   createWindowManager, initWindowCallbacks, initPositionElements,
   positionSettingsPanel, positionStatisticsPanel,
   positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel,
-  updateFiltersPanelLayout,
+  updateFiltersPanelLayout, refreshWindowMinHeight,
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
   type WindowManager
@@ -489,6 +489,7 @@ const setPaintSectionCollapsed = (collapsed: boolean) => {
   paintSectionContent.style.display = collapsed ? 'none' : 'grid';
   paintSectionToggle.classList.toggle('is-collapsed', collapsed);
   paintSectionToggle.title = collapsed ? 'Expand Paint' : 'Collapse Paint';
+  refreshWindowMinHeight(controlsEl);
 };
 
 setPaintSectionCollapsed(S.isPaintCollapsed);

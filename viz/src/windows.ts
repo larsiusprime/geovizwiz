@@ -193,6 +193,11 @@ export function initPositionElements(elements: PositionElements) {
   els = elements;
 }
 
+export function refreshWindowMinHeight(element: HTMLElement) {
+  element.style.height = '';
+  ensureWindowMinHeight(element);
+}
+
 export function positionSettingsPanel() {
   if (!els.controlsEl || !els.settingsControlsEl) return;
   if (isPinned(els.settingsControlsEl)) return;

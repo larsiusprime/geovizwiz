@@ -401,6 +401,7 @@ const landScheduleTableSelect = document.getElementById('landScheduleTableSelect
 const landScheduleTableSelectRow = document.getElementById('landScheduleTableSelectRow') as HTMLDivElement;
 const landScheduleAddTableButton = document.getElementById('landScheduleAddTable') as HTMLButtonElement;
 const landScheduleTableContainer = document.getElementById('landScheduleTableContainer') as HTMLDivElement;
+const landScheduleTablesSection = document.getElementById('landScheduleTablesSection') as HTMLDivElement;
 const landScheduleTablesToggle = document.getElementById('landScheduleTablesToggle') as HTMLButtonElement;
 const landScheduleTablesContent = document.getElementById('landScheduleTablesContent') as HTMLDivElement;
 const landScheduleCurveToggle = document.getElementById('landScheduleCurveToggle') as HTMLButtonElement;
@@ -875,6 +876,7 @@ initLandScheduleElements({
   landScheduleAddTableButton,
   landScheduleTableContainer,
   landScheduleCurveChart,
+  landScheduleTablesSection,
 });
 initLandScheduleCallbacks({
   showFiltersPanel: showFilters,

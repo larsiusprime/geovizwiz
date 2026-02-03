@@ -51,6 +51,7 @@ let landScheduleTableSelectRow: HTMLDivElement;
 let landScheduleAddTableButton: HTMLButtonElement;
 let landScheduleTableContainer: HTMLDivElement;
 let landScheduleCurveChart: HTMLDivElement;
+let landScheduleTablesSection: HTMLDivElement;
 
 let showFiltersPanel: (() => void) | null = null;
 
@@ -63,6 +64,7 @@ export function initLandScheduleElements(els: {
   landScheduleAddTableButton: HTMLButtonElement;
   landScheduleTableContainer: HTMLDivElement;
   landScheduleCurveChart: HTMLDivElement;
+  landScheduleTablesSection: HTMLDivElement;
 }) {
   landScheduleFieldSelect = els.landScheduleFieldSelect;
   landScheduleValueSelect = els.landScheduleValueSelect;
@@ -72,6 +74,7 @@ export function initLandScheduleElements(els: {
   landScheduleAddTableButton = els.landScheduleAddTableButton;
   landScheduleTableContainer = els.landScheduleTableContainer;
   landScheduleCurveChart = els.landScheduleCurveChart;
+  landScheduleTablesSection = els.landScheduleTablesSection;
 }
 
 export function initLandScheduleCallbacks(cbs: { showFiltersPanel?: () => void }) {
@@ -476,12 +479,14 @@ export function renderLandScheduleTables() {
   landScheduleTableContainer.replaceChildren();
 
   if (!entry) {
+    landScheduleTablesSection.style.display = 'none';
     landScheduleTableSelectRow.style.display = 'none';
     landScheduleAddTableButton.disabled = true;
     updateLandScheduleCurve(null);
     return;
   }
 
+  landScheduleTablesSection.style.display = 'grid';
   landScheduleAddTableButton.disabled = false;
 
   if (entry.tables.length === 0) {

@@ -17,6 +17,7 @@ export const S = {
   // --- Map ---
   map: null! as maplibregl.Map,
   currentBasemap: 'streets' as 'streets' | 'satellite' | 'none',
+  lastBasemapMode: 'streets' as 'streets' | 'satellite',
 
   // --- Layers & Data ---
   layers: new Map<string, LayerState>(),
@@ -77,7 +78,7 @@ export const S = {
   // --- Window state ---
   isLayersMinimized: false,
   isSettingsMenuMinimized: false,
-  isPaintMinimized: false,
+  isPaintCollapsed: false,
   isLegendVisible: true,
   isLegendMinimized: false,
   isStatisticsMinimized: true,

@@ -128,39 +128,29 @@
       background: rgba(240, 240, 240, 0.9);
     }
 
-    #controls fieldset,
-    #paintControls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
-    #controls label,
-    #paintControls label { display:block; font-size: 12px; color: #333; }
+    #controls fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 6px; }
+    #controls label { display:block; font-size: 12px; color: #333; }
     #controls select,
     #controls input[type="number"],
-    #controls input[type="text"],
-    #paintControls select,
-    #paintControls input[type="number"],
-    #paintControls input[type="text"] {
+    #controls input[type="text"] {
       width: 100%; padding: 6px 8px; border-radius: 8px; border: 1px solid #ddd; font-size: 14px;
     }
 
-    #controls .row,
-    #paintControls .row {
+    #controls .row {
       display: grid;
       grid-template-columns: minmax(0,1fr) minmax(0,1fr);
       gap: var(--gap);
       align-items: end;
     }
-    #controls .row > *,
-    #paintControls .row > * { min-width: 0; }
+    #controls .row > * { min-width: 0; }
 
     #controls .buttons,
-    #paintControls .buttons,
     #settingsControls .buttons { display: flex; flex-wrap: wrap; gap: 6px; }
     #controls button,
-    #paintControls button,
     #settingsControls button {
       border: 1px solid #ddd; background: #f8f8f8; padding: 6px 8px; border-radius: 8px; cursor: pointer;
     }
     #controls button:hover,
-    #paintControls button:hover,
     #settingsControls button:hover { background: #f0f0f0; }
 
     .eye-button {
@@ -236,6 +226,61 @@
     .layer-tools {
       display: flex;
       gap: 4px;
+    }
+
+    .basemap-row .layer-name {
+      font-style: italic;
+    }
+
+    .basemap-toggles {
+      display: inline-flex;
+      gap: 6px;
+    }
+
+    .basemap-toggle {
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      border-radius: 6px;
+      padding: 2px 4px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .basemap-toggle img {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    .basemap-toggle.active {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.15);
+    }
+
+    .paint-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 600;
+      color: #111827;
+      margin-bottom: 6px;
+    }
+
+    .paint-collapse-toggle {
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #4b5563;
+      padding: 2px 4px;
+      transition: transform 0.2s ease;
+    }
+
+    .paint-collapse-toggle.is-collapsed {
+      transform: rotate(-90deg);
     }
 
     #controls .layer-action-btn {
@@ -910,10 +955,6 @@
           <img src="./src/svg/settings.svg" alt="Settings" />
         </button>
 
-        <button id="btnPaintMenu" class="toolbar-button" title="Show/hide paint">
-          <img src="./src/svg/paint.svg" alt="Paint" />
-        </button>
-               
         <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
           <img src="./src/svg/legend.svg" alt="Legend" />
         </button>
@@ -977,6 +1018,137 @@
       </fieldset>
 
       <fieldset id="legend">      </fieldset>
+
+      <div class="divider"></div>
+
+      <div class="paint-section">
+        <div class="paint-section-header">
+          <span>Paint</span>
+          <button id="paintSectionToggle" class="paint-collapse-toggle" type="button" title="Collapse Paint">▼</button>
+        </div>
+        <div id="paintSectionContent" style="display: grid; gap: 10px;">
+          <!-- Numeric field options -->
+          <fieldset id="numericOptions">
+            <label>Field type: numeric</label>
+
+            <!-- Normalization choices -->
+            <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
+                <span>as-is</span>
+              </label>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="normMode" id="norm-land" value="perLand" disabled />
+                <span>…per land size <em id="normLandUnit">(unit)</em></span>
+              </label>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" disabled />
+                <span>…per building size <em id="normBldgUnit">(unit)</em></span>
+              </label>
+            </div>
+
+            <fieldset class="row">
+              <div>
+                <br/>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="checkbox" id="enable3D" />
+                  <span>3D enabled</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset class="row" id="extrusionOptions" style="display: none;">
+              <div>
+                <label for="mult">Extrusion multiplier</label>
+                <input id="mult" type="number" step=".1" value="1" />
+              </div>
+              <div>
+                <label for="units">Units</label>
+                <select id="units">
+                  <option value="centimeters" selected>centimeters</option>
+                  <option value="meters">meters</option>
+                  <option value="inches">inches</option>
+                  <option value="feet">feet</option>
+                  <option value="kilometers">kilometers</option>
+                  <option value="miles">miles</option>
+                  <option value="stories">stories (~3.3m)</option>
+                </select>
+              </div>
+            </fieldset>
+          </fieldset>
+
+          <!-- Categorical field options -->
+          <fieldset id="categoricalOptions" style="display: none;">
+            <label>Field type: categorical</label>
+            <div style="display:grid; gap:6px;">
+              <label>Color method</label>
+                 <div style="display:grid; gap:6px;">
+                 <label style="display:flex; gap:8px; align-items:center;">
+                   <input type="radio" name="categoricalColorMode" id="cat-random" value="random" checked>
+                   <span>Random color</span>
+                 </label>
+                 <label style="display:flex; gap:8px; align-items:center;">
+                   <input type="radio" name="categoricalColorMode" id="cat-single" value="single">
+                   <span>Single color</span>
+                 </label>
+    			 <div style="display:grid; gap:6px;">
+                 <label style="display:flex; gap:8px; align-items:center;">
+                   <input type="radio" name="categoricalColorMode" id="cat-ramp" value="colorRamp">
+                   <span>Color ramp</span>
+                 </label>
+               </div>
+               
+                           <!-- Color options (only shown for single color) -->
+                <div id="colorOptions" style="display: none;">
+                  <label>Color options</label>
+                  <div style="display:grid; gap:8px;">
+                    <input type="color" id="colorPicker" value="#3b82f6" style="width:100%; height:40px; border:2px solid #ddd; border-radius:6px; cursor:pointer;">
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                      <button id="btnCancelColorPicker" style="font-size:12px; padding:4px 8px;">Cancel</button>
+                      <button id="btnConfirmColorPicker" style="font-size:12px; padding:4px 8px;">OK</button>
+                    </div>
+                  </div>
+                </div>
+            </div>
+          </fieldset>
+
+          <div id="paintDividerCategorical" class="divider"></div>
+
+          <!-- Shared visualization options -->
+          <fieldset id="colorRampOptions" style="display: none;">
+            <label>Color ramp</label>
+            <div>
+              <select id="ramp"></select>
+            </div>
+          </fieldset>
+
+          <div id="paintDividerRamp" class="divider"></div>
+
+          <fieldset id="colorScalingOptions" style="display: none;">
+            <label>Color scaling</label>
+            <div style="display:grid; gap:6px;">
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="colorMode" id="color-cont" value="continuous">
+                <span>Linear (min→max, clamped p1–p99)</span>
+              </label>
+              <label style="display:flex; gap:8px; align-items:center;">
+                <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
+                <span>Quantiles (equal-frequency, p1–p99)</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <div id="paintDividerScaling" class="divider"></div>
+
+          <fieldset id="opacityOptions" style="display: none;">
+            <label>Opacity</label>
+            <div class="inline">
+              <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
+              <output id="opacityVal">0.9</output>
+            </div>
+          </fieldset>
+        </div>
+      </div>
       </div>
       <div class="window-resize-edge" aria-hidden="true"></div>
       <div class="window-resize-handle" aria-hidden="true">
@@ -1009,14 +1181,6 @@
           <button data-view="east" type="button">East</button>
           <button data-view="south" type="button">South</button>
           <button data-view="west" type="button">West</button>
-        </div>
-      </fieldset>
-      <fieldset>
-        <label>Basemap</label>
-        <div class="buttons">
-          <button data-basemap="streets" type="button">Streets</button>
-          <button data-basemap="satellite" type="button">Satellite</button>
-          <button data-basemap="none" type="button">Nothing</button>
         </div>
       </fieldset>
       <fieldset>
@@ -1085,148 +1249,6 @@
       </div>
       <div id="filtersList" class="filters-list"></div>
       <button id="addFilterButton" type="button">Add condition</button>
-    </div>
-    <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true">
-      <img src="./src/svg/expand.svg" alt="" />
-    </div>
-  </div>
-
-  <div id="paintControls" class="viz-window" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
-      <div style="font-weight: 600; font-size: 13px;">Paint</div>
-      <div class="window-actions">
-        <button id="btnPinPaint" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img alt="Pin menu" />
-        </button>
-        <button id="btnMinimizePaint" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M7 10l5 5 5-5z"/>
-          </svg>
-        </button>
-      </div>
-    </div>
-    <div id="paintContent" data-window-content style="padding: 12px; display: grid; gap: 10px;">
-      <!-- Numeric field options -->
-      <fieldset id="numericOptions">
-        <label>Field type: numeric</label>
-
-        <!-- Normalization choices -->
-        <div id="normGroup" style="display:grid; gap:6px; margin-top:6px;">
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="normMode" id="norm-asis" value="asis" checked />
-            <span>as-is</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="normMode" id="norm-land" value="perLand" disabled />
-            <span>…per land size <em id="normLandUnit">(unit)</em></span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="normMode" id="norm-bldg" value="perBuilding" disabled />
-            <span>…per building size <em id="normBldgUnit">(unit)</em></span>
-          </label>
-        </div>
-
-        <fieldset class="row">
-          <div>
-            <br/>
-            <label style="display:flex; gap:8px; align-items:center;">
-              <input type="checkbox" id="enable3D" />
-              <span>3D enabled</span>
-            </label>
-          </div>
-        </fieldset>
-
-        <fieldset class="row" id="extrusionOptions" style="display: none;">
-          <div>
-            <label for="mult">Extrusion multiplier</label>
-            <input id="mult" type="number" step=".1" value="1" />
-          </div>
-          <div>
-            <label for="units">Units</label>
-            <select id="units">
-              <option value="centimeters" selected>centimeters</option>
-              <option value="meters">meters</option>
-              <option value="inches">inches</option>
-              <option value="feet">feet</option>
-              <option value="kilometers">kilometers</option>
-              <option value="miles">miles</option>
-              <option value="stories">stories (~3.3m)</option>
-            </select>
-          </div>
-        </fieldset>
-      </fieldset>
-
-      <!-- Categorical field options -->
-      <fieldset id="categoricalOptions" style="display: none;">
-        <label>Field type: categorical</label>
-        <div style="display:grid; gap:6px;">
-          <label>Color method</label>
-             <div style="display:grid; gap:6px;">
-             <label style="display:flex; gap:8px; align-items:center;">
-               <input type="radio" name="categoricalColorMode" id="cat-random" value="random" checked>
-               <span>Random color</span>
-             </label>
-             <label style="display:flex; gap:8px; align-items:center;">
-               <input type="radio" name="categoricalColorMode" id="cat-single" value="single">
-               <span>Single color</span>
-             </label>
-			 <div style="display:grid; gap:6px;">
-             <label style="display:flex; gap:8px; align-items:center;">
-               <input type="radio" name="categoricalColorMode" id="cat-ramp" value="colorRamp">
-               <span>Color ramp</span>
-             </label>
-           </div>
-           
-                       <!-- Color options (only shown for single color) -->
-            <div id="colorOptions" style="display: none;">
-              <label>Color options</label>
-              <div style="display:grid; gap:8px;">
-                <input type="color" id="colorPicker" value="#3b82f6" style="width:100%; height:40px; border:2px solid #ddd; border-radius:6px; cursor:pointer;">
-                <div style="display:flex; gap:8px; justify-content:flex-end;">
-                  <button id="btnCancelColorPicker" style="font-size:12px; padding:4px 8px;">Cancel</button>
-                  <button id="btnConfirmColorPicker" style="font-size:12px; padding:4px 8px;">OK</button>
-                </div>
-              </div>
-            </div>
-        </div>
-      </fieldset>
-
-      <div id="paintDividerCategorical" class="divider"></div>
-
-      <!-- Shared visualization options -->
-      <fieldset id="colorRampOptions" style="display: none;">
-        <label>Color ramp</label>
-        <div>
-          <select id="ramp"></select>
-        </div>
-      </fieldset>
-
-      <div id="paintDividerRamp" class="divider"></div>
-
-      <fieldset id="colorScalingOptions" style="display: none;">
-        <label>Color scaling</label>
-        <div style="display:grid; gap:6px;">
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="colorMode" id="color-cont" value="continuous">
-            <span>Linear (min→max, clamped p1–p99)</span>
-          </label>
-          <label style="display:flex; gap:8px; align-items:center;">
-            <input type="radio" name="colorMode" id="color-quant" value="quantiles" checked>
-            <span>Quantiles (equal-frequency, p1–p99)</span>
-          </label>
-        </div>
-      </fieldset>
-
-      <div id="paintDividerScaling" class="divider"></div>
-
-      <fieldset id="opacityOptions" style="display: none;">
-        <label>Opacity</label>
-        <div class="inline">
-          <input id="opacity" type="range" min="0" max="1" step="0.05" value="0.9" />
-          <output id="opacityVal">0.9</output>
-        </div>
-      </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
     <div class="window-resize-handle" aria-hidden="true">

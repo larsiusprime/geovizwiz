@@ -8,7 +8,7 @@
  */
 import { S } from './state';
 import { SOURCE_ID, LAYER_ID, ERROR_LAYER_ID } from './config';
-import type { LayerState, DataStore } from './types';
+import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 import { cloneFilters } from './filters';
 import { refreshLandSchedulePanel } from './land-schedule';
@@ -16,6 +16,8 @@ import { refreshLandSchedulePanel } from './land-schedule';
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 const CHART_ICON = new URL('./svg/chart.svg', import.meta.url).href;
 const SCATTER_ICON = new URL('./svg/scatter.svg', import.meta.url).href;
+const STREET_ICON = new URL('./svg/streets.svg', import.meta.url).href;
+const SATELLITE_ICON = new URL('./svg/globe.svg', import.meta.url).href;
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initLayerElements)            */
@@ -95,6 +97,7 @@ let _applyExtrusionWithVisibility: () => void;
 let _closeAddLayerModal: () => void;
 let _createEyeButton: (isHidden: boolean, title: string) => HTMLButtonElement;
 let _setEyeButtonIcon: (button: HTMLButtonElement, isHidden: boolean) => void;
+let _setBasemapMode: (mode: BasemapMode) => void;
 
 export function initLayerCallbacks(cbs: {
   setSizeState: (bldgField: string | null, bldgUnit: string | null, landField: string | null, landUnit: string | null) => void;
@@ -117,6 +120,7 @@ export function initLayerCallbacks(cbs: {
   closeAddLayerModal: () => void;
   createEyeButton: (isHidden: boolean, title: string) => HTMLButtonElement;
   setEyeButtonIcon: (button: HTMLButtonElement, isHidden: boolean) => void;
+  setBasemapMode: (mode: BasemapMode) => void;
 }) {
   _setSizeState = cbs.setSizeState;
   _populateFieldDropdownFromList = cbs.populateFieldDropdownFromList;
@@ -138,6 +142,7 @@ export function initLayerCallbacks(cbs: {
   _closeAddLayerModal = cbs.closeAddLayerModal;
   _createEyeButton = cbs.createEyeButton;
   _setEyeButtonIcon = cbs.setEyeButtonIcon;
+  _setBasemapMode = cbs.setBasemapMode;
 }
 
 /* ------------------------------------------------------------------ */
@@ -646,149 +651,197 @@ export function renderLayerList() {
     _renderScatterLayerOptions();
     _refreshStatisticsPanel();
     _refreshScatterPanel();
-    return;
+  } else {
+    S.layerOrder.forEach((layerId, index) => {
+      const layer = S.layers.get(layerId);
+      if (!layer) return;
+
+      const row = document.createElement('div');
+      row.className = `layer-row${layerId === S.currentLayerId ? ' current' : ''}`;
+
+      const visibilityToggle = _createEyeButton(!layer.visible, layer.visible ? 'Hide layer' : 'Show layer');
+      visibilityToggle.addEventListener('click', () => {
+        const nextVisible = !layer.visible;
+        setLayerVisibility(layer, nextVisible);
+        visibilityToggle.title = nextVisible ? 'Hide layer' : 'Show layer';
+        _setEyeButtonIcon(visibilityToggle, !nextVisible);
+      });
+
+      const currentRadio = document.createElement('input');
+      currentRadio.type = 'radio';
+      currentRadio.name = 'currentLayer';
+      currentRadio.checked = layerId === S.currentLayerId;
+      currentRadio.title = 'Set as current layer';
+      currentRadio.addEventListener('change', () => {
+        if (currentRadio.checked) setCurrentLayer(layerId);
+      });
+
+      const nameButton = document.createElement('button');
+      nameButton.type = 'button';
+      nameButton.className = 'layer-name';
+      nameButton.textContent = layer.field ?? `layer ${index + 1}`
+      nameButton.addEventListener('click', () => setCurrentLayer(layerId));
+
+      const moveUpBtn = document.createElement('button');
+      moveUpBtn.type = 'button';
+      moveUpBtn.className = 'layer-action-btn';
+      moveUpBtn.textContent = '\u25B2';
+      moveUpBtn.title = 'Move layer up';
+      moveUpBtn.disabled = S.layerOrder.indexOf(layerId) === 0;
+      moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
+
+      const moveDownBtn = document.createElement('button');
+      moveDownBtn.type = 'button';
+      moveDownBtn.className = 'layer-action-btn';
+      moveDownBtn.textContent = '\u25BC';
+      moveDownBtn.title = 'Move layer down';
+      moveDownBtn.disabled = S.layerOrder.indexOf(layerId) === S.layerOrder.length - 1;
+      moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
+
+      const deleteBtn = document.createElement('button');
+      deleteBtn.type = 'button';
+      deleteBtn.className = 'layer-action-btn';
+      deleteBtn.textContent = '\u274C';
+      deleteBtn.title = 'Delete layer';
+      deleteBtn.addEventListener('click', () => {
+        if (!confirm(`Delete layer "${layer.name}"?`)) return;
+        removeLayer(layerId);
+        applyLayerOrderToMap();
+      });
+
+      const toolsGroup = document.createElement('div');
+      toolsGroup.className = 'layer-tools';
+
+      const hasActiveFilters = (layer.filters ?? []).some(filter => filter.active);
+
+      const filterBtn = document.createElement('button');
+      filterBtn.type = 'button';
+      filterBtn.className = `layer-tool-btn${hasActiveFilters ? ' is-active' : ' is-muted'}`;
+      filterBtn.title = 'Filters';
+      filterBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" />`;
+      filterBtn.addEventListener('click', () => {
+        setCurrentLayer(layerId);
+        _showFiltersPanel();
+      });
+
+      const statsBtn = document.createElement('button');
+      statsBtn.type = 'button';
+      statsBtn.className = 'layer-tool-btn';
+      statsBtn.title = 'Statistics';
+      statsBtn.innerHTML = `<img src="${CHART_ICON}" alt="Statistics" />`;
+      statsBtn.addEventListener('click', () => {
+        const prevStatsLayer = S.statsLayerId;
+        S.statsLayerId = layerId;
+        if (prevStatsLayer !== S.statsLayerId) {
+          S.statsCategoryField = null;
+          S.statsCategoryValueIndices = [];
+          S.statsField = null;
+          S.statsFieldType = null;
+        }
+        _renderStatsLayerOptions();
+        _refreshStatisticsPanel();
+        _showStatisticsPanel();
+      });
+
+      const scatterBtn = document.createElement('button');
+      scatterBtn.type = 'button';
+      scatterBtn.className = 'layer-tool-btn';
+      scatterBtn.title = 'Scatterplot';
+      scatterBtn.innerHTML = `<img src="${SCATTER_ICON}" alt="Scatterplot" />`;
+      scatterBtn.addEventListener('click', () => {
+        const prevScatterLayer = S.scatterLayerId;
+        S.scatterLayerId = layerId;
+        if (prevScatterLayer !== S.scatterLayerId) {
+          S.scatterCategoryField = null;
+          S.scatterCategoryValueIndices = [];
+          S.scatterXField = null;
+          S.scatterYField = null;
+          S.scatterRangeIsCustom = false;
+          S.scatterColorByField = null;
+        }
+        _renderScatterLayerOptions();
+        _refreshScatterPanel();
+        _showScatterplotPanel();
+      });
+
+      toolsGroup.append(statsBtn, scatterBtn);
+
+      const actionGroup = document.createElement('div');
+      actionGroup.className = 'layer-actions';
+      actionGroup.append(moveUpBtn, moveDownBtn, deleteBtn);
+
+      row.append(currentRadio, visibilityToggle, filterBtn, nameButton, toolsGroup, actionGroup);
+      _layerList.appendChild(row);
+    });
   }
 
-  S.layerOrder.forEach((layerId, index) => {
-    const layer = S.layers.get(layerId);
-    if (!layer) return;
+  const activeBasemap = S.currentBasemap === 'none' ? S.lastBasemapMode : S.currentBasemap;
+  const basemapHidden = S.currentBasemap === 'none';
 
-    const row = document.createElement('div');
-    row.className = `layer-row${layerId === S.currentLayerId ? ' current' : ''}`;
+  const basemapRow = document.createElement('div');
+  basemapRow.className = 'layer-row basemap-row';
 
-    const visibilityToggle = _createEyeButton(!layer.visible, layer.visible ? 'Hide layer' : 'Show layer');
-    visibilityToggle.addEventListener('click', () => {
-      const nextVisible = !layer.visible;
-      setLayerVisibility(layer, nextVisible);
-      visibilityToggle.title = nextVisible ? 'Hide layer' : 'Show layer';
-      _setEyeButtonIcon(visibilityToggle, !nextVisible);
-    });
+  const basemapRadio = document.createElement('input');
+  basemapRadio.type = 'radio';
+  basemapRadio.disabled = true;
+  basemapRadio.title = 'Basemap layer';
 
-    const currentRadio = document.createElement('input');
-    currentRadio.type = 'radio';
-    currentRadio.name = 'currentLayer';
-    currentRadio.checked = layerId === S.currentLayerId;
-    currentRadio.title = 'Set as current layer';
-    currentRadio.addEventListener('change', () => {
-      if (currentRadio.checked) setCurrentLayer(layerId);
-    });
-
-    const nameButton = document.createElement('button');
-    nameButton.type = 'button';
-    nameButton.className = 'layer-name';
-    nameButton.textContent = layer.field ?? `layer ${index + 1}`
-    nameButton.addEventListener('click', () => setCurrentLayer(layerId));
-
-    const moveUpBtn = document.createElement('button');
-    moveUpBtn.type = 'button';
-    moveUpBtn.className = 'layer-action-btn';
-    moveUpBtn.textContent = '\u25B2';
-    moveUpBtn.title = 'Move layer up';
-    moveUpBtn.disabled = S.layerOrder.indexOf(layerId) === 0;
-    moveUpBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'up'));
-
-    const moveDownBtn = document.createElement('button');
-    moveDownBtn.type = 'button';
-    moveDownBtn.className = 'layer-action-btn';
-    moveDownBtn.textContent = '\u25BC';
-    moveDownBtn.title = 'Move layer down';
-    moveDownBtn.disabled = S.layerOrder.indexOf(layerId) === S.layerOrder.length - 1;
-    moveDownBtn.addEventListener('click', () => moveLayerInOrder(layerId, 'down'));
-
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'layer-action-btn';
-    deleteBtn.textContent = '\u274C';
-    deleteBtn.title = 'Delete layer';
-    deleteBtn.addEventListener('click', () => {
-      if (!confirm(`Delete layer "${layer.name}"?`)) return;
-      removeLayer(layerId);
-      applyLayerOrderToMap();
-    });
-
-    const toolsGroup = document.createElement('div');
-    toolsGroup.className = 'layer-tools';
-
-    const hasActiveFilters = (layer.filters ?? []).some(filter => filter.active);
-
-    const filterBtn = document.createElement('button');
-    filterBtn.type = 'button';
-    filterBtn.className = `layer-tool-btn${hasActiveFilters ? ' is-active' : ' is-muted'}`;
-    filterBtn.title = 'Filters';
-    filterBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" />`;
-    filterBtn.addEventListener('click', () => {
-      setCurrentLayer(layerId);
-      _showFiltersPanel();
-    });
-
-    const statsBtn = document.createElement('button');
-    statsBtn.type = 'button';
-    statsBtn.className = 'layer-tool-btn';
-    statsBtn.title = 'Statistics';
-    statsBtn.innerHTML = `<img src="${CHART_ICON}" alt="Statistics" />`;
-    statsBtn.addEventListener('click', () => {
-      const prevStatsLayer = S.statsLayerId;
-      S.statsLayerId = layerId;
-      if (prevStatsLayer !== S.statsLayerId) {
-        S.statsCategoryField = null;
-        S.statsCategoryValueIndices = [];
-        S.statsField = null;
-        S.statsFieldType = null;
-      }
-      _renderStatsLayerOptions();
-      _refreshStatisticsPanel();
-      _showStatisticsPanel();
-    });
-
-    const scatterBtn = document.createElement('button');
-    scatterBtn.type = 'button';
-    scatterBtn.className = 'layer-tool-btn';
-    scatterBtn.title = 'Scatterplot';
-    scatterBtn.innerHTML = `<img src="${SCATTER_ICON}" alt="Scatterplot" />`;
-    scatterBtn.addEventListener('click', () => {
-      const prevScatterLayer = S.scatterLayerId;
-      S.scatterLayerId = layerId;
-      if (prevScatterLayer !== S.scatterLayerId) {
-        S.scatterCategoryField = null;
-        S.scatterCategoryValueIndices = [];
-        S.scatterXField = null;
-        S.scatterYField = null;
-        S.scatterRangeIsCustom = false;
-        S.scatterColorByField = null;
-      }
-      _renderScatterLayerOptions();
-      _refreshScatterPanel();
-      _showScatterplotPanel();
-    });
-
-    toolsGroup.append(statsBtn, scatterBtn);
-
-    const actionGroup = document.createElement('div');
-    actionGroup.className = 'layer-actions';
-    actionGroup.append(moveUpBtn, moveDownBtn, deleteBtn);
-
-    row.append(currentRadio, visibilityToggle, filterBtn, nameButton, toolsGroup, actionGroup);
-    _layerList.appendChild(row);
+  const basemapEye = _createEyeButton(basemapHidden, basemapHidden ? 'Show basemap' : 'Hide basemap');
+  basemapEye.addEventListener('click', () => {
+    const nextMode: BasemapMode = basemapHidden ? S.lastBasemapMode : 'none';
+    _setBasemapMode(nextMode);
   });
 
+  const filterSpacer = document.createElement('div');
+
+  const basemapName = document.createElement('span');
+  basemapName.className = 'layer-name';
+  basemapName.textContent = activeBasemap;
+
+  const basemapToggleGroup = document.createElement('div');
+  basemapToggleGroup.className = 'basemap-toggles';
+
+  const streetsButton = document.createElement('button');
+  streetsButton.type = 'button';
+  streetsButton.className = `basemap-toggle${activeBasemap === 'streets' ? ' active' : ''}`;
+  streetsButton.title = 'OSM basemap';
+  streetsButton.innerHTML = `<img src="${STREET_ICON}" alt="Streets" />`;
+  streetsButton.addEventListener('click', () => _setBasemapMode('streets'));
+
+  const satelliteButton = document.createElement('button');
+  satelliteButton.type = 'button';
+  satelliteButton.className = `basemap-toggle${activeBasemap === 'satellite' ? ' active' : ''}`;
+  satelliteButton.title = 'Satellite basemap';
+  satelliteButton.innerHTML = `<img src="${SATELLITE_ICON}" alt="Satellite" />`;
+  satelliteButton.addEventListener('click', () => _setBasemapMode('satellite'));
+
+  basemapToggleGroup.append(streetsButton, satelliteButton);
+
+  const actionSpacer = document.createElement('div');
+
+  basemapRow.append(basemapRadio, basemapEye, filterSpacer, basemapName, basemapToggleGroup, actionSpacer);
+  _layerList.appendChild(basemapRow);
+
   updateCurrentLayerDetails();
-  const prevStatsLayer = S.statsLayerId;
-  const prevScatterLayer = S.scatterLayerId;
-  _renderStatsLayerOptions();
-  _renderScatterLayerOptions();
-  if (prevStatsLayer !== S.statsLayerId) {
-    S.statsCategoryField = null;
-    S.statsCategoryValueIndices = [];
-    S.statsField = null;
-    S.statsFieldType = null;
-    _refreshStatisticsPanel();
-  }
-  if (prevScatterLayer !== S.scatterLayerId) {
-    S.scatterCategoryField = null;
-    S.scatterCategoryValueIndices = [];
-    S.scatterXField = null;
-    S.scatterYField = null;
-    S.scatterRangeIsCustom = false;
-    _refreshScatterPanel();
+  if (S.layerOrder.length > 0) {
+    const prevStatsLayer = S.statsLayerId;
+    const prevScatterLayer = S.scatterLayerId;
+    _renderStatsLayerOptions();
+    _renderScatterLayerOptions();
+    if (prevStatsLayer !== S.statsLayerId) {
+      S.statsCategoryField = null;
+      S.statsCategoryValueIndices = [];
+      S.statsField = null;
+      S.statsFieldType = null;
+      _refreshStatisticsPanel();
+    }
+    if (prevScatterLayer !== S.scatterLayerId) {
+      S.scatterCategoryField = null;
+      S.scatterCategoryValueIndices = [];
+      S.scatterXField = null;
+      S.scatterYField = null;
+      S.scatterRangeIsCustom = false;
+      _refreshScatterPanel();
+    }
   }
 }

@@ -4,7 +4,6 @@ import {
   handleLassoMouseDown, handleLassoMouseMove, handleLassoMouseUp,
   handlePolygonMouseDown, handlePolygonMouseMove, handlePolygonDoubleClick,
 } from './selection';
-import { updatePaintButtonState } from './windows';
 
 /* ---------- callbacks wired from main.ts ---------- */
 
@@ -44,7 +43,6 @@ const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
-const btnPaintMenu = document.getElementById('btnPaintMenu') as HTMLButtonElement;
 
 /* ---------- Constants ---------- */
 
@@ -280,7 +278,6 @@ export function updateToolbarButtonStates() {
     landScheduleToolButton.classList.add('active');
   }
 
-  updatePaintButtonState(btnPaintMenu);
 }
 
 /* ---------- Initialize ---------- */

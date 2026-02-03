@@ -50,6 +50,7 @@ let resizeStartX = 0;
 let resizeStartY = 0;
 let resizeStartWidth = 0;
 let resizeStartHeight = 0;
+let resizeMinHeight = MIN_WINDOW_HEIGHT;
 let lastMouseX = 0;
 let lastMouseY = 0;
 
@@ -97,6 +98,7 @@ export function enableWindowResizing(windowEl: HTMLElement) {
     const rect = windowEl.getBoundingClientRect();
     resizeStartWidth = rect.width;
     resizeStartHeight = rect.height;
+    resizeMinHeight = Math.max(MIN_WINDOW_HEIGHT, windowEl.scrollHeight);
     document.body.style.userSelect = 'none';
   };
 
@@ -329,7 +331,7 @@ export function handleMouseMove(e: MouseEvent) {
     const nextWidth = Math.max(MIN_WINDOW_WIDTH, resizeStartWidth + dx);
     resizeTarget.style.width = `${nextWidth}px`;
     if (resizeMode === 'both') {
-      const nextHeight = Math.max(MIN_WINDOW_HEIGHT, resizeStartHeight + dy);
+      const nextHeight = Math.max(resizeMinHeight, resizeStartHeight + dy);
       resizeTarget.style.height = `${nextHeight}px`;
     }
     if (resizeTarget.id === 'filtersControls') {
@@ -407,7 +409,9 @@ function updatePinButtonState(element: HTMLElement) {
   const img = entry.pinButton.querySelector('img');
   if (!img) return;
   const pinned = isPinned(element);
-  img.src = pinned ? './src/svg/thumbtack.svg' : './src/svg/thumbtack-tilted.svg';
+  const pinnedSrc = entry.pinButton.dataset.pinSrc;
+  const unpinnedSrc = entry.pinButton.dataset.unpinSrc;
+  img.src = pinned ? (pinnedSrc ?? './src/svg/thumbtack.svg') : (unpinnedSrc ?? './src/svg/thumbtack-tilted.svg');
   img.alt = pinned ? 'Unpin menu' : 'Pin menu';
   entry.pinButton.setAttribute('aria-pressed', String(pinned));
   entry.pinButton.title = pinned ? 'Unpin' : 'Pin';

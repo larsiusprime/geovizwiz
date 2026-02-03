@@ -420,6 +420,8 @@ const landScheduleBasePer = document.getElementById('landScheduleBasePer') as HT
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
 const PENCIL_ICON = new URL('./svg/pencil.svg', import.meta.url).href;
+const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
+const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
 
 function setEyeButtonIcon(button: HTMLButtonElement, isHidden: boolean) {
   const img = button.querySelector('img');
@@ -438,6 +440,14 @@ function createEyeButton(isHidden: boolean, title: string) {
   img.alt = isHidden ? 'Hidden' : 'Visible';
   button.appendChild(img);
   return button;
+}
+
+function initPinButton(button: HTMLButtonElement) {
+  const img = button.querySelector('img');
+  if (!img) return;
+  button.dataset.pinSrc = PIN_ICON;
+  button.dataset.unpinSrc = PIN_ICON_TILTED;
+  img.src = PIN_ICON_TILTED;
 }
 
 // Quality button (create after elements are declared)
@@ -626,6 +636,16 @@ initWindowDocking({
   pinnedContainer: pinnedPanelsEl,
   appContainer: appEl,
 });
+[
+  btnPinLayers,
+  btnPinSettings,
+  btnPinPaint,
+  btnPinFilters,
+  btnPinStatistics,
+  btnPinScatterplot,
+  btnPinLandSchedule,
+  btnPinLegend,
+].forEach(initPinButton);
 registerDockableWindow(controlsEl, btnPinLayers);
 registerDockableWindow(settingsControlsEl, btnPinSettings);
 registerDockableWindow(paintControlsEl, btnPinPaint);

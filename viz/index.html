@@ -34,6 +34,12 @@
     .viz-window {
       min-width: 240px;
       min-height: 160px;
+      grid-template-rows: auto 1fr;
+      align-content: start;
+    }
+
+    .window-header {
+      align-self: start;
     }
 
     .viz-window.is-pinned {
@@ -920,7 +926,7 @@
         <div style="font-weight: 600; font-size: 13px;">Layers</div>
         <div class="window-actions">
           <button id="btnPinLayers" class="window-pin" type="button" title="Pin" aria-pressed="false">
-            <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+            <img alt="Pin menu" />
           </button>
           <button id="btnMinimizeLayers" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
 			  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -929,7 +935,7 @@
 		  </button>
         </div>
       </div>
-      <div id="settingsContent" style="padding: 12px;">
+      <div id="settingsContent" data-window-content style="padding: 12px;">
       <fieldset id="layerPanel">
         <div class="layer-add-row">
           <button id="addLayerFromStore" type="button">Add layer</button>
@@ -959,7 +965,7 @@
       <div style="font-weight: 600; font-size: 13px;">Settings</div>
       <div class="window-actions">
         <button id="btnPinSettings" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizeSettingsMenu" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -968,7 +974,7 @@
         </button>
       </div>
     </div>
-    <div id="settingsMenuContent" style="padding: 12px; display: grid; gap: 10px;">
+    <div id="settingsMenuContent" data-window-content style="padding: 12px; display: grid; gap: 10px;">
       <fieldset>
         <label>View presets</label>
         <div class="buttons">
@@ -1011,7 +1017,7 @@
       <div style="font-weight: 600; font-size: 13px;">Filters</div>
       <div class="window-actions">
         <button id="btnPinFilters" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizeFilters" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1020,7 +1026,7 @@
         </button>
       </div>
     </div>
-    <div id="filtersContent" style="padding: 12px; display: grid; gap: 12px;">
+    <div id="filtersContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
       <div class="filters-saved-container">
         <div class="filters-saved-tabs" role="tablist" aria-label="Saved filters">
           <button id="filtersSaveToggle" class="filters-saved-tab" type="button" role="tab" aria-controls="filtersSavePanel" aria-selected="false">Save</button>
@@ -1062,7 +1068,7 @@
       <div style="font-weight: 600; font-size: 13px;">Paint</div>
       <div class="window-actions">
         <button id="btnPinPaint" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizePaint" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1071,7 +1077,7 @@
         </button>
       </div>
     </div>
-    <div id="paintContent" style="padding: 12px; display: grid; gap: 10px;">
+    <div id="paintContent" data-window-content style="padding: 12px; display: grid; gap: 10px;">
       <!-- Numeric field options -->
       <fieldset id="numericOptions">
         <label>Field type: numeric</label>
@@ -1202,7 +1208,7 @@
       <div style="font-weight: 600; font-size: 13px;">Statistics</div>
       <div class="window-actions">
         <button id="btnPinStatistics" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizeStatistics" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1211,7 +1217,7 @@
         </button>
       </div>
     </div>
-    <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
+    <div id="statisticsContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
       <div id="statsLayerSection" class="stats-section" style="display: grid; gap: 8px;">
         <div style="font-weight: 600; font-size: 12px;">Layer:</div>
         <div id="statsLayerName" class="layer-source-name">Select a layer to view statistics.</div>
@@ -1321,7 +1327,7 @@
       <div style="font-weight: 600; font-size: 13px;">Scatterplot</div>
       <div class="window-actions">
         <button id="btnPinScatterplot" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizeScatterplot" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1330,7 +1336,7 @@
         </button>
       </div>
     </div>
-    <div id="scatterplotContent" style="padding: 12px; display: grid; gap: 12px;">
+    <div id="scatterplotContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
       <div style="display: grid; gap: 12px;">
         <div id="scatterDataSourceSection" class="stats-section" style="display: grid; gap: 8px;">
           <div style="font-weight: 600; font-size: 12px;">Layer:</div>
@@ -1408,7 +1414,7 @@
       <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
       <div class="window-actions">
         <button id="btnPinLandSchedule" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizeLandSchedule" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
@@ -1417,7 +1423,7 @@
         </button>
       </div>
     </div>
-    <div id="landScheduleContent" style="padding: 12px; display: grid; gap: 12px;">
+    <div id="landScheduleContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
       <div class="land-schedule-section">
         <div class="land-schedule-subtitle">Market Area field:</div>
         <div class="land-schedule-row">
@@ -1604,7 +1610,7 @@
       <div style="font-weight: 600; font-size: 13px;" id="legendTitle">Legend</div>
       <div class="window-actions">
         <button id="btnPinLegend" class="window-pin" type="button" title="Pin" aria-pressed="false">
-          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          <img alt="Pin menu" />
         </button>
         <button id="btnMinimizeLegend" style="
           border: none;
@@ -1626,7 +1632,7 @@
 	    </button>
       </div>
     </div>
-    <div id="legendContent" style="
+    <div id="legendContent" data-window-content style="
       padding: 8px;
       max-height: calc(70vh - 40px);
       overflow-y: auto;

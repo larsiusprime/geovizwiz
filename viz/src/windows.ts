@@ -347,7 +347,7 @@ export function handleMouseMove(e: MouseEvent) {
     const dx = e.clientX - resizeStartX;
     const dy = e.clientY - resizeStartY;
     if (resizeMode !== 'y') {
-      const nextWidth = Math.max(MIN_WINDOW_WIDTH, resizeStartWidth + dx);
+      const nextWidth = Math.max(getMinWindowWidth(resizeTarget), resizeStartWidth + dx);
       resizeTarget.style.width = `${nextWidth}px`;
     }
     if (resizeMode === 'both') {

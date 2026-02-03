@@ -397,7 +397,6 @@ const landScheduleContent = document.getElementById('landScheduleContent') as HT
 const landScheduleFieldSelect = document.getElementById('landScheduleFieldSelect') as HTMLSelectElement;
 const landScheduleValueRow = document.getElementById('landScheduleValueRow') as HTMLDivElement;
 const landScheduleValueSelect = document.getElementById('landScheduleValueSelect') as HTMLSelectElement;
-const landScheduleApplyButton = document.getElementById('landScheduleApply') as HTMLButtonElement;
 const landScheduleTableSelect = document.getElementById('landScheduleTableSelect') as HTMLSelectElement;
 const landScheduleTableSelectRow = document.getElementById('landScheduleTableSelectRow') as HTMLDivElement;
 const landScheduleAddTableButton = document.getElementById('landScheduleAddTable') as HTMLButtonElement;
@@ -839,7 +838,6 @@ initLandScheduleElements({
   landScheduleFieldSelect,
   landScheduleValueSelect,
   landScheduleValueRow,
-  landScheduleApplyButton,
   landScheduleTableSelect,
   landScheduleTableSelectRow,
   landScheduleAddTableButton,

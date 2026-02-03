@@ -884,6 +884,7 @@
     .land-schedule-row select,
     .land-schedule-row input {
       flex: 1;
+      min-width: 200px;
     }
 
     .land-schedule-button {
@@ -1546,7 +1547,7 @@
     </div>
   </div>
 
-  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); min-width: 360px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
       <div class="window-actions">
@@ -1573,7 +1574,6 @@
           <select id="landScheduleValueSelect">
             <option value="" selected disabled>Choose a value</option>
           </select>
-          <button id="landScheduleApply" type="button" class="land-schedule-button">apply</button>
         </div>
       </div>
 
@@ -1585,7 +1585,7 @@
           <span class="muted" style="font-size: 12px;">Current table:</span>
           <select id="landScheduleTableSelect"></select>
         </div>
-        <button id="landScheduleAddTable" type="button" class="land-schedule-button">add table</button>
+        <button id="landScheduleAddTable" type="button" class="land-schedule-button">new table</button>
         <div id="landScheduleTableContainer" style="display: grid; gap: 10px;"></div>
       </div>
     </div>

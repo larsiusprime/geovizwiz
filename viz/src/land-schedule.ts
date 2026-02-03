@@ -45,7 +45,6 @@ const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: stri
 let landScheduleFieldSelect: HTMLSelectElement;
 let landScheduleValueSelect: HTMLSelectElement;
 let landScheduleValueRow: HTMLDivElement;
-let landScheduleApplyButton: HTMLButtonElement;
 let landScheduleTableSelect: HTMLSelectElement;
 let landScheduleTableSelectRow: HTMLDivElement;
 let landScheduleAddTableButton: HTMLButtonElement;
@@ -57,7 +56,6 @@ export function initLandScheduleElements(els: {
   landScheduleFieldSelect: HTMLSelectElement;
   landScheduleValueSelect: HTMLSelectElement;
   landScheduleValueRow: HTMLDivElement;
-  landScheduleApplyButton: HTMLButtonElement;
   landScheduleTableSelect: HTMLSelectElement;
   landScheduleTableSelectRow: HTMLDivElement;
   landScheduleAddTableButton: HTMLButtonElement;
@@ -66,7 +64,6 @@ export function initLandScheduleElements(els: {
   landScheduleFieldSelect = els.landScheduleFieldSelect;
   landScheduleValueSelect = els.landScheduleValueSelect;
   landScheduleValueRow = els.landScheduleValueRow;
-  landScheduleApplyButton = els.landScheduleApplyButton;
   landScheduleTableSelect = els.landScheduleTableSelect;
   landScheduleTableSelectRow = els.landScheduleTableSelectRow;
   landScheduleAddTableButton = els.landScheduleAddTableButton;
@@ -127,6 +124,33 @@ function updateValueHeader(headerEl: HTMLElement, unit: LandScheduleUnit) {
   headerEl.textContent = `Value / ${suffix}`;
 }
 
+const landScheduleSettleTimers = new WeakMap<HTMLInputElement, number>();
+
+function scheduleLandScheduleSettle(input: HTMLInputElement, callback: () => void) {
+  const existing = landScheduleSettleTimers.get(input);
+  if (existing !== undefined) {
+    window.clearTimeout(existing);
+  }
+  const handle = window.setTimeout(() => {
+    landScheduleSettleTimers.delete(input);
+    callback();
+  }, 400);
+  landScheduleSettleTimers.set(input, handle);
+}
+
+function enforceRowBounds(
+  table: LandScheduleTable,
+  tbody: HTMLTableSectionElement,
+  row: LandScheduleRow,
+  maxInput: HTMLInputElement
+) {
+  if (row.min !== null && row.max !== null && row.max < row.min) {
+    row.max = row.min;
+    setLandScheduleInputValue(maxInput, row.max);
+  }
+  syncDerivedRowMins(table, tbody);
+}
+
 function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLTableSectionElement) {
   const row = table.rows[rowIndex];
   const tr = document.createElement('tr');
@@ -150,25 +174,29 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   maxInput.dataset.role = 'max';
   setLandScheduleInputValue(maxInput, row.max);
   maxInput.addEventListener('input', () => {
-    const parsed = parseOptionalNumber(maxInput.value);
-    row.max = parsed;
-    if (row.min !== null && row.max !== null && row.max < row.min) {
-      row.max = row.min;
-      setLandScheduleInputValue(maxInput, row.max);
-    }
-    syncDerivedRowMins(table, tbody);
+    row.max = parseOptionalNumber(maxInput.value);
+    scheduleLandScheduleSettle(maxInput, () => {
+      enforceRowBounds(table, tbody, row, maxInput);
+    });
   });
+  const settleMax = () => enforceRowBounds(table, tbody, row, maxInput);
+  maxInput.addEventListener('blur', settleMax);
+  maxInput.addEventListener('change', settleMax);
   maxTd.appendChild(maxInput);
 
   minInput.addEventListener('input', () => {
     if (rowIndex !== 0) return;
     row.min = parseOptionalNumber(minInput.value);
-    if (row.min !== null && row.max !== null && row.max < row.min) {
-      row.max = row.min;
-      setLandScheduleInputValue(maxInput, row.max);
-    }
-    syncDerivedRowMins(table, tbody);
+    scheduleLandScheduleSettle(minInput, () => {
+      enforceRowBounds(table, tbody, row, maxInput);
+    });
   });
+  const settleMin = () => {
+    if (rowIndex !== 0) return;
+    enforceRowBounds(table, tbody, row, maxInput);
+  };
+  minInput.addEventListener('blur', settleMin);
+  minInput.addEventListener('change', settleMin);
 
   const valueTd = document.createElement('td');
   const valueInput = document.createElement('input');
@@ -257,7 +285,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
   deleteBtn.className = 'land-table-delete';
-  deleteBtn.textContent = '×';
+  deleteBtn.textContent = '❌';
   deleteBtn.title = 'Delete table';
   deleteBtn.addEventListener('click', () => {
     const confirmed = window.confirm('Delete this table?');
@@ -354,7 +382,6 @@ export function updateLandScheduleValueOptions() {
   if (!S.currentLandScheduleField) {
     landScheduleValueRow.style.display = 'none';
     landScheduleValueSelect.disabled = true;
-    landScheduleApplyButton.disabled = true;
     S.currentLandScheduleValue = null;
     renderLandScheduleTables();
     return;
@@ -366,7 +393,6 @@ export function updateLandScheduleValueOptions() {
 
   landScheduleValueRow.style.display = 'flex';
   landScheduleValueSelect.disabled = false;
-  landScheduleApplyButton.disabled = false;
 
   if (S.currentLandScheduleValue && (S.currentLandScheduleValue === LAND_SCHEDULE_DEFAULT_KEY || values.includes(S.currentLandScheduleValue))) {
     landScheduleValueSelect.value = S.currentLandScheduleValue;

@@ -795,22 +795,22 @@ export function renderLayerList() {
   const filterSpacer = document.createElement('div');
 
   const basemapName = document.createElement('span');
-  basemapName.className = 'layer-name';
+  basemapName.className = 'basemap-label';
   basemapName.textContent = activeBasemap;
 
   const basemapToggleGroup = document.createElement('div');
-  basemapToggleGroup.className = 'basemap-toggles';
+  basemapToggleGroup.className = 'layer-tools basemap-toggles';
 
   const streetsButton = document.createElement('button');
   streetsButton.type = 'button';
-  streetsButton.className = `basemap-toggle${activeBasemap === 'streets' ? ' active' : ''}`;
+  streetsButton.className = `layer-tool-btn basemap-toggle${activeBasemap === 'streets' ? ' active' : ''}`;
   streetsButton.title = 'OSM basemap';
   streetsButton.innerHTML = `<img src="${STREET_ICON}" alt="Streets" />`;
   streetsButton.addEventListener('click', () => _setBasemapMode('streets'));
 
   const satelliteButton = document.createElement('button');
   satelliteButton.type = 'button';
-  satelliteButton.className = `basemap-toggle${activeBasemap === 'satellite' ? ' active' : ''}`;
+  satelliteButton.className = `layer-tool-btn basemap-toggle${activeBasemap === 'satellite' ? ' active' : ''}`;
   satelliteButton.title = 'Satellite basemap';
   satelliteButton.innerHTML = `<img src="${SATELLITE_ICON}" alt="Satellite" />`;
   satelliteButton.addEventListener('click', () => _setBasemapMode('satellite'));

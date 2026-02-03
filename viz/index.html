@@ -228,50 +228,58 @@
       gap: 4px;
     }
 
-    .basemap-row .layer-name {
-      font-style: italic;
-    }
-
     .basemap-toggles {
       display: inline-flex;
-      gap: 6px;
+      gap: 4px;
     }
 
-    .basemap-toggle {
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      border-radius: 6px;
-      padding: 2px 4px;
+    .basemap-label {
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      cursor: pointer;
+      max-width: 100%;
+      padding: 2px 8px;
+      border-radius: 999px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      font-size: 12px;
+      color: #111827;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .basemap-toggle img {
+    #controls .basemap-toggle {
+      border: none;
+      background: none;
+      padding: 0;
+    }
+
+    #controls .basemap-toggle img {
       width: 16px;
       height: 16px;
       display: block;
+      opacity: 0.25;
+      filter: grayscale(1);
     }
 
-    .basemap-toggle.active {
-      border-color: #3b82f6;
-      background: rgba(59, 130, 246, 0.15);
+    #controls .basemap-toggle.active img {
+      opacity: 1;
+      filter: grayscale(1) brightness(0);
     }
 
     .paint-section-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 6px;
       font-size: 12px;
       font-weight: 600;
       color: #111827;
       margin-bottom: 6px;
     }
 
-    .paint-collapse-toggle {
+    #controls .paint-collapse-toggle {
       border: none;
-      background: none;
+      background: transparent;
       cursor: pointer;
       font-size: 14px;
       color: #4b5563;
@@ -279,7 +287,12 @@
       transition: transform 0.2s ease;
     }
 
-    .paint-collapse-toggle.is-collapsed {
+    #controls .paint-collapse-toggle:hover {
+      background: #f3f4f6;
+      border-radius: 6px;
+    }
+
+    #controls .paint-collapse-toggle.is-collapsed {
       transform: rotate(-90deg);
     }
 
@@ -1023,8 +1036,8 @@
 
       <div class="paint-section">
         <div class="paint-section-header">
-          <span>Paint</span>
           <button id="paintSectionToggle" class="paint-collapse-toggle" type="button" title="Collapse Paint">▼</button>
+          <span>Paint</span>
         </div>
         <div id="paintSectionContent" style="display: grid; gap: 10px;">
           <!-- Numeric field options -->

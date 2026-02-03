@@ -31,7 +31,9 @@
       position: relative;
       overflow-y: auto;
       overflow-x: hidden;
-      padding-right: 6px;
+      --pinned-gutter: 8px;
+      padding-right: var(--pinned-gutter);
+      background: #f3f4f6;
     }
 
     .pinned-column-resize-handle {

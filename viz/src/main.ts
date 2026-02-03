@@ -53,6 +53,7 @@ import {
   refreshFiltersUI,
   applyActiveFilterAction,
   persistFiltersContext,
+  invalidateFiltersContextIf,
 } from './filters';
 import {
   createWindowManager, initWindowCallbacks, initPositionElements,
@@ -614,6 +615,9 @@ const landScheduleWin = createWindowManager({
   contentEl: landScheduleContent,
   controlsEl: landScheduleControlsEl,
   positionFn: positionLandSchedulePanel,
+  onMinimize: () => {
+    invalidateFiltersContextIf(context => context.type === 'landSchedule');
+  },
 });
 
 // Convenience aliases matching the old function names
@@ -692,6 +696,7 @@ initFilterElements({
   filtersSavedStatus,
   filtersLoadControls,
   filtersLoadSelect,
+  filtersContextLine: document.getElementById('filtersContextLine') as HTMLDivElement,
 });
 initFilterCallbacks({
   persistCurrentLayerState,
@@ -700,6 +705,7 @@ initFilterCallbacks({
   scheduleScatterPlotRefresh,
   getCurrentLayerIds,
   clearLegendVisibility,
+  hideFiltersPanel: minimizeFilters,
 });
 
 // Wire DOM elements and callbacks into the rendering module

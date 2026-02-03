@@ -5,7 +5,7 @@
  */
 import { S, LAND_SCHEDULE_DEFAULT_KEY, LAND_SCHEDULE_DEFAULT_LABEL } from './state';
 import { getCategoricalValues } from './filters';
-import { setFiltersContext, cloneFilters } from './filters';
+import { setFiltersContext, cloneFilters, invalidateFiltersContextIf } from './filters';
 import type {
   FilterRule,
   LandScheduleEntry,
@@ -151,6 +151,37 @@ function getValueModeTooltip(unit: LandScheduleUnit, mode: LandScheduleValueMode
   return 'The size ranges work like marginal income tax brackets. So the first chunk of size is valued at the first rate, and then the next chunk of size bigger than that is valued at the next rate, and so on.';
 }
 
+function formatRangeValue(value: number | null) {
+  return value === null ? '—' : String(value);
+}
+
+function updateRowTooltip(
+  table: LandScheduleTable,
+  row: LandScheduleRow,
+  rowIndex: number,
+  minInfo: HTMLElement,
+  maxInfo: HTMLElement
+) {
+  const unitLabel = getUnitAxisLabel(table.unit);
+  const minVal = formatRangeValue(row.min);
+  const maxVal = formatRangeValue(row.max);
+  const minQualifier = rowIndex === 0 ? 'greater than or equal to' : 'greater than';
+  const text = `This row targets parcels ${minQualifier} ${minVal} ${unitLabel}s and less than or equal to ${maxVal} ${unitLabel}s.`;
+  minInfo.title = text;
+  maxInfo.title = text;
+}
+
+function updateAllRowTooltips(table: LandScheduleTable, tbody: HTMLTableSectionElement) {
+  table.rows.forEach((row, index) => {
+    const rowEl = tbody.querySelector(`tr[data-row-index="${index}"]`) as HTMLTableRowElement | null;
+    const minInfo = rowEl?.querySelector('[data-role="min-info"]') as HTMLElement | null;
+    const maxInfo = rowEl?.querySelector('[data-role="max-info"]') as HTMLElement | null;
+    if (minInfo && maxInfo) {
+      updateRowTooltip(table, row, index, minInfo, maxInfo);
+    }
+  });
+}
+
 function updateLandScheduleCurve(table: LandScheduleTable | null) {
   const plotly = getPlotly();
   if (!plotly || !landScheduleCurveChart) return;
@@ -238,6 +269,7 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   tr.dataset.rowIndex = String(rowIndex);
 
   const minTd = document.createElement('td');
+  minTd.className = 'land-table-range-cell';
   const minInput = document.createElement('input');
   minInput.type = 'number';
   minInput.inputMode = 'decimal';
@@ -246,17 +278,27 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
     minInput.disabled = true;
   }
   setLandScheduleInputValue(minInput, row.min);
-  minTd.appendChild(minInput);
+  const minInfo = document.createElement('span');
+  minInfo.className = 'land-table-info';
+  minInfo.textContent = 'ⓘ';
+  minInfo.dataset.role = 'min-info';
+  minTd.append(minInput, minInfo);
 
   const maxTd = document.createElement('td');
+  maxTd.className = 'land-table-range-cell';
   const maxInput = document.createElement('input');
   maxInput.type = 'number';
   maxInput.inputMode = 'decimal';
   maxInput.dataset.role = 'max';
   setLandScheduleInputValue(maxInput, row.max);
+  const maxInfo = document.createElement('span');
+  maxInfo.className = 'land-table-info';
+  maxInfo.textContent = 'ⓘ';
+  maxInfo.dataset.role = 'max-info';
   maxInput.addEventListener('input', () => {
     row.max = parseOptionalNumber(maxInput.value);
     updateLandScheduleCurve(table);
+    updateRowTooltip(table, row, rowIndex, minInfo, maxInfo);
     scheduleLandScheduleSettle(maxInput, () => {
       enforceRowBounds(table, tbody, row, maxInput);
     });
@@ -264,12 +306,13 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   const settleMax = () => enforceRowBounds(table, tbody, row, maxInput);
   maxInput.addEventListener('blur', settleMax);
   maxInput.addEventListener('change', settleMax);
-  maxTd.appendChild(maxInput);
+  maxTd.append(maxInput, maxInfo);
 
   minInput.addEventListener('input', () => {
     if (rowIndex !== 0) return;
     row.min = parseOptionalNumber(minInput.value);
     updateLandScheduleCurve(table);
+    updateRowTooltip(table, row, rowIndex, minInfo, maxInfo);
     scheduleLandScheduleSettle(minInput, () => {
       enforceRowBounds(table, tbody, row, maxInput);
     });
@@ -293,6 +336,8 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   });
   valueTd.appendChild(valueInput);
 
+  updateRowTooltip(table, row, rowIndex, minInfo, maxInfo);
+
   const deleteTd = document.createElement('td');
   const deleteBtn = document.createElement('button');
   deleteBtn.type = 'button';
@@ -315,6 +360,8 @@ function syncDerivedRowMins(table: LandScheduleTable, tbody: HTMLTableSectionEle
     const rowEl = tbody.querySelector(`tr[data-row-index="${i}"]`) as HTMLTableRowElement | null;
     const minInput = rowEl?.querySelector('input[data-role="min"]') as HTMLInputElement | null;
     const maxInput = rowEl?.querySelector('input[data-role="max"]') as HTMLInputElement | null;
+    const minInfo = rowEl?.querySelector('[data-role="min-info"]') as HTMLElement | null;
+    const maxInfo = rowEl?.querySelector('[data-role="max-info"]') as HTMLElement | null;
     if (minInput) {
       setLandScheduleInputValue(minInput, row.min);
     }
@@ -323,6 +370,9 @@ function syncDerivedRowMins(table: LandScheduleTable, tbody: HTMLTableSectionEle
       if (maxInput) {
         setLandScheduleInputValue(maxInput, row.max);
       }
+    }
+    if (minInfo && maxInfo) {
+      updateRowTooltip(table, row, i, minInfo, maxInfo);
     }
   }
 }
@@ -381,6 +431,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   filterButton.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions...`;
   landScheduleFilterButton = filterButton;
   updateLandScheduleFilterButtonState(activeTable);
+  const landScheduleContextKey = `${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:${activeTable.id}`;
   filterButton.addEventListener('click', () => {
     setFiltersContext({
       type: 'landSchedule',
@@ -391,6 +442,8 @@ function renderActiveTable(entry: LandScheduleEntry) {
         activeTable.filterInvert = filterInvert;
         updateLandScheduleFilterButtonState(activeTable);
       },
+      label: `Land schedule: ${S.currentLandScheduleField ?? '—'} = ${S.currentLandScheduleValue ?? '—'} / ${activeTable.name || 'Untitled table'}`,
+      key: landScheduleContextKey,
     });
     showFiltersPanel?.();
   });
@@ -449,6 +502,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
     updateValueHeader(valueHeader, activeTable.unit, activeTable.valueMode);
     valueInfo.title = getValueModeTooltip(activeTable.unit, activeTable.valueMode);
     updateLandScheduleCurve(activeTable);
+    updateAllRowTooltips(activeTable, tbody);
   });
   unitWrap.append(unitLabel, unitSelect);
 
@@ -498,6 +552,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   landScheduleTableContainer.appendChild(card);
 
   syncDerivedRowMins(activeTable, tbody);
+  updateAllRowTooltips(activeTable, tbody);
   updateLandScheduleCurve(activeTable);
 }
 
@@ -537,6 +592,14 @@ export function renderLandScheduleTables() {
   const entry = getCurrentEntry();
   landScheduleTableContainer.replaceChildren();
   landScheduleFilterButton = null;
+
+  invalidateFiltersContextIf(context => {
+    if (context.type !== 'landSchedule') return false;
+    if (!entry) return true;
+    const activeId = entry.activeTableId ?? '';
+    const expectedKey = `${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:${activeId}`;
+    return context.key !== expectedKey;
+  });
 
   if (!entry) {
     landScheduleTablesSection.style.display = 'none';

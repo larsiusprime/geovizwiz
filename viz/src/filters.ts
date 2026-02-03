@@ -39,6 +39,7 @@ let filtersSaveConfirmButton: HTMLButtonElement;
 let filtersSavedStatus: HTMLDivElement;
 let filtersLoadControls: HTMLDivElement;
 let filtersLoadSelect: HTMLSelectElement;
+let filtersContextLine: HTMLDivElement;
 
 export function initFilterElements(els: {
   filtersListEl: HTMLDivElement;
@@ -54,6 +55,7 @@ export function initFilterElements(els: {
   filtersSavedStatus: HTMLDivElement;
   filtersLoadControls: HTMLDivElement;
   filtersLoadSelect: HTMLSelectElement;
+  filtersContextLine: HTMLDivElement;
 }) {
   filtersListEl = els.filtersListEl;
   filtersInvertToggle = els.filtersInvertToggle;
@@ -68,6 +70,8 @@ export function initFilterElements(els: {
   filtersSavedStatus = els.filtersSavedStatus;
   filtersLoadControls = els.filtersLoadControls;
   filtersLoadSelect = els.filtersLoadSelect;
+  filtersContextLine = els.filtersContextLine;
+  updateFiltersContextLine();
 }
 
 /* ------------------------------------------------------------------ */
@@ -80,6 +84,7 @@ let _updateStatisticsResults: () => void;
 let _scheduleScatterPlotRefresh: () => void;
 let _getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
 let _clearLegendVisibility: () => void;
+let _hideFiltersPanel: () => void;
 
 type FiltersContext =
   | { type: 'layer' }
@@ -88,6 +93,8 @@ type FiltersContext =
       getFilters: () => FilterRule[];
       getFilterInvert: () => boolean;
       setFilters: (filters: FilterRule[], filterInvert: boolean) => void;
+      label: string;
+      key: string;
     };
 
 let filtersContext: FiltersContext = { type: 'layer' };
@@ -97,6 +104,18 @@ let layerFiltersSnapshot: {
   filterMode: FilterMode;
   filterActionMode: FilterActionMode;
 } | null = null;
+
+function getLayerContextLabel() {
+  const layer = S.currentLayerId ? S.layers.get(S.currentLayerId) : null;
+  const name = layer?.name || layer?.field || 'Current layer';
+  return `Layer: ${name}`;
+}
+
+function updateFiltersContextLine() {
+  if (!filtersContextLine) return;
+  const label = filtersContext.type === 'landSchedule' ? filtersContext.label : getLayerContextLabel();
+  filtersContextLine.textContent = `Context: "${label}"`;
+}
 export function initFilterCallbacks(cbs: {
   persistCurrentLayerState: () => void;
   renderLayerList: () => void;
@@ -104,6 +123,7 @@ export function initFilterCallbacks(cbs: {
   scheduleScatterPlotRefresh: () => void;
   getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
   clearLegendVisibility: () => void;
+  hideFiltersPanel: () => void;
 }) {
   _persistCurrentLayerState = cbs.persistCurrentLayerState;
   _renderLayerList = cbs.renderLayerList;
@@ -111,6 +131,7 @@ export function initFilterCallbacks(cbs: {
   _scheduleScatterPlotRefresh = cbs.scheduleScatterPlotRefresh;
   _getCurrentLayerIds = cbs.getCurrentLayerIds;
   _clearLegendVisibility = cbs.clearLegendVisibility;
+  _hideFiltersPanel = cbs.hideFiltersPanel;
 }
 
 /* ------------------------------------------------------------------ */
@@ -150,6 +171,7 @@ export function setFiltersContext(context: FiltersContext) {
   if (filtersInvertToggle) {
     filtersInvertToggle.checked = S.filterInvert;
   }
+  updateFiltersContextLine();
   renderFiltersList();
   updateFiltersUIState();
 }
@@ -160,6 +182,14 @@ export function persistFiltersContext() {
     return;
   }
   _persistCurrentLayerState();
+}
+
+export function invalidateFiltersContextIf(predicate: (context: FiltersContext) => boolean) {
+  if (!predicate(filtersContext)) return;
+  if (filtersContext.type === 'landSchedule') {
+    setFiltersContext({ type: 'layer' });
+  }
+  _hideFiltersPanel?.();
 }
 
 function getReferenceFilterName(filter: FilterRule): string | null {
@@ -948,6 +978,7 @@ export function renderFiltersList() {
 
 export function refreshFiltersUI() {
   syncFiltersWithAvailableFields();
+  updateFiltersContextLine();
   renderFiltersList();
   updateFiltersUIState();
 }

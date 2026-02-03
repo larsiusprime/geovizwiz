@@ -136,6 +136,70 @@ export function enableWindowResizing(windowEl: HTMLElement) {
 export function createWindowManager(config: WindowConfig): WindowManager {
   const display = config.contentDisplay ?? 'grid';
 
+  function avoidWindowOverlap(target: HTMLElement) {
+    if (isPinned(target)) return;
+    const rect = target.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const padding = 12;
+    const windows = Array.from(document.querySelectorAll<HTMLElement>('.viz-window'))
+      .filter(el => el !== target)
+      .filter(el => window.getComputedStyle(el).display !== 'none');
+    const targetArea = rect.width * rect.height;
+    if (!windows.length || targetArea === 0) return;
+
+    const overlaps = windows.map(win => {
+      const r = win.getBoundingClientRect();
+      const overlapX = Math.max(0, Math.min(rect.right, r.right) - Math.max(rect.left, r.left));
+      const overlapY = Math.max(0, Math.min(rect.bottom, r.bottom) - Math.max(rect.top, r.top));
+      return overlapX * overlapY;
+    });
+    const maxOverlap = Math.max(...overlaps, 0);
+    if (maxOverlap / targetArea < 0.35) return;
+
+    const candidates: Array<{ left: number; top: number }> = [
+      { left: padding, top: padding },
+      { left: viewportWidth - rect.width - padding, top: padding },
+      { left: padding, top: viewportHeight - rect.height - padding },
+      { left: viewportWidth - rect.width - padding, top: viewportHeight - rect.height - padding },
+    ];
+
+    windows.forEach(win => {
+      const r = win.getBoundingClientRect();
+      candidates.push({ left: r.right + padding, top: r.top });
+      candidates.push({ left: r.left, top: r.bottom + padding });
+    });
+
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+    let best = { left: rect.left, top: rect.top, overlap: maxOverlap };
+
+    candidates.forEach(candidate => {
+      const left = clamp(candidate.left, padding, viewportWidth - rect.width - padding);
+      const top = clamp(candidate.top, padding, viewportHeight - rect.height - padding);
+      const candidateRect = {
+        left,
+        top,
+        right: left + rect.width,
+        bottom: top + rect.height,
+      };
+      let overlap = 0;
+      windows.forEach(win => {
+        const r = win.getBoundingClientRect();
+        const overlapX = Math.max(0, Math.min(candidateRect.right, r.right) - Math.max(candidateRect.left, r.left));
+        const overlapY = Math.max(0, Math.min(candidateRect.bottom, r.bottom) - Math.max(candidateRect.top, r.top));
+        overlap += overlapX * overlapY;
+      });
+      if (overlap < best.overlap) {
+        best = { left, top, overlap };
+      }
+    });
+
+    if (best.left !== rect.left || best.top !== rect.top) {
+      target.style.left = `${best.left}px`;
+      target.style.top = `${best.top}px`;
+    }
+  }
+
   function minimize() {
     config.setMinimized(true);
     config.contentEl.style.display = 'none';
@@ -157,6 +221,7 @@ export function createWindowManager(config: WindowConfig): WindowManager {
       config.positionFn?.();
     }
     config.onShow?.();
+    avoidWindowOverlap(config.controlsEl);
     ensureWindowMinHeight(config.controlsEl);
     if (isPinned(config.controlsEl)) {
       updatePinnedLayout();

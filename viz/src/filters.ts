@@ -5,7 +5,12 @@
  * saved filters, and the filters panel UI live here.
  */
 import type { Expression } from 'maplibre-gl';
-import { S, NUMERIC_FILTER_OPERATORS, CATEGORICAL_FILTER_OPERATORS } from './state';
+import {
+  S,
+  NUMERIC_FILTER_OPERATORS,
+  CATEGORICAL_FILTER_OPERATORS,
+  REFERENCE_FILTER_OPERATORS
+} from './state';
 import { numOrNull } from './utils.number';
 import { updateFiltersPanelLayout } from './windows';
 import type {
@@ -13,6 +18,9 @@ import type {
   FilterOperator, FilterRule, SavedFilterEntry,
   ColorMode, LayerState
 } from './types';
+
+const FILTER_REFERENCE_FIELD = '__named_filter__';
+const FILTER_REFERENCE_LABEL = 'Named filter...';
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initFilterElements)          */
@@ -97,6 +105,50 @@ export function cloneFilters(source: FilterRule[]): FilterRule[] {
     ...filter,
     value: Array.isArray(filter.value) ? [...filter.value] : filter.value
   }));
+}
+
+function getReferenceFilterName(filter: FilterRule): string | null {
+  if (filter.fieldType !== 'reference') return null;
+  if (typeof filter.value !== 'string') return null;
+  const trimmed = filter.value.trim();
+  return trimmed ? trimmed : null;
+}
+
+function getSavedFilterReferenceGraph(): Map<string, string[]> {
+  const graph = new Map<string, string[]>();
+  S.savedFiltersStore.forEach(entry => {
+    const references = entry.filters
+      .map(rule => getReferenceFilterName(rule))
+      .filter((name): name is string => Boolean(name));
+    graph.set(entry.name, references);
+  });
+  return graph;
+}
+
+function isCircularSavedFilter(name: string): boolean {
+  const graph = getSavedFilterReferenceGraph();
+  const visited = new Set<string>();
+  const stack = new Set<string>();
+
+  const visit = (node: string): boolean => {
+    if (stack.has(node)) return true;
+    if (visited.has(node)) return false;
+    visited.add(node);
+    stack.add(node);
+    const refs = graph.get(node) ?? [];
+    for (const ref of refs) {
+      if (!graph.has(ref)) continue;
+      if (visit(ref)) return true;
+    }
+    stack.delete(node);
+    return false;
+  };
+
+  return visit(name);
+}
+
+function showCircularFilterModal(name: string) {
+  window.alert(`Circular filter reference detected. "${name}" cannot be used because it references itself (directly or indirectly).`);
 }
 
 export function serializeFiltersForComparison(source: FilterRule[], invert: boolean): string {
@@ -260,6 +312,7 @@ export function getAvailableFilterFields() {
 export function syncFiltersWithAvailableFields() {
   const availableFields = new Set(getAvailableFilterFields().map(item => item.field));
   S.filters.forEach(filter => {
+    if (filter.fieldType === 'reference') return;
     if (filter.field && !availableFields.has(filter.field)) {
       filter.field = null;
       filter.fieldType = null;
@@ -286,6 +339,9 @@ export function getCategoricalValues(field: string): string[] {
 
 export function isFilterComplete(filter: FilterRule): boolean {
   if (!filter.active || !filter.field || !filter.operator) return false;
+  if (filter.fieldType === 'reference') {
+    return typeof filter.value === 'string' && filter.value.trim().length > 0;
+  }
   if (filter.value === null || filter.value === undefined) return false;
   if (Array.isArray(filter.value)) return filter.value.length > 0;
   if (typeof filter.value === 'string') return filter.value.trim().length > 0;
@@ -300,8 +356,17 @@ export function getActiveFilters(): FilterRule[] {
 /*  Filter expressions (MapLibre)                                     */
 /* ------------------------------------------------------------------ */
 
-function buildFilterExpression(filter: FilterRule): any | null {
+function buildFilterExpression(filter: FilterRule, stack: Set<string>): any | null {
   if (!filter.field || !filter.operator || filter.value === null) return null;
+  if (filter.fieldType === 'reference') {
+    const referenceName = getReferenceFilterName(filter);
+    if (!referenceName) return null;
+    const entry = S.savedFiltersStore.get(referenceName);
+    if (!entry) return null;
+    const referenceExpr = buildSavedFilterExpression(entry, stack);
+    if (!referenceExpr) return null;
+    return filter.operator === 'ref-false' ? ['!', referenceExpr] : referenceExpr;
+  }
   if (filter.fieldType === 'numeric') {
     if (!Number.isFinite(filter.value)) return null;
     const value = Number(filter.value);
@@ -340,18 +405,24 @@ function buildFilterExpression(filter: FilterRule): any | null {
   return null;
 }
 
-function buildFiltersExpression(activeFilters: FilterRule[]): any | null {
+function buildFiltersExpression(activeFilters: FilterRule[], stack: Set<string>): any | null {
   if (!activeFilters.length) return null;
   const expressions = activeFilters
-    .map(filter => buildFilterExpression(filter))
+    .map(filter => buildFilterExpression(filter, stack))
     .filter(Boolean) as any[];
   if (!expressions.length) return null;
   return expressions.length === 1 ? expressions[0] : ['all', ...expressions];
 }
 
-export function buildSavedFilterExpression(entry: SavedFilterEntry): any | null {
+export function buildSavedFilterExpression(entry: SavedFilterEntry, stack: Set<string> = new Set()): any | null {
+  if (stack.has(entry.name)) {
+    showCircularFilterModal(entry.name);
+    return null;
+  }
+  const nextStack = new Set(stack);
+  nextStack.add(entry.name);
   const activeFilters = entry.filters.filter(isFilterComplete);
-  const baseExpr = buildFiltersExpression(activeFilters);
+  const baseExpr = buildFiltersExpression(activeFilters, nextStack);
   if (!baseExpr) return null;
   return entry.filterInvert ? ['!', baseExpr] : baseExpr;
 }
@@ -359,7 +430,7 @@ export function buildSavedFilterExpression(entry: SavedFilterEntry): any | null 
 function buildFilterModeExpression(): any | null {
   if (S.filterMode === 'none') return null;
   const activeFilters = getActiveFilters();
-  const baseExpr = buildFiltersExpression(activeFilters);
+  const baseExpr = buildFiltersExpression(activeFilters, new Set());
   if (!baseExpr) return null;
   const modeExpr = S.filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
   return S.filterInvert ? ['!', modeExpr] : modeExpr;
@@ -493,7 +564,7 @@ export function buildLegendVisibilityFilter(): any | null {
 function buildFilterModeExpressionForLayer(layer: LayerState): any | null {
   if (layer.filterMode === 'none') return null;
   const activeFilters = layer.filters.filter(isFilterComplete);
-  const baseExpr = buildFiltersExpression(activeFilters);
+  const baseExpr = buildFiltersExpression(activeFilters, new Set());
   if (!baseExpr) return null;
   const modeExpr = layer.filterMode === 'hide' ? ['!', baseExpr] : baseExpr;
   return layer.filterInvert ? ['!', modeExpr] : modeExpr;
@@ -582,6 +653,12 @@ export function renderFiltersList() {
   filtersListEl.replaceChildren();
 
   const availableFields = getAvailableFilterFields();
+  const savedFilterNames = Array.from(S.savedFiltersStore.values())
+    .map(entry => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+  const circularSavedFilters = new Set(
+    savedFilterNames.filter(name => isCircularSavedFilter(name))
+  );
 
   S.filters.forEach(filter => {
     const row = document.createElement('div');
@@ -630,6 +707,9 @@ export function renderFiltersList() {
     placeholderOption.disabled = true;
     placeholderOption.selected = !filter.field;
     fieldSelect.appendChild(placeholderOption);
+    const referenceOption = new Option(FILTER_REFERENCE_LABEL, FILTER_REFERENCE_FIELD);
+    referenceOption.dataset.type = 'reference';
+    fieldSelect.appendChild(referenceOption);
     availableFields.forEach(item => {
       const option = new Option(item.field, item.field);
       option.dataset.type = item.type;
@@ -666,7 +746,9 @@ export function renderFiltersList() {
       operatorSelect.appendChild(operatorPlaceholder);
       const operatorOptions = filter.fieldType === 'numeric'
         ? NUMERIC_FILTER_OPERATORS
-        : CATEGORICAL_FILTER_OPERATORS;
+        : filter.fieldType === 'categorical'
+          ? CATEGORICAL_FILTER_OPERATORS
+          : REFERENCE_FILTER_OPERATORS;
       operatorOptions.forEach(option => {
         operatorSelect.appendChild(new Option(option.label, option.value));
       });
@@ -675,15 +757,72 @@ export function renderFiltersList() {
       }
       operatorSelect.addEventListener('change', () => {
         filter.operator = operatorSelect.value as FilterOperator;
-        filter.value = null;
+        if (filter.fieldType !== 'reference') {
+          filter.value = null;
+        }
         renderFiltersList();
         updateFiltersUIState();
         applyActiveFilterAction();
         _persistCurrentLayerState();
       });
+      if (filter.fieldType === 'reference') {
+        operatorSelect.disabled = !filter.value;
+      }
       operatorRow.appendChild(operatorSelect);
 
-      if (filter.fieldType === 'numeric') {
+      if (filter.fieldType === 'reference') {
+        const valueSelect = document.createElement('select');
+        const valuePlaceholder = new Option('Select value', '');
+        valuePlaceholder.disabled = true;
+        valuePlaceholder.selected = !filter.value;
+        valueSelect.appendChild(valuePlaceholder);
+
+        if (savedFilterNames.length === 0) {
+          const emptyOption = new Option('No saved filters available', '');
+          emptyOption.disabled = true;
+          valueSelect.appendChild(emptyOption);
+          valueSelect.disabled = true;
+        } else {
+          savedFilterNames.forEach(name => {
+            const option = new Option(name, name);
+            valueSelect.appendChild(option);
+          });
+          if (typeof filter.value === 'string') {
+            valueSelect.value = filter.value;
+          }
+        }
+
+        valueSelect.addEventListener('change', () => {
+          const selectedValue = valueSelect.value || null;
+          if (!selectedValue) {
+            filter.value = null;
+            filter.operator = null;
+            renderFiltersList();
+            updateFiltersUIState();
+            applyActiveFilterAction();
+            _persistCurrentLayerState();
+            return;
+          }
+          if (circularSavedFilters.has(selectedValue) || isCircularSavedFilter(selectedValue)) {
+            showCircularFilterModal(selectedValue);
+            valueSelect.value = '';
+            filter.value = null;
+            filter.operator = null;
+            renderFiltersList();
+            updateFiltersUIState();
+            applyActiveFilterAction();
+            _persistCurrentLayerState();
+            return;
+          }
+          filter.value = selectedValue;
+          renderFiltersList();
+          updateFiltersUIState();
+          applyActiveFilterAction();
+          _persistCurrentLayerState();
+        });
+
+        operatorRow.appendChild(valueSelect);
+      } else if (filter.fieldType === 'numeric') {
         const valueInput = document.createElement('input');
         valueInput.type = 'number';
         valueInput.placeholder = 'Value';
@@ -763,6 +902,16 @@ export function refreshFiltersUI() {
 
 function matchesFilterRule(feature: GeoJSON.Feature, filter: FilterRule): boolean {
   if (!filter.field || !filter.operator) return false;
+  if (filter.fieldType === 'reference') {
+    const referenceName = getReferenceFilterName(filter);
+    if (!referenceName) return false;
+    const entry = S.savedFiltersStore.get(referenceName);
+    if (!entry) return false;
+    const referenceExpr = buildSavedFilterExpression(entry);
+    if (!referenceExpr) return false;
+    const resolved = evaluateFilterExpression(referenceExpr, feature);
+    return filter.operator === 'ref-false' ? !resolved : resolved;
+  }
   const rawValue = feature.properties?.[filter.field];
   if (filter.fieldType === 'numeric') {
     const numericValue = numOrNull(rawValue);

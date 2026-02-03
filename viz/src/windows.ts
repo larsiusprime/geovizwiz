@@ -520,7 +520,13 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   element.style.position = 'relative';
   setPinnedState(element, true);
 
-  let targetColumn = column ?? findColumnForWindow(element);
+  let targetColumn = column;
+  if (targetColumn && !canColumnFitWindow(targetColumn, element)) {
+    targetColumn = null;
+  }
+  if (!targetColumn) {
+    targetColumn = findColumnForWindow(element);
+  }
   if (!targetColumn) {
     targetColumn = createPinnedColumn();
   }
@@ -563,10 +569,12 @@ function updatePinnedLayout() {
   const visibleColumns: Array<{ column: HTMLDivElement; width: number }> = [];
   columns.forEach((column) => {
     const children = Array.from(column.children) as HTMLElement[];
-    const visibleChildren = children.filter(child => window.getComputedStyle(child).display !== 'none');
+    const visibleChildren = children
+      .filter(child => child.classList.contains('viz-window'))
+      .filter(child => window.getComputedStyle(child).display !== 'none');
     if (visibleChildren.length === 0) {
-      column.style.display = 'none';
-      column.style.width = '0px';
+      columnWidthOverrides.delete(column);
+      column.remove();
       return;
     }
     column.style.display = 'flex';
@@ -579,6 +587,13 @@ function updatePinnedLayout() {
     });
     visibleColumns.push({ column, width: columnWidth });
   });
+  if (visibleColumns.length === 0) {
+    document.documentElement.style.setProperty('--pinned-width', '0px');
+    ensureFloatingWindowsClearDock();
+    _updateLegendPosition();
+    updateFiltersPanelLayout();
+    return;
+  }
   visibleColumns.forEach((entry, index) => {
     totalWidth += entry.width;
     if (index < visibleColumns.length - 1) {
@@ -618,21 +633,28 @@ function findColumnForWindow(element: HTMLElement) {
   const containerHeight = pinnedContainer.getBoundingClientRect().height;
   const gapValue = parseFloat(window.getComputedStyle(pinnedContainer).gap || `${PINNED_GAP_FALLBACK}`);
   for (const column of columns) {
-    const visibleChildren = Array.from(column.children)
-      .filter((child): child is HTMLElement => child instanceof HTMLElement)
-      .filter(child => child.classList.contains('viz-window'))
-      .filter(child => window.getComputedStyle(child).display !== 'none');
-    if (visibleChildren.length === 0) {
-      return column;
-    }
-    const usedHeight = visibleChildren.reduce((sum, child) => sum + child.getBoundingClientRect().height, 0)
-      + gapValue * Math.max(0, visibleChildren.length - 1);
-    const nextHeight = element.getBoundingClientRect().height;
-    if (usedHeight + nextHeight <= containerHeight) {
+    if (canColumnFitWindow(column, element, containerHeight, gapValue)) {
       return column;
     }
   }
   return null;
+}
+
+function canColumnFitWindow(
+  column: HTMLDivElement,
+  element: HTMLElement,
+  containerHeight = pinnedContainer?.getBoundingClientRect().height ?? 0,
+  gapValue = parseFloat(window.getComputedStyle(pinnedContainer ?? document.body).gap || `${PINNED_GAP_FALLBACK}`)
+) {
+  const visibleChildren = Array.from(column.children)
+    .filter((child): child is HTMLElement => child instanceof HTMLElement)
+    .filter(child => child.classList.contains('viz-window'))
+    .filter(child => window.getComputedStyle(child).display !== 'none');
+  const usedHeight = visibleChildren.reduce((sum, child) => sum + child.getBoundingClientRect().height, 0)
+    + gapValue * Math.max(0, visibleChildren.length - 1);
+  const nextHeight = element.getBoundingClientRect().height;
+  const totalHeight = usedHeight + nextHeight + (visibleChildren.length > 0 ? gapValue : 0);
+  return totalHeight <= containerHeight;
 }
 
 function getDockRightEdge() {

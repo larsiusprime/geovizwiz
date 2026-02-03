@@ -105,10 +105,15 @@
       height: 14px;
       cursor: nwse-resize;
       opacity: 0.6;
-      background:
-        linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%) bottom right / 6px 6px no-repeat,
-        linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%) center / 6px 6px no-repeat,
-        linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.25) 50%) top left / 6px 6px no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .window-resize-handle img {
+      width: 14px;
+      height: 14px;
+      display: block;
     }
 
     .window-resize-edge {
@@ -975,7 +980,9 @@
       <fieldset id="legend">      </fieldset>
       </div>
       <div class="window-resize-edge" aria-hidden="true"></div>
-      <div class="window-resize-handle" aria-hidden="true"></div>
+      <div class="window-resize-handle" aria-hidden="true">
+        <img src="./src/svg/expand.svg" alt="" />
+      </div>
     </div>
   </div>
 
@@ -1028,7 +1035,9 @@
       </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
   <div id="filtersControls" class="viz-window" style="position: absolute; top: 10px; left: 860px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
@@ -1079,7 +1088,9 @@
       <button id="addFilterButton" type="button">Add condition</button>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
   <div id="paintControls" class="viz-window" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
@@ -1219,7 +1230,9 @@
       </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
   <div id="statisticsControls" class="viz-window" style="position: absolute; top: 10px; left: 900px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
@@ -1338,7 +1351,9 @@
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
   <div id="scatterplotControls" class="viz-window" style="position: absolute; top: 10px; left: 900px; width: min(calc(92vw - 80px), 520px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
@@ -1425,7 +1440,9 @@
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
   <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
@@ -1496,7 +1513,9 @@
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
   <!-- Modal 1: Numeric field chooser -->
@@ -1657,7 +1676,9 @@
       overflow-y: auto;
     "></div>
     <div class="window-resize-edge" aria-hidden="true"></div>
-    <div class="window-resize-handle" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
   </div>
 
 

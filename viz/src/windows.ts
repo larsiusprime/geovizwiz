@@ -37,6 +37,7 @@ type DockableWindow = {
 type ResizeMode = 'both' | 'x' | 'y';
 
 const PINNED_GAP_FALLBACK = 8;
+const PINNED_GUTTER = 8;
 const MIN_WINDOW_WIDTH = 240;
 const MIN_WINDOW_HEIGHT = 160;
 
@@ -566,12 +567,13 @@ function updatePinnedLayout() {
       return;
     }
     column.style.display = 'flex';
-    const minColumnWidth = getColumnMinWidth(column);
+    const minColumnWidth = getColumnMinWidth(column) + PINNED_GUTTER;
     const overrideWidth = columnWidthOverrides.get(getColumnIndex(column));
     const columnWidth = Math.max(minColumnWidth, overrideWidth ?? minColumnWidth);
     column.style.width = `${columnWidth}px`;
+    column.style.setProperty('--pinned-gutter', `${PINNED_GUTTER}px`);
     visibleChildren.forEach(child => {
-      child.style.width = `${columnWidth}px`;
+      child.style.width = `${Math.max(0, columnWidth - PINNED_GUTTER)}px`;
     });
     visibleColumns.push({ column, width: columnWidth });
   });

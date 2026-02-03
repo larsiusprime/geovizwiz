@@ -401,6 +401,11 @@ const landScheduleTableSelect = document.getElementById('landScheduleTableSelect
 const landScheduleTableSelectRow = document.getElementById('landScheduleTableSelectRow') as HTMLDivElement;
 const landScheduleAddTableButton = document.getElementById('landScheduleAddTable') as HTMLButtonElement;
 const landScheduleTableContainer = document.getElementById('landScheduleTableContainer') as HTMLDivElement;
+const landScheduleTablesToggle = document.getElementById('landScheduleTablesToggle') as HTMLButtonElement;
+const landScheduleTablesContent = document.getElementById('landScheduleTablesContent') as HTMLDivElement;
+const landScheduleCurveToggle = document.getElementById('landScheduleCurveToggle') as HTMLButtonElement;
+const landScheduleCurveContent = document.getElementById('landScheduleCurveContent') as HTMLDivElement;
+const landScheduleCurveChart = document.getElementById('landScheduleCurveChart') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -494,6 +499,33 @@ const setPaintSectionCollapsed = (collapsed: boolean) => {
 setPaintSectionCollapsed(S.isPaintCollapsed);
 paintSectionToggle.addEventListener('click', () => {
   setPaintSectionCollapsed(!S.isPaintCollapsed);
+});
+
+const setLandScheduleTablesCollapsed = (collapsed: boolean) => {
+  S.isLandScheduleTablesCollapsed = collapsed;
+  landScheduleTablesContent.style.display = collapsed ? 'none' : 'grid';
+  landScheduleTablesToggle.classList.toggle('is-collapsed', collapsed);
+  landScheduleTablesToggle.title = collapsed ? 'Expand Size tables' : 'Collapse Size tables';
+  refreshWindowMinHeight(landScheduleControlsEl);
+};
+
+const setLandScheduleCurveCollapsed = (collapsed: boolean) => {
+  S.isLandScheduleCurveCollapsed = collapsed;
+  landScheduleCurveContent.style.display = collapsed ? 'none' : 'block';
+  landScheduleCurveToggle.classList.toggle('is-collapsed', collapsed);
+  landScheduleCurveToggle.title = collapsed ? 'Expand Curve' : 'Collapse Curve';
+  refreshWindowMinHeight(landScheduleControlsEl);
+};
+
+setLandScheduleTablesCollapsed(S.isLandScheduleTablesCollapsed);
+setLandScheduleCurveCollapsed(S.isLandScheduleCurveCollapsed);
+
+landScheduleTablesToggle.addEventListener('click', () => {
+  setLandScheduleTablesCollapsed(!S.isLandScheduleTablesCollapsed);
+});
+
+landScheduleCurveToggle.addEventListener('click', () => {
+  setLandScheduleCurveCollapsed(!S.isLandScheduleCurveCollapsed);
 });
 
 // Color ramp choices
@@ -842,6 +874,7 @@ initLandScheduleElements({
   landScheduleTableSelectRow,
   landScheduleAddTableButton,
   landScheduleTableContainer,
+  landScheduleCurveChart,
 });
 initLandScheduleCallbacks({
   showFiltersPanel: showFilters,

@@ -85,6 +85,8 @@ export const S = {
   isScatterplotMinimized: true,
   isFiltersMinimized: true,
   isLandScheduleMinimized: true,
+  isLandScheduleTablesCollapsed: false,
+  isLandScheduleCurveCollapsed: false,
   hiddenLegendItems: new Set<string>(),
 
   // --- Statistics ---

@@ -869,10 +869,35 @@
       gap: 8px;
     }
 
+    .land-schedule-section-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .land-schedule-subtitle {
       font-weight: 600;
       font-size: 12px;
       color: #333;
+    }
+
+    .land-schedule-collapse-toggle {
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      color: #4b5563;
+      padding: 2px 4px;
+      transition: transform 0.2s ease;
+    }
+
+    .land-schedule-collapse-toggle:hover {
+      background: #f3f4f6;
+      border-radius: 6px;
+    }
+
+    .land-schedule-collapse-toggle.is-collapsed {
+      transform: rotate(-90deg);
     }
 
     .land-schedule-row {
@@ -928,7 +953,7 @@
 
     .land-table-delete {
       border: none;
-      background: #f2f2f2;
+      background: none;
       color: #444;
       width: 22px;
       height: 22px;
@@ -997,6 +1022,16 @@
     .land-table-actions {
       display: flex;
       justify-content: flex-end;
+    }
+
+    .land-schedule-curve {
+      display: grid;
+      gap: 6px;
+    }
+
+    .land-schedule-curve-chart {
+      width: 100%;
+      height: 200px;
     }
   </style>
 </head>
@@ -1580,13 +1615,27 @@
       <div class="divider"></div>
 
       <div class="land-schedule-section">
-        <div class="land-schedule-subtitle">Size tables</div>
-        <div id="landScheduleTableSelectRow" class="land-schedule-row" style="display: none;">
-          <span class="muted" style="font-size: 12px;">Current table:</span>
-          <select id="landScheduleTableSelect"></select>
+        <div class="land-schedule-section-header">
+          <button id="landScheduleTablesToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Size tables">▼</button>
+          <div class="land-schedule-subtitle">Size tables</div>
         </div>
-        <button id="landScheduleAddTable" type="button" class="land-schedule-button">new table</button>
-        <div id="landScheduleTableContainer" style="display: grid; gap: 10px;"></div>
+        <div id="landScheduleTablesContent" style="display: grid; gap: 10px;">
+          <div id="landScheduleTableSelectRow" class="land-schedule-row" style="display: none;">
+            <span class="muted" style="font-size: 12px;">Current table:</span>
+            <select id="landScheduleTableSelect"></select>
+          </div>
+          <button id="landScheduleAddTable" type="button" class="land-schedule-button">new table</button>
+          <div id="landScheduleTableContainer" style="display: grid; gap: 10px;"></div>
+          <div class="land-schedule-curve">
+            <div class="land-schedule-section-header">
+              <button id="landScheduleCurveToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Curve">▼</button>
+              <div class="land-schedule-subtitle">Curve</div>
+            </div>
+            <div id="landScheduleCurveContent">
+              <div id="landScheduleCurveChart" class="land-schedule-curve-chart"></div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>

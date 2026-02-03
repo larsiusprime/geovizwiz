@@ -55,9 +55,9 @@ import {
 } from './filters';
 import {
   createWindowManager, initWindowCallbacks, initPositionElements,
-  positionPaintPanel, positionSettingsPanel, positionStatisticsPanel,
+  positionSettingsPanel, positionStatisticsPanel,
   positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel,
-  updateFiltersPanelLayout, updatePaintButtonState,
+  updateFiltersPanelLayout,
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
   type WindowManager
@@ -155,12 +155,6 @@ S.map.on('load', () => {
 });
 
 
-function updateBasemapButtonStates() {
-  basemapButtons.forEach(button => {
-    button.classList.toggle('active', button.dataset.basemap === S.currentBasemap);
-  });
-}
-
 const BASEMAP_LAYER_IDS: Record<BasemapMode, string> = {
   streets: 'osm-tiles',
   satellite: 'satellite-tiles',
@@ -236,8 +230,11 @@ function setBasemapMode(mode: BasemapMode) {
   if (mode === S.currentBasemap) return;
   removeBasemap(S.currentBasemap);
   S.currentBasemap = mode;
-  updateBasemapButtonStates();
+  if (mode !== 'none') {
+    S.lastBasemapMode = mode;
+  }
   addBasemap(mode);
+  renderLayerList();
 }
 
 /* ---------------- Cursor Management (see ./toolbar.ts) ---------------- */
@@ -278,7 +275,6 @@ const unitsSelect = document.getElementById('units') as HTMLSelectElement;
 const layerList = document.getElementById('layerList') as HTMLDivElement;
 const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
 const settingsOtherActions = document.getElementById('settingsOtherActions') as HTMLDivElement;
-const btnPaintMenu = document.getElementById('btnPaintMenu') as HTMLButtonElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
 const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
@@ -294,23 +290,11 @@ const paintDividerCategorical = document.getElementById('paintDividerCategorical
 const paintDividerRamp = document.getElementById('paintDividerRamp') as HTMLDivElement;
 const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement;
 const currentLayerSource = document.getElementById('currentLayerSource') as HTMLDivElement;
-const basemapButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-basemap]'));
-
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
 (document.getElementById('btn-ortho') as HTMLButtonElement)?.addEventListener('click', () => setOrtho());
 viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
-
-basemapButtons.forEach(button => {
-  button.addEventListener('click', () => {
-    const mode = button.dataset.basemap as BasemapMode | undefined;
-    if (mode) {
-      setBasemapMode(mode);
-    }
-  });
-});
-updateBasemapButtonStates();
 
 // Zoom to data button
 const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
@@ -328,8 +312,8 @@ const controlsEl = document.getElementById('controls') as HTMLDivElement;
 const settingsContent = document.getElementById('settingsContent') as HTMLDivElement;
 const settingsControlsEl = document.getElementById('settingsControls') as HTMLDivElement;
 const settingsMenuContent = document.getElementById('settingsMenuContent') as HTMLDivElement;
-const paintControlsEl = document.getElementById('paintControls') as HTMLDivElement;
-const paintContent = document.getElementById('paintContent') as HTMLDivElement;
+const paintSectionToggle = document.getElementById('paintSectionToggle') as HTMLButtonElement;
+const paintSectionContent = document.getElementById('paintSectionContent') as HTMLDivElement;
 const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
 const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
 const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
@@ -368,7 +352,6 @@ const filtersLoadControls = document.getElementById('filtersLoadControls') as HT
 const filtersLoadSelect = document.getElementById('filtersLoadSelect') as HTMLSelectElement;
 const btnPinLayers = document.getElementById('btnPinLayers') as HTMLButtonElement;
 const btnPinSettings = document.getElementById('btnPinSettings') as HTMLButtonElement;
-const btnPinPaint = document.getElementById('btnPinPaint') as HTMLButtonElement;
 const btnPinFilters = document.getElementById('btnPinFilters') as HTMLButtonElement;
 const btnPinStatistics = document.getElementById('btnPinStatistics') as HTMLButtonElement;
 const btnPinScatterplot = document.getElementById('btnPinScatterplot') as HTMLButtonElement;
@@ -465,7 +448,6 @@ if (settingsOtherActions) {
 }
 const btnMinimizeLayers = document.getElementById('btnMinimizeLayers') as HTMLButtonElement;
 const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu') as HTMLButtonElement;
-const btnMinimizePaint = document.getElementById('btnMinimizePaint') as HTMLButtonElement;
 const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') as HTMLButtonElement;
 const btnMinimizeScatterplot = document.getElementById('btnMinimizeScatterplot') as HTMLButtonElement;
 const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
@@ -502,6 +484,18 @@ const colorPicker = document.getElementById('colorPicker') as HTMLInputElement;
 const btnCancelColorPicker = document.getElementById('btnCancelColorPicker') as HTMLButtonElement;
 const btnConfirmColorPicker = document.getElementById('btnConfirmColorPicker') as HTMLButtonElement;
 
+const setPaintSectionCollapsed = (collapsed: boolean) => {
+  S.isPaintCollapsed = collapsed;
+  paintSectionContent.style.display = collapsed ? 'none' : 'grid';
+  paintSectionToggle.classList.toggle('is-collapsed', collapsed);
+  paintSectionToggle.title = collapsed ? 'Expand Paint' : 'Collapse Paint';
+};
+
+setPaintSectionCollapsed(S.isPaintCollapsed);
+paintSectionToggle.addEventListener('click', () => {
+  setPaintSectionCollapsed(!S.isPaintCollapsed);
+});
+
 // Color ramp choices
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
@@ -512,23 +506,13 @@ rampSelect.value = 'Viridis';
 /* ---------------- Layer & Data Store functions — see ./layers.ts ----------------- */
 
 // Window management — using createWindowManager from windows.ts
-// The paint window manager is declared first so layers can reference minimizePaint in its onMinimize.
-const paintWin = createWindowManager({
-  getMinimized: () => S.isPaintMinimized,
-  setMinimized: (v) => { S.isPaintMinimized = v; },
-  contentEl: paintContent,
-  controlsEl: paintControlsEl,
-  positionFn: positionPaintPanel,
-});
-
 const layersWin = createWindowManager({
   getMinimized: () => S.isLayersMinimized,
   setMinimized: (v) => { S.isLayersMinimized = v; },
   contentEl: settingsContent,
   controlsEl: controlsEl,
   contentDisplay: 'block',
-  positionFn: () => { positionPaintPanel(); positionSettingsPanel(); },
-  onMinimize: () => { paintWin.minimize(); },
+  positionFn: () => { positionSettingsPanel(); },
 });
 
 const settingsMenuWin = createWindowManager({
@@ -604,9 +588,6 @@ const showLayers = layersWin.show;
 const minimizeSettingsMenu = settingsMenuWin.minimize;
 const showSettingsMenu = settingsMenuWin.show;
 const toggleSettingsMenu = settingsMenuWin.toggle;
-const minimizePaint = paintWin.minimize;
-const showPaint = paintWin.show;
-const togglePaint = paintWin.toggle;
 const minimizeLegend = legendWin.minimize;
 const showLegend = legendWin.show;
 const minimizeStatistics = statisticsWin.minimize;
@@ -626,7 +607,6 @@ initWindowCallbacks({
 });
 initPositionElements({
   controlsEl,
-  paintControlsEl,
   settingsControlsEl,
   statisticsControlsEl,
   scatterplotControlsEl,
@@ -642,7 +622,6 @@ initWindowDocking({
 [
   btnPinLayers,
   btnPinSettings,
-  btnPinPaint,
   btnPinFilters,
   btnPinStatistics,
   btnPinScatterplot,
@@ -651,7 +630,6 @@ initWindowDocking({
 ].forEach(initPinButton);
 registerDockableWindow(controlsEl, btnPinLayers);
 registerDockableWindow(settingsControlsEl, btnPinSettings);
-registerDockableWindow(paintControlsEl, btnPinPaint);
 registerDockableWindow(filtersControlsEl, btnPinFilters);
 registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
@@ -659,7 +637,6 @@ registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
 registerDockableWindow(floatingLegend, btnPinLegend);
 enableWindowResizing(controlsEl);
 enableWindowResizing(settingsControlsEl);
-enableWindowResizing(paintControlsEl);
 enableWindowResizing(filtersControlsEl);
 enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
@@ -910,6 +887,7 @@ initLayerCallbacks({
   closeAddLayerModal,
   createEyeButton,
   setEyeButtonIcon,
+  setBasemapMode,
 });
 
 // Initialize metadata module for project save/load
@@ -930,7 +908,6 @@ initMetadataModule();
 function installWelcome() {
   minimizeLayers();
   minimizeSettingsMenu();
-  minimizePaint();
   minimizeFilters();
 
   S.welcomeEl = document.createElement('div');
@@ -960,7 +937,6 @@ function installWelcome() {
 export function revealUI() {
   if (S.welcomeEl) { S.welcomeEl.remove(); S.welcomeEl = null; }
   showLayers();
-  showPaint();
   minimizeSettingsMenu();
 }
 
@@ -1855,13 +1831,11 @@ colorPicker.addEventListener('input', () => {
 // Window management event listeners
 btnMinimizeLayers.addEventListener('click', minimizeLayers);
 btnMinimizeSettingsMenu.addEventListener('click', minimizeSettingsMenu);
-btnMinimizePaint.addEventListener('click', minimizePaint);
 btnMinimizeLegend.addEventListener('click', minimizeLegend);
 btnMinimizeStatistics.addEventListener('click', minimizeStatistics);
 btnMinimizeScatterplot.addEventListener('click', minimizeScatterplot);
 btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
-btnPaintMenu.addEventListener('click', togglePaint);
 
 landScheduleFieldSelect.addEventListener('change', () => {
   S.currentLandScheduleField = landScheduleFieldSelect.value || null;
@@ -2108,17 +2082,14 @@ window.addEventListener('resize', () => {
 // Make windows draggable
 makeDraggable(controlsEl);
 makeDraggable(settingsControlsEl);
-makeDraggable(paintControlsEl);
 makeDraggable(floatingLegend);
 makeDraggable(statisticsControlsEl);
 makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
 makeDraggable(landScheduleControlsEl);
-positionPaintPanel();
 positionSettingsPanel();
 positionFiltersPanel();
 positionLandSchedulePanel();
-updatePaintButtonState(btnPaintMenu);
 
 rampSelect.addEventListener('change', () => {
   // if quantiles, new color count ⇒ recompute breaks

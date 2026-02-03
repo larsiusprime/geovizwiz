@@ -177,7 +177,6 @@ export function createWindowManager(config: WindowConfig): WindowManager {
 
 export type PositionElements = {
   controlsEl: HTMLDivElement;
-  paintControlsEl: HTMLDivElement;
   settingsControlsEl: HTMLDivElement;
   statisticsControlsEl: HTMLDivElement;
   scatterplotControlsEl: HTMLDivElement;
@@ -192,18 +191,6 @@ let els: PositionElements;
 /** Must be called once from main.ts to pass in the DOM elements. */
 export function initPositionElements(elements: PositionElements) {
   els = elements;
-}
-
-export function positionPaintPanel() {
-  if (!els.controlsEl || !els.paintControlsEl) return;
-  if (isPinned(els.paintControlsEl)) return;
-  if (els.paintControlsEl.dataset.userPositioned === 'true') return;
-  const rect = els.controlsEl.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.paintControlsEl.style.left = `${rect.left}px`;
-  els.paintControlsEl.style.top = `${rect.bottom + gap}px`;
-  els.paintControlsEl.style.transform = 'none';
 }
 
 export function positionSettingsPanel() {
@@ -307,21 +294,6 @@ export function positionLandSchedulePanel() {
   els.landScheduleControlsEl.style.left = `${rect.right + gap}px`;
   els.landScheduleControlsEl.style.top = `${rect.top}px`;
   els.landScheduleControlsEl.style.transform = 'none';
-}
-
-// ---------------------------------------------------------------------------
-// updatePaintButtonState
-// ---------------------------------------------------------------------------
-
-export function updatePaintButtonState(btnPaintMenu: HTMLButtonElement | null) {
-  if (!btnPaintMenu) return;
-  if (S.isPaintMinimized) {
-    btnPaintMenu.classList.add('inactive');
-    btnPaintMenu.classList.remove('active');
-  } else {
-    btnPaintMenu.classList.remove('inactive');
-    btnPaintMenu.classList.add('active');
-  }
 }
 
 // ---------------------------------------------------------------------------

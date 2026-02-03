@@ -9,7 +9,7 @@ import type {
   LayerState, DataStore, FilterRule, SavedFilterEntry,
   ParcelPatchMap, ColorMode, CategoricalColorMode, QualityMode,
   UpdateMode, SubjectMode, FilterMode, FilterActionMode,
-  LandScheduleBaseLot, NumericFilterOperator, CategoricalFilterOperator
+  LandScheduleBaseLot, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator
 } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 
@@ -182,4 +182,9 @@ export const CATEGORICAL_FILTER_OPERATORS: Array<{ value: CategoricalFilterOpera
   { value: 'neq', label: 'not =' },
   { value: 'any', label: 'any of...' },
   { value: 'not-any', label: 'not any of...' }
+];
+
+export const REFERENCE_FILTER_OPERATORS: Array<{ value: ReferenceFilterOperator; label: string }> = [
+  { value: 'ref-true', label: 'TRUE' },
+  { value: 'ref-false', label: 'FALSE' }
 ];

@@ -2,12 +2,13 @@ import type { AsyncBuffer } from './utils.sanitize';
 
 export type BasemapMode = 'streets' | 'satellite' | 'none';
 
-export type FilterFieldType = 'numeric' | 'categorical';
+export type FilterFieldType = 'numeric' | 'categorical' | 'reference';
 export type FilterMode = 'none' | 'show' | 'hide';
 export type FilterActionMode = 'none' | 'select' | 'show' | 'hide';
 export type NumericFilterOperator = 'lt' | 'gt' | 'lte' | 'gte' | 'eq' | 'neq';
 export type CategoricalFilterOperator = 'eq' | 'neq' | 'any' | 'not-any';
-export type FilterOperator = NumericFilterOperator | CategoricalFilterOperator;
+export type ReferenceFilterOperator = 'ref-true' | 'ref-false';
+export type FilterOperator = NumericFilterOperator | CategoricalFilterOperator | ReferenceFilterOperator;
 
 export type FilterRule = {
   id: string;

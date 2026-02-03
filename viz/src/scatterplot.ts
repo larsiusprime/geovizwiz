@@ -12,8 +12,6 @@ import { numOrNull } from './utils.number';
 import {
   buildLayerVisibilityExpression,
   evaluateFilterExpression,
-  buildSavedFilterExpression,
-  renderSubjectFilterOptions,
 } from './filters';
 import {
   populateCategoryFields,
@@ -32,7 +30,7 @@ import type {
 /*  DOM element references (set once via initScatterplotElements)      */
 /* ------------------------------------------------------------------ */
 
-let scatterLayerSelect: HTMLSelectElement;
+let scatterLayerName: HTMLDivElement;
 let scatterSubjectControls: SubjectSelectorControls;
 let scatterCategoryFieldSelect: HTMLSelectElement;
 let scatterCategoryValueSelect: HTMLSelectElement;
@@ -51,7 +49,7 @@ let scatterPlot: HTMLDivElement;
 let scatterPlotEmpty: HTMLDivElement;
 
 export function initScatterplotElements(els: {
-  scatterLayerSelect: HTMLSelectElement;
+  scatterLayerName: HTMLDivElement;
   scatterSubjectControls: SubjectSelectorControls;
   scatterXFieldSelect: HTMLSelectElement;
   scatterYFieldSelect: HTMLSelectElement;
@@ -67,7 +65,7 @@ export function initScatterplotElements(els: {
   scatterPlot: HTMLDivElement;
   scatterPlotEmpty: HTMLDivElement;
 }) {
-  scatterLayerSelect = els.scatterLayerSelect;
+  scatterLayerName = els.scatterLayerName;
   scatterSubjectControls = els.scatterSubjectControls;
   scatterCategoryFieldSelect = els.scatterSubjectControls.categoryFieldSelect;
   scatterCategoryValueSelect = els.scatterSubjectControls.categoryValueSelect;
@@ -92,29 +90,15 @@ export function initScatterplotElements(els: {
 
 let _getScatterLayer: () => LayerState | null;
 let _getScatterDataStore: () => DataStore | null;
-let _getLayerDataStore: (layer: LayerState | null) => DataStore | null;
-let _renderLayerSelectOptions: (
-  select: HTMLSelectElement,
-  selectedId: string | null,
-  placeholderText: string
-) => string | null;
 let _getParcelId: (feature: GeoJSON.Feature) => string;
 
 export function initScatterplotCallbacks(cbs: {
   getScatterLayer: () => LayerState | null;
   getScatterDataStore: () => DataStore | null;
-  getLayerDataStore: (layer: LayerState | null) => DataStore | null;
-  renderLayerSelectOptions: (
-    select: HTMLSelectElement,
-    selectedId: string | null,
-    placeholderText: string
-  ) => string | null;
   getParcelId: (feature: GeoJSON.Feature) => string;
 }) {
   _getScatterLayer = cbs.getScatterLayer;
   _getScatterDataStore = cbs.getScatterDataStore;
-  _getLayerDataStore = cbs.getLayerDataStore;
-  _renderLayerSelectOptions = cbs.renderLayerSelectOptions;
   _getParcelId = cbs.getParcelId;
 }
 
@@ -247,7 +231,6 @@ export function updateScatterSubjectControls() {
   if (!layer || !scatterGeoJSON) {
     scatterSubjectControls.buttons.forEach(button => { button.disabled = true; });
     scatterSubjectControls.categoryControls.style.display = 'none';
-    scatterSubjectControls.filterControls.style.display = 'none';
     scatterCategoryFieldSelect.disabled = true;
     scatterCategoryValueSelect.disabled = true;
     return;
@@ -266,7 +249,8 @@ function updateScatterSubjectButtons() {
 }
 
 export function setScatterSubjectMode(mode: SubjectMode) {
-  S.scatterSubjectMode = mode;
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  S.scatterSubjectMode = allowedModes.includes(mode) ? mode : 'all';
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
   S.scatterRangeIsCustom = false;
@@ -560,8 +544,7 @@ function getScatterSubjectSelection(
   mode: SubjectMode,
   categoryField: string | null,
   categoryValueIndices: string[],
-  categoryValueMap: Array<{ label: string; value: unknown }>,
-  filteredName: string | null
+  categoryValueMap: Array<{ label: string; value: unknown }>
 ): GeoJSON.Feature[] {
   if (mode === 'visible') {
     if (!layerGeoJSON) return [];
@@ -587,14 +570,6 @@ function getScatterSubjectSelection(
       return selectedValues.has(value);
     });
   }
-  if (mode === 'filtered') {
-    if (!dataGeoJSON || !filteredName) return [];
-    const entry = S.savedFiltersStore.get(filteredName);
-    if (!entry) return [];
-    const filterExpr = buildSavedFilterExpression(entry);
-    if (!filterExpr) return [];
-    return dataGeoJSON.features.filter(feature => evaluateFilterExpression(filterExpr, feature));
-  }
   return layerGeoJSON?.features ?? [];
 }
 
@@ -619,14 +594,6 @@ export function updateScatterPlot() {
     resetScatterPlot('Choose category values to render the scatterplot.');
     return;
   }
-  if (S.scatterSubjectMode === 'filtered' && !S.scatterFilteredName) {
-    if (S.savedFiltersStore.size === 0) {
-      resetScatterPlot('No saved filters available for the scatterplot.');
-    } else {
-      resetScatterPlot('Select a saved filter to render the scatterplot.');
-    }
-    return;
-  }
   if (!S.scatterXField || !S.scatterYField) {
     resetScatterPlot('Select X and Y fields to render the scatterplot.');
     return;
@@ -639,8 +606,7 @@ export function updateScatterPlot() {
     S.scatterSubjectMode,
     S.scatterCategoryField,
     S.scatterCategoryValueIndices,
-    S.scatterCategoryValueMap,
-    S.scatterFilteredName
+    S.scatterCategoryValueMap
   );
   const xValues: number[] = [];
   const yValues: number[] = [];
@@ -763,13 +729,35 @@ export function refreshScatterPanel() {
   populateScatterCategoryValues(S.scatterCategoryField);
   populateScatterFields();
   populateScatterColorByFields();
-  S.scatterFilteredName = renderSubjectFilterOptions(scatterSubjectControls, S.scatterFilteredName);
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  if (!allowedModes.includes(S.scatterSubjectMode)) {
+    S.scatterSubjectMode = 'all';
+  }
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
   scheduleScatterPlotRefresh();
 }
 
+function resolveScatterLayerId(): string | null {
+  if (S.scatterLayerId && S.layers.has(S.scatterLayerId)) {
+    return S.scatterLayerId;
+  }
+  return S.currentLayerId ?? S.layerOrder[0] ?? null;
+}
+
+function getScatterLayerLabel(layerId: string | null): string {
+  if (!layerId) return 'Select a layer to view the scatterplot.';
+  const layer = S.layers.get(layerId);
+  if (!layer) return 'Select a layer to view the scatterplot.';
+  const index = S.layerOrder.indexOf(layerId);
+  const baseName = layer.field ?? `layer ${index + 1}`;
+  const store = S.dataStores.get(layer.dataStoreId);
+  const sourceLabel = store?.file?.name ?? store?.name ?? 'Unknown source';
+  return `${baseName} (${sourceLabel})`;
+}
+
 export function renderScatterLayerOptions() {
-  if (!scatterLayerSelect) return;
-  S.scatterLayerId = _renderLayerSelectOptions(scatterLayerSelect, S.scatterLayerId, 'Choose a layer');
+  if (!scatterLayerName) return;
+  S.scatterLayerId = resolveScatterLayerId();
+  scatterLayerName.textContent = getScatterLayerLabel(S.scatterLayerId);
 }

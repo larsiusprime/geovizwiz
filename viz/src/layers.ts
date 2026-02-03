@@ -10,8 +10,12 @@ import { S } from './state';
 import { SOURCE_ID, LAYER_ID, ERROR_LAYER_ID } from './config';
 import type { LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
-import { cloneFilters } from './filters';
+import { cloneFilters, isFilterComplete } from './filters';
 import { refreshLandSchedulePanel } from './land-schedule';
+
+const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
+const CHART_ICON = new URL('./svg/chart.svg', import.meta.url).href;
+const SCATTER_ICON = new URL('./svg/scatter.svg', import.meta.url).href;
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initLayerElements)            */
@@ -80,6 +84,9 @@ let _updateSelectionControls: () => void;
 let _refreshStatisticsPanel: () => void;
 let _refreshScatterPanel: () => void;
 let _refreshFiltersUI: () => void;
+let _showFiltersPanel: () => void;
+let _showStatisticsPanel: () => void;
+let _showScatterplotPanel: () => void;
 let _renderStatsLayerOptions: () => void;
 let _renderScatterLayerOptions: () => void;
 let _addOrUpdateSource: (fc: GeoJSON.FeatureCollection) => void;
@@ -99,6 +106,9 @@ export function initLayerCallbacks(cbs: {
   refreshStatisticsPanel: () => void;
   refreshScatterPanel: () => void;
   refreshFiltersUI: () => void;
+  showFiltersPanel: () => void;
+  showStatisticsPanel: () => void;
+  showScatterplotPanel: () => void;
   renderStatsLayerOptions: () => void;
   renderScatterLayerOptions: () => void;
   addOrUpdateSource: (fc: GeoJSON.FeatureCollection) => void;
@@ -117,6 +127,9 @@ export function initLayerCallbacks(cbs: {
   _refreshStatisticsPanel = cbs.refreshStatisticsPanel;
   _refreshScatterPanel = cbs.refreshScatterPanel;
   _refreshFiltersUI = cbs.refreshFiltersUI;
+  _showFiltersPanel = cbs.showFiltersPanel;
+  _showStatisticsPanel = cbs.showStatisticsPanel;
+  _showScatterplotPanel = cbs.showScatterplotPanel;
   _renderStatsLayerOptions = cbs.renderStatsLayerOptions;
   _renderScatterLayerOptions = cbs.renderScatterLayerOptions;
   _addOrUpdateSource = cbs.addOrUpdateSource;
@@ -693,7 +706,68 @@ export function renderLayerList() {
       applyLayerOrderToMap();
     });
 
-    row.append(visibilityToggle, currentRadio, nameButton, moveUpBtn, moveDownBtn, deleteBtn);
+    const actionGroup = document.createElement('div');
+    actionGroup.className = 'layer-actions';
+    actionGroup.append(moveUpBtn, moveDownBtn, deleteBtn);
+
+    const toolsGroup = document.createElement('div');
+    toolsGroup.className = 'layer-tools';
+
+    const hasActiveFilters = (layer.filters ?? []).some(filter => isFilterComplete(filter));
+
+    const filterBtn = document.createElement('button');
+    filterBtn.type = 'button';
+    filterBtn.className = `layer-tool-btn${hasActiveFilters ? '' : ' is-muted'}`;
+    filterBtn.title = 'Filters';
+    filterBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" />`;
+    filterBtn.addEventListener('click', () => {
+      setCurrentLayer(layerId);
+      _showFiltersPanel();
+    });
+
+    const statsBtn = document.createElement('button');
+    statsBtn.type = 'button';
+    statsBtn.className = 'layer-tool-btn';
+    statsBtn.title = 'Statistics';
+    statsBtn.innerHTML = `<img src="${CHART_ICON}" alt="Statistics" />`;
+    statsBtn.addEventListener('click', () => {
+      const prevStatsLayer = S.statsLayerId;
+      S.statsLayerId = layerId;
+      if (prevStatsLayer !== S.statsLayerId) {
+        S.statsCategoryField = null;
+        S.statsCategoryValueIndices = [];
+        S.statsField = null;
+        S.statsFieldType = null;
+      }
+      _renderStatsLayerOptions();
+      _refreshStatisticsPanel();
+      _showStatisticsPanel();
+    });
+
+    const scatterBtn = document.createElement('button');
+    scatterBtn.type = 'button';
+    scatterBtn.className = 'layer-tool-btn';
+    scatterBtn.title = 'Scatterplot';
+    scatterBtn.innerHTML = `<img src="${SCATTER_ICON}" alt="Scatterplot" />`;
+    scatterBtn.addEventListener('click', () => {
+      const prevScatterLayer = S.scatterLayerId;
+      S.scatterLayerId = layerId;
+      if (prevScatterLayer !== S.scatterLayerId) {
+        S.scatterCategoryField = null;
+        S.scatterCategoryValueIndices = [];
+        S.scatterXField = null;
+        S.scatterYField = null;
+        S.scatterRangeIsCustom = false;
+        S.scatterColorByField = null;
+      }
+      _renderScatterLayerOptions();
+      _refreshScatterPanel();
+      _showScatterplotPanel();
+    });
+
+    toolsGroup.append(filterBtn, statsBtn, scatterBtn);
+
+    row.append(visibilityToggle, currentRadio, nameButton, actionGroup, toolsGroup);
     _layerList.appendChild(row);
   });
 

@@ -9,9 +9,9 @@ import { S, NUMERIC_FILTER_OPERATORS, CATEGORICAL_FILTER_OPERATORS } from './sta
 import { numOrNull } from './utils.number';
 import { updateFiltersPanelLayout } from './windows';
 import type {
-  FilterFieldType, FilterMode, FilterActionMode,
+  FilterFieldType, FilterMode,
   FilterOperator, FilterRule, SavedFilterEntry,
-  ColorMode, LayerState, SubjectSelectorControls
+  ColorMode, LayerState
 } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -31,9 +31,6 @@ let filtersSaveConfirmButton: HTMLButtonElement;
 let filtersSavedStatus: HTMLDivElement;
 let filtersLoadControls: HTMLDivElement;
 let filtersLoadSelect: HTMLSelectElement;
-let filtersSelectButton: HTMLButtonElement;
-let filtersShowButton: HTMLButtonElement;
-let filtersHideButton: HTMLButtonElement;
 
 export function initFilterElements(els: {
   filtersListEl: HTMLDivElement;
@@ -49,9 +46,6 @@ export function initFilterElements(els: {
   filtersSavedStatus: HTMLDivElement;
   filtersLoadControls: HTMLDivElement;
   filtersLoadSelect: HTMLSelectElement;
-  filtersSelectButton: HTMLButtonElement;
-  filtersShowButton: HTMLButtonElement;
-  filtersHideButton: HTMLButtonElement;
 }) {
   filtersListEl = els.filtersListEl;
   filtersInvertToggle = els.filtersInvertToggle;
@@ -66,9 +60,6 @@ export function initFilterElements(els: {
   filtersSavedStatus = els.filtersSavedStatus;
   filtersLoadControls = els.filtersLoadControls;
   filtersLoadSelect = els.filtersLoadSelect;
-  filtersSelectButton = els.filtersSelectButton;
-  filtersShowButton = els.filtersShowButton;
-  filtersHideButton = els.filtersHideButton;
 }
 
 /* ------------------------------------------------------------------ */
@@ -76,45 +67,25 @@ export function initFilterElements(els: {
 /* ------------------------------------------------------------------ */
 
 let _persistCurrentLayerState: () => void;
-let _updateStatisticsSectionVisibility: () => void;
+let _renderLayerList: () => void;
 let _updateStatisticsResults: () => void;
 let _scheduleScatterPlotRefresh: () => void;
 let _getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
-let _getCurrentSourceId: () => string | null;
 let _clearLegendVisibility: () => void;
-let _clearAllSelections: () => void;
-let _updateSelectionControls: () => void;
-let _getParcelId: (feature: GeoJSON.Feature) => string;
-let _renderSubjectFilterOptionsCallback: (controls: SubjectSelectorControls, selectedName: string | null) => string | null;
-let _statsSubjectControls: SubjectSelectorControls;
-let _scatterSubjectControls: SubjectSelectorControls;
-
 export function initFilterCallbacks(cbs: {
   persistCurrentLayerState: () => void;
-  updateStatisticsSectionVisibility: () => void;
+  renderLayerList: () => void;
   updateStatisticsResults: () => void;
   scheduleScatterPlotRefresh: () => void;
   getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
-  getCurrentSourceId: () => string | null;
   clearLegendVisibility: () => void;
-  clearAllSelections: () => void;
-  updateSelectionControls: () => void;
-  getParcelId: (feature: GeoJSON.Feature) => string;
-  statsSubjectControls: SubjectSelectorControls;
-  scatterSubjectControls: SubjectSelectorControls;
 }) {
   _persistCurrentLayerState = cbs.persistCurrentLayerState;
-  _updateStatisticsSectionVisibility = cbs.updateStatisticsSectionVisibility;
+  _renderLayerList = cbs.renderLayerList;
   _updateStatisticsResults = cbs.updateStatisticsResults;
   _scheduleScatterPlotRefresh = cbs.scheduleScatterPlotRefresh;
   _getCurrentLayerIds = cbs.getCurrentLayerIds;
-  _getCurrentSourceId = cbs.getCurrentSourceId;
   _clearLegendVisibility = cbs.clearLegendVisibility;
-  _clearAllSelections = cbs.clearAllSelections;
-  _updateSelectionControls = cbs.updateSelectionControls;
-  _getParcelId = cbs.getParcelId;
-  _statsSubjectControls = cbs.statsSubjectControls;
-  _scatterSubjectControls = cbs.scatterSubjectControls;
 }
 
 /* ------------------------------------------------------------------ */
@@ -236,15 +207,6 @@ export function updateSavedFiltersUIState() {
     renderSavedFiltersOptions();
   }
 
-  S.statsFilteredName = renderSubjectFilterOptions(_statsSubjectControls, S.statsFilteredName);
-  S.scatterFilteredName = renderSubjectFilterOptions(_scatterSubjectControls, S.scatterFilteredName);
-  if (S.statsSubjectMode === 'filtered') {
-    _updateStatisticsSectionVisibility();
-    _updateStatisticsResults();
-  }
-  if (S.scatterSubjectMode === 'filtered') {
-    _scheduleScatterPlotRefresh();
-  }
 }
 
 export function saveCurrentFilters(name: string) {
@@ -604,21 +566,14 @@ export function createFilterRule(): FilterRule {
   };
 }
 
-function updateFilterActionButtons() {
-  filtersSelectButton.classList.toggle('active', S.filterActionMode === 'select');
-  filtersShowButton.classList.toggle('active', S.filterActionMode === 'show');
-  filtersHideButton.classList.toggle('active', S.filterActionMode === 'hide');
-}
-
 export function updateFiltersUIState() {
   const hasData = Boolean(S.currentGeoJSON);
   const hasActiveFilters = getActiveFilters().length > 0;
   const canApply = hasData && hasActiveFilters;
   if (addFilterButton) addFilterButton.disabled = false;
-  if (filtersSelectButton) filtersSelectButton.disabled = !canApply;
-  if (filtersShowButton) filtersShowButton.disabled = !canApply;
-  if (filtersHideButton) filtersHideButton.disabled = !canApply;
-  updateFilterActionButtons();
+  if (!canApply) {
+    S.filterMode = 'none';
+  }
   updateSavedFiltersUIState();
 }
 
@@ -802,29 +757,6 @@ export function refreshFiltersUI() {
   updateFiltersUIState();
 }
 
-export function renderSubjectFilterOptions(controls: SubjectSelectorControls, selectedName: string | null): string | null {
-  controls.filterSelect.replaceChildren();
-  const placeholder = new Option('Choose a saved filter', '');
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  controls.filterSelect.appendChild(placeholder);
-
-  S.savedFiltersStore.forEach((entry, name) => {
-    controls.filterSelect.appendChild(new Option(entry.name, name));
-  });
-
-  if (selectedName && S.savedFiltersStore.has(selectedName)) {
-    controls.filterSelect.value = selectedName;
-  } else {
-    selectedName = null;
-  }
-
-  controls.filterSelect.disabled = S.savedFiltersStore.size === 0;
-  controls.filterSelect.style.display = S.savedFiltersStore.size === 0 ? 'none' : 'block';
-  controls.filterEmptyState.style.display = S.savedFiltersStore.size === 0 ? 'block' : 'none';
-  return selectedName;
-}
-
 /* ------------------------------------------------------------------ */
 /*  Filter matching (JS-side evaluation)                              */
 /* ------------------------------------------------------------------ */
@@ -879,69 +811,15 @@ function matchesActiveFilters(feature: GeoJSON.Feature): boolean {
 /*  Filter actions                                                    */
 /* ------------------------------------------------------------------ */
 
-function applyFilteredSelection() {
-  if (!S.currentGeoJSON) return;
-  const activeFilters = getActiveFilters();
-  if (!activeFilters.length) return;
-  const sourceId = _getCurrentSourceId();
-  if (!sourceId) return;
-
-  _clearAllSelections();
-
-  for (const feature of S.currentGeoJSON.features) {
-    if (!matchesActiveFilters(feature)) continue;
-    if (feature.id === undefined) continue;
-    const parcelId = _getParcelId(feature);
-    S.selectedParcels.add(parcelId);
-    S.map.setFeatureState(
-      { source: sourceId, id: feature.id },
-      { selected: true }
-    );
-  }
-  _updateSelectionControls();
-}
-
-function applyFilterMode(mode: FilterMode) {
-  if (!S.currentGeoJSON) return;
-  S.filterMode = mode;
-  if (mode !== 'none') {
+export function applyActiveFilterAction() {
+  const hasActiveFilters = getActiveFilters().length > 0;
+  const nextMode: FilterMode = hasActiveFilters ? 'show' : 'none';
+  S.filterActionMode = 'none';
+  S.filterMode = nextMode;
+  if (nextMode !== 'none') {
     _clearLegendVisibility();
   }
   applyMapFilters();
   updateFiltersUIState();
-  _persistCurrentLayerState();
-}
-
-export function applyActiveFilterAction() {
-  if (S.filterActionMode === 'select') {
-    applyFilteredSelection();
-    return;
-  }
-  if (S.filterActionMode === 'show') {
-    applyFilterMode('show');
-    return;
-  }
-  if (S.filterActionMode === 'hide') {
-    applyFilterMode('hide');
-    return;
-  }
-}
-
-export function setFilterActionMode(nextMode: FilterActionMode) {
-  const next = S.filterActionMode === nextMode ? 'none' : nextMode;
-  S.filterActionMode = next;
-
-  if (next === 'select') {
-    applyFilterMode('none');
-    applyFilteredSelection();
-  } else if (next === 'show' || next === 'hide') {
-    applyFilterMode(next);
-  } else {
-    if (S.filterMode !== 'none') {
-      applyFilterMode('none');
-    }
-  }
-
-  updateFilterActionButtons();
-  _persistCurrentLayerState();
+  _renderLayerList();
 }

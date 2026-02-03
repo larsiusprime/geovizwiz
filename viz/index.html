@@ -89,7 +89,7 @@
 
     .layer-row {
       display: grid;
-      grid-template-columns: auto auto 1fr auto auto auto;
+      grid-template-columns: auto auto 1fr auto auto;
       gap: 6px;
       align-items: center;
       padding: 4px 6px;
@@ -121,6 +121,11 @@
       gap: 4px;
     }
 
+    .layer-tools {
+      display: flex;
+      gap: 4px;
+    }
+
     #controls .layer-action-btn {
       border: none;
       background: none;
@@ -134,6 +139,35 @@
     .layer-action-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
+    }
+
+    #controls .layer-tool-btn {
+      border: none;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #controls .layer-tool-btn img {
+      width: 16px;
+      height: 16px;
+      display: block;
+    }
+
+    #controls .layer-tool-btn.is-muted img {
+      opacity: 0.35;
+    }
+
+    .layer-source-name {
+      font-size: 12px;
+      color: #111827;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      padding: 6px 8px;
     }
 
     .current-layer-header {
@@ -759,24 +793,12 @@
           <img src="./src/svg/settings.svg" alt="Settings" />
         </button>
 
-        <button id="filtersToolButton" class="toolbar-button" title="Filters">
-          <img src="./src/svg/filters.svg" alt="Filters" />
-        </button>
-
         <button id="btnPaintMenu" class="toolbar-button" title="Show/hide paint">
           <img src="./src/svg/paint.svg" alt="Paint" />
         </button>
                
         <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
           <img src="./src/svg/legend.svg" alt="Legend" />
-        </button>
-
-        <button id="statisticsToolButton" class="toolbar-button" title="Statistics">
-          <img src="./src/svg/chart.svg" alt="Statistics" />
-        </button>
-
-        <button id="scatterplotToolButton" class="toolbar-button" title="Scatterplot">
-          <img src="./src/svg/scatter.svg" alt="Scatterplot" />
         </button>
 
         <button id="landScheduleToolButton" class="toolbar-button" title="Land Schedule">
@@ -911,14 +933,6 @@
             </div>
           </div>
         </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="filters-actions">
-        <button id="filtersSelectButton" type="button">Select filtered</button>
-        <button id="filtersShowButton" type="button">Show filtered</button>
-        <button id="filtersHideButton" type="button">Hide filtered</button>
       </div>
 
       <div class="divider"></div>
@@ -1079,9 +1093,7 @@
     <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
       <div id="statsLayerSection" class="stats-section" style="display: grid; gap: 8px;">
         <div style="font-weight: 600; font-size: 12px;">Layer:</div>
-        <select id="statsLayerSelect">
-          <option value="" selected disabled>Choose a layer</option>
-        </select>
+        <div id="statsLayerName" class="layer-source-name">Select a layer to view statistics.</div>
       </div>
       <div id="statsSubjectSection" class="stats-section"></div>
 
@@ -1194,9 +1206,7 @@
       <div style="display: grid; gap: 12px;">
         <div id="scatterDataSourceSection" class="stats-section" style="display: grid; gap: 8px;">
           <div style="font-weight: 600; font-size: 12px;">Layer:</div>
-          <select id="scatterLayerSelect">
-            <option value="" selected disabled>Choose a layer</option>
-          </select>
+          <div id="scatterLayerName" class="layer-source-name">Select a layer to view the scatterplot.</div>
           <div id="scatterSubjectSection" class="stats-section"></div>
         </div>
         <div class="divider"></div>

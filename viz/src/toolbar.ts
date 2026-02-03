@@ -11,22 +11,16 @@ import { updatePaintButtonState } from './windows';
 let _showLayers: () => void = () => {};
 let _minimizeLayers: () => void = () => {};
 let _toggleSettingsMenu: () => void = () => {};
-let _toggleFilters: () => void = () => {};
 let _showLegend: () => void = () => {};
 let _minimizeLegend: () => void = () => {};
-let _toggleStatistics: () => void = () => {};
-let _toggleScatterplot: () => void = () => {};
 let _toggleLandSchedule: () => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
   minimizeLayers: () => void;
   toggleSettingsMenu: () => void;
-  toggleFilters: () => void;
   showLegend: () => void;
   minimizeLegend: () => void;
-  toggleStatistics: () => void;
-  toggleScatterplot: () => void;
   toggleLandSchedule: () => void;
 }
 
@@ -34,11 +28,8 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _showLayers = cb.showLayers;
   _minimizeLayers = cb.minimizeLayers;
   _toggleSettingsMenu = cb.toggleSettingsMenu;
-  _toggleFilters = cb.toggleFilters;
   _showLegend = cb.showLegend;
   _minimizeLegend = cb.minimizeLegend;
-  _toggleStatistics = cb.toggleStatistics;
-  _toggleScatterplot = cb.toggleScatterplot;
   _toggleLandSchedule = cb.toggleLandSchedule;
 }
 
@@ -52,9 +43,6 @@ const panToolButton = document.getElementById('panToolButton') as HTMLButtonElem
 const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement;
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
-const statisticsToolButton = document.getElementById('statisticsToolButton') as HTMLButtonElement;
-const scatterplotToolButton = document.getElementById('scatterplotToolButton') as HTMLButtonElement;
-const filtersToolButton = document.getElementById('filtersToolButton') as HTMLButtonElement;
 const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
 const btnPaintMenu = document.getElementById('btnPaintMenu') as HTMLButtonElement;
 
@@ -284,30 +272,6 @@ export function updateToolbarButtonStates() {
     legendToolButton.classList.add('active');
   }
 
-  if (S.isStatisticsMinimized) {
-    statisticsToolButton.classList.add('inactive');
-    statisticsToolButton.classList.remove('active');
-  } else {
-    statisticsToolButton.classList.remove('inactive');
-    statisticsToolButton.classList.add('active');
-  }
-
-  if (S.isScatterplotMinimized) {
-    scatterplotToolButton.classList.add('inactive');
-    scatterplotToolButton.classList.remove('active');
-  } else {
-    scatterplotToolButton.classList.remove('inactive');
-    scatterplotToolButton.classList.add('active');
-  }
-
-  if (S.isFiltersMinimized) {
-    filtersToolButton.classList.add('inactive');
-    filtersToolButton.classList.remove('active');
-  } else {
-    filtersToolButton.classList.remove('inactive');
-    filtersToolButton.classList.add('active');
-  }
-
   if (S.isLandScheduleMinimized) {
     landScheduleToolButton.classList.add('inactive');
     landScheduleToolButton.classList.remove('active');
@@ -397,12 +361,6 @@ export function initializeToolbar() {
     _toggleSettingsMenu();
   });
 
-  filtersToolButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllSubmenus();
-    _toggleFilters();
-  });
-
   // Handle pan button click
   panToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -440,18 +398,6 @@ export function initializeToolbar() {
     } else {
       _minimizeLegend();
     }
-  });
-
-  statisticsToolButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllSubmenus();
-    _toggleStatistics();
-  });
-
-  scatterplotToolButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    closeAllSubmenus();
-    _toggleScatterplot();
   });
 
   landScheduleToolButton.addEventListener('click', (e) => {

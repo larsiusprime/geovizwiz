@@ -10,8 +10,6 @@ import { fmt, percentile, numOrNull } from './utils.number';
 import {
   buildLayerVisibilityExpression,
   evaluateFilterExpression,
-  buildSavedFilterExpression,
-  renderSubjectFilterOptions,
 } from './filters';
 import type {
   SubjectMode,
@@ -26,7 +24,7 @@ import type {
 /* ------------------------------------------------------------------ */
 
 /**
- * Build a subject-mode selector UI (All / Visible / Selected / Category / Filtered)
+ * Build a subject-mode selector UI (All / Visible / Selected)
  * inside the given container. Returns references to the created DOM elements.
  */
 export function buildSubjectSelector(
@@ -54,9 +52,7 @@ export function buildSubjectSelector(
   const modes: Array<{ mode: SubjectMode; label: string }> = [
     { mode: 'all', label: 'All' },
     { mode: 'visible', label: 'Visible' },
-    { mode: 'selected', label: 'Selected' },
-    { mode: 'category', label: 'Category' },
-    { mode: 'filtered', label: 'Filtered' }
+    { mode: 'selected', label: 'Selected' }
   ];
   modes.forEach(({ mode, label }) => {
     const button = document.createElement('button');
@@ -93,25 +89,9 @@ export function buildSubjectSelector(
   categoryValueSelect.appendChild(valuePlaceholder);
 
   categoryControls.append(categoryFieldSelect, categoryValueSelect);
-  const filterControls = document.createElement('div');
-  filterControls.style.display = 'none';
-  filterControls.style.gap = '6px';
-  filterControls.style.marginTop = '8px';
+  container.append(subjectBlock, categoryControls);
 
-  const filterSelect = document.createElement('select');
-  const filterPlaceholder = new Option('Choose a saved filter', '');
-  filterPlaceholder.disabled = true;
-  filterPlaceholder.selected = true;
-  filterSelect.appendChild(filterPlaceholder);
-
-  const filterEmptyState = document.createElement('div');
-  filterEmptyState.className = 'muted';
-  filterEmptyState.textContent = "You haven't saved any filters yet.";
-
-  filterControls.append(filterSelect, filterEmptyState);
-  container.append(subjectBlock, categoryControls, filterControls);
-
-  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect, filterControls, filterSelect, filterEmptyState };
+  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect };
 }
 
 export function updateSubjectButtons(controls: SubjectSelectorControls, mode: SubjectMode) {
@@ -127,18 +107,9 @@ export function updateSubjectControls(
   hasFieldSelected: boolean
 ) {
   const isCategory = mode === 'category';
-  const isFiltered = mode === 'filtered';
   controls.categoryControls.style.display = isCategory ? 'grid' : 'none';
   controls.categoryFieldSelect.disabled = !isCategory || !hasFieldOptions;
   controls.categoryValueSelect.disabled = !isCategory || !hasFieldSelected;
-  controls.filterControls.style.display = isFiltered ? 'grid' : 'none';
-  if (!isFiltered) {
-    return;
-  }
-  const hasFilters = S.savedFiltersStore.size > 0;
-  controls.filterSelect.disabled = !hasFilters;
-  controls.filterSelect.style.display = hasFilters ? 'block' : 'none';
-  controls.filterEmptyState.style.display = hasFilters ? 'none' : 'block';
 }
 
 /**
@@ -228,7 +199,7 @@ export function populateCategoryValues(
 /*  DOM element references (set once via initStatisticsElements)       */
 /* ------------------------------------------------------------------ */
 
-let statsLayerSelect: HTMLSelectElement;
+let statsLayerName: HTMLDivElement;
 let statsSubjectControls: SubjectSelectorControls;
 let statsCategoryFieldSelect: HTMLSelectElement;
 let statsCategoryValueSelect: HTMLSelectElement;
@@ -258,7 +229,7 @@ let statsOverflowMinPct: HTMLInputElement;
 let statsOverflowMaxPct: HTMLInputElement;
 
 export function initStatisticsElements(els: {
-  statsLayerSelect: HTMLSelectElement;
+  statsLayerName: HTMLDivElement;
   statsSubjectControls: SubjectSelectorControls;
   statsFieldSelect: HTMLSelectElement;
   statsDetails: HTMLDivElement;
@@ -285,7 +256,7 @@ export function initStatisticsElements(els: {
   statsOverflowMinPct: HTMLInputElement;
   statsOverflowMaxPct: HTMLInputElement;
 }) {
-  statsLayerSelect = els.statsLayerSelect;
+  statsLayerName = els.statsLayerName;
   statsSubjectControls = els.statsSubjectControls;
   statsCategoryFieldSelect = els.statsSubjectControls.categoryFieldSelect;
   statsCategoryValueSelect = els.statsSubjectControls.categoryValueSelect;
@@ -322,28 +293,17 @@ export function initStatisticsElements(els: {
 let _getStatsLayer: () => LayerState | null;
 let _getLayerDataStore: (layer: LayerState | null) => DataStore | null;
 let _getLayerGeoJSON: (layer: LayerState | null) => GeoJSON.FeatureCollection | null;
-let _renderLayerSelectOptions: (
-  select: HTMLSelectElement,
-  selectedId: string | null,
-  placeholderText: string
-) => string | null;
 let _getParcelId: (feature: GeoJSON.Feature) => string;
 
 export function initStatisticsCallbacks(cbs: {
   getStatsLayer: () => LayerState | null;
   getLayerDataStore: (layer: LayerState | null) => DataStore | null;
   getLayerGeoJSON: (layer: LayerState | null) => GeoJSON.FeatureCollection | null;
-  renderLayerSelectOptions: (
-    select: HTMLSelectElement,
-    selectedId: string | null,
-    placeholderText: string
-  ) => string | null;
   getParcelId: (feature: GeoJSON.Feature) => string;
 }) {
   _getStatsLayer = cbs.getStatsLayer;
   _getLayerDataStore = cbs.getLayerDataStore;
   _getLayerGeoJSON = cbs.getLayerGeoJSON;
-  _renderLayerSelectOptions = cbs.renderLayerSelectOptions;
   _getParcelId = cbs.getParcelId;
 }
 
@@ -405,7 +365,7 @@ export function getStatsFieldType(field: string | null, numericFields: string[],
 export function populateStatisticsFields() {
   const layer = _getStatsLayer();
   const dataStore = _getLayerDataStore(layer);
-  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category';
   const sourceGeoJSON = useDataSource ? dataStore?.geojson ?? null : _getLayerGeoJSON(layer);
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
@@ -597,7 +557,7 @@ export function getStatsSourceContext() {
 
 export function getStatsNormalizationContext() {
   const { layer, dataStore } = getStatsSourceContext();
-  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category';
   return {
     landField: useDataSource ? dataStore?.landSizeField ?? null : layer?.landSizeField ?? null,
     landUnit: useDataSource ? dataStore?.landSizeUnitLabel ?? null : layer?.landSizeUnitLabel ?? null,
@@ -627,8 +587,7 @@ export function getStatsSubjectSelection(
   mode: SubjectMode,
   categoryField: string | null,
   categoryValueIndices: string[],
-  categoryValueMap: Array<{ label: string; value: unknown }>,
-  filteredName: string | null
+  categoryValueMap: Array<{ label: string; value: unknown }>
 ): GeoJSON.Feature[] {
   const { layer, layerGeoJSON, dataGeoJSON } = getStatsSourceContext();
   if (!layer) return [];
@@ -660,20 +619,12 @@ export function getStatsSubjectSelection(
       return selectedValues.has(value);
     });
   }
-  if (mode === 'filtered') {
-    if (!dataGeoJSON || !filteredName) return [];
-    const entry = S.savedFiltersStore.get(filteredName);
-    if (!entry) return [];
-    const filterExpr = buildSavedFilterExpression(entry);
-    if (!filterExpr) return [];
-    return dataGeoJSON.features.filter(feature => evaluateFilterExpression(filterExpr, feature));
-  }
   return layerGeoJSON?.features ?? [];
 }
 
 export function updateStatisticsResults() {
   const { layer, layerGeoJSON, dataGeoJSON, dataStore } = getStatsSourceContext();
-  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category';
   const sourceGeoJSON = useDataSource ? dataGeoJSON : layerGeoJSON;
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
@@ -690,11 +641,6 @@ export function updateStatisticsResults() {
     resetStatisticsDisplay();
     return;
   }
-  if (S.statsSubjectMode === 'filtered' && !S.statsFilteredName) {
-    S.statsValuesCache = [];
-    resetStatisticsDisplay();
-    return;
-  }
   S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
   if (!S.statsFieldType) {
     S.statsValuesCache = [];
@@ -706,8 +652,7 @@ export function updateStatisticsResults() {
     S.statsSubjectMode,
     S.statsCategoryField,
     S.statsCategoryValueIndices,
-    S.statsCategoryValueMap,
-    S.statsFilteredName
+    S.statsCategoryValueMap
   );
 
   const totalCount = sourceGeoJSON.features.length;
@@ -824,7 +769,6 @@ export function updateStatisticsSubjectControls() {
   if (!hasLayerData) {
     statsSubjectControls.buttons.forEach(button => { button.disabled = true; });
     statsSubjectControls.categoryControls.style.display = 'none';
-    statsSubjectControls.filterControls.style.display = 'none';
     statsCategoryFieldSelect.disabled = true;
     statsCategoryValueSelect.disabled = true;
     return;
@@ -843,7 +787,8 @@ function updateStatisticsSubjectButtons() {
 }
 
 export function setStatsSubjectMode(mode: SubjectMode) {
-  S.statsSubjectMode = mode;
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  S.statsSubjectMode = allowedModes.includes(mode) ? mode : 'all';
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
@@ -851,14 +796,7 @@ export function setStatsSubjectMode(mode: SubjectMode) {
 }
 
 export function updateStatisticsSectionVisibility() {
-  const shouldShow = S.statsSubjectMode !== 'category' || S.statsCategoryValueIndices.length > 0;
-  statisticsSection.style.display = shouldShow ? 'grid' : 'none';
-  if (!shouldShow) {
-    statsDetails.style.display = 'none';
-    statsNumericBlock.style.display = 'none';
-    statsCategoricalBlock.style.display = 'none';
-    return;
-  }
+  statisticsSection.style.display = 'grid';
   populateStatisticsFields();
   const hasField = Boolean(S.statsField);
   statsDetails.style.display = hasField ? 'grid' : 'none';
@@ -869,10 +807,8 @@ export function updateStatisticsSectionVisibility() {
     return;
   }
   const layer = _getStatsLayer();
-  const dataStore = _getLayerDataStore(layer);
-  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
-  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
-  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+  const numericFields = layer?.chosenNumericFields ?? [];
+  const categoricalFields = layer?.chosenCategoricalFields ?? [];
   S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
   if (!S.statsFieldType) {
     statsNumericBlock.style.display = 'none';
@@ -891,7 +827,10 @@ export function refreshStatisticsPanel() {
   populateStatisticsCategoryFields();
   populateStatisticsCategoryValues(S.statsCategoryField);
 
-  S.statsFilteredName = renderSubjectFilterOptions(statsSubjectControls, S.statsFilteredName);
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  if (!allowedModes.includes(S.statsSubjectMode)) {
+    S.statsSubjectMode = 'all';
+  }
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
@@ -903,7 +842,26 @@ export function refreshStatisticsPanel() {
   }
 }
 
+function resolveStatsLayerId(): string | null {
+  if (S.statsLayerId && S.layers.has(S.statsLayerId)) {
+    return S.statsLayerId;
+  }
+  return S.currentLayerId ?? S.layerOrder[0] ?? null;
+}
+
+function getStatsLayerLabel(layerId: string | null): string {
+  if (!layerId) return 'Select a layer to view statistics.';
+  const layer = S.layers.get(layerId);
+  if (!layer) return 'Select a layer to view statistics.';
+  const index = S.layerOrder.indexOf(layerId);
+  const baseName = layer.field ?? `layer ${index + 1}`;
+  const store = S.dataStores.get(layer.dataStoreId);
+  const sourceLabel = store?.file?.name ?? store?.name ?? 'Unknown source';
+  return `${baseName} (${sourceLabel})`;
+}
+
 export function renderStatsLayerOptions() {
-  if (!statsLayerSelect) return;
-  S.statsLayerId = _renderLayerSelectOptions(statsLayerSelect, S.statsLayerId, 'Choose a layer');
+  if (!statsLayerName) return;
+  S.statsLayerId = resolveStatsLayerId();
+  statsLayerName.textContent = getStatsLayerLabel(S.statsLayerId);
 }

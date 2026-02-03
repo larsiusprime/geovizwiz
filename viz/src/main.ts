@@ -49,10 +49,9 @@ import {
   setSavedFiltersPanelMode, updateSavedFiltersUIState,
   saveCurrentFilters, applySavedFilter,
   getCategoricalValues,
-  applyMapFilters,
   createFilterRule, updateFiltersUIState, renderFiltersList,
   refreshFiltersUI,
-  applyActiveFilterAction, setFilterActionMode,
+  applyActiveFilterAction,
 } from './filters';
 import {
   createWindowManager, initWindowCallbacks, initPositionElements,
@@ -121,7 +120,7 @@ import {
   setCurrentLayer, setLayerVisibility,
   createLayerState, persistCurrentLayerState,
   registerLayer, removeLayer,
-  renderLayerList, renderLayerSelectOptions,
+  renderLayerList,
   getStatsLayer, getScatterLayer, getLayerDataStore, getLayerGeoJSON, getScatterDataStore,
   createDataStore, renderDataStoreList,
 } from './layers';
@@ -327,10 +326,10 @@ const paintContent = document.getElementById('paintContent') as HTMLDivElement;
 const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
 const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
 const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
-const statsLayerSelect = document.getElementById('statsLayerSelect') as HTMLSelectElement;
+const statsLayerName = document.getElementById('statsLayerName') as HTMLDivElement;
 const scatterplotControlsEl = document.getElementById('scatterplotControls') as HTMLDivElement;
 const scatterplotContent = document.getElementById('scatterplotContent') as HTMLDivElement;
-const scatterLayerSelect = document.getElementById('scatterLayerSelect') as HTMLSelectElement;
+const scatterLayerName = document.getElementById('scatterLayerName') as HTMLDivElement;
 const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
 const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
 const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
@@ -360,9 +359,6 @@ const filtersSaveConfirmButton = document.getElementById('filtersSaveConfirm') a
 const filtersSavedStatus = document.getElementById('filtersSavedStatus') as HTMLDivElement;
 const filtersLoadControls = document.getElementById('filtersLoadControls') as HTMLDivElement;
 const filtersLoadSelect = document.getElementById('filtersLoadSelect') as HTMLSelectElement;
-const filtersSelectButton = document.getElementById('filtersSelectButton') as HTMLButtonElement;
-const filtersShowButton = document.getElementById('filtersShowButton') as HTMLButtonElement;
-const filtersHideButton = document.getElementById('filtersHideButton') as HTMLButtonElement;
 
 const statsSubjectControls = buildSubjectSelector(statsSubjectSection);
 const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection, { title: null });
@@ -591,13 +587,10 @@ const minimizeLegend = legendWin.minimize;
 const showLegend = legendWin.show;
 const minimizeStatistics = statisticsWin.minimize;
 const showStatistics = statisticsWin.show;
-const toggleStatistics = statisticsWin.toggle;
 const minimizeScatterplot = scatterplotWin.minimize;
 const showScatterplot = scatterplotWin.show;
-const toggleScatterplot = scatterplotWin.toggle;
 const minimizeFilters = filtersWin.minimize;
 const showFilters = filtersWin.show;
-const toggleFilters = filtersWin.toggle;
 const minimizeLandSchedule = landScheduleWin.minimize;
 const showLandSchedule = landScheduleWin.show;
 const toggleLandSchedule = landScheduleWin.toggle;
@@ -634,23 +627,14 @@ initFilterElements({
   filtersSavedStatus,
   filtersLoadControls,
   filtersLoadSelect,
-  filtersSelectButton,
-  filtersShowButton,
-  filtersHideButton,
 });
 initFilterCallbacks({
   persistCurrentLayerState,
-  updateStatisticsSectionVisibility,
+  renderLayerList,
   updateStatisticsResults,
   scheduleScatterPlotRefresh,
   getCurrentLayerIds,
-  getCurrentSourceId,
   clearLegendVisibility,
-  clearAllSelections,
-  updateSelectionControls,
-  getParcelId,
-  statsSubjectControls,
-  scatterSubjectControls,
 });
 
 // Wire DOM elements and callbacks into the rendering module
@@ -760,7 +744,7 @@ initModalCallbacks({
 
 // Wire DOM elements and callbacks into the statistics module
 initStatisticsElements({
-  statsLayerSelect,
+  statsLayerName,
   statsSubjectControls,
   statsFieldSelect,
   statsDetails,
@@ -791,13 +775,12 @@ initStatisticsCallbacks({
   getStatsLayer,
   getLayerDataStore,
   getLayerGeoJSON,
-  renderLayerSelectOptions,
   getParcelId,
 });
 
 // Wire DOM elements and callbacks into the scatterplot module
 initScatterplotElements({
-  scatterLayerSelect,
+  scatterLayerName,
   scatterSubjectControls,
   scatterXFieldSelect,
   scatterYFieldSelect,
@@ -816,8 +799,6 @@ initScatterplotElements({
 initScatterplotCallbacks({
   getScatterLayer,
   getScatterDataStore,
-  getLayerDataStore,
-  renderLayerSelectOptions,
   getParcelId,
 });
 
@@ -862,6 +843,9 @@ initLayerCallbacks({
   refreshStatisticsPanel,
   refreshScatterPanel,
   refreshFiltersUI,
+  showFiltersPanel: showFilters,
+  showStatisticsPanel: showStatistics,
+  showScatterplotPanel: showScatterplot,
   renderStatsLayerOptions,
   renderScatterLayerOptions,
   addOrUpdateSource,
@@ -1872,47 +1856,10 @@ addFilterButton.addEventListener('click', () => {
   persistCurrentLayerState();
 });
 
-filtersSelectButton.addEventListener('click', () => {
-  setFilterActionMode('select');
-});
-
-filtersShowButton.addEventListener('click', () => {
-  setFilterActionMode('show');
-});
-
-filtersHideButton.addEventListener('click', () => {
-  setFilterActionMode('hide');
-});
-
 filtersInvertToggle.addEventListener('change', () => {
   S.filterInvert = filtersInvertToggle.checked;
   applyActiveFilterAction();
-  applyMapFilters();
-  updateSavedFiltersUIState();
   persistCurrentLayerState();
-});
-
-statsLayerSelect.addEventListener('change', () => {
-  S.statsLayerId = statsLayerSelect.value || null;
-  S.statsCategoryField = null;
-  S.statsCategoryValueIndices = [];
-  S.statsField = null;
-  S.statsFieldType = null;
-  refreshStatisticsPanel();
-  resetStatisticsDisplay();
-});
-
-scatterLayerSelect.addEventListener('change', () => {
-  S.scatterLayerId = scatterLayerSelect.value || null;
-  S.scatterCategoryField = null;
-  S.scatterCategoryValueIndices = [];
-  S.scatterXField = null;
-  S.scatterYField = null;
-  S.scatterRangeIsCustom = false;
-  S.scatterColorByField = null;
-  clearScatterHover();
-  clearScatterSelection();
-  refreshScatterPanel();
 });
 
 statsSubjectButtons.forEach(button => {
@@ -1929,18 +1876,6 @@ scatterSubjectButtons.forEach(button => {
     if (!mode) return;
     setScatterSubjectMode(mode);
   });
-});
-
-statsSubjectControls.filterSelect.addEventListener('change', () => {
-  S.statsFilteredName = statsSubjectControls.filterSelect.value || null;
-  updateStatisticsSectionVisibility();
-  updateStatisticsResults();
-});
-
-scatterSubjectControls.filterSelect.addEventListener('change', () => {
-  S.scatterFilteredName = scatterSubjectControls.filterSelect.value || null;
-  S.scatterRangeIsCustom = false;
-  scheduleScatterPlotRefresh();
 });
 
 statsCategoryFieldSelect.addEventListener('change', () => {
@@ -1991,7 +1926,7 @@ statsFieldSelect.addEventListener('change', () => {
   S.statsField = statsFieldSelect.value || null;
   const layer = getStatsLayer();
   const dataStore = getLayerDataStore(layer);
-  const useDataSource = S.statsSubjectMode === 'category' || S.statsSubjectMode === 'filtered';
+  const useDataSource = S.statsSubjectMode === 'category';
   const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
   const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
   S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
@@ -2286,11 +2221,8 @@ initToolbarCallbacks({
   showLayers,
   minimizeLayers,
   toggleSettingsMenu,
-  toggleFilters,
   showLegend,
   minimizeLegend,
-  toggleStatistics,
-  toggleScatterplot,
   toggleLandSchedule,
 });
 

@@ -36,7 +36,7 @@ export type CategoricalColorMode = 'random' | 'single' | 'colorRamp';
 export type QualityMode = 'fast' | 'high';
 export type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
 export type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
-export type SubjectMode = 'all' | 'visible' | 'selected' | 'category' | 'filtered';
+export type SubjectMode = 'all' | 'visible' | 'selected' | 'category';
 export type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
 
 export type LandScheduleBaseLot = {
@@ -109,9 +109,6 @@ export type SubjectSelectorControls = {
   categoryControls: HTMLDivElement;
   categoryFieldSelect: HTMLSelectElement;
   categoryValueSelect: HTMLSelectElement;
-  filterControls: HTMLDivElement;
-  filterSelect: HTMLSelectElement;
-  filterEmptyState: HTMLDivElement;
 };
 
 export type SubjectSelectorOptions = {

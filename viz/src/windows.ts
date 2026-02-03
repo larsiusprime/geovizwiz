@@ -29,6 +29,30 @@ export type WindowManager = {
 let _updateToolbarButtonStates: () => void = () => {};
 let _updateLegendPosition: () => void = () => {};
 
+type DockableWindow = {
+  element: HTMLElement;
+  pinButton: HTMLButtonElement;
+};
+
+type ResizeMode = 'both' | 'x';
+
+const PINNED_GAP_FALLBACK = 8;
+const MIN_WINDOW_WIDTH = 240;
+const MIN_WINDOW_HEIGHT = 160;
+
+let pinnedContainer: HTMLDivElement | null = null;
+let appContainer: HTMLElement | null = null;
+let dockableWindows: DockableWindow[] = [];
+let isResizing = false;
+let resizeTarget: HTMLElement | null = null;
+let resizeMode: ResizeMode = 'both';
+let resizeStartX = 0;
+let resizeStartY = 0;
+let resizeStartWidth = 0;
+let resizeStartHeight = 0;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
 /** Must be called once from main.ts to wire in the callbacks. */
 export function initWindowCallbacks(callbacks: {
   updateToolbarButtonStates: () => void;
@@ -36,6 +60,48 @@ export function initWindowCallbacks(callbacks: {
 }) {
   _updateToolbarButtonStates = callbacks.updateToolbarButtonStates;
   _updateLegendPosition = callbacks.updateLegendPosition;
+}
+
+export function initWindowDocking(config: {
+  pinnedContainer: HTMLDivElement;
+  appContainer: HTMLElement;
+}) {
+  pinnedContainer = config.pinnedContainer;
+  appContainer = config.appContainer;
+  updatePinnedLayout();
+  window.addEventListener('resize', () => updatePinnedLayout());
+}
+
+export function registerDockableWindow(windowEl: HTMLElement, pinButton: HTMLButtonElement) {
+  dockableWindows.push({ element: windowEl, pinButton });
+  pinButton.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    togglePinnedState(windowEl);
+  });
+  updatePinButtonState(windowEl);
+}
+
+export function enableWindowResizing(windowEl: HTMLElement) {
+  const handle = windowEl.querySelector('.window-resize-handle') as HTMLElement | null;
+  const edge = windowEl.querySelector('.window-resize-edge') as HTMLElement | null;
+
+  const startResize = (mode: ResizeMode) => (event: MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isResizing = true;
+    resizeTarget = windowEl;
+    resizeMode = mode;
+    resizeStartX = event.clientX;
+    resizeStartY = event.clientY;
+    const rect = windowEl.getBoundingClientRect();
+    resizeStartWidth = rect.width;
+    resizeStartHeight = rect.height;
+    document.body.style.userSelect = 'none';
+  };
+
+  handle?.addEventListener('mousedown', startResize('both'));
+  edge?.addEventListener('mousedown', startResize('x'));
 }
 
 export function createWindowManager(config: WindowConfig): WindowManager {
@@ -46,6 +112,9 @@ export function createWindowManager(config: WindowConfig): WindowManager {
     config.contentEl.style.display = 'none';
     config.controlsEl.style.display = 'none';
     config.onMinimize?.();
+    if (isPinned(config.controlsEl)) {
+      updatePinnedLayout();
+    }
     _updateToolbarButtonStates();
   }
 
@@ -55,6 +124,9 @@ export function createWindowManager(config: WindowConfig): WindowManager {
     config.controlsEl.style.display = 'grid';
     config.positionFn?.();
     config.onShow?.();
+    if (isPinned(config.controlsEl)) {
+      updatePinnedLayout();
+    }
     _updateToolbarButtonStates();
   }
 
@@ -91,6 +163,7 @@ export function initPositionElements(elements: PositionElements) {
 
 export function positionPaintPanel() {
   if (!els.controlsEl || !els.paintControlsEl) return;
+  if (isPinned(els.paintControlsEl)) return;
   if (els.paintControlsEl.dataset.userPositioned === 'true') return;
   const rect = els.controlsEl.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return;
@@ -102,6 +175,7 @@ export function positionPaintPanel() {
 
 export function positionSettingsPanel() {
   if (!els.controlsEl || !els.settingsControlsEl) return;
+  if (isPinned(els.settingsControlsEl)) return;
   if (els.settingsControlsEl.dataset.userPositioned === 'true') return;
   const rect = els.controlsEl.getBoundingClientRect();
   if (rect.width === 0 && rect.height === 0) return;
@@ -113,6 +187,7 @@ export function positionSettingsPanel() {
 
 export function positionStatisticsPanel() {
   if (!els.statisticsControlsEl) return;
+  if (isPinned(els.statisticsControlsEl)) return;
   if (els.statisticsControlsEl.dataset.userPositioned === 'true') return;
   const anchor = (!S.isSettingsMenuMinimized && els.settingsControlsEl) ? els.settingsControlsEl : els.controlsEl;
   if (!anchor) return;
@@ -126,6 +201,7 @@ export function positionStatisticsPanel() {
 
 export function positionScatterplotPanel() {
   if (!els.scatterplotControlsEl) return;
+  if (isPinned(els.scatterplotControlsEl)) return;
   if (els.scatterplotControlsEl.dataset.userPositioned === 'true') return;
   const anchor = (!S.isStatisticsMinimized && els.statisticsControlsEl)
     ? els.statisticsControlsEl
@@ -143,6 +219,7 @@ export function positionScatterplotPanel() {
 
 export function positionFiltersPanel() {
   if (!els.filtersControlsEl) return;
+  if (isPinned(els.filtersControlsEl)) return;
   if (els.filtersControlsEl.dataset.userPositioned === 'true') return;
   const anchor = (!S.isScatterplotMinimized && els.scatterplotControlsEl)
     ? els.scatterplotControlsEl
@@ -179,6 +256,7 @@ export function updateFiltersPanelLayout() {
 
 export function positionLandSchedulePanel() {
   if (!els.landScheduleControlsEl) return;
+  if (isPinned(els.landScheduleControlsEl)) return;
   if (els.landScheduleControlsEl.dataset.userPositioned === 'true') return;
   const anchor = (!S.isFiltersMinimized && els.filtersControlsEl)
     ? els.filtersControlsEl
@@ -222,8 +300,14 @@ export function makeDraggable(element: HTMLElement) {
   if (!header) return;
 
   header.addEventListener('mousedown', (e) => {
+    const target = e.target as HTMLElement;
+    if (target.closest('button')) return;
+    if (target.closest('.window-resize-handle') || target.closest('.window-resize-edge')) return;
     S.isDragging = true;
     S.dragTarget = element;
+    if (isPinned(element)) {
+      unpinWindow(element);
+    }
     element.dataset.userPositioned = 'true';
     const rect = element.getBoundingClientRect();
     S.dragOffset.x = e.clientX - rect.left;
@@ -236,6 +320,27 @@ export function makeDraggable(element: HTMLElement) {
 }
 
 export function handleMouseMove(e: MouseEvent) {
+  lastMouseX = e.clientX;
+  lastMouseY = e.clientY;
+
+  if (isResizing && resizeTarget) {
+    const dx = e.clientX - resizeStartX;
+    const dy = e.clientY - resizeStartY;
+    const nextWidth = Math.max(MIN_WINDOW_WIDTH, resizeStartWidth + dx);
+    resizeTarget.style.width = `${nextWidth}px`;
+    if (resizeMode === 'both') {
+      const nextHeight = Math.max(MIN_WINDOW_HEIGHT, resizeStartHeight + dy);
+      resizeTarget.style.height = `${nextHeight}px`;
+    }
+    if (resizeTarget.id === 'filtersControls') {
+      updateFiltersPanelLayout();
+    }
+    if (isPinned(resizeTarget)) {
+      updatePinnedLayout();
+    }
+    return;
+  }
+
   if (!S.isDragging || !S.dragTarget) return;
 
   const x = e.clientX - S.dragOffset.x;
@@ -260,6 +365,12 @@ export function handleMouseMove(e: MouseEvent) {
 }
 
 export function handleMouseUp() {
+  if (isResizing) {
+    isResizing = false;
+    resizeTarget = null;
+    document.body.style.userSelect = '';
+  }
+
   const releasedTarget = S.dragTarget;
   S.isDragging = false;
   S.dragTarget = null;
@@ -267,4 +378,135 @@ export function handleMouseUp() {
   if (releasedTarget?.id === 'filtersControls') {
     updateFiltersPanelLayout();
   }
+  if (releasedTarget && pinnedContainer) {
+    const dropColumn = getPinnedDropColumn(lastMouseX, lastMouseY);
+    const dropInPinnedArea = isPointInPinnedArea(lastMouseX, lastMouseY);
+    if (dropColumn) {
+      pinWindow(releasedTarget, dropColumn);
+    } else if (dropInPinnedArea) {
+      pinWindow(releasedTarget);
+    }
+  }
+}
+
+function isPinned(element: HTMLElement) {
+  return element.dataset.pinned === 'true';
+}
+
+function togglePinnedState(element: HTMLElement) {
+  if (isPinned(element)) {
+    unpinWindow(element);
+  } else {
+    pinWindow(element);
+  }
+}
+
+function updatePinButtonState(element: HTMLElement) {
+  const entry = dockableWindows.find(win => win.element === element);
+  if (!entry) return;
+  const img = entry.pinButton.querySelector('img');
+  if (!img) return;
+  const pinned = isPinned(element);
+  img.src = pinned ? './src/svg/thumbtack.svg' : './src/svg/thumbtack-tilted.svg';
+  img.alt = pinned ? 'Unpin menu' : 'Pin menu';
+  entry.pinButton.setAttribute('aria-pressed', String(pinned));
+  entry.pinButton.title = pinned ? 'Unpin' : 'Pin';
+}
+
+function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
+  if (!pinnedContainer || !appContainer) return;
+  if (isPinned(element)) return;
+  const rect = element.getBoundingClientRect();
+  element.dataset.floatLeft = element.style.left || `${rect.left}px`;
+  element.dataset.floatTop = element.style.top || `${rect.top}px`;
+  element.dataset.floatRight = element.style.right || '';
+  element.dataset.floatTransform = element.style.transform || '';
+  element.style.left = '';
+  element.style.top = '';
+  element.style.right = '';
+  element.style.transform = 'none';
+  element.style.position = 'relative';
+  setPinnedState(element, true);
+
+  let targetColumn = column;
+  if (!targetColumn) {
+    targetColumn = document.createElement('div');
+    targetColumn.className = 'pinned-column';
+    pinnedContainer.appendChild(targetColumn);
+  }
+  targetColumn.appendChild(element);
+  updatePinButtonState(element);
+  updatePinnedLayout();
+}
+
+function unpinWindow(element: HTMLElement) {
+  if (!appContainer) return;
+  if (!isPinned(element)) return;
+  const column = element.parentElement;
+  setPinnedState(element, false);
+  element.style.position = 'absolute';
+  element.style.left = element.dataset.floatLeft ?? element.style.left;
+  element.style.top = element.dataset.floatTop ?? element.style.top;
+  element.style.right = element.dataset.floatRight ?? '';
+  element.style.transform = element.dataset.floatTransform ?? 'none';
+  appContainer.appendChild(element);
+  if (column?.classList.contains('pinned-column') && column.children.length === 0) {
+    column.remove();
+  }
+  updatePinButtonState(element);
+  updatePinnedLayout();
+}
+
+function setPinnedState(element: HTMLElement, pinned: boolean) {
+  element.dataset.pinned = pinned ? 'true' : 'false';
+  element.classList.toggle('is-pinned', pinned);
+}
+
+function updatePinnedLayout() {
+  if (!pinnedContainer) return;
+  const columns = Array.from(pinnedContainer.querySelectorAll('.pinned-column')) as HTMLDivElement[];
+  const containerStyles = window.getComputedStyle(pinnedContainer);
+  const paddingLeft = parseFloat(containerStyles.paddingLeft || '0');
+  const paddingRight = parseFloat(containerStyles.paddingRight || '0');
+  const gapValue = parseFloat(containerStyles.columnGap || containerStyles.gap || `${PINNED_GAP_FALLBACK}`);
+  let totalWidth = paddingLeft + paddingRight;
+  const visibleColumns: Array<{ column: HTMLDivElement; width: number }> = [];
+  columns.forEach((column) => {
+    const children = Array.from(column.children) as HTMLElement[];
+    const visibleChildren = children.filter(child => window.getComputedStyle(child).display !== 'none');
+    if (visibleChildren.length === 0) {
+      column.style.display = 'none';
+      column.style.width = '0px';
+      return;
+    }
+    column.style.display = 'flex';
+    const maxWidth = visibleChildren.reduce((acc, child) => Math.max(acc, child.getBoundingClientRect().width), 0);
+    const columnWidth = Math.max(MIN_WINDOW_WIDTH, maxWidth);
+    column.style.width = `${columnWidth}px`;
+    visibleColumns.push({ column, width: columnWidth });
+  });
+  visibleColumns.forEach((entry, index) => {
+    totalWidth += entry.width;
+    if (index < visibleColumns.length - 1) {
+      totalWidth += gapValue;
+    }
+  });
+  document.documentElement.style.setProperty('--pinned-width', `${totalWidth}px`);
+  _updateLegendPosition();
+  updateFiltersPanelLayout();
+}
+
+function isPointInPinnedArea(x: number, y: number) {
+  if (!pinnedContainer) return false;
+  const rect = pinnedContainer.getBoundingClientRect();
+  return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+}
+
+function getPinnedDropColumn(x: number, y: number) {
+  if (!pinnedContainer) return null;
+  const columns = Array.from(pinnedContainer.querySelectorAll('.pinned-column')) as HTMLDivElement[];
+  return columns.find(column => {
+    const rect = column.getBoundingClientRect();
+    return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
+  }) ?? null;
 }

@@ -6,11 +6,94 @@
   <title>geovizwiz</title>
   <link rel="icon" href="data:,">
   <style>
-    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; }
+    :root { --panel:#fff; --shadow:0 6px 24px rgba(0,0,0,.12); --gap:10px; --pinned-width: 0px; }
     *, *::before, *::after { box-sizing: border-box; }
 
     html, body, #app { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
-    #map { position: absolute; left: 64px; top: 0; right: 0; bottom: 0; }
+    #map { position: absolute; left: calc(64px + var(--pinned-width)); top: 0; right: 0; bottom: 0; }
+
+    #pinnedPanels {
+      position: absolute;
+      left: 64px;
+      top: 0;
+      bottom: 0;
+      display: flex;
+      gap: 8px;
+      padding: 10px 8px;
+      z-index: 12;
+      pointer-events: auto;
+    }
+
+    .pinned-column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 100%;
+    }
+
+    .viz-window {
+      min-width: 240px;
+      min-height: 160px;
+    }
+
+    .viz-window.is-pinned {
+      position: relative !important;
+      left: auto !important;
+      top: auto !important;
+      right: auto !important;
+      transform: none !important;
+      margin: 0;
+    }
+
+    .window-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .window-pin {
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      padding: 2px;
+      width: 20px;
+      height: 20px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .window-pin img {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
+    .window-resize-handle {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      width: 14px;
+      height: 14px;
+      cursor: nwse-resize;
+      opacity: 0.6;
+      background:
+        linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.15) 50%) bottom right / 6px 6px no-repeat,
+        linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.2) 50%) center / 6px 6px no-repeat,
+        linear-gradient(135deg, transparent 50%, rgba(0,0,0,0.25) 50%) top left / 6px 6px no-repeat;
+    }
+
+    .window-resize-edge {
+      position: absolute;
+      right: 0;
+      top: 34px;
+      bottom: 6px;
+      width: 6px;
+      cursor: ew-resize;
+    }
 
     .window-header:hover {
       background: rgba(240, 240, 240, 0.9);
@@ -765,6 +848,7 @@
   <body>
     <div id="app">
       <div id="map"></div>
+      <div id="pinnedPanels"></div>
       
       <!-- Vertical Toolbar -->
       <div id="verticalToolbar">
@@ -831,14 +915,19 @@
       </div>
 
 
-      <div id="controls" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+      <div id="controls" class="viz-window" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
       <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
         <div style="font-weight: 600; font-size: 13px;">Layers</div>
-        <button id="btnMinimizeLayers" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M7 10l5 5 5-5z"/>
-			</svg>
-		</button>
+        <div class="window-actions">
+          <button id="btnPinLayers" class="window-pin" type="button" title="Pin" aria-pressed="false">
+            <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+          </button>
+          <button id="btnMinimizeLayers" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+			  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				  <path d="M7 10l5 5 5-5z"/>
+			  </svg>
+		  </button>
+        </div>
       </div>
       <div id="settingsContent" style="padding: 12px;">
       <fieldset id="layerPanel">
@@ -860,17 +949,24 @@
 
       <fieldset id="legend">      </fieldset>
       </div>
+      <div class="window-resize-edge" aria-hidden="true"></div>
+      <div class="window-resize-handle" aria-hidden="true"></div>
     </div>
   </div>
 
-  <div id="settingsControls" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 320px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="settingsControls" class="viz-window" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 320px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Settings</div>
-      <button id="btnMinimizeSettingsMenu" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
+      <div class="window-actions">
+        <button id="btnPinSettings" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeSettingsMenu" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="settingsMenuContent" style="padding: 12px; display: grid; gap: 10px;">
       <fieldset>
@@ -906,16 +1002,23 @@
         </div>
       </fieldset>
     </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
-  <div id="filtersControls" style="position: absolute; top: 10px; left: 860px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="filtersControls" class="viz-window" style="position: absolute; top: 10px; left: 860px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Filters</div>
-      <button id="btnMinimizeFilters" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
+      <div class="window-actions">
+        <button id="btnPinFilters" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeFilters" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="filtersContent" style="padding: 12px; display: grid; gap: 12px;">
       <div class="filters-saved-container">
@@ -950,16 +1053,23 @@
       <div id="filtersList" class="filters-list"></div>
       <button id="addFilterButton" type="button">Add condition</button>
     </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
-  <div id="paintControls" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="paintControls" class="viz-window" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Paint</div>
-      <button id="btnMinimizePaint" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
+      <div class="window-actions">
+        <button id="btnPinPaint" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizePaint" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="paintContent" style="padding: 12px; display: grid; gap: 10px;">
       <!-- Numeric field options -->
@@ -1083,16 +1193,23 @@
         </div>
       </fieldset>
     </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
-  <div id="statisticsControls" style="position: absolute; top: 10px; left: 900px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="statisticsControls" class="viz-window" style="position: absolute; top: 10px; left: 900px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Statistics</div>
-      <button id="btnMinimizeStatistics" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
+      <div class="window-actions">
+        <button id="btnPinStatistics" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeStatistics" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="statisticsContent" style="padding: 12px; display: grid; gap: 12px;">
       <div id="statsLayerSection" class="stats-section" style="display: grid; gap: 8px;">
@@ -1195,16 +1312,23 @@
         </div>
       </div>
     </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
-  <div id="scatterplotControls" style="position: absolute; top: 10px; left: 900px; width: min(calc(92vw - 80px), 520px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="scatterplotControls" class="viz-window" style="position: absolute; top: 10px; left: 900px; width: min(calc(92vw - 80px), 520px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Scatterplot</div>
-      <button id="btnMinimizeScatterplot" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
+      <div class="window-actions">
+        <button id="btnPinScatterplot" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeScatterplot" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="scatterplotContent" style="padding: 12px; display: grid; gap: 12px;">
       <div style="display: grid; gap: 12px;">
@@ -1275,16 +1399,23 @@
         <div id="scatterPlot" style="height: 220px; width: 100%;"></div>
       </div>
     </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
-  <div id="landScheduleControls" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
-      <button id="btnMinimizeLandSchedule" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M7 10l5 5 5-5z"/>
-        </svg>
-      </button>
+      <div class="window-actions">
+        <button id="btnPinLandSchedule" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeLandSchedule" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
     </div>
     <div id="landScheduleContent" style="padding: 12px; display: grid; gap: 12px;">
       <div class="land-schedule-section">
@@ -1339,6 +1470,8 @@
         </div>
       </div>
     </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
   <!-- Modal 1: Numeric field chooser -->
@@ -1442,7 +1575,7 @@
   <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
 
   <!-- Floating Legend -->
-  <div id="floatingLegend" style="
+  <div id="floatingLegend" class="viz-window" style="
     position: absolute;
     top: 140px;
     right: 20px;
@@ -1469,30 +1602,37 @@
       cursor: move;
     ">
       <div style="font-weight: 600; font-size: 13px;" id="legendTitle">Legend</div>
-      <button id="btnMinimizeLegend" style="
-        border: none;
-        background: none;
-        cursor: pointer;
-        font-size: 14px;
-        color: #666;
-        padding: 2px;
-        width: 20px;
-        height: 20px;
-        border-radius: 3px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-      " title="Minimize">
-			<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-				<path d="M7 10l5 5 5-5z"/>
-			</svg>
-	  </button>
+      <div class="window-actions">
+        <button id="btnPinLegend" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="./src/svg/thumbtack-tilted.svg" alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeLegend" style="
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-size: 14px;
+          color: #666;
+          padding: 2px;
+          width: 20px;
+          height: 20px;
+          border-radius: 3px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        " title="Minimize">
+			  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+				  <path d="M7 10l5 5 5-5z"/>
+			  </svg>
+	    </button>
+      </div>
     </div>
     <div id="legendContent" style="
       padding: 8px;
       max-height: calc(70vh - 40px);
       overflow-y: auto;
     "></div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"></div>
   </div>
 
 

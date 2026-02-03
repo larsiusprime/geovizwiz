@@ -58,6 +58,7 @@ import {
   positionPaintPanel, positionSettingsPanel, positionStatisticsPanel,
   positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel,
   updateFiltersPanelLayout, updatePaintButtonState,
+  initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
   type WindowManager
 } from './windows';
@@ -317,6 +318,8 @@ if (addLayerFromStoreButton) {
 }
 
 // Window elements
+const appEl = document.getElementById('app') as HTMLDivElement;
+const pinnedPanelsEl = document.getElementById('pinnedPanels') as HTMLDivElement;
 const controlsEl = document.getElementById('controls') as HTMLDivElement;
 const settingsContent = document.getElementById('settingsContent') as HTMLDivElement;
 const settingsControlsEl = document.getElementById('settingsControls') as HTMLDivElement;
@@ -359,6 +362,14 @@ const filtersSaveConfirmButton = document.getElementById('filtersSaveConfirm') a
 const filtersSavedStatus = document.getElementById('filtersSavedStatus') as HTMLDivElement;
 const filtersLoadControls = document.getElementById('filtersLoadControls') as HTMLDivElement;
 const filtersLoadSelect = document.getElementById('filtersLoadSelect') as HTMLSelectElement;
+const btnPinLayers = document.getElementById('btnPinLayers') as HTMLButtonElement;
+const btnPinSettings = document.getElementById('btnPinSettings') as HTMLButtonElement;
+const btnPinPaint = document.getElementById('btnPinPaint') as HTMLButtonElement;
+const btnPinFilters = document.getElementById('btnPinFilters') as HTMLButtonElement;
+const btnPinStatistics = document.getElementById('btnPinStatistics') as HTMLButtonElement;
+const btnPinScatterplot = document.getElementById('btnPinScatterplot') as HTMLButtonElement;
+const btnPinLandSchedule = document.getElementById('btnPinLandSchedule') as HTMLButtonElement;
+const btnPinLegend = document.getElementById('btnPinLegend') as HTMLButtonElement;
 
 const statsSubjectControls = buildSubjectSelector(statsSubjectSection);
 const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection, { title: null });
@@ -611,6 +622,26 @@ initPositionElements({
   filtersListEl,
   landScheduleControlsEl,
 });
+initWindowDocking({
+  pinnedContainer: pinnedPanelsEl,
+  appContainer: appEl,
+});
+registerDockableWindow(controlsEl, btnPinLayers);
+registerDockableWindow(settingsControlsEl, btnPinSettings);
+registerDockableWindow(paintControlsEl, btnPinPaint);
+registerDockableWindow(filtersControlsEl, btnPinFilters);
+registerDockableWindow(statisticsControlsEl, btnPinStatistics);
+registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
+registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
+registerDockableWindow(floatingLegend, btnPinLegend);
+enableWindowResizing(controlsEl);
+enableWindowResizing(settingsControlsEl);
+enableWindowResizing(paintControlsEl);
+enableWindowResizing(filtersControlsEl);
+enableWindowResizing(statisticsControlsEl);
+enableWindowResizing(scatterplotControlsEl);
+enableWindowResizing(landScheduleControlsEl);
+enableWindowResizing(floatingLegend);
 
 // Wire DOM elements and callbacks into the filters module
 initFilterElements({

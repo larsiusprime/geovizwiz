@@ -57,7 +57,7 @@ let isColumnResizing = false;
 let resizeColumn: HTMLDivElement | null = null;
 let columnResizeStartX = 0;
 let columnResizeStartWidth = 0;
-const columnWidthOverrides = new WeakMap<HTMLDivElement, number>();
+const columnWidthOverrides = new Map<number, number>();
 
 /** Must be called once from main.ts to wire in the callbacks. */
 export function initWindowCallbacks(callbacks: {
@@ -148,6 +148,9 @@ export function createWindowManager(config: WindowConfig): WindowManager {
 
   function show() {
     config.setMinimized(false);
+    if (isPinned(config.controlsEl) && pinnedContainer && !pinnedContainer.contains(config.controlsEl)) {
+      restorePinnedWindow(config.controlsEl);
+    }
     config.contentEl.style.display = display;
     config.controlsEl.style.display = 'grid';
     config.positionFn?.();
@@ -356,7 +359,7 @@ export function handleMouseMove(e: MouseEvent) {
     const dx = e.clientX - columnResizeStartX;
     const minColumnWidth = getColumnMinWidth(resizeColumn);
     const nextWidth = Math.max(minColumnWidth, columnResizeStartWidth + dx);
-    columnWidthOverrides.set(resizeColumn, nextWidth);
+    columnWidthOverrides.set(getColumnIndex(resizeColumn), nextWidth);
     updatePinnedLayout();
     return;
   }
@@ -474,6 +477,10 @@ function getColumnMinWidth(column: HTMLDivElement) {
   return children.reduce((maxWidth, child) => Math.max(maxWidth, getMinWindowWidth(child)), MIN_WINDOW_WIDTH);
 }
 
+function getColumnIndex(column: HTMLDivElement) {
+  return Number(column.dataset.columnIndex ?? 0);
+}
+
 function hasPinnedWindows() {
   if (!pinnedContainer) return false;
   return pinnedContainer.querySelectorAll('.pinned-column > .viz-window').length > 0;
@@ -530,7 +537,8 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   if (!targetColumn) {
     targetColumn = createPinnedColumn();
   }
-  targetColumn.appendChild(element);
+  element.dataset.pinnedColumn = `${getColumnIndex(targetColumn)}`;
+  insertWindowInColumn(targetColumn, element);
   updatePinButtonState(element);
   updatePinnedLayout();
 }
@@ -540,6 +548,8 @@ function unpinWindow(element: HTMLElement) {
   if (!isPinned(element)) return;
   const column = element.parentElement;
   setPinnedState(element, false);
+  element.dataset.pinnedColumn = '';
+  element.dataset.pinnedOrder = '';
   element.style.position = 'absolute';
   element.style.left = element.dataset.floatLeft ?? element.style.left;
   element.style.top = element.dataset.floatTop ?? element.style.top;
@@ -573,13 +583,13 @@ function updatePinnedLayout() {
       .filter(child => child.classList.contains('viz-window'))
       .filter(child => window.getComputedStyle(child).display !== 'none');
     if (visibleChildren.length === 0) {
-      columnWidthOverrides.delete(column);
+      columnWidthOverrides.delete(getColumnIndex(column));
       column.remove();
       return;
     }
     column.style.display = 'flex';
     const minColumnWidth = getColumnMinWidth(column);
-    const overrideWidth = columnWidthOverrides.get(column);
+    const overrideWidth = columnWidthOverrides.get(getColumnIndex(column));
     const columnWidth = Math.max(minColumnWidth, overrideWidth ?? minColumnWidth);
     column.style.width = `${columnWidth}px`;
     visibleChildren.forEach(child => {
@@ -593,6 +603,12 @@ function updatePinnedLayout() {
     _updateLegendPosition();
     updateFiltersPanelLayout();
     return;
+  }
+  const columnIndices = new Set(visibleColumns.map(entry => getColumnIndex(entry.column)));
+  for (const key of columnWidthOverrides.keys()) {
+    if (!columnIndices.has(key)) {
+      columnWidthOverrides.delete(key);
+    }
   }
   visibleColumns.forEach((entry, index) => {
     totalWidth += entry.width;
@@ -610,6 +626,8 @@ function createPinnedColumn() {
   if (!pinnedContainer) return null;
   const column = document.createElement('div');
   column.className = 'pinned-column';
+  const nextIndex = getNextColumnIndex();
+  column.dataset.columnIndex = `${nextIndex}`;
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'pinned-column-resize-handle';
   resizeHandle.setAttribute('aria-hidden', 'true');
@@ -655,6 +673,86 @@ function canColumnFitWindow(
   const nextHeight = element.getBoundingClientRect().height;
   const totalHeight = usedHeight + nextHeight + (visibleChildren.length > 0 ? gapValue : 0);
   return totalHeight <= containerHeight;
+}
+
+function insertWindowInColumn(column: HTMLDivElement, element: HTMLElement) {
+  const desiredOrder = Number(element.dataset.pinnedOrder ?? '');
+  const windows = Array.from(column.children)
+    .filter((child): child is HTMLElement => child instanceof HTMLElement)
+    .filter(child => child.classList.contains('viz-window'));
+  if (Number.isNaN(desiredOrder)) {
+    element.dataset.pinnedOrder = `${windows.length}`;
+    column.appendChild(element);
+    return;
+  }
+  const sorted = windows.sort((a, b) => {
+    const orderA = Number(a.dataset.pinnedOrder ?? 0);
+    const orderB = Number(b.dataset.pinnedOrder ?? 0);
+    return orderA - orderB;
+  });
+  const target = sorted.find(child => Number(child.dataset.pinnedOrder ?? 0) > desiredOrder);
+  if (target) {
+    column.insertBefore(element, target);
+  } else {
+    column.appendChild(element);
+  }
+}
+
+function restorePinnedWindow(element: HTMLElement) {
+  if (!pinnedContainer) return;
+  let targetColumn: HTMLDivElement | null = null;
+  const storedColumnIndex = Number(element.dataset.pinnedColumn ?? '');
+  if (!Number.isNaN(storedColumnIndex)) {
+    targetColumn = getOrCreateColumnByIndex(storedColumnIndex);
+  }
+  if (!targetColumn || !canColumnFitWindow(targetColumn, element)) {
+    targetColumn = findColumnForWindow(element);
+  }
+  if (!targetColumn) {
+    targetColumn = createPinnedColumn();
+  }
+  element.dataset.pinnedColumn = `${getColumnIndex(targetColumn)}`;
+  insertWindowInColumn(targetColumn, element);
+  updatePinnedLayout();
+}
+
+function getNextColumnIndex() {
+  if (!pinnedContainer) return 0;
+  const indices = Array.from(pinnedContainer.querySelectorAll('.pinned-column'))
+    .map(column => Number((column as HTMLDivElement).dataset.columnIndex ?? 0));
+  if (indices.length === 0) return 0;
+  return Math.max(...indices) + 1;
+}
+
+function getOrCreateColumnByIndex(index: number) {
+  if (!pinnedContainer) return null;
+  const existing = Array.from(pinnedContainer.querySelectorAll('.pinned-column'))
+    .find(column => Number((column as HTMLDivElement).dataset.columnIndex ?? 0) === index) as HTMLDivElement | undefined;
+  if (existing) return existing;
+  const column = document.createElement('div');
+  column.className = 'pinned-column';
+  column.dataset.columnIndex = `${index}`;
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'pinned-column-resize-handle';
+  resizeHandle.setAttribute('aria-hidden', 'true');
+  resizeHandle.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isColumnResizing = true;
+    resizeColumn = column;
+    columnResizeStartX = event.clientX;
+    columnResizeStartWidth = column.getBoundingClientRect().width;
+    document.body.style.userSelect = 'none';
+  });
+  column.appendChild(resizeHandle);
+  const columns = Array.from(pinnedContainer.querySelectorAll('.pinned-column')) as HTMLDivElement[];
+  const insertBefore = columns.find(existingColumn => getColumnIndex(existingColumn) > index);
+  if (insertBefore) {
+    pinnedContainer.insertBefore(column, insertBefore);
+  } else {
+    pinnedContainer.appendChild(column);
+  }
+  return column;
 }
 
 function getDockRightEdge() {

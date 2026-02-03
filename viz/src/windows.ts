@@ -41,7 +41,6 @@ const MIN_WINDOW_WIDTH = 240;
 const MIN_WINDOW_HEIGHT = 160;
 
 let pinnedContainer: HTMLDivElement | null = null;
-let pinnedResizeHandle: HTMLDivElement | null = null;
 let appContainer: HTMLElement | null = null;
 let dockableWindows: DockableWindow[] = [];
 let isResizing = false;
@@ -54,10 +53,11 @@ let resizeStartHeight = 0;
 let resizeMinHeight = MIN_WINDOW_HEIGHT;
 let lastMouseX = 0;
 let lastMouseY = 0;
-let isDockResizing = false;
-let dockResizeStartX = 0;
-let dockResizeStartWidth = 0;
-let dockWidthOverride: number | null = null;
+let isColumnResizing = false;
+let resizeColumn: HTMLDivElement | null = null;
+let columnResizeStartX = 0;
+let columnResizeStartWidth = 0;
+const columnWidthOverrides = new WeakMap<HTMLDivElement, number>();
 
 /** Must be called once from main.ts to wire in the callbacks. */
 export function initWindowCallbacks(callbacks: {
@@ -70,22 +70,10 @@ export function initWindowCallbacks(callbacks: {
 
 export function initWindowDocking(config: {
   pinnedContainer: HTMLDivElement;
-  pinnedResizeHandle: HTMLDivElement;
   appContainer: HTMLElement;
 }) {
   pinnedContainer = config.pinnedContainer;
-  pinnedResizeHandle = config.pinnedResizeHandle;
   appContainer = config.appContainer;
-  pinnedResizeHandle.addEventListener('mousedown', (event) => {
-    if (!pinnedContainer) return;
-    if (!hasPinnedWindows()) return;
-    event.preventDefault();
-    event.stopPropagation();
-    isDockResizing = true;
-    dockResizeStartX = event.clientX;
-    dockResizeStartWidth = getDockWidth();
-    document.body.style.userSelect = 'none';
-  });
   updatePinnedLayout();
   window.addEventListener('resize', () => updatePinnedLayout());
 }
@@ -97,6 +85,10 @@ export function registerDockableWindow(windowEl: HTMLElement, pinButton: HTMLBut
     event.stopPropagation();
     togglePinnedState(windowEl);
   });
+  const minWidth = Math.max(MIN_WINDOW_WIDTH, windowEl.scrollWidth);
+  if (!windowEl.dataset.minWidth) {
+    windowEl.dataset.minWidth = `${minWidth}`;
+  }
   updatePinButtonState(windowEl);
 }
 
@@ -126,7 +118,15 @@ export function enableWindowResizing(windowEl: HTMLElement) {
 
   if (contentEl) {
     const observer = new ResizeObserver(() => {
+      const currentMinWidth = Number(windowEl.dataset.minWidth ?? MIN_WINDOW_WIDTH);
+      if (contentEl.scrollWidth > contentEl.clientWidth) {
+        const nextMinWidth = Math.max(currentMinWidth, contentEl.scrollWidth);
+        windowEl.dataset.minWidth = `${nextMinWidth}`;
+      }
       ensureWindowMinHeight(windowEl);
+      if (isPinned(windowEl)) {
+        updatePinnedLayout();
+      }
     });
     observer.observe(contentEl);
   }
@@ -352,11 +352,11 @@ export function handleMouseMove(e: MouseEvent) {
   lastMouseX = e.clientX;
   lastMouseY = e.clientY;
 
-  if (isDockResizing && pinnedContainer) {
-    const dx = e.clientX - dockResizeStartX;
-    const minDockWidth = getMinDockWidth();
-    const nextWidth = Math.max(minDockWidth, dockResizeStartWidth + dx);
-    dockWidthOverride = nextWidth;
+  if (isColumnResizing && resizeColumn) {
+    const dx = e.clientX - columnResizeStartX;
+    const minColumnWidth = getColumnMinWidth(resizeColumn);
+    const nextWidth = Math.max(minColumnWidth, columnResizeStartWidth + dx);
+    columnWidthOverrides.set(resizeColumn, nextWidth);
     updatePinnedLayout();
     return;
   }
@@ -416,8 +416,9 @@ export function handleMouseUp() {
     resizeTarget = null;
     document.body.style.userSelect = '';
   }
-  if (isDockResizing) {
-    isDockResizing = false;
+  if (isColumnResizing) {
+    isColumnResizing = false;
+    resizeColumn = null;
     document.body.style.userSelect = '';
   }
 
@@ -460,28 +461,22 @@ function ensureWindowMinHeight(element: HTMLElement) {
 }
 
 function getMinWindowWidth(element: HTMLElement) {
-  return Math.max(MIN_WINDOW_WIDTH, element.scrollWidth);
+  const storedMin = Number(element.dataset.minWidth ?? MIN_WINDOW_WIDTH);
+  return Math.max(MIN_WINDOW_WIDTH, storedMin);
+}
+
+function getColumnMinWidth(column: HTMLDivElement) {
+  const children = Array.from(column.children)
+    .filter((child): child is HTMLElement => child instanceof HTMLElement)
+    .filter(child => child.classList.contains('viz-window'))
+    .filter(child => window.getComputedStyle(child).display !== 'none');
+  if (children.length === 0) return MIN_WINDOW_WIDTH;
+  return children.reduce((maxWidth, child) => Math.max(maxWidth, getMinWindowWidth(child)), MIN_WINDOW_WIDTH);
 }
 
 function hasPinnedWindows() {
   if (!pinnedContainer) return false;
   return pinnedContainer.querySelectorAll('.pinned-column > .viz-window').length > 0;
-}
-
-function getMinDockWidth() {
-  const pinnedWindows = dockableWindows
-    .map(entry => entry.element)
-    .filter(element => isPinned(element) && window.getComputedStyle(element).display !== 'none');
-  if (pinnedWindows.length === 0) return 0;
-  return pinnedWindows.reduce((maxWidth, element) => Math.max(maxWidth, getMinWindowWidth(element)), MIN_WINDOW_WIDTH);
-}
-
-function getDockWidth() {
-  const minDockWidth = getMinDockWidth();
-  if (dockWidthOverride !== null) {
-    return Math.max(minDockWidth, dockWidthOverride);
-  }
-  return minDockWidth;
 }
 
 function isPinned(element: HTMLElement) {
@@ -525,15 +520,12 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   element.style.position = 'relative';
   setPinnedState(element, true);
 
-  let targetColumn = column;
+  let targetColumn = column ?? findColumnForWindow(element);
   if (!targetColumn) {
-    targetColumn = document.createElement('div');
-    targetColumn.className = 'pinned-column';
-    pinnedContainer.appendChild(targetColumn);
+    targetColumn = createPinnedColumn();
   }
   targetColumn.appendChild(element);
   updatePinButtonState(element);
-  dockWidthOverride = dockWidthOverride ?? getMinDockWidth();
   updatePinnedLayout();
 }
 
@@ -568,7 +560,6 @@ function updatePinnedLayout() {
   const paddingRight = parseFloat(containerStyles.paddingRight || '0');
   const gapValue = parseFloat(containerStyles.columnGap || containerStyles.gap || `${PINNED_GAP_FALLBACK}`);
   let totalWidth = paddingLeft + paddingRight;
-  const dockWidth = getDockWidth();
   const visibleColumns: Array<{ column: HTMLDivElement; width: number }> = [];
   columns.forEach((column) => {
     const children = Array.from(column.children) as HTMLElement[];
@@ -579,7 +570,9 @@ function updatePinnedLayout() {
       return;
     }
     column.style.display = 'flex';
-    const columnWidth = Math.max(MIN_WINDOW_WIDTH, dockWidth);
+    const minColumnWidth = getColumnMinWidth(column);
+    const overrideWidth = columnWidthOverrides.get(column);
+    const columnWidth = Math.max(minColumnWidth, overrideWidth ?? minColumnWidth);
     column.style.width = `${columnWidth}px`;
     visibleChildren.forEach(child => {
       child.style.width = `${columnWidth}px`;
@@ -593,19 +586,53 @@ function updatePinnedLayout() {
     }
   });
   document.documentElement.style.setProperty('--pinned-width', `${totalWidth}px`);
-  updatePinnedResizeHandle();
   ensureFloatingWindowsClearDock();
   _updateLegendPosition();
   updateFiltersPanelLayout();
 }
 
-function updatePinnedResizeHandle() {
-  if (!pinnedResizeHandle) return;
-  if (!hasPinnedWindows()) {
-    pinnedResizeHandle.style.display = 'none';
-    return;
+function createPinnedColumn() {
+  if (!pinnedContainer) return null;
+  const column = document.createElement('div');
+  column.className = 'pinned-column';
+  const resizeHandle = document.createElement('div');
+  resizeHandle.className = 'pinned-column-resize-handle';
+  resizeHandle.setAttribute('aria-hidden', 'true');
+  resizeHandle.addEventListener('mousedown', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    isColumnResizing = true;
+    resizeColumn = column;
+    columnResizeStartX = event.clientX;
+    columnResizeStartWidth = column.getBoundingClientRect().width;
+    document.body.style.userSelect = 'none';
+  });
+  column.appendChild(resizeHandle);
+  pinnedContainer.appendChild(column);
+  return column;
+}
+
+function findColumnForWindow(element: HTMLElement) {
+  if (!pinnedContainer) return null;
+  const columns = Array.from(pinnedContainer.querySelectorAll('.pinned-column')) as HTMLDivElement[];
+  const containerHeight = pinnedContainer.getBoundingClientRect().height;
+  const gapValue = parseFloat(window.getComputedStyle(pinnedContainer).gap || `${PINNED_GAP_FALLBACK}`);
+  for (const column of columns) {
+    const visibleChildren = Array.from(column.children)
+      .filter((child): child is HTMLElement => child instanceof HTMLElement)
+      .filter(child => child.classList.contains('viz-window'))
+      .filter(child => window.getComputedStyle(child).display !== 'none');
+    if (visibleChildren.length === 0) {
+      return column;
+    }
+    const usedHeight = visibleChildren.reduce((sum, child) => sum + child.getBoundingClientRect().height, 0)
+      + gapValue * Math.max(0, visibleChildren.length - 1);
+    const nextHeight = element.getBoundingClientRect().height;
+    if (usedHeight + nextHeight <= containerHeight) {
+      return column;
+    }
   }
-  pinnedResizeHandle.style.display = 'block';
+  return null;
 }
 
 function getDockRightEdge() {

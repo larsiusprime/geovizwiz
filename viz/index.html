@@ -24,6 +24,16 @@
       pointer-events: auto;
     }
 
+    #pinnedResizeHandle {
+      position: absolute;
+      left: calc(64px + var(--pinned-width) - 4px);
+      top: 0;
+      bottom: 0;
+      width: 8px;
+      cursor: ew-resize;
+      z-index: 13;
+    }
+
     .pinned-column {
       display: flex;
       flex-direction: column;
@@ -49,6 +59,14 @@
       right: auto !important;
       transform: none !important;
       margin: 0;
+    }
+
+    .viz-window.is-pinned .window-resize-edge {
+      display: none;
+    }
+
+    .viz-window.is-pinned .window-resize-handle {
+      cursor: ns-resize;
     }
 
     .window-actions {
@@ -855,6 +873,7 @@
     <div id="app">
       <div id="map"></div>
       <div id="pinnedPanels"></div>
+      <div id="pinnedResizeHandle" aria-hidden="true"></div>
       
       <!-- Vertical Toolbar -->
       <div id="verticalToolbar">

@@ -634,6 +634,7 @@ initPositionElements({
 });
 initWindowDocking({
   pinnedContainer: pinnedPanelsEl,
+  pinnedResizeHandle: document.getElementById('pinnedResizeHandle') as HTMLDivElement,
   appContainer: appEl,
 });
 [

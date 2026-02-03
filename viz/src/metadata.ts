@@ -1,8 +1,18 @@
 // metadata.ts - Project save/load functionality
 
 import { S } from './state.js';
-import type { DataStore, LayerState, SavedFilterEntry, ProjectFileV1, SerializedDataSource, SerializedLayer } from './types.js';
+import type {
+  DataStore,
+  LayerState,
+  SavedFilterEntry,
+  ProjectFileV1,
+  SerializedDataSource,
+  SerializedLayer,
+  SerializedLandScheduleEntry,
+  SerializedLandScheduleTable
+} from './types.js';
 import { persistCurrentLayerState, renderDataStoreList, renderLayerList, registerLayer, applyLayerState, applyLayerOrderToMap } from './layers.js';
+import { cloneFilters } from './filters.js';
 import { revealUI } from './main.js';
 import { addOrUpdateSource, applyGrayRendering, ensureErrorLayer } from './rendering.js';
 import { applyExtrusionWithVisibility } from './legend.js';
@@ -66,6 +76,29 @@ function serializeSavedFilters(): SavedFilterEntry[] {
   return result;
 }
 
+function serializeLandSchedules(): SerializedLandScheduleEntry[] {
+  const result: SerializedLandScheduleEntry[] = [];
+  S.landScheduleStore.forEach((valueMap, field) => {
+    valueMap.forEach((entry, valueKey) => {
+      const tables: SerializedLandScheduleTable[] = entry.tables.map(table => ({
+        id: table.id,
+        name: table.name,
+        unit: table.unit,
+        rows: table.rows.map(row => ({ ...row })),
+        filters: cloneFilters(table.filters ?? []),
+        filterInvert: table.filterInvert ?? false,
+      }));
+      result.push({
+        field,
+        valueKey,
+        tables,
+        activeTableId: entry.activeTableId,
+      });
+    });
+  });
+  return result;
+}
+
 export function exportProject() {
   // Persist current layer state before export
   if (S.currentLayerId) {
@@ -90,7 +123,8 @@ export function exportProject() {
     projectName: dataSources[0]?.name || 'Untitled Project',
     dataSources,
     layers: serializedLayers,
-    savedFilters: serializeSavedFilters()
+    savedFilters: serializeSavedFilters(),
+    landSchedules: serializeLandSchedules()
   };
 
   const json = JSON.stringify(projectFile, null, 2);
@@ -112,6 +146,7 @@ function validateProjectFile(data: any): data is ProjectFileV1 {
   if (!Array.isArray(data.dataSources)) return false;
   if (!Array.isArray(data.layers)) return false;
   if (!Array.isArray(data.savedFilters)) return false;
+  if (data.landSchedules && !Array.isArray(data.landSchedules)) return false;
   return true;
 }
 
@@ -198,6 +233,7 @@ export async function loadProjectFile(file: File) {
     S.layers.clear();
     S.layerOrder.length = 0;
     S.savedFiltersStore.clear();
+    S.landScheduleStore.clear();
     S.currentLayerId = null;
     S.currentDataStoreId = null;
 
@@ -220,6 +256,27 @@ export async function loadProjectFile(file: File) {
         filterInvert: entry.filterInvert
       });
     });
+
+    if (projectData.landSchedules) {
+      projectData.landSchedules.forEach((entry: SerializedLandScheduleEntry) => {
+        let valueMap = S.landScheduleStore.get(entry.field);
+        if (!valueMap) {
+          valueMap = new Map();
+          S.landScheduleStore.set(entry.field, valueMap);
+        }
+        valueMap.set(entry.valueKey, {
+          tables: entry.tables.map(table => ({
+            id: table.id,
+            name: table.name,
+            unit: table.unit,
+            rows: table.rows.map(row => ({ ...row })),
+            filters: table.filters.map(f => ({ ...f })),
+            filterInvert: table.filterInvert ?? false,
+          })),
+          activeTableId: entry.activeTableId,
+        });
+      });
+    }
 
     // Create or reuse data stores
     const dataStoreMap = new Map<string, string>();  // old ID -> new ID

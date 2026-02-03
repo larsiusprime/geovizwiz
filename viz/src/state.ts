@@ -9,7 +9,7 @@ import type {
   LayerState, DataStore, FilterRule, SavedFilterEntry,
   ParcelPatchMap, ColorMode, CategoricalColorMode, QualityMode,
   UpdateMode, SubjectMode, FilterMode, FilterActionMode,
-  LandScheduleBaseLot, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator
+  LandScheduleStore, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator
 } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 
@@ -120,7 +120,7 @@ export const S = {
   scatterHoveredParcelId: null as string | null,
 
   // --- Land schedule ---
-  landScheduleStore: new Map<string, Map<string, LandScheduleBaseLot>>(),
+  landScheduleStore: new Map() as LandScheduleStore,
   currentLandScheduleField: null as string | null,
   currentLandScheduleValue: null as string | null,
   isUpdatingLandScheduleUI: false,

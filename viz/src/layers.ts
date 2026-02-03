@@ -10,7 +10,7 @@ import { S } from './state';
 import { SOURCE_ID, LAYER_ID, ERROR_LAYER_ID } from './config';
 import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
-import { cloneFilters } from './filters';
+import { cloneFilters, setFiltersContext } from './filters';
 import { refreshLandSchedulePanel } from './land-schedule';
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
@@ -721,6 +721,7 @@ export function renderLayerList() {
       filterBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" />`;
       filterBtn.addEventListener('click', () => {
         setCurrentLayer(layerId);
+        setFiltersContext({ type: 'layer' });
         _showFiltersPanel();
       });
 

@@ -47,6 +47,30 @@ export type LandScheduleBaseLot = {
   per: LandSchedulePerUnit | null;
 };
 
+export type LandScheduleUnit = 'sqft' | 'acre' | 'ft' | 'sqm' | 'hectare' | 'm' | 'flat';
+
+export type LandScheduleRow = {
+  min: number | null;
+  max: number | null;
+  value: number | null;
+};
+
+export type LandScheduleTable = {
+  id: string;
+  name: string;
+  unit: LandScheduleUnit;
+  rows: LandScheduleRow[];
+  filters: FilterRule[];
+  filterInvert: boolean;
+};
+
+export type LandScheduleEntry = {
+  tables: LandScheduleTable[];
+  activeTableId: string | null;
+};
+
+export type LandScheduleStore = Map<string, Map<string, LandScheduleEntry>>;
+
 export type LayerState = {
   id: string;
   name: string;
@@ -166,4 +190,21 @@ export type ProjectFileV1 = {
   dataSources: SerializedDataSource[];
   layers: SerializedLayer[];
   savedFilters: SavedFilterEntry[];
+  landSchedules?: SerializedLandScheduleEntry[];
+};
+
+export type SerializedLandScheduleTable = {
+  id: string;
+  name: string;
+  unit: LandScheduleUnit;
+  rows: LandScheduleRow[];
+  filters: FilterRule[];
+  filterInvert: boolean;
+};
+
+export type SerializedLandScheduleEntry = {
+  field: string;
+  valueKey: string;
+  tables: SerializedLandScheduleTable[];
+  activeTableId: string | null;
 };

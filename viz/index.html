@@ -970,11 +970,28 @@
     .land-table-filter {
       border: 1px solid #d5d5d5;
       background: #fff;
-      width: 26px;
-      height: 26px;
       border-radius: 6px;
-      font-size: 14px;
+      font-size: 12px;
       cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 8px;
+      color: #222;
+    }
+
+    .land-table-filter img {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
+    .land-table-filter.is-muted img {
+      opacity: 0.35;
+    }
+
+    .land-table-filter.is-active img {
+      filter: invert(19%) sepia(96%) saturate(7079%) hue-rotate(355deg) brightness(100%) contrast(112%);
     }
 
     .land-table-unit {
@@ -1021,7 +1038,9 @@
 
     .land-table-actions {
       display: flex;
-      justify-content: flex-end;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
     }
 
     .land-schedule-curve {

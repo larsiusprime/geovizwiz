@@ -52,6 +52,7 @@ import {
   createFilterRule, updateFiltersUIState, renderFiltersList,
   refreshFiltersUI,
   applyActiveFilterAction,
+  persistFiltersContext,
 } from './filters';
 import {
   createWindowManager, initWindowCallbacks, initPositionElements,
@@ -1918,13 +1919,13 @@ addFilterButton.addEventListener('click', () => {
   S.filters.push(createFilterRule());
   renderFiltersList();
   updateFiltersUIState();
-  persistCurrentLayerState();
+  persistFiltersContext();
 });
 
 filtersInvertToggle.addEventListener('change', () => {
   S.filterInvert = filtersInvertToggle.checked;
   applyActiveFilterAction();
-  persistCurrentLayerState();
+  persistFiltersContext();
 });
 
 statsSubjectButtons.forEach(button => {

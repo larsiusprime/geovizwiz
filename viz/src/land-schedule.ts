@@ -5,29 +5,8 @@
  */
 import { S, LAND_SCHEDULE_DEFAULT_KEY, LAND_SCHEDULE_DEFAULT_LABEL } from './state';
 import { getCategoricalValues } from './filters';
-
-type LandScheduleUnit = 'sqft' | 'acre' | 'ft' | 'sqm' | 'hectare' | 'm' | 'flat';
-
-type LandScheduleRow = {
-  min: number | null;
-  max: number | null;
-  value: number | null;
-};
-
-type LandScheduleTable = {
-  id: string;
-  name: string;
-  unit: LandScheduleUnit;
-  rows: LandScheduleRow[];
-  filters: unknown[];
-};
-
-type LandScheduleEntry = {
-  tables: LandScheduleTable[];
-  activeTableId: string | null;
-};
-
-const landScheduleStore = new Map<string, Map<string, LandScheduleEntry>>();
+import { setFiltersContext, cloneFilters } from './filters';
+import type { FilterRule, LandScheduleEntry, LandScheduleRow, LandScheduleTable, LandScheduleUnit } from './types';
 
 const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: string }> = [
   { value: 'sqft', label: 'area (sqft)', header: 'sqft' },
@@ -38,6 +17,8 @@ const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: stri
   { value: 'm', label: 'frontage (m)', header: 'm' },
   { value: 'flat', label: 'Flat value', header: 'Flat value' },
 ];
+
+const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initLandScheduleElements)     */
@@ -52,6 +33,7 @@ let landScheduleAddTableButton: HTMLButtonElement;
 let landScheduleTableContainer: HTMLDivElement;
 let landScheduleCurveChart: HTMLDivElement;
 let landScheduleTablesSection: HTMLDivElement;
+let landScheduleFilterButton: HTMLButtonElement | null = null;
 
 let showFiltersPanel: (() => void) | null = null;
 
@@ -86,10 +68,10 @@ export function initLandScheduleCallbacks(cbs: { showFiltersPanel?: () => void }
 /* ------------------------------------------------------------------ */
 
 function getLandScheduleEntry(field: string, valueKey: string): LandScheduleEntry {
-  let fieldMap = landScheduleStore.get(field);
+  let fieldMap = S.landScheduleStore.get(field);
   if (!fieldMap) {
     fieldMap = new Map();
-    landScheduleStore.set(field, fieldMap);
+    S.landScheduleStore.set(field, fieldMap);
   }
   let entry = fieldMap.get(valueKey);
   if (!entry) {
@@ -125,14 +107,17 @@ function setLandScheduleInputValue(input: HTMLInputElement, value: number | null
   input.value = value === null ? '' : String(value);
 }
 
-function updateValueHeader(headerEl: HTMLElement, unit: LandScheduleUnit) {
+function getValueHeaderText(unit: LandScheduleUnit) {
   if (unit === 'flat') {
-    headerEl.textContent = 'Flat value';
-    return;
+    return 'Flat value';
   }
   const option = UNIT_OPTIONS.find(opt => opt.value === unit);
   const suffix = option ? option.header : unit;
-  headerEl.textContent = `Value / ${suffix}`;
+  return `Value / ${suffix}`;
+}
+
+function updateValueHeader(headerEl: HTMLElement, unit: LandScheduleUnit) {
+  headerEl.textContent = getValueHeaderText(unit);
 }
 
 const landScheduleSettleTimers = new WeakMap<HTMLInputElement, number>();
@@ -175,7 +160,7 @@ function updateLandScheduleCurve(table: LandScheduleTable | null) {
   const layout = {
     margin: { l: 40, r: 16, t: 10, b: 36 },
     xaxis: { title: xAxisLabel, fixedrange: true, zeroline: false },
-    yaxis: { title: 'Value', fixedrange: true, zeroline: false },
+    yaxis: { title: getValueHeaderText(table.unit), fixedrange: true, zeroline: false },
     dragmode: false,
     showlegend: false,
     hovermode: 'closest',
@@ -214,6 +199,17 @@ function enforceRowBounds(
   }
   syncDerivedRowMins(table, tbody);
   updateLandScheduleCurve(table);
+}
+
+function hasActiveTableFilters(table: LandScheduleTable) {
+  return table.filters.some(filter => filter.active);
+}
+
+function updateLandScheduleFilterButtonState(table: LandScheduleTable | null) {
+  if (!landScheduleFilterButton) return;
+  const isActive = table ? hasActiveTableFilters(table) : false;
+  landScheduleFilterButton.classList.toggle('is-active', isActive);
+  landScheduleFilterButton.classList.toggle('is-muted', !isActive);
 }
 
 function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLTableSectionElement) {
@@ -329,6 +325,9 @@ function renderActiveTable(entry: LandScheduleEntry) {
   landScheduleTableContainer.replaceChildren();
   const activeTable = entry.tables.find(table => table.id === entry.activeTableId);
   if (!activeTable) return;
+  landScheduleFilterButton = null;
+  activeTable.filters = activeTable.filters ?? [];
+  activeTable.filterInvert = activeTable.filterInvert ?? false;
 
   const card = document.createElement('div');
   card.className = 'land-table-card';
@@ -372,9 +371,21 @@ function renderActiveTable(entry: LandScheduleEntry) {
   const filterButton = document.createElement('button');
   filterButton.type = 'button';
   filterButton.className = 'land-table-filter';
-  filterButton.textContent = '▽';
-  filterButton.title = 'Add filters to this table';
+  filterButton.title = 'Conditions';
+  filterButton.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions...`;
+  landScheduleFilterButton = filterButton;
+  updateLandScheduleFilterButtonState(activeTable);
   filterButton.addEventListener('click', () => {
+    setFiltersContext({
+      type: 'landSchedule',
+      getFilters: () => activeTable.filters,
+      getFilterInvert: () => activeTable.filterInvert,
+      setFilters: (filters: FilterRule[], filterInvert: boolean) => {
+        activeTable.filters = cloneFilters(filters);
+        activeTable.filterInvert = filterInvert;
+        updateLandScheduleFilterButtonState(activeTable);
+      },
+    });
     showFiltersPanel?.();
   });
 
@@ -433,7 +444,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
     });
     renderLandScheduleTables();
   });
-  actions.appendChild(addRowBtn);
+  actions.append(landScheduleAddTableButton, addRowBtn);
 
   card.append(header, controls, tableEl, actions);
   landScheduleTableContainer.appendChild(card);
@@ -477,6 +488,7 @@ export function updateLandScheduleValueOptions() {
 export function renderLandScheduleTables() {
   const entry = getCurrentEntry();
   landScheduleTableContainer.replaceChildren();
+  landScheduleFilterButton = null;
 
   if (!entry) {
     landScheduleTablesSection.style.display = 'none';
@@ -491,6 +503,7 @@ export function renderLandScheduleTables() {
 
   if (entry.tables.length === 0) {
     landScheduleTableSelectRow.style.display = 'none';
+    landScheduleTableContainer.appendChild(landScheduleAddTableButton);
     updateLandScheduleCurve(null);
     return;
   }
@@ -510,6 +523,7 @@ export function addLandScheduleTable() {
     unit: 'sqft',
     rows: [{ min: null, max: null, value: null }],
     filters: [],
+    filterInvert: false,
   };
   entry.tables.push(newTable);
   entry.activeTableId = newTable.id;

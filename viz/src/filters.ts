@@ -14,7 +14,7 @@ import {
 import { numOrNull } from './utils.number';
 import { updateFiltersPanelLayout } from './windows';
 import type {
-  FilterFieldType, FilterMode,
+  FilterFieldType, FilterMode, FilterActionMode,
   FilterOperator, FilterRule, SavedFilterEntry,
   ColorMode, LayerState
 } from './types';
@@ -80,6 +80,23 @@ let _updateStatisticsResults: () => void;
 let _scheduleScatterPlotRefresh: () => void;
 let _getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
 let _clearLegendVisibility: () => void;
+
+type FiltersContext =
+  | { type: 'layer' }
+  | {
+      type: 'landSchedule';
+      getFilters: () => FilterRule[];
+      getFilterInvert: () => boolean;
+      setFilters: (filters: FilterRule[], filterInvert: boolean) => void;
+    };
+
+let filtersContext: FiltersContext = { type: 'layer' };
+let layerFiltersSnapshot: {
+  filters: FilterRule[];
+  filterInvert: boolean;
+  filterMode: FilterMode;
+  filterActionMode: FilterActionMode;
+} | null = null;
 export function initFilterCallbacks(cbs: {
   persistCurrentLayerState: () => void;
   renderLayerList: () => void;
@@ -105,6 +122,44 @@ export function cloneFilters(source: FilterRule[]): FilterRule[] {
     ...filter,
     value: Array.isArray(filter.value) ? [...filter.value] : filter.value
   }));
+}
+
+export function setFiltersContext(context: FiltersContext) {
+  if (context.type === 'landSchedule') {
+    if (!layerFiltersSnapshot) {
+      layerFiltersSnapshot = {
+        filters: cloneFilters(S.filters),
+        filterInvert: S.filterInvert,
+        filterMode: S.filterMode,
+        filterActionMode: S.filterActionMode,
+      };
+    }
+    S.filters = cloneFilters(context.getFilters());
+    S.filterInvert = context.getFilterInvert();
+    S.filterMode = 'none';
+    S.filterActionMode = 'none';
+  } else if (filtersContext.type === 'landSchedule' && layerFiltersSnapshot) {
+    S.filters = cloneFilters(layerFiltersSnapshot.filters);
+    S.filterInvert = layerFiltersSnapshot.filterInvert;
+    S.filterMode = layerFiltersSnapshot.filterMode;
+    S.filterActionMode = layerFiltersSnapshot.filterActionMode;
+    layerFiltersSnapshot = null;
+  }
+
+  filtersContext = context;
+  if (filtersInvertToggle) {
+    filtersInvertToggle.checked = S.filterInvert;
+  }
+  renderFiltersList();
+  updateFiltersUIState();
+}
+
+export function persistFiltersContext() {
+  if (filtersContext.type === 'landSchedule') {
+    filtersContext.setFilters(cloneFilters(S.filters), S.filterInvert);
+    return;
+  }
+  _persistCurrentLayerState();
 }
 
 function getReferenceFilterName(filter: FilterRule): string | null {
@@ -288,7 +343,7 @@ export function applySavedFilter(name: string) {
   renderFiltersList();
   updateFiltersUIState();
   applyActiveFilterAction();
-  _persistCurrentLayerState();
+  persistFiltersContext();
 }
 
 /* ------------------------------------------------------------------ */
@@ -598,6 +653,7 @@ export function buildLayerVisibilityExpression(layer: LayerState): any | null {
 }
 
 export function applyMapFilters() {
+  if (filtersContext.type === 'landSchedule') return;
   const ids = _getCurrentLayerIds();
   if (!ids) return;
   const expressions: any[] = ['all'];
@@ -679,7 +735,7 @@ export function renderFiltersList() {
       filter.active = toggleInput.checked;
       updateFiltersUIState();
       applyActiveFilterAction();
-      _persistCurrentLayerState();
+      persistFiltersContext();
     });
     toggleLabel.append(toggleInput);
 
@@ -693,7 +749,7 @@ export function renderFiltersList() {
       renderFiltersList();
       updateFiltersUIState();
       applyActiveFilterAction();
-      _persistCurrentLayerState();
+      persistFiltersContext();
     });
 
     headerRow.append(toggleLabel, deleteButton);
@@ -729,7 +785,7 @@ export function renderFiltersList() {
       renderFiltersList();
       updateFiltersUIState();
       applyActiveFilterAction();
-      _persistCurrentLayerState();
+      persistFiltersContext();
     });
 
     fieldRow.appendChild(fieldSelect);
@@ -763,7 +819,7 @@ export function renderFiltersList() {
         renderFiltersList();
         updateFiltersUIState();
         applyActiveFilterAction();
-        _persistCurrentLayerState();
+        persistFiltersContext();
       });
       if (filter.fieldType === 'reference') {
         operatorSelect.disabled = !filter.value;
@@ -800,7 +856,7 @@ export function renderFiltersList() {
             renderFiltersList();
             updateFiltersUIState();
             applyActiveFilterAction();
-            _persistCurrentLayerState();
+            persistFiltersContext();
             return;
           }
           if (circularSavedFilters.has(selectedValue) || isCircularSavedFilter(selectedValue)) {
@@ -811,14 +867,14 @@ export function renderFiltersList() {
             renderFiltersList();
             updateFiltersUIState();
             applyActiveFilterAction();
-            _persistCurrentLayerState();
+            persistFiltersContext();
             return;
           }
           filter.value = selectedValue;
           renderFiltersList();
           updateFiltersUIState();
           applyActiveFilterAction();
-          _persistCurrentLayerState();
+          persistFiltersContext();
         });
 
         operatorRow.appendChild(valueSelect);
@@ -833,7 +889,7 @@ export function renderFiltersList() {
           filter.value = Number.isFinite(parsed) ? parsed : null;
           updateFiltersUIState();
           applyActiveFilterAction();
-          _persistCurrentLayerState();
+          persistFiltersContext();
         });
         operatorRow.appendChild(valueInput);
       } else {
@@ -872,7 +928,7 @@ export function renderFiltersList() {
           }
           updateFiltersUIState();
           applyActiveFilterAction();
-          _persistCurrentLayerState();
+          persistFiltersContext();
         });
         operatorRow.appendChild(valueSelect);
       }
@@ -961,6 +1017,11 @@ function matchesActiveFilters(feature: GeoJSON.Feature): boolean {
 /* ------------------------------------------------------------------ */
 
 export function applyActiveFilterAction() {
+  if (filtersContext.type === 'landSchedule') {
+    persistFiltersContext();
+    updateFiltersUIState();
+    return;
+  }
   const hasActiveFilters = getActiveFilters().length > 0;
   const nextMode: FilterMode = hasActiveFilters ? 'show' : 'none';
   S.filterActionMode = 'none';

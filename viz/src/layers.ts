@@ -706,10 +706,6 @@ export function renderLayerList() {
       applyLayerOrderToMap();
     });
 
-    const actionGroup = document.createElement('div');
-    actionGroup.className = 'layer-actions';
-    actionGroup.append(moveUpBtn, moveDownBtn, deleteBtn);
-
     const toolsGroup = document.createElement('div');
     toolsGroup.className = 'layer-tools';
 
@@ -717,7 +713,7 @@ export function renderLayerList() {
 
     const filterBtn = document.createElement('button');
     filterBtn.type = 'button';
-    filterBtn.className = `layer-tool-btn${hasActiveFilters ? '' : ' is-muted'}`;
+    filterBtn.className = `layer-tool-btn${hasActiveFilters ? ' is-active' : ' is-muted'}`;
     filterBtn.title = 'Filters';
     filterBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" />`;
     filterBtn.addEventListener('click', () => {
@@ -765,9 +761,13 @@ export function renderLayerList() {
       _showScatterplotPanel();
     });
 
-    toolsGroup.append(filterBtn, statsBtn, scatterBtn);
+    toolsGroup.append(statsBtn, scatterBtn);
 
-    row.append(visibilityToggle, currentRadio, nameButton, actionGroup, toolsGroup);
+    const actionGroup = document.createElement('div');
+    actionGroup.className = 'layer-actions';
+    actionGroup.append(moveUpBtn, moveDownBtn, deleteBtn);
+
+    row.append(currentRadio, visibilityToggle, filterBtn, nameButton, toolsGroup, actionGroup);
     _layerList.appendChild(row);
   });
 

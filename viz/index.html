@@ -89,7 +89,7 @@
 
     .layer-row {
       display: grid;
-      grid-template-columns: auto auto 1fr auto auto;
+      grid-template-columns: auto auto auto 1fr auto auto;
       gap: 6px;
       align-items: center;
       padding: 4px 6px;
@@ -159,6 +159,10 @@
 
     #controls .layer-tool-btn.is-muted img {
       opacity: 0.35;
+    }
+
+    #controls .layer-tool-btn.is-active img {
+      filter: invert(78%) sepia(82%) saturate(700%) hue-rotate(356deg) brightness(104%) contrast(103%);
     }
 
     .layer-source-name {

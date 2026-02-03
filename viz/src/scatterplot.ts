@@ -514,53 +514,18 @@ export function resetScatterPlot(message: string) {
   clearScatterSelection();
 }
 
-function getSelectionMode(event: any): 'add' | 'remove' | 'replace' {
-  const sourceEvent = event?.event as MouseEvent | undefined;
-  if (sourceEvent?.altKey) return 'remove';
-  if (sourceEvent?.shiftKey) return 'add';
-  return 'replace';
-}
-
-function applyScatterSelection(parcelIds: string[], mode: 'add' | 'remove' | 'replace') {
-  if (mode === 'replace') {
-    S.scatterSelectedParcelIds.clear();
-  }
-  if (mode === 'remove') {
-    parcelIds.forEach(id => S.scatterSelectedParcelIds.delete(id));
-  } else {
-    parcelIds.forEach(id => S.scatterSelectedParcelIds.add(id));
-  }
-  updateScatterPlotSelectionDisplay();
-}
-
 function handleScatterPlotClick(event: any) {
   const pointIndex = event?.points?.[0]?.pointIndex as number | undefined;
   if (pointIndex === undefined) return;
   const point = scatterPlotPoints[pointIndex];
   if (!point) return;
-  const mode = getSelectionMode(event);
-  if (mode === 'add') {
-    S.scatterSelectedParcelIds.add(point.parcelId);
-  } else if (mode === 'remove') {
+  if (S.scatterSelectedParcelIds.has(point.parcelId)) {
     S.scatterSelectedParcelIds.delete(point.parcelId);
   } else {
-    if (S.scatterSelectedParcelIds.has(point.parcelId)) {
-      S.scatterSelectedParcelIds.delete(point.parcelId);
-    } else {
-      S.scatterSelectedParcelIds.clear();
-      S.scatterSelectedParcelIds.add(point.parcelId);
-    }
+    S.scatterSelectedParcelIds.clear();
+    S.scatterSelectedParcelIds.add(point.parcelId);
   }
   updateScatterPlotSelectionDisplay();
-}
-
-function handleScatterPlotSelected(event: any) {
-  const mode = getSelectionMode(event);
-  const parcelIds = (event?.points ?? [])
-    .map((pt: any) => scatterPlotPoints[pt.pointIndex]?.parcelId)
-    .filter((id: string | undefined): id is string => Boolean(id));
-  if (parcelIds.length === 0) return;
-  applyScatterSelection(parcelIds, mode);
 }
 
 function handleScatterPlotHover(event: any) {
@@ -582,7 +547,6 @@ function attachScatterPlotEvents() {
   if (!plotly || !scatterPlot) return;
   if (typeof (scatterPlot as any).on !== 'function') return;
   (scatterPlot as any).on('plotly_click', handleScatterPlotClick);
-  (scatterPlot as any).on('plotly_selected', handleScatterPlotSelected);
   (scatterPlot as any).on('plotly_deselect', clearScatterSelection);
   (scatterPlot as any).on('plotly_hover', handleScatterPlotHover);
   (scatterPlot as any).on('plotly_unhover', handleScatterPlotUnhover);
@@ -771,7 +735,7 @@ export function updateScatterPlot() {
   const layout = {
     margin: { l: 48, r: 16, t: 8, b: 42 },
     height: 220,
-    dragmode: 'select',
+    dragmode: false,
     hovermode: 'closest',
     xaxis: { title: S.scatterXField, range: [Math.min(xMin, xMax), Math.max(xMin, xMax)] },
     yaxis: { title: S.scatterYField, range: [Math.min(yMin, yMax), Math.max(yMin, yMax)] }

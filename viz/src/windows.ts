@@ -148,12 +148,13 @@ export function createWindowManager(config: WindowConfig): WindowManager {
 
   function show() {
     config.setMinimized(false);
-    if (isPinned(config.controlsEl) && pinnedContainer && !pinnedContainer.contains(config.controlsEl)) {
-      restorePinnedWindow(config.controlsEl);
-    }
     config.contentEl.style.display = display;
     config.controlsEl.style.display = 'grid';
-    config.positionFn?.();
+    if (isPinned(config.controlsEl) && pinnedContainer && !pinnedContainer.contains(config.controlsEl)) {
+      restorePinnedWindow(config.controlsEl);
+    } else {
+      config.positionFn?.();
+    }
     config.onShow?.();
     ensureWindowMinHeight(config.controlsEl);
     if (isPinned(config.controlsEl)) {

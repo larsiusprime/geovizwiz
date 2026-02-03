@@ -6,7 +6,14 @@
 import { S, LAND_SCHEDULE_DEFAULT_KEY, LAND_SCHEDULE_DEFAULT_LABEL } from './state';
 import { getCategoricalValues } from './filters';
 import { setFiltersContext, cloneFilters } from './filters';
-import type { FilterRule, LandScheduleEntry, LandScheduleRow, LandScheduleTable, LandScheduleUnit } from './types';
+import type {
+  FilterRule,
+  LandScheduleEntry,
+  LandScheduleRow,
+  LandScheduleTable,
+  LandScheduleUnit,
+  LandScheduleValueMode
+} from './types';
 
 const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: string }> = [
   { value: 'sqft', label: 'area (sqft)', header: 'sqft' },
@@ -15,7 +22,6 @@ const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: stri
   { value: 'sqm', label: 'area (sqm)', header: 'sqm' },
   { value: 'hectare', label: 'area (hectare)', header: 'hectare' },
   { value: 'm', label: 'frontage (m)', header: 'm' },
-  { value: 'flat', label: 'Flat value', header: 'Flat value' },
 ];
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
@@ -107,17 +113,20 @@ function setLandScheduleInputValue(input: HTMLInputElement, value: number | null
   input.value = value === null ? '' : String(value);
 }
 
-function getValueHeaderText(unit: LandScheduleUnit) {
-  if (unit === 'flat') {
-    return 'Flat value';
+function getValueHeaderText(unit: LandScheduleUnit, mode: LandScheduleValueMode) {
+  if (mode === 'flat') {
+    return 'Value';
   }
   const option = UNIT_OPTIONS.find(opt => opt.value === unit);
   const suffix = option ? option.header : unit;
+  if (mode === 'per-unit-marginal') {
+    return `Value / ${suffix} (marginal)`;
+  }
   return `Value / ${suffix}`;
 }
 
-function updateValueHeader(headerEl: HTMLElement, unit: LandScheduleUnit) {
-  headerEl.textContent = getValueHeaderText(unit);
+function updateValueHeader(headerEl: HTMLElement, unit: LandScheduleUnit, mode: LandScheduleValueMode) {
+  headerEl.textContent = getValueHeaderText(unit, mode);
 }
 
 const landScheduleSettleTimers = new WeakMap<HTMLInputElement, number>();
@@ -129,6 +138,17 @@ function getPlotly(): any | null {
 function getUnitAxisLabel(unit: LandScheduleUnit) {
   const option = UNIT_OPTIONS.find(opt => opt.value === unit);
   return option ? option.header : unit;
+}
+
+function getValueModeTooltip(unit: LandScheduleUnit, mode: LandScheduleValueMode) {
+  const unitLabel = getUnitAxisLabel(unit);
+  if (mode === 'flat') {
+    return 'Lots within the size range are valued at exactly this';
+  }
+  if (mode === 'per-unit') {
+    return `Lots within the size range are valued at (value/${unitLabel}) x (the lot's area)`;
+  }
+  return 'The size ranges work like marginal income tax brackets. So the first chunk of size is valued at the first rate, and then the next chunk of size bigger than that is valued at the next rate, and so on.';
 }
 
 function updateLandScheduleCurve(table: LandScheduleTable | null) {
@@ -156,11 +176,11 @@ function updateLandScheduleCurve(table: LandScheduleTable | null) {
     hovertemplate: 'x: %{x}<br>y: %{y}<extra></extra>',
   };
 
-  const xAxisLabel = table.unit === 'flat' ? 'Flat value' : getUnitAxisLabel(table.unit);
+  const xAxisLabel = getUnitAxisLabel(table.unit);
   const layout = {
     margin: { l: 40, r: 16, t: 10, b: 36 },
     xaxis: { title: xAxisLabel, fixedrange: true, zeroline: false },
-    yaxis: { title: getValueHeaderText(table.unit), fixedrange: true, zeroline: false },
+    yaxis: { title: getValueHeaderText(table.unit, table.valueMode), fixedrange: true, zeroline: false },
     dragmode: false,
     showlegend: false,
     hovermode: 'closest',
@@ -328,6 +348,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   landScheduleFilterButton = null;
   activeTable.filters = activeTable.filters ?? [];
   activeTable.filterInvert = activeTable.filterInvert ?? false;
+  activeTable.valueMode = activeTable.valueMode ?? 'per-unit';
 
   const card = document.createElement('div');
   card.className = 'land-table-card';
@@ -349,25 +370,10 @@ function renderActiveTable(entry: LandScheduleEntry) {
   });
   nameLabel.appendChild(nameInput);
 
-  const deleteBtn = document.createElement('button');
-  deleteBtn.type = 'button';
-  deleteBtn.className = 'land-table-delete';
-  deleteBtn.textContent = '❌';
-  deleteBtn.title = 'Delete table';
-  deleteBtn.addEventListener('click', () => {
-    const confirmed = window.confirm('Delete this table?');
-    if (!confirmed) return;
-    entry.tables = entry.tables.filter(table => table.id !== activeTable.id);
-    if (entry.activeTableId === activeTable.id) {
-      entry.activeTableId = entry.tables[0]?.id ?? null;
-    }
-    renderLandScheduleTables();
-  });
+  header.append(nameLabel);
 
-  header.append(nameLabel, deleteBtn);
-
-  const controls = document.createElement('div');
-  controls.className = 'land-table-controls';
+  const conditionsRow = document.createElement('div');
+  conditionsRow.className = 'land-table-conditions-row';
   const filterButton = document.createElement('button');
   filterButton.type = 'button';
   filterButton.className = 'land-table-filter';
@@ -389,6 +395,25 @@ function renderActiveTable(entry: LandScheduleEntry) {
     showFiltersPanel?.();
   });
 
+  const deleteBtn = document.createElement('button');
+  deleteBtn.type = 'button';
+  deleteBtn.className = 'land-table-delete';
+  deleteBtn.textContent = '❌';
+  deleteBtn.title = 'Delete table';
+  deleteBtn.addEventListener('click', () => {
+    const confirmed = window.confirm('Delete this table?');
+    if (!confirmed) return;
+    entry.tables = entry.tables.filter(table => table.id !== activeTable.id);
+    if (entry.activeTableId === activeTable.id) {
+      entry.activeTableId = entry.tables[0]?.id ?? null;
+    }
+    renderLandScheduleTables();
+  });
+
+  conditionsRow.append(filterButton, deleteBtn);
+
+  const controls = document.createElement('div');
+  controls.className = 'land-table-controls';
   const unitWrap = document.createElement('div');
   unitWrap.className = 'land-table-unit';
   const unitLabel = document.createElement('span');
@@ -397,14 +422,37 @@ function renderActiveTable(entry: LandScheduleEntry) {
   UNIT_OPTIONS.forEach(option => {
     unitSelect.appendChild(new Option(option.label, option.value));
   });
+  const valueWrap = document.createElement('div');
+  valueWrap.className = 'land-table-value-mode';
+  const valueLabel = document.createElement('span');
+  valueLabel.textContent = 'Value:';
+  const valueSelect = document.createElement('select');
+  valueSelect.appendChild(new Option('Flat', 'flat'));
+  valueSelect.appendChild(new Option('Per unit', 'per-unit'));
+  valueSelect.appendChild(new Option('Per unit (marginal)', 'per-unit-marginal'));
+  valueSelect.value = activeTable.valueMode;
+  const valueInfo = document.createElement('span');
+  valueInfo.className = 'land-table-info';
+  valueInfo.textContent = 'ⓘ';
+  valueInfo.title = getValueModeTooltip(activeTable.unit, activeTable.valueMode);
+  valueSelect.addEventListener('change', () => {
+    activeTable.valueMode = valueSelect.value as LandScheduleValueMode;
+    updateValueHeader(valueHeader, activeTable.unit, activeTable.valueMode);
+    valueInfo.title = getValueModeTooltip(activeTable.unit, activeTable.valueMode);
+    updateLandScheduleCurve(activeTable);
+  });
+  valueWrap.append(valueLabel, valueSelect, valueInfo);
+
   unitSelect.value = activeTable.unit;
   unitSelect.addEventListener('change', () => {
     activeTable.unit = unitSelect.value as LandScheduleUnit;
-    updateValueHeader(valueHeader, activeTable.unit);
+    updateValueHeader(valueHeader, activeTable.unit, activeTable.valueMode);
+    valueInfo.title = getValueModeTooltip(activeTable.unit, activeTable.valueMode);
     updateLandScheduleCurve(activeTable);
   });
   unitWrap.append(unitLabel, unitSelect);
-  controls.append(filterButton, unitWrap);
+
+  controls.append(unitWrap, valueWrap);
 
   const tableEl = document.createElement('table');
   tableEl.className = 'land-table-grid';
@@ -416,7 +464,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   maxHeader.textContent = 'Max';
   const valueHeader = document.createElement('th');
   valueHeader.dataset.role = 'value-header';
-  updateValueHeader(valueHeader, activeTable.unit);
+  updateValueHeader(valueHeader, activeTable.unit, activeTable.valueMode);
   const deleteHeader = document.createElement('th');
   deleteHeader.textContent = '';
   headerRow.append(minHeader, maxHeader, valueHeader, deleteHeader);
@@ -446,7 +494,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   });
   actions.append(landScheduleAddTableButton, addRowBtn);
 
-  card.append(header, controls, tableEl, actions);
+  card.append(header, conditionsRow, controls, tableEl, actions);
   landScheduleTableContainer.appendChild(card);
 
   syncDerivedRowMins(activeTable, tbody);
@@ -521,6 +569,7 @@ export function addLandScheduleTable() {
     id: `table-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     name: `Table ${nextIndex}`,
     unit: 'sqft',
+    valueMode: 'per-unit',
     rows: [{ min: null, max: null, value: null }],
     filters: [],
     filterInvert: false,

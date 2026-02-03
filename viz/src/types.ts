@@ -47,7 +47,9 @@ export type LandScheduleBaseLot = {
   per: LandSchedulePerUnit | null;
 };
 
-export type LandScheduleUnit = 'sqft' | 'acre' | 'ft' | 'sqm' | 'hectare' | 'm' | 'flat';
+export type LandScheduleUnit = 'sqft' | 'acre' | 'ft' | 'sqm' | 'hectare' | 'm';
+
+export type LandScheduleValueMode = 'flat' | 'per-unit' | 'per-unit-marginal';
 
 export type LandScheduleRow = {
   min: number | null;
@@ -59,6 +61,7 @@ export type LandScheduleTable = {
   id: string;
   name: string;
   unit: LandScheduleUnit;
+  valueMode: LandScheduleValueMode;
   rows: LandScheduleRow[];
   filters: FilterRule[];
   filterInvert: boolean;
@@ -197,6 +200,7 @@ export type SerializedLandScheduleTable = {
   id: string;
   name: string;
   unit: LandScheduleUnit;
+  valueMode: LandScheduleValueMode;
   rows: LandScheduleRow[];
   filters: FilterRule[];
   filterInvert: boolean;

@@ -967,6 +967,13 @@
       gap: 10px;
     }
 
+    .land-table-conditions-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
     .land-table-filter {
       border: 1px solid #d5d5d5;
       background: #fff;
@@ -1000,6 +1007,21 @@
       gap: 6px;
       font-size: 12px;
       flex: 1;
+    }
+
+    .land-table-value-mode {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      flex: 1;
+      justify-content: flex-end;
+    }
+
+    .land-table-info {
+      font-size: 12px;
+      color: #6b7280;
+      cursor: help;
     }
 
     .land-table-grid {
@@ -1609,7 +1631,7 @@
     </div>
   </div>
 
-  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 360px); min-width: 360px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 380px); min-width: 380px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
       <div class="window-actions">

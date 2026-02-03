@@ -159,58 +159,6 @@ export function updateFloatingLegend() {
   `;
   legendContent.appendChild(fieldInfo);
 
-  // Add zoom to selected button on its own row
-  const zoomRow = document.createElement('div');
-  zoomRow.style.cssText = `
-    display: flex;
-    justify-content: flex-end;
-    padding: 4px;
-    margin-bottom: 4px;
-    border-bottom: 1px solid #eee;
-  `;
-
-  const zoomBtn = document.createElement('button');
-  zoomBtn.textContent = 'Zoom to selected';
-  zoomBtn.title = 'Zoom to bounding box of selected items';
-  zoomBtn.style.cssText = `
-    border: 1px solid #ccc;
-    background: #f8f9fa;
-    cursor: pointer;
-    font-size: 11px;
-    padding: 2px 6px;
-    border-radius: 3px;
-  `;
-
-  zoomBtn.onclick = () => {
-    if (S.selectedLegendItems.size === 0) {
-      // Show a toast or alert that no items are selected
-      return;
-    }
-
-    // Get the bounding box from the markup layer source
-    const markupSource = S.map.getSource('markup-source') as any;
-    if (markupSource) {
-      const data = markupSource.serialize();
-      if (data.data && typeof data.data === 'object' && 'features' in data.data && Array.isArray(data.data.features) && data.data.features.length > 0) {
-        const feature = data.data.features[0];
-        if (feature.geometry.type === 'Polygon' && Array.isArray(feature.geometry.coordinates) && feature.geometry.coordinates.length > 0) {
-          const bbox = feature.geometry.coordinates[0];
-          const bounds: [number, number, number, number] = [
-            Math.min(...bbox.map((coord: number[]) => coord[0])),
-            Math.min(...bbox.map((coord: number[]) => coord[1])),
-            Math.max(...bbox.map((coord: number[]) => coord[0])),
-            Math.max(...bbox.map((coord: number[]) => coord[1]))
-          ];
-
-          S.map.fitBounds(bounds, { padding: 50 });
-        }
-      }
-    }
-  };
-
-  zoomRow.appendChild(zoomBtn);
-  legendContent.appendChild(zoomRow);
-
   // Add header bar with column headers
   const headerBar = document.createElement('div');
   headerBar.style.cssText = `

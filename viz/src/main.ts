@@ -111,9 +111,13 @@ import {
   getMultiplierValue, getUnitFactor, getOpacityValue,
 } from './rendering';
 import {
+  addLandScheduleTable,
+  initLandScheduleCallbacks,
   initLandScheduleElements,
-  updateLandScheduleValueOptions, updateLandScheduleInputsFromStore,
-  updateLandScheduleStoreFromInputs, refreshLandSchedulePanel,
+  refreshLandSchedulePanel,
+  renderLandScheduleTables,
+  setActiveLandScheduleTable,
+  updateLandScheduleValueOptions,
 } from './land-schedule';
 import {
   initLayerElements, initLayerCallbacks,
@@ -409,13 +413,12 @@ const landScheduleControlsEl = document.getElementById('landScheduleControls') a
 const landScheduleContent = document.getElementById('landScheduleContent') as HTMLDivElement;
 const landScheduleFieldSelect = document.getElementById('landScheduleFieldSelect') as HTMLSelectElement;
 const landScheduleValueRow = document.getElementById('landScheduleValueRow') as HTMLDivElement;
-const landScheduleFieldLabel = document.getElementById('landScheduleFieldLabel') as HTMLSpanElement;
 const landScheduleValueSelect = document.getElementById('landScheduleValueSelect') as HTMLSelectElement;
-const landScheduleValuationSection = document.getElementById('landScheduleValuationSection') as HTMLDivElement;
-const landScheduleBaseMin = document.getElementById('landScheduleBaseMin') as HTMLInputElement;
-const landScheduleBaseMax = document.getElementById('landScheduleBaseMax') as HTMLInputElement;
-const landScheduleBaseValue = document.getElementById('landScheduleBaseValue') as HTMLInputElement;
-const landScheduleBasePer = document.getElementById('landScheduleBasePer') as HTMLSelectElement;
+const landScheduleApplyButton = document.getElementById('landScheduleApply') as HTMLButtonElement;
+const landScheduleTableSelect = document.getElementById('landScheduleTableSelect') as HTMLSelectElement;
+const landScheduleTableSelectRow = document.getElementById('landScheduleTableSelectRow') as HTMLDivElement;
+const landScheduleAddTableButton = document.getElementById('landScheduleAddTable') as HTMLButtonElement;
+const landScheduleTableContainer = document.getElementById('landScheduleTableContainer') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -857,13 +860,15 @@ initScatterplotCallbacks({
 initLandScheduleElements({
   landScheduleFieldSelect,
   landScheduleValueSelect,
-  landScheduleBaseMin,
-  landScheduleBaseMax,
-  landScheduleBaseValue,
-  landScheduleBasePer,
-  landScheduleValuationSection,
-  landScheduleFieldLabel,
   landScheduleValueRow,
+  landScheduleApplyButton,
+  landScheduleTableSelect,
+  landScheduleTableSelectRow,
+  landScheduleAddTableButton,
+  landScheduleTableContainer,
+});
+initLandScheduleCallbacks({
+  showFiltersPanel: showFilters,
 });
 
 // Wire DOM elements and callbacks into the layers module
@@ -1866,14 +1871,15 @@ landScheduleFieldSelect.addEventListener('change', () => {
 
 landScheduleValueSelect.addEventListener('change', () => {
   S.currentLandScheduleValue = landScheduleValueSelect.value || null;
-  updateLandScheduleInputsFromStore();
+  renderLandScheduleTables();
 });
 
-landScheduleBaseMin.addEventListener('input', updateLandScheduleStoreFromInputs);
-landScheduleBaseMax.addEventListener('input', updateLandScheduleStoreFromInputs);
-landScheduleBaseValue.addEventListener('input', updateLandScheduleStoreFromInputs);
-landScheduleBasePer.addEventListener('change', () => {
-  updateLandScheduleStoreFromInputs();
+landScheduleAddTableButton.addEventListener('click', () => {
+  addLandScheduleTable();
+});
+
+landScheduleTableSelect.addEventListener('change', () => {
+  setActiveLandScheduleTable(landScheduleTableSelect.value || null);
 });
 
 filtersSaveToggle.addEventListener('click', () => {

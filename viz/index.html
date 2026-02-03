@@ -805,72 +805,133 @@
       gap: 8px;
     }
 
-    .land-schedule-row {
-      display: grid;
-      gap: 6px;
-    }
-
-    .land-schedule-row.split {
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      align-items: end;
-      margin-right:20px;
-    }
-
-    .land-schedule-row.split.land-schedule-fields {
-      align-items: start;
-    }
-    
-    .land-schedule-row.split input {
-      width: 120px;
-    }
-
-    .land-schedule-row.split label {
-      font-size: 12px;
-    }
-
-    .land-schedule-field {
-      display: grid;
-      gap: 4px;
-      font-size: 12px;
-    }
-
-    .land-schedule-box-title {
-      font-weight: 600;
-      font-size: 12px;
-      color: #333;
-      margin-top: 6px;
-    }
-
-    .land-schedule-box {
-      border: 1px solid #e1e1e1;
-      border-radius: 8px;
-      padding: 10px;
-      display: grid;
-      gap: 8px;
-      background: #fff;
-    }
-
-    .land-schedule-row.inline {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .land-schedule-row.inline label {
-      margin: 0;
-    }
-
-    .land-schedule-inline-unit {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-
     .land-schedule-subtitle {
       font-weight: 600;
       font-size: 12px;
       color: #333;
+    }
+
+    .land-schedule-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .land-schedule-row select,
+    .land-schedule-row input {
+      flex: 1;
+    }
+
+    .land-schedule-button {
+      border: 1px solid #d5d5d5;
+      border-radius: 6px;
+      background: #f6f6f6;
+      color: #222;
+      font-size: 12px;
+      padding: 6px 10px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .land-schedule-button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+
+    .land-table-card {
+      border: 1px solid #e1e1e1;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .land-table-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .land-table-header label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      flex: 1;
+    }
+
+    .land-table-delete {
+      border: none;
+      background: #f2f2f2;
+      color: #444;
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .land-table-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .land-table-filter {
+      border: 1px solid #d5d5d5;
+      background: #fff;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .land-table-unit {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      flex: 1;
+    }
+
+    .land-table-grid {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .land-table-grid th,
+    .land-table-grid td {
+      border: 1px solid #e1e1e1;
+      padding: 4px;
+      text-align: left;
+    }
+
+    .land-table-grid input {
+      width: 100%;
+      border: none;
+      background: transparent;
+      padding: 2px;
+    }
+
+    .land-table-grid input:disabled {
+      color: #888;
+    }
+
+    .land-table-delete-row {
+      border: none;
+      background: #f5f5f5;
+      color: #444;
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .land-table-actions {
+      display: flex;
+      justify-content: flex-end;
     }
   </style>
 </head>
@@ -1460,55 +1521,31 @@
     </div>
     <div id="landScheduleContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
       <div class="land-schedule-section">
-        <div class="land-schedule-subtitle">Market Area field:</div>
+        <div class="land-schedule-subtitle">Land schedule field:</div>
         <div class="land-schedule-row">
           <select id="landScheduleFieldSelect">
             <option value="" selected disabled>Choose a field</option>
           </select>
         </div>
-        <div class="land-schedule-subtitle" id="landScheduleFieldLabel"></div>
-        <div id="landScheduleValueRow" class="land-schedule-row" style="display: none;">
+        <div class="land-schedule-subtitle">Value:</div>
+        <div id="landScheduleValueRow" class="land-schedule-row">
           <select id="landScheduleValueSelect">
             <option value="" selected disabled>Choose a value</option>
           </select>
+          <button id="landScheduleApply" type="button" class="land-schedule-button">apply</button>
         </div>
       </div>
 
       <div class="divider"></div>
 
-      <div id="landScheduleValuationSection" style="display: none; gap: 10px;">
-        <div class="land-schedule-subtitle">Valuation</div>
-        <div class="land-schedule-box-title">Base lot</div>
-        <div class="land-schedule-box">
-          <div class="land-schedule-row">
-            <div class="land-schedule-subtitle" style="font-weight: 500;">Size range</div>
-            <div class="land-schedule-row split land-schedule-fields" style="gap: 8px;">
-              <label class="land-schedule-field">
-                <span>Min</span>
-                <input id="landScheduleBaseMin" type="number" inputmode="decimal" />
-              </label>
-              <label class="land-schedule-field">
-                <span>Max</span>
-                <input id="landScheduleBaseMax" type="number" inputmode="decimal" />
-              </label>
-            </div>
-          </div>
-          <div class="land-schedule-row split land-schedule-fields" style="gap: 8px;">
-            <label class="land-schedule-field">
-              <span>Value</span>
-              <input id="landScheduleBaseValue" type="number" inputmode="decimal" />
-            </label>
-            <label class="land-schedule-field">
-              <span>Per size unit</span>
-              <select id="landScheduleBasePer">
-                <option value="" selected disabled>Select</option>
-                <option value="lot">lot</option>
-                <option value="area">area</option>
-                <option value="frontage">frontage</option>
-              </select>
-            </label>
-          </div>
+      <div class="land-schedule-section">
+        <div class="land-schedule-subtitle">Size tables</div>
+        <div id="landScheduleTableSelectRow" class="land-schedule-row" style="display: none;">
+          <span class="muted" style="font-size: 12px;">Current table:</span>
+          <select id="landScheduleTableSelect"></select>
         </div>
+        <button id="landScheduleAddTable" type="button" class="land-schedule-button">add table</button>
+        <div id="landScheduleTableContainer" style="display: grid; gap: 10px;"></div>
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>

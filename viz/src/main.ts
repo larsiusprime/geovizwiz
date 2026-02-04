@@ -4,8 +4,7 @@ import maplibregl from 'maplibre-gl';
 import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
-import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
-import * as hyparquet from 'hyparquet';
+import type * as HyparquetModule from 'hyparquet';
 
 
 // Local imports
@@ -1279,7 +1278,22 @@ function getPrimaryGeometryColumn(md: any): string {
   return primaryGeom;
 }
 
-function getTopLevelColumns(md: any): string[] {
+let hyparquetModulePromise: Promise<typeof HyparquetModule> | null = null;
+async function getHyparquetModule() {
+  if (!hyparquetModulePromise) {
+    hyparquetModulePromise = import('hyparquet') as Promise<typeof HyparquetModule>;
+  }
+  return hyparquetModulePromise;
+}
+
+function resolveHyparquetExport<T>(mod: any, key: string): T | null {
+  return (mod?.[key] ?? mod?.default?.[key] ?? null) as T | null;
+}
+
+async function getTopLevelColumns(md: any): Promise<string[]> {
+  const hyparquetModule = await getHyparquetModule();
+  const parquetSchema = resolveHyparquetExport<any>(hyparquetModule, 'parquetSchema');
+  if (!parquetSchema) throw new Error('GeoParquet schema reader unavailable.');
   const schemaTree: any = parquetSchema(md);
   const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
   return top
@@ -1288,11 +1302,12 @@ function getTopLevelColumns(md: any): string[] {
 }
 
 async function readParquetRows(file: AsyncBuffer, columns: string[]) {
+  const hyparquetModule = await getHyparquetModule();
   const parquetRead =
-    (hyparquet as any).parquetRead ??
-    (hyparquet as any).parquetReadAsync ??
-    (hyparquet as any).readParquet ??
-    (hyparquet as any).readParquetAsync;
+    resolveHyparquetExport<any>(hyparquetModule, 'parquetRead') ??
+    resolveHyparquetExport<any>(hyparquetModule, 'parquetReadAsync') ??
+    resolveHyparquetExport<any>(hyparquetModule, 'readParquet') ??
+    resolveHyparquetExport<any>(hyparquetModule, 'readParquetAsync');
 
   if (!parquetRead) {
     throw new Error('GeoParquet fallback reader unavailable.');
@@ -1303,7 +1318,7 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
     columns
   });
   console.debug('[GeoDiag] hyparquet exports:', {
-    keys: Object.keys(hyparquet as any).slice(0, 20)
+    keys: Object.keys(hyparquetModule as any).slice(0, 20)
   });
   const result = await parquetRead({ file, columns, compressors });
   if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
@@ -1358,9 +1373,12 @@ function coerceRowsFromResult(result: any, columns: string[]) {
 
 async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureCollection> {
   console.groupCollapsed('[GeoDiag] toGeoJsonFlatteningZ start');
+  const hyparquetModule = await getHyparquetModule();
+  const parquetMetadataAsync = resolveHyparquetExport<any>(hyparquetModule, 'parquetMetadataAsync');
+  if (!parquetMetadataAsync) throw new Error('GeoParquet metadata reader unavailable.');
   const md = await parquetMetadataAsync(file);
   const primaryGeom = getPrimaryGeometryColumn(md);
-  const columns = getTopLevelColumns(md);
+  const columns = await getTopLevelColumns(md);
   if (!columns.includes(primaryGeom)) columns.push(primaryGeom);
   console.debug('[GeoDiag] toGeoJsonFlatteningZ metadata:', {
     primaryGeom,
@@ -2102,6 +2120,11 @@ fileInput.addEventListener('change', async () => {
     S.lastFile = dataStore.file;
     S.lastAsyncBuffer = dataStore.asyncBuffer;
 
+    const hyparquetModule = await getHyparquetModule();
+    const parquetMetadataAsync = resolveHyparquetExport<any>(hyparquetModule, 'parquetMetadataAsync');
+    const parquetSchema = resolveHyparquetExport<any>(hyparquetModule, 'parquetSchema');
+    if (!parquetMetadataAsync) throw new Error('GeoParquet metadata reader unavailable.');
+    if (!parquetSchema) throw new Error('GeoParquet schema reader unavailable.');
     const md = await parquetMetadataAsync(S.lastAsyncBuffer);
     const numRows = Number(md.num_rows ?? 0);
 

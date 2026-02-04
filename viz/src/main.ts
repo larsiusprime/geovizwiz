@@ -1196,6 +1196,21 @@ function updateBoundsFromGeometry(
   walk((geometry as any).coordinates);
 }
 
+function getGeometryBounds(geometry: GeoJSON.Geometry | null): [number, number, number, number] | null {
+  if (!geometry) return null;
+  const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  updateBoundsFromGeometry(geometry, bounds);
+  if (!Number.isFinite(bounds.minX) || !Number.isFinite(bounds.minY)) return null;
+  return [bounds.minX, bounds.minY, bounds.maxX, bounds.maxY];
+}
+
+function isReasonableLonLatBounds(bounds: [number, number, number, number] | null): boolean {
+  if (!bounds) return false;
+  const [minX, minY, maxX, maxY] = bounds;
+  if (![minX, minY, maxX, maxY].every(Number.isFinite)) return false;
+  return minX >= -180 && maxX <= 180 && minY >= -90 && maxY <= 90;
+}
+
 function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const bytes = toUint8Array(raw) ?? (typeof raw === 'string' ? hexToUint8Array(raw) : null);
@@ -1630,6 +1645,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   let skippedCount = 0;
   let nonPolygonCount = 0;
   let invalidCoordCount = 0;
+  let outOfRangeCount = 0;
   const geomTypeSamples = new Map<string, number>();
   const parsedBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   rows.forEach((row: Record<string, any>, index: number) => {
@@ -1644,6 +1660,11 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     }
     if (!geometryHasFiniteCoords(geometry)) {
       invalidCoordCount += 1;
+      return;
+    }
+    const geomBounds = getGeometryBounds(geometry);
+    if (!isReasonableLonLatBounds(geomBounds)) {
+      outOfRangeCount += 1;
       return;
     }
     parsedCount += 1;
@@ -1671,6 +1692,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     skippedCount,
     nonPolygonCount,
     invalidCoordCount,
+    outOfRangeCount,
     sampleGeomTypes: Array.from(geomTypeSamples.entries()).slice(0, 5),
     sampleBounds: Number.isFinite(parsedBounds.minX)
       ? [parsedBounds.minX, parsedBounds.minY, parsedBounds.maxX, parsedBounds.maxY]
@@ -1801,7 +1823,16 @@ async function loadSelectedColumns() {
     const validCoordFeatures = S.currentGeoJSON.features.filter(f =>
       geometryHasFiniteCoords(f.geometry ?? null)
     ).length;
-    const dataBbox = bbox(S.currentGeoJSON);
+    let dataBbox = bbox(S.currentGeoJSON);
+    if (!dataBbox) {
+      const fallbackBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+      for (const feature of S.currentGeoJSON.features) {
+        updateBoundsFromGeometry(feature.geometry ?? null, fallbackBounds);
+      }
+      if (Number.isFinite(fallbackBounds.minX)) {
+        dataBbox = [fallbackBounds.minX, fallbackBounds.minY, fallbackBounds.maxX, fallbackBounds.maxY];
+      }
+    }
     console.debug('[GeoDiag] GeoJSON bbox after load:', {
       bbox: dataBbox ?? null,
       featureCount: S.currentGeoJSON.features.length,

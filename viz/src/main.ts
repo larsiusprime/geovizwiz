@@ -1173,6 +1173,29 @@ function geometryHasFiniteCoords(geometry: GeoJSON.Geometry | null): boolean {
   return hasPoint;
 }
 
+function updateBoundsFromGeometry(
+  geometry: GeoJSON.Geometry | null,
+  bounds: { minX: number; minY: number; maxX: number; maxY: number }
+) {
+  if (!geometry) return;
+  const update = (x: number, y: number) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    if (x < bounds.minX) bounds.minX = x;
+    if (y < bounds.minY) bounds.minY = y;
+    if (x > bounds.maxX) bounds.maxX = x;
+    if (y > bounds.maxY) bounds.maxY = y;
+  };
+  const walk = (coords: any) => {
+    if (!Array.isArray(coords)) return;
+    if (typeof coords[0] === 'number') {
+      update(coords[0], coords[1]);
+      return;
+    }
+    for (const c of coords) walk(c);
+  };
+  walk((geometry as any).coordinates);
+}
+
 function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const bytes = toUint8Array(raw) ?? (typeof raw === 'string' ? hexToUint8Array(raw) : null);
@@ -1583,6 +1606,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   let nonPolygonCount = 0;
   let invalidCoordCount = 0;
   const geomTypeSamples = new Map<string, number>();
+  const parsedBounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
   rows.forEach((row: Record<string, any>, index: number) => {
     const geometry = parseRowGeometry(row?.[primaryGeom]);
     if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) {
@@ -1598,6 +1622,9 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
       return;
     }
     parsedCount += 1;
+    if (parsedCount <= 25) {
+      updateBoundsFromGeometry(geometry, parsedBounds);
+    }
     const properties: Record<string, any> = {};
     for (const [key, value] of Object.entries(row)) {
       if (key !== primaryGeom) properties[key] = value;
@@ -1619,7 +1646,10 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     skippedCount,
     nonPolygonCount,
     invalidCoordCount,
-    sampleGeomTypes: Array.from(geomTypeSamples.entries()).slice(0, 5)
+    sampleGeomTypes: Array.from(geomTypeSamples.entries()).slice(0, 5),
+    sampleBounds: Number.isFinite(parsedBounds.minX)
+      ? [parsedBounds.minX, parsedBounds.minY, parsedBounds.maxX, parsedBounds.maxY]
+      : null
   });
   console.groupEnd();
   return { type: 'FeatureCollection', features };

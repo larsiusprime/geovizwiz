@@ -159,25 +159,25 @@ function updateRowTooltip(
   table: LandScheduleTable,
   row: LandScheduleRow,
   rowIndex: number,
-  minInfo: HTMLElement,
-  maxInfo: HTMLElement
+  minInput: HTMLInputElement,
+  maxInput: HTMLInputElement
 ) {
   const unitLabel = getUnitAxisLabel(table.unit);
   const minVal = formatRangeValue(row.min);
   const maxVal = formatRangeValue(row.max);
   const minQualifier = rowIndex === 0 ? 'greater than or equal to' : 'greater than';
   const text = `This row targets parcels ${minQualifier} ${minVal} ${unitLabel}s and less than or equal to ${maxVal} ${unitLabel}s.`;
-  minInfo.title = text;
-  maxInfo.title = text;
+  minInput.title = text;
+  maxInput.title = text;
 }
 
 function updateAllRowTooltips(table: LandScheduleTable, tbody: HTMLTableSectionElement) {
   table.rows.forEach((row, index) => {
     const rowEl = tbody.querySelector(`tr[data-row-index="${index}"]`) as HTMLTableRowElement | null;
-    const minInfo = rowEl?.querySelector('[data-role="min-info"]') as HTMLElement | null;
-    const maxInfo = rowEl?.querySelector('[data-role="max-info"]') as HTMLElement | null;
-    if (minInfo && maxInfo) {
-      updateRowTooltip(table, row, index, minInfo, maxInfo);
+    const minInput = rowEl?.querySelector('[data-role="min"]') as HTMLInputElement | null;
+    const maxInput = rowEl?.querySelector('[data-role="max"]') as HTMLInputElement | null;
+    if (minInput && maxInput) {
+      updateRowTooltip(table, row, index, minInput, maxInput);
     }
   });
 }
@@ -269,7 +269,6 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   tr.dataset.rowIndex = String(rowIndex);
 
   const minTd = document.createElement('td');
-  minTd.className = 'land-table-range-cell';
   const minInput = document.createElement('input');
   minInput.type = 'number';
   minInput.inputMode = 'decimal';
@@ -278,27 +277,18 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
     minInput.disabled = true;
   }
   setLandScheduleInputValue(minInput, row.min);
-  const minInfo = document.createElement('span');
-  minInfo.className = 'land-table-info';
-  minInfo.textContent = 'ⓘ';
-  minInfo.dataset.role = 'min-info';
-  minTd.append(minInput, minInfo);
+  minTd.append(minInput);
 
   const maxTd = document.createElement('td');
-  maxTd.className = 'land-table-range-cell';
   const maxInput = document.createElement('input');
   maxInput.type = 'number';
   maxInput.inputMode = 'decimal';
   maxInput.dataset.role = 'max';
   setLandScheduleInputValue(maxInput, row.max);
-  const maxInfo = document.createElement('span');
-  maxInfo.className = 'land-table-info';
-  maxInfo.textContent = 'ⓘ';
-  maxInfo.dataset.role = 'max-info';
   maxInput.addEventListener('input', () => {
     row.max = parseOptionalNumber(maxInput.value);
     updateLandScheduleCurve(table);
-    updateRowTooltip(table, row, rowIndex, minInfo, maxInfo);
+    updateRowTooltip(table, row, rowIndex, minInput, maxInput);
     scheduleLandScheduleSettle(maxInput, () => {
       enforceRowBounds(table, tbody, row, maxInput);
     });
@@ -306,13 +296,13 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   const settleMax = () => enforceRowBounds(table, tbody, row, maxInput);
   maxInput.addEventListener('blur', settleMax);
   maxInput.addEventListener('change', settleMax);
-  maxTd.append(maxInput, maxInfo);
+  maxTd.append(maxInput);
 
   minInput.addEventListener('input', () => {
     if (rowIndex !== 0) return;
     row.min = parseOptionalNumber(minInput.value);
     updateLandScheduleCurve(table);
-    updateRowTooltip(table, row, rowIndex, minInfo, maxInfo);
+    updateRowTooltip(table, row, rowIndex, minInput, maxInput);
     scheduleLandScheduleSettle(minInput, () => {
       enforceRowBounds(table, tbody, row, maxInput);
     });
@@ -336,7 +326,7 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
   });
   valueTd.appendChild(valueInput);
 
-  updateRowTooltip(table, row, rowIndex, minInfo, maxInfo);
+  updateRowTooltip(table, row, rowIndex, minInput, maxInput);
 
   const deleteTd = document.createElement('td');
   const deleteBtn = document.createElement('button');
@@ -513,9 +503,19 @@ function renderActiveTable(entry: LandScheduleEntry) {
   const thead = document.createElement('thead');
   const headerRow = document.createElement('tr');
   const minHeader = document.createElement('th');
-  minHeader.textContent = 'Min';
+  minHeader.textContent = 'Min ';
+  const minHeaderInfo = document.createElement('span');
+  minHeaderInfo.className = 'land-table-info';
+  minHeaderInfo.textContent = 'ⓘ';
+  minHeaderInfo.title = 'Minimum parcel size for the row. The first row is inclusive; later rows start just above the previous max.';
+  minHeader.append(minHeaderInfo);
   const maxHeader = document.createElement('th');
-  maxHeader.textContent = 'Max';
+  maxHeader.textContent = 'Max ';
+  const maxHeaderInfo = document.createElement('span');
+  maxHeaderInfo.className = 'land-table-info';
+  maxHeaderInfo.textContent = 'ⓘ';
+  maxHeaderInfo.title = 'Maximum parcel size for the row (inclusive).';
+  maxHeader.append(maxHeaderInfo);
   const valueHeader = document.createElement('th');
   valueHeader.dataset.role = 'value-header';
   updateValueHeader(valueHeader, activeTable.unit, activeTable.valueMode);

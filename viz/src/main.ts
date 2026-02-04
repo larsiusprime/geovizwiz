@@ -1074,7 +1074,16 @@ function hideLoading() { loadingOverlay.classList.remove('show'); }
 
 function isUnsupported3dPolygonError(err: unknown) {
   const message = String((err as any)?.message ?? err ?? '');
-  return message.includes('Unsupported geometry type: 1006');
+  const isMatch = message.includes('Unsupported geometry type: 1006');
+  if (isMatch) {
+    console.warn('[GeoDiag] Unsupported geometry type 1006 detected (likely 3D).', {
+      message,
+      err
+    });
+  } else {
+    console.debug('[GeoDiag] Error did not match 1006:', { message });
+  }
+  return isMatch;
 }
 
 function toUint8Array(data: unknown): Uint8Array | null {
@@ -1127,6 +1136,11 @@ function normalizeGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const geometry = raw?.type === 'Feature' && raw?.geometry ? raw.geometry : raw;
   if (!geometry?.type || !geometry?.coordinates) return null;
+  console.debug('[GeoDiag] normalizeGeometry input:', {
+    rawType: raw?.type,
+    geomType: geometry?.type,
+    hasCoords: Array.isArray(geometry?.coordinates)
+  });
   if (geometry.type === 'Polygon' || geometry.type === 'PolygonZ') {
     const coords = stripZFromPolygonCoords(geometry.coordinates);
     if (!coords) return null;
@@ -1143,12 +1157,21 @@ function normalizeGeometry(raw: any): GeoJSON.Geometry | null {
 function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const bytes = toUint8Array(raw) ?? (typeof raw === 'string' ? hexToUint8Array(raw) : null);
-  if (bytes) return parseWkbGeometry2d(bytes);
+  if (bytes) {
+    console.debug('[GeoDiag] parseRowGeometry: detected WKB bytes.', { byteLength: bytes.length });
+    return parseWkbGeometry2d(bytes);
+  }
   if (typeof raw === 'string') {
     try {
+      console.debug('[GeoDiag] parseRowGeometry: attempting JSON parse of string geometry.', {
+        sample: raw.slice(0, 120)
+      });
       return normalizeGeometry(JSON.parse(raw));
     } catch {}
   }
+  console.debug('[GeoDiag] parseRowGeometry: attempting normalizeGeometry of raw object.', {
+    rawType: typeof raw
+  });
   return normalizeGeometry(raw);
 }
 
@@ -1172,6 +1195,16 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     const hasM = hasMFlag;
     if (type >= 1000) type -= 1000;
     if (hasSrid) offset += 4;
+    console.debug('[GeoDiag] WKB geometry header:', {
+      byteOrder,
+      littleEndian,
+      rawType: view.getUint32(startOffset + 1, littleEndian),
+      type,
+      hasZ,
+      hasM,
+      hasSrid,
+      startOffset
+    });
 
     const readUInt32 = () => {
       const value = view.getUint32(offset, littleEndian);
@@ -1193,9 +1226,13 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
 
     if (type === 3) {
       const ringCount = readUInt32();
+      console.debug('[GeoDiag] WKB Polygon:', { ringCount });
       const rings: number[][][] = [];
       for (let i = 0; i < ringCount; i++) {
         const pointCount = readUInt32();
+        if (i < 3) {
+          console.debug('[GeoDiag] WKB Polygon ring points:', { ringIndex: i, pointCount });
+        }
         const ring: number[][] = [];
         for (let j = 0; j < pointCount; j++) {
           ring.push(readPoint());
@@ -1207,6 +1244,7 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
 
     if (type === 6) {
       const polygonCount = readUInt32();
+      console.debug('[GeoDiag] WKB MultiPolygon:', { polygonCount });
       const polygons: number[][][][] = [];
       for (let i = 0; i < polygonCount; i++) {
         const parsed = readGeometry(offset);
@@ -1223,7 +1261,9 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     return { geometry: null, offset };
   };
 
-  return readGeometry(0).geometry;
+  const result = readGeometry(0).geometry;
+  console.debug('[GeoDiag] WKB parse result:', { type: result?.type });
+  return result;
 }
 
 function getPrimaryGeometryColumn(md: any): string {
@@ -1262,10 +1302,16 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
 }
 
 async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureCollection> {
+  console.groupCollapsed('[GeoDiag] toGeoJsonFlatteningZ start');
   const md = await parquetMetadataAsync(file);
   const primaryGeom = getPrimaryGeometryColumn(md);
   const columns = getTopLevelColumns(md);
   if (!columns.includes(primaryGeom)) columns.push(primaryGeom);
+  console.debug('[GeoDiag] toGeoJsonFlatteningZ metadata:', {
+    primaryGeom,
+    columnCount: columns.length,
+    columns
+  });
 
   const rowsResult = await readParquetRows(file, columns);
   const rows = Array.isArray(rowsResult)
@@ -1273,11 +1319,21 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     : rowsResult?.rows ?? rowsResult?.data ?? [];
 
   if (!Array.isArray(rows)) throw new Error('GeoParquet fallback produced no rows.');
+  console.debug('[GeoDiag] toGeoJsonFlatteningZ rows:', { rowCount: rows.length });
 
   const features: GeoJSON.Feature[] = [];
   rows.forEach((row: Record<string, any>, index: number) => {
     const geometry = parseRowGeometry(row?.[primaryGeom]);
-    if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return;
+    if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) {
+      if (index < 5 || index % 1000 === 0) {
+        console.debug('[GeoDiag] Skipping non-polygon geometry row.', {
+          index,
+          geomType: geometry?.type,
+          geomValueSample: row?.[primaryGeom]
+        });
+      }
+      return;
+    }
     const properties: Record<string, any> = {};
     for (const [key, value] of Object.entries(row)) {
       if (key !== primaryGeom) properties[key] = value;
@@ -1293,6 +1349,8 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     features.push(feature);
   });
 
+  console.debug('[GeoDiag] toGeoJsonFlatteningZ features:', { featureCount: features.length });
+  console.groupEnd();
   return { type: 'FeatureCollection', features };
 }
 
@@ -1304,9 +1362,25 @@ async function loadSelectedColumns() {
   try {
     let result: any;
     try {
+      console.groupCollapsed('[GeoDiag] toGeoJson start');
+      console.debug('[GeoDiag] file info:', {
+        name: S.lastFile?.name,
+        size: S.lastFile?.size,
+        type: S.lastFile?.type
+      });
       result = await toGeoJson({ file: S.lastAsyncBuffer, compressors });
+      console.debug('[GeoDiag] toGeoJson result type:', {
+        type: result?.type,
+        hasGeojson: Boolean(result?.geojson)
+      });
+      console.groupEnd();
     } catch (err) {
-      if (!isUnsupported3dPolygonError(err)) throw err;
+      console.groupEnd();
+      console.groupCollapsed('[GeoDiag] toGeoJson error');
+      console.error('[GeoDiag] toGeoJson error details:', err);
+      const shouldFallback = isUnsupported3dPolygonError(err);
+      console.groupEnd();
+      if (!shouldFallback) throw err;
       console.warn('GeoParquet 3D polygon detected; flattening Z coordinates.', err);
       result = await toGeoJsonFlatteningZ(S.lastAsyncBuffer);
     }
@@ -1316,10 +1390,19 @@ async function loadSelectedColumns() {
       result?.type === 'FeatureCollection' ? result : result?.geojson;
     if (!fc?.features) throw new Error('Parser returned no FeatureCollection.');
 
+    console.debug('[GeoDiag] FeatureCollection summary:', {
+      featureCount: fc.features.length,
+      geomTypes: fc.features.slice(0, 10).map(f => f.geometry?.type)
+    });
+
     let features = fc.features.filter(f => f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon'));
+    console.debug('[GeoDiag] Polygon/MultiPolygon filter result:', {
+      filteredCount: features.length
+    });
     if (features.length === 0) throw new Error('No Polygon/MultiPolygon features found.');
 
     sanitizeFeaturesInPlace(features);
+    console.debug('[GeoDiag] Features sanitized.', { count: features.length });
 
     const keep = new Set<string>([
       'id','ID','fid','FID','name','NAME', 
@@ -1329,8 +1412,12 @@ async function loadSelectedColumns() {
       S.landSizeField || ''
     ]);
     trimPropertiesInPlace(features, keep);
+    console.debug('[GeoDiag] Feature properties trimmed.', {
+      keepCount: keep.size
+    });
 
     for (const f of features) roundGeometryInPlace(f);
+    console.debug('[GeoDiag] Geometry rounded.');
 
     // Ensure all features have IDs for the selection system
     features.forEach((feature, index) => {
@@ -1338,6 +1425,7 @@ async function loadSelectedColumns() {
         feature.id = index;
       }
     });
+    console.debug('[GeoDiag] Feature IDs ensured.');
 
     if (S.cancelRequested) return;
     S.currentGeoJSON = { type: 'FeatureCollection', features };

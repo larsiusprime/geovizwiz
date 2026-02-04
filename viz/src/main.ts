@@ -1087,6 +1087,93 @@ function toUint8Array(data: unknown): Uint8Array | null {
   return null;
 }
 
+function base64ToUint8Array(base64: string): Uint8Array | null {
+  if (!base64 || typeof base64 !== 'string') return null;
+  try {
+    const binary = typeof atob === 'function' ? atob(base64) : null;
+    if (!binary) return null;
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  } catch {
+    return null;
+  }
+}
+
+function hexToUint8Array(hex: string): Uint8Array | null {
+  const cleaned = hex.trim().replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleaned) || cleaned.length % 2 !== 0) return null;
+  const bytes = new Uint8Array(cleaned.length / 2);
+  for (let i = 0; i < cleaned.length; i += 2) {
+    bytes[i / 2] = parseInt(cleaned.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function stripZFromPolygonCoords(coords: any): number[][][] | null {
+  if (!Array.isArray(coords)) return null;
+  const toPoint2d = (pt: any): number[] | null => {
+    if (ArrayBuffer.isView(pt)) return [pt[0], pt[1]];
+    if (Array.isArray(pt)) return [pt[0], pt[1]];
+    if (pt && typeof pt === 'object') {
+      if (typeof pt.x === 'number' && typeof pt.y === 'number') return [pt.x, pt.y];
+      if (typeof pt.lng === 'number' && typeof pt.lat === 'number') return [pt.lng, pt.lat];
+    }
+    return null;
+  };
+  return coords.map((ring: any) =>
+    Array.isArray(ring)
+      ? ring.map((pt: any) => toPoint2d(pt) ?? pt)
+      : ring
+  ) as number[][][];
+}
+
+function stripZFromMultiPolygonCoords(coords: any): number[][][][] | null {
+  if (!Array.isArray(coords)) return null;
+  return coords.map((poly: any) =>
+    Array.isArray(poly)
+      ? poly.map((ring: any) =>
+          Array.isArray(ring) ? stripZFromPolygonCoords([ring])?.[0] ?? ring : ring
+        )
+      : poly
+  ) as number[][][][];
+}
+
+function normalizeGeometry(raw: any): GeoJSON.Geometry | null {
+  if (!raw) return null;
+  const geometry = raw?.type === 'Feature' && raw?.geometry ? raw.geometry : raw;
+  if (!geometry?.type || !geometry?.coordinates) return null;
+  if (geometry.type === 'Polygon') {
+    const coords = stripZFromPolygonCoords(geometry.coordinates);
+    if (!coords) return null;
+    return { type: 'Polygon', coordinates: coords };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    const coords = stripZFromMultiPolygonCoords(geometry.coordinates);
+    if (!coords) return null;
+    return { type: 'MultiPolygon', coordinates: coords };
+  }
+  return null;
+}
+
+function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
+  if (!raw) return null;
+  let bytes = toUint8Array(raw);
+  if (!bytes && typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        return normalizeGeometry(JSON.parse(trimmed));
+      } catch {}
+    }
+    bytes = hexToUint8Array(trimmed) ?? base64ToUint8Array(trimmed);
+  }
+  if (bytes) return parseWkbGeometry2d(bytes);
+  return normalizeGeometry(raw);
+}
+
 function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
@@ -1097,8 +1184,15 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     const littleEndian = byteOrder === 1;
     let type = view.getUint32(offset, littleEndian);
     offset += 4;
-    const hasZ = type >= 1000;
-    if (hasZ) type -= 1000;
+    let hasZ = false;
+    let hasM = false;
+    let hasSrid = false;
+    if ((type & 0x80000000) !== 0) { hasZ = true; type &= ~0x80000000; }
+    if ((type & 0x40000000) !== 0) { hasM = true; type &= ~0x40000000; }
+    if ((type & 0x20000000) !== 0) { hasSrid = true; type &= ~0x20000000; }
+    if (type >= 3000) { hasZ = true; hasM = true; type -= 3000; }
+    else if (type >= 2000) { hasM = true; type -= 2000; }
+    else if (type >= 1000) { hasZ = true; type -= 1000; }
 
     const readUInt32 = () => {
       const value = view.getUint32(offset, littleEndian);
@@ -1114,8 +1208,12 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
       const x = readDouble();
       const y = readDouble();
       if (hasZ) readDouble();
+      if (hasM) readDouble();
       return [x, y];
     };
+    if (hasSrid) {
+      readUInt32();
+    }
 
     if (type === 3) {
       const ringCount = readUInt32();
@@ -1202,9 +1300,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
 
   const features: GeoJSON.Feature[] = [];
   rows.forEach((row: Record<string, any>, index: number) => {
-    const geomBytes = toUint8Array(row?.[primaryGeom]);
-    if (!geomBytes) return;
-    const geometry = parseWkbGeometry2d(geomBytes);
+    const geometry = parseRowGeometry(row?.[primaryGeom]);
     if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return;
     const properties: Record<string, any> = {};
     for (const [key, value] of Object.entries(row)) {

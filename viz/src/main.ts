@@ -1087,6 +1087,65 @@ function toUint8Array(data: unknown): Uint8Array | null {
   return null;
 }
 
+function hexToUint8Array(hex: string): Uint8Array | null {
+  const cleaned = hex.trim().replace(/^0x/i, '');
+  if (!/^[0-9a-fA-F]+$/.test(cleaned) || cleaned.length % 2 !== 0) return null;
+  const bytes = new Uint8Array(cleaned.length / 2);
+  for (let i = 0; i < cleaned.length; i += 2) {
+    bytes[i / 2] = parseInt(cleaned.slice(i, i + 2), 16);
+  }
+  return bytes;
+}
+
+function stripZFromPolygonCoords(coords: any): number[][][] | null {
+  if (!Array.isArray(coords)) return null;
+  return coords.map((ring: any) =>
+    Array.isArray(ring)
+      ? ring.map((pt: any) => (Array.isArray(pt) ? [pt[0], pt[1]] : pt))
+      : ring
+  ) as number[][][];
+}
+
+function stripZFromMultiPolygonCoords(coords: any): number[][][][] | null {
+  if (!Array.isArray(coords)) return null;
+  return coords.map((poly: any) =>
+    Array.isArray(poly)
+      ? poly.map((ring: any) =>
+          Array.isArray(ring) ? ring.map((pt: any) => (Array.isArray(pt) ? [pt[0], pt[1]] : pt)) : ring
+        )
+      : poly
+  ) as number[][][][];
+}
+
+function normalizeGeometry(raw: any): GeoJSON.Geometry | null {
+  if (!raw) return null;
+  const geometry = raw?.type === 'Feature' && raw?.geometry ? raw.geometry : raw;
+  if (!geometry?.type || !geometry?.coordinates) return null;
+  if (geometry.type === 'Polygon') {
+    const coords = stripZFromPolygonCoords(geometry.coordinates);
+    if (!coords) return null;
+    return { type: 'Polygon', coordinates: coords };
+  }
+  if (geometry.type === 'MultiPolygon') {
+    const coords = stripZFromMultiPolygonCoords(geometry.coordinates);
+    if (!coords) return null;
+    return { type: 'MultiPolygon', coordinates: coords };
+  }
+  return null;
+}
+
+function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
+  if (!raw) return null;
+  const bytes = toUint8Array(raw) ?? (typeof raw === 'string' ? hexToUint8Array(raw) : null);
+  if (bytes) return parseWkbGeometry2d(bytes);
+  if (typeof raw === 'string') {
+    try {
+      return normalizeGeometry(JSON.parse(raw));
+    } catch {}
+  }
+  return normalizeGeometry(raw);
+}
+
 function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
@@ -1202,9 +1261,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
 
   const features: GeoJSON.Feature[] = [];
   rows.forEach((row: Record<string, any>, index: number) => {
-    const geomBytes = toUint8Array(row?.[primaryGeom]);
-    if (!geomBytes) return;
-    const geometry = parseWkbGeometry2d(geomBytes);
+    const geometry = parseRowGeometry(row?.[primaryGeom]);
     if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return;
     const properties: Record<string, any> = {};
     for (const [key, value] of Object.entries(row)) {

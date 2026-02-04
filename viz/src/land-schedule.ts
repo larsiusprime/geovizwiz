@@ -374,6 +374,9 @@ function renderActiveTable(entry: LandScheduleEntry) {
   card.className = 'land-table-card';
   card.dataset.tableId = activeTable.id;
 
+  const deleteRow = document.createElement('div');
+  deleteRow.className = 'land-table-delete-bar';
+
   const header = document.createElement('div');
   header.className = 'land-table-header';
   const nameLabel = document.createElement('label');
@@ -390,10 +393,6 @@ function renderActiveTable(entry: LandScheduleEntry) {
   });
   nameLabel.appendChild(nameInput);
 
-  header.append(nameLabel);
-
-  const conditionsRow = document.createElement('div');
-  conditionsRow.className = 'land-table-conditions-row';
   const filterButton = document.createElement('button');
   filterButton.type = 'button';
   filterButton.className = 'land-table-filter';
@@ -433,7 +432,8 @@ function renderActiveTable(entry: LandScheduleEntry) {
     renderLandScheduleTables();
   });
 
-  conditionsRow.append(filterButton, deleteBtn);
+  deleteRow.append(deleteBtn);
+  header.append(nameLabel, filterButton);
 
   const controls = document.createElement('div');
   controls.className = 'land-table-controls';
@@ -528,7 +528,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   });
   actions.append(landScheduleAddTableButton, addRowBtn);
 
-  card.append(header, conditionsRow, controls, tableEl, actions);
+  card.append(deleteRow, header, controls, tableEl, actions);
   landScheduleTableContainer.appendChild(card);
 
   syncDerivedRowMins(activeTable, tbody);

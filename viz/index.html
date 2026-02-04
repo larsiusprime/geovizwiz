@@ -997,6 +997,132 @@
       display: flex;
       justify-content: flex-end;
     }
+
+    .land-adjustments {
+      display: grid;
+      gap: 8px;
+      border: 1px solid #e1e1e1;
+      border-radius: 10px;
+      padding: 8px;
+      background: #fff;
+    }
+
+    .land-adjustments-toggle {
+      border: none;
+      background: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #333;
+      padding: 0;
+      text-align: left;
+    }
+
+    .land-adjustments-body {
+      display: grid;
+      gap: 8px;
+    }
+
+    .land-adjustment-card {
+      border: 1px solid #e6e6e6;
+      border-radius: 8px;
+      padding: 8px;
+      background: #fafafa;
+      display: grid;
+      gap: 6px;
+    }
+
+    .land-adjustment-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .land-adjustment-header label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      flex: 1;
+    }
+
+    .land-adjustment-header input {
+      flex: 1;
+    }
+
+    .land-adjustment-delete {
+      border: none;
+      background: #f2f2f2;
+      color: #444;
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .land-adjustment-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .land-adjustment-row label,
+    .land-adjustment-row span {
+      min-width: 80px;
+      color: #444;
+    }
+
+    .land-adjustment-row select,
+    .land-adjustment-row input {
+      flex: 1;
+    }
+
+    .land-adjustment-conditions {
+      border: 1px solid #d5d5d5;
+      background: #fff;
+      border-radius: 6px;
+      padding: 4px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .land-adjustment-conditions img {
+      width: 14px;
+      height: 14px;
+    }
+
+    .land-adjustment-value {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .land-adjustment-value input {
+      flex: 1;
+      text-align: left;
+    }
+
+    .land-adjustment-value.is-multiply input {
+      text-align: center;
+    }
+
+    .land-adjustment-suffix {
+      font-weight: 600;
+      color: #555;
+    }
+
+    .land-adjustments-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
   </style>
 </head>
   <body>

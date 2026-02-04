@@ -591,20 +591,6 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     });
     nameLabel.appendChild(nameInput);
 
-    const deleteBtn = document.createElement('button');
-    deleteBtn.type = 'button';
-    deleteBtn.className = 'land-adjustment-delete';
-    deleteBtn.textContent = '×';
-    deleteBtn.title = 'Delete adjustment';
-    deleteBtn.addEventListener('click', () => {
-      entry.adjustments = entry.adjustments.filter(item => item.id !== adjustment.id);
-      renderLandScheduleAdjustments(entry);
-    });
-
-    header.append(nameLabel, deleteBtn);
-
-    const conditionsRow = document.createElement('div');
-    conditionsRow.className = 'land-adjustment-row';
     const conditionsBtn = document.createElement('button');
     conditionsBtn.type = 'button';
     conditionsBtn.className = 'land-table-filter';
@@ -627,7 +613,18 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
       });
       showFiltersPanel?.();
     });
-    conditionsRow.appendChild(conditionsBtn);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'land-adjustment-delete';
+    deleteBtn.textContent = '❌';
+    deleteBtn.title = 'Delete adjustment';
+    deleteBtn.addEventListener('click', () => {
+      entry.adjustments = entry.adjustments.filter(item => item.id !== adjustment.id);
+      renderLandScheduleAdjustments(entry);
+    });
+
+    header.append(nameLabel, conditionsBtn, deleteBtn);
 
     const operationRow = document.createElement('div');
     operationRow.className = 'land-adjustment-row';
@@ -640,19 +637,6 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     operationSelect.value = adjustment.operation;
     operationRow.append(operationLabel, operationSelect);
 
-    const unitRow = document.createElement('div');
-    unitRow.className = 'land-adjustment-row';
-    const unitLabel = document.createElement('span');
-    unitLabel.textContent = 'Size unit:';
-    const unitSelect = document.createElement('select');
-    ADJUSTMENT_UNIT_OPTIONS.forEach(option => {
-      unitSelect.appendChild(new Option(option.label, option.value));
-    });
-    unitSelect.value = adjustment.sizeUnit;
-    unitRow.append(unitLabel, unitSelect);
-
-    const valueRow = document.createElement('div');
-    valueRow.className = 'land-adjustment-row';
     const valueLabel = document.createElement('span');
     valueLabel.textContent = 'Value:';
     const valueWrap = document.createElement('div');
@@ -665,7 +649,18 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     valueSuffix.className = 'land-adjustment-value-suffix';
     valueSuffix.textContent = 'x';
     valueWrap.append(valueInput, valueSuffix);
-    valueRow.append(valueLabel, valueWrap);
+    operationRow.append(valueLabel, valueWrap);
+
+    const unitRow = document.createElement('div');
+    unitRow.className = 'land-adjustment-row';
+    const unitLabel = document.createElement('span');
+    unitLabel.textContent = 'Size unit:';
+    const unitSelect = document.createElement('select');
+    ADJUSTMENT_UNIT_OPTIONS.forEach(option => {
+      unitSelect.appendChild(new Option(option.label, option.value));
+    });
+    unitSelect.value = adjustment.sizeUnit;
+    unitRow.append(unitLabel, unitSelect);
 
     const syncValueUI = () => {
       const isMultiply = adjustment.operation === 'multiply';
@@ -692,7 +687,7 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 
     syncValueUI();
 
-    card.append(header, conditionsRow, operationRow, unitRow, valueRow);
+    card.append(header, operationRow, unitRow);
     landScheduleAdjustmentsContainer.appendChild(card);
   });
 }

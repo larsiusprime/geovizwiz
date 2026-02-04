@@ -129,8 +129,6 @@ function updateValueHeader(headerEl: HTMLElement, unit: LandScheduleUnit, mode: 
   headerEl.textContent = getValueHeaderText(unit, mode);
 }
 
-const landScheduleSettleTimers = new WeakMap<HTMLInputElement, number>();
-
 function getPlotly(): any | null {
   return (window as any).Plotly ?? null;
 }
@@ -226,18 +224,6 @@ function updateLandScheduleCurve(table: LandScheduleTable | null) {
   plotly.react(landScheduleCurveChart, [trace], layout, config);
 }
 
-function scheduleLandScheduleSettle(input: HTMLInputElement, callback: () => void) {
-  const existing = landScheduleSettleTimers.get(input);
-  if (existing !== undefined) {
-    window.clearTimeout(existing);
-  }
-  const handle = window.setTimeout(() => {
-    landScheduleSettleTimers.delete(input);
-    callback();
-  }, 400);
-  landScheduleSettleTimers.set(input, handle);
-}
-
 function enforceRowBounds(
   table: LandScheduleTable,
   tbody: HTMLTableSectionElement,
@@ -289,9 +275,6 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
     row.max = parseOptionalNumber(maxInput.value);
     updateLandScheduleCurve(table);
     updateRowTooltip(table, row, rowIndex, minInput, maxInput);
-    scheduleLandScheduleSettle(maxInput, () => {
-      enforceRowBounds(table, tbody, row, maxInput);
-    });
   });
   const settleMax = () => enforceRowBounds(table, tbody, row, maxInput);
   maxInput.addEventListener('blur', settleMax);
@@ -303,9 +286,6 @@ function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLT
     row.min = parseOptionalNumber(minInput.value);
     updateLandScheduleCurve(table);
     updateRowTooltip(table, row, rowIndex, minInput, maxInput);
-    scheduleLandScheduleSettle(minInput, () => {
-      enforceRowBounds(table, tbody, row, maxInput);
-    });
   });
   const settleMin = () => {
     if (rowIndex !== 0) return;

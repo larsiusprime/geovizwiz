@@ -1084,6 +1084,12 @@ function toUint8Array(data: unknown): Uint8Array | null {
   if (ArrayBuffer.isView(data)) {
     return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
   }
+  if (Array.isArray(data) && data.every((value) => typeof value === 'number')) {
+    return Uint8Array.from(data);
+  }
+  if (typeof data === 'object' && data !== null && Array.isArray((data as any).data)) {
+    return Uint8Array.from((data as any).data);
+  }
   return null;
 }
 
@@ -1121,12 +1127,12 @@ function normalizeGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const geometry = raw?.type === 'Feature' && raw?.geometry ? raw.geometry : raw;
   if (!geometry?.type || !geometry?.coordinates) return null;
-  if (geometry.type === 'Polygon') {
+  if (geometry.type === 'Polygon' || geometry.type === 'PolygonZ') {
     const coords = stripZFromPolygonCoords(geometry.coordinates);
     if (!coords) return null;
     return { type: 'Polygon', coordinates: coords };
   }
-  if (geometry.type === 'MultiPolygon') {
+  if (geometry.type === 'MultiPolygon' || geometry.type === 'MultiPolygonZ') {
     const coords = stripZFromMultiPolygonCoords(geometry.coordinates);
     if (!coords) return null;
     return { type: 'MultiPolygon', coordinates: coords };
@@ -1156,8 +1162,16 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     const littleEndian = byteOrder === 1;
     let type = view.getUint32(offset, littleEndian);
     offset += 4;
-    const hasZ = type >= 1000;
-    if (hasZ) type -= 1000;
+    const hasZFlag = (type & 0x80000000) !== 0;
+    const hasMFlag = (type & 0x40000000) !== 0;
+    const hasSrid = (type & 0x20000000) !== 0;
+    if (hasZFlag || hasMFlag || hasSrid) {
+      type = type & 0x1fffffff;
+    }
+    const hasZ = hasZFlag || type >= 1000;
+    const hasM = hasMFlag;
+    if (type >= 1000) type -= 1000;
+    if (hasSrid) offset += 4;
 
     const readUInt32 = () => {
       const value = view.getUint32(offset, littleEndian);
@@ -1173,6 +1187,7 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
       const x = readDouble();
       const y = readDouble();
       if (hasZ) readDouble();
+      if (hasM) readDouble();
       return [x, y];
     };
 

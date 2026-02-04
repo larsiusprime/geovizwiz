@@ -1325,77 +1325,107 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
     argCount: (parquetRead as any)?.length ?? null
   });
 
-  const rows: any[] = [];
-  let doneCalled = false;
-  let doneResolve: (value: any) => void;
-  let doneReject: (err: any) => void;
-  const donePromise = new Promise<any>((resolve, reject) => {
-    doneResolve = resolve;
-    doneReject = reject;
-  });
-  const finish = (value: any) => {
-    if (!doneCalled) {
-      doneCalled = true;
-      doneResolve(value);
-    }
-  };
-  const fail = (err: any) => {
-    if (!doneCalled) {
-      doneCalled = true;
-      doneReject(err);
-    }
-  };
-
-  const result = await parquetRead({
-    file,
-    columns,
-    compressors,
-    rowCallback: (row: any) => rows.push(row),
-    onRow: (row: any) => rows.push(row),
-    onRecord: (row: any) => rows.push(row),
-    onData: (row: any) => rows.push(row),
-    onComplete: () => finish(rows),
-    onFinish: () => finish(rows),
-    onDone: () => finish(rows),
-    onError: (err: any) => fail(err)
-  });
-
-  if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
-    console.debug('[GeoDiag] readParquetRows result is async iterable.');
-    const iterableRows: any[] = [];
-    for await (const row of result as any) {
-      iterableRows.push(row);
-    }
-    return iterableRows;
-  }
-
-  if (result === undefined) {
-    console.debug('[GeoDiag] readParquetRows returned undefined; awaiting callbacks.');
-    const timeoutMs = 15000;
-    const timeoutPromise = new Promise<any>((resolve) => {
-      setTimeout(() => {
-        if (!doneCalled) {
-          console.warn('[GeoDiag] readParquetRows callback timeout; returning collected rows so far.', {
-            rowCount: rows.length
-          });
-          resolve(rows);
-        }
-      }, timeoutMs);
+  const attemptRead = async (label: string, options: Record<string, any>) => {
+    const rows: any[] = [];
+    let doneCalled = false;
+    let doneResolve: (value: any) => void;
+    let doneReject: (err: any) => void;
+    const donePromise = new Promise<any>((resolve, reject) => {
+      doneResolve = resolve;
+      doneReject = reject;
     });
-    const finalResult = await Promise.race([donePromise, timeoutPromise]);
-    return finalResult;
+    const finish = (value: any) => {
+      if (!doneCalled) {
+        doneCalled = true;
+        doneResolve(value);
+      }
+    };
+    const fail = (err: any) => {
+      if (!doneCalled) {
+        doneCalled = true;
+        doneReject(err);
+      }
+    };
+    const result = await parquetRead({
+      file,
+      compressors,
+      rowCallback: (row: any) => rows.push(row),
+      onRow: (row: any) => rows.push(row),
+      onRecord: (row: any) => rows.push(row),
+      onData: (row: any) => rows.push(row),
+      onComplete: () => finish(rows),
+      onFinish: () => finish(rows),
+      onDone: () => finish(rows),
+      onError: (err: any) => fail(err),
+      ...options
+    });
+
+    if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
+      console.debug('[GeoDiag] readParquetRows result is async iterable.', { label });
+      const iterableRows: any[] = [];
+      for await (const row of result as any) {
+        iterableRows.push(row);
+      }
+      return { result: iterableRows, rowCount: iterableRows.length };
+    }
+
+    if (result === undefined) {
+      console.debug('[GeoDiag] readParquetRows returned undefined; awaiting callbacks.', { label });
+      const timeoutMs = 15000;
+      const timeoutPromise = new Promise<any>((resolve) => {
+        setTimeout(() => {
+          if (!doneCalled) {
+            console.warn('[GeoDiag] readParquetRows callback timeout; returning collected rows so far.', {
+              label,
+              rowCount: rows.length
+            });
+            resolve(rows);
+          }
+        }, timeoutMs);
+      });
+      const finalResult = await Promise.race([donePromise, timeoutPromise]);
+      return { result: finalResult, rowCount: Array.isArray(finalResult) ? finalResult.length : null };
+    }
+
+    const resultType = Array.isArray(result) ? 'array' : typeof result;
+    const rowCount = Array.isArray(result)
+      ? result.length
+      : result?.rows?.length ?? result?.data?.length ?? result?.rowCount ?? null;
+    console.debug('[GeoDiag] readParquetRows result summary:', {
+      label,
+      resultType,
+      keys: result && typeof result === 'object' ? Object.keys(result) : null,
+      isArray: Array.isArray(result),
+      rowCount
+    });
+    return { result, rowCount };
+  };
+
+  const attempts: Array<{ label: string; options: Record<string, any> }> = [
+    { label: 'columns', options: { columns } },
+    { label: 'columnNames', options: { columnNames: columns } },
+    { label: 'columnList', options: { columnList: columns } },
+    { label: 'fields', options: { fields: columns } },
+    { label: 'select', options: { select: columns } },
+    { label: 'all-columns', options: {} }
+  ];
+
+  for (const attempt of attempts) {
+    const { result, rowCount } = await attemptRead(attempt.label, attempt.options);
+    if (rowCount && rowCount > 0) return result;
+    if (Array.isArray(result) && result.length > 0) return result;
+    if (result && typeof result === 'object' && !Array.isArray(result)) {
+      const maybeRows = result?.rows ?? result?.data ?? null;
+      if (Array.isArray(maybeRows) && maybeRows.length > 0) return result;
+      if (result?.rowGroups?.length) return result;
+    }
+    console.debug('[GeoDiag] readParquetRows attempt yielded no rows.', {
+      label: attempt.label,
+      rowCount: rowCount ?? null
+    });
   }
 
-  const resultType = Array.isArray(result) ? 'array' : typeof result;
-  console.debug('[GeoDiag] readParquetRows result summary:', {
-    resultType,
-    keys: result && typeof result === 'object' ? Object.keys(result) : null,
-    isArray: Array.isArray(result),
-    rowCount: Array.isArray(result)
-      ? result.length
-      : result?.rows?.length ?? result?.data?.length ?? result?.rowCount ?? null
-  });
-  return result;
+  return [];
 }
 
 function coerceRowsFromResult(result: any, columns: string[]) {

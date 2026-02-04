@@ -1153,6 +1153,26 @@ function normalizeGeometry(raw: any): GeoJSON.Geometry | null {
   return null;
 }
 
+function geometryHasFiniteCoords(geometry: GeoJSON.Geometry | null): boolean {
+  if (!geometry) return false;
+  let hasPoint = false;
+  const walk = (coords: any) => {
+    if (!Array.isArray(coords)) return;
+    if (typeof coords[0] === 'number') {
+      const x = coords[0];
+      const y = coords[1];
+      if (Number.isFinite(x) && Number.isFinite(y)) hasPoint = true;
+      return;
+    }
+    for (const c of coords) {
+      walk(c);
+      if (hasPoint) return;
+    }
+  };
+  walk((geometry as any).coordinates);
+  return hasPoint;
+}
+
 function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const bytes = toUint8Array(raw) ?? (typeof raw === 'string' ? hexToUint8Array(raw) : null);
@@ -1236,7 +1256,10 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     const byteOrder = view.getUint8(offset);
     offset += 1;
     if (byteOrder !== 0 && byteOrder !== 1) {
-      console.warn('[GeoDiag] WKB geometry header: invalid byte order.', { byteOrder, startOffset });
+      if (geoDiagLogBudget > 0) {
+        console.warn('[GeoDiag] WKB geometry header: invalid byte order.', { byteOrder, startOffset });
+        geoDiagLogBudget -= 1;
+      }
       return { geometry: null, offset };
     }
     const littleEndian = byteOrder === 1;
@@ -1495,6 +1518,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   let parsedCount = 0;
   let skippedCount = 0;
   let nonPolygonCount = 0;
+  let invalidCoordCount = 0;
   const geomTypeSamples = new Map<string, number>();
   rows.forEach((row: Record<string, any>, index: number) => {
     const geometry = parseRowGeometry(row?.[primaryGeom]);
@@ -1504,6 +1528,10 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
         nonPolygonCount += 1;
         geomTypeSamples.set(geometry.type, (geomTypeSamples.get(geometry.type) ?? 0) + 1);
       }
+      return;
+    }
+    if (!geometryHasFiniteCoords(geometry)) {
+      invalidCoordCount += 1;
       return;
     }
     parsedCount += 1;
@@ -1527,6 +1555,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     parsedCount,
     skippedCount,
     nonPolygonCount,
+    invalidCoordCount,
     sampleGeomTypes: Array.from(geomTypeSamples.entries()).slice(0, 5)
   });
   console.groupEnd();
@@ -1651,10 +1680,14 @@ async function loadSelectedColumns() {
     // Set field select to "-- choose --" (empty value)
     fieldSelect.value = '';
 
+    const validCoordFeatures = S.currentGeoJSON.features.filter(f =>
+      geometryHasFiniteCoords(f.geometry ?? null)
+    ).length;
     const dataBbox = bbox(S.currentGeoJSON);
     console.debug('[GeoDiag] GeoJSON bbox after load:', {
       bbox: dataBbox ?? null,
-      featureCount: S.currentGeoJSON.features.length
+      featureCount: S.currentGeoJSON.features.length,
+      validCoordFeatures
     });
 
     addOrUpdateSource(S.currentGeoJSON);

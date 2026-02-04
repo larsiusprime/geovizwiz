@@ -1161,17 +1161,49 @@ function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
     return parseWkbGeometry2d(bytes);
   }
   if (typeof raw === 'string') {
-    try {
-      console.debug('[GeoDiag] parseRowGeometry: attempting JSON parse of string geometry.', {
-        sample: raw.slice(0, 120)
+    const trimmed = raw.trim();
+    if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+      try {
+        console.debug('[GeoDiag] parseRowGeometry: attempting JSON parse of string geometry.', {
+          sample: raw.slice(0, 120)
+        });
+        return normalizeGeometry(JSON.parse(raw));
+      } catch {}
+    }
+    const binaryBytes = stringToUint8Array(raw);
+    if (binaryBytes) {
+      console.debug('[GeoDiag] parseRowGeometry: detected binary string WKB.', {
+        byteLength: binaryBytes.length
       });
-      return normalizeGeometry(JSON.parse(raw));
-    } catch {}
+      return parseWkbGeometry2d(binaryBytes);
+    }
   }
   console.debug('[GeoDiag] parseRowGeometry: attempting normalizeGeometry of raw object.', {
     rawType: typeof raw
   });
   return normalizeGeometry(raw);
+}
+
+function stringToUint8Array(value: string): Uint8Array | null {
+  if (!value) return null;
+  let hasBinary = false;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code === 0 || code > 255) {
+      hasBinary = true;
+      break;
+    }
+    if (code < 32 && code !== 9 && code !== 10 && code !== 13) {
+      hasBinary = true;
+      break;
+    }
+  }
+  if (!hasBinary) return null;
+  const bytes = new Uint8Array(value.length);
+  for (let i = 0; i < value.length; i += 1) {
+    bytes[i] = value.charCodeAt(i) & 0xff;
+  }
+  return bytes;
 }
 
 function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {

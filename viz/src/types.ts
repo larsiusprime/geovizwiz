@@ -57,6 +57,20 @@ export type LandScheduleRow = {
   value: number | null;
 };
 
+export type LandScheduleAdjustmentOperation = 'multiply' | 'add';
+
+export type LandScheduleAdjustmentSizeUnit = 'area' | 'frontage' | 'flat';
+
+export type LandScheduleAdjustment = {
+  id: string;
+  name: string;
+  operation: LandScheduleAdjustmentOperation;
+  sizeUnit: LandScheduleAdjustmentSizeUnit;
+  value: number | null;
+  filters: FilterRule[];
+  filterInvert: boolean;
+};
+
 export type LandScheduleTable = {
   id: string;
   name: string;
@@ -70,6 +84,7 @@ export type LandScheduleTable = {
 export type LandScheduleEntry = {
   tables: LandScheduleTable[];
   activeTableId: string | null;
+  adjustments: LandScheduleAdjustment[];
 };
 
 export type LandScheduleStore = Map<string, Map<string, LandScheduleEntry>>;
@@ -206,9 +221,20 @@ export type SerializedLandScheduleTable = {
   filterInvert: boolean;
 };
 
+export type SerializedLandScheduleAdjustment = {
+  id: string;
+  name: string;
+  operation: LandScheduleAdjustmentOperation;
+  sizeUnit: LandScheduleAdjustmentSizeUnit;
+  value: number | null;
+  filters: FilterRule[];
+  filterInvert: boolean;
+};
+
 export type SerializedLandScheduleEntry = {
   field: string;
   valueKey: string;
   tables: SerializedLandScheduleTable[];
   activeTableId: string | null;
+  adjustments: SerializedLandScheduleAdjustment[];
 };

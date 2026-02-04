@@ -1075,6 +1075,73 @@
       gap: 8px;
     }
 
+    .land-adjustment-card {
+      border: 1px solid #e1e1e1;
+      border-radius: 10px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      gap: 8px;
+    }
+
+    .land-adjustment-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .land-adjustment-header label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      flex: 1;
+    }
+
+    .land-adjustment-delete {
+      border: none;
+      background: none;
+      color: #444;
+      width: 22px;
+      height: 22px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    .land-adjustment-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .land-adjustment-row > span {
+      min-width: 72px;
+      font-weight: 600;
+    }
+
+    .land-adjustment-row select,
+    .land-adjustment-row input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .land-adjustment-value {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 1;
+    }
+
+    .land-adjustment-value.is-multiply input {
+      text-align: center;
+    }
+
+    .land-adjustment-value-suffix {
+      font-weight: 600;
+      color: #374151;
+    }
+
     .land-schedule-curve {
       display: grid;
       gap: 6px;
@@ -1695,6 +1762,19 @@
               <div id="landScheduleCurveChart" class="land-schedule-curve-chart"></div>
             </div>
           </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div id="landScheduleAdjustmentsSection" class="land-schedule-section">
+        <div class="land-schedule-section-header">
+          <button id="landScheduleAdjustmentsToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Adjustments">▼</button>
+          <div class="land-schedule-subtitle">Adjustments</div>
+        </div>
+        <div id="landScheduleAdjustmentsContent" style="display: grid; gap: 10px;">
+          <div id="landScheduleAdjustmentsContainer" style="display: grid; gap: 10px;"></div>
+          <button id="landScheduleAddAdjustment" type="button" class="land-schedule-button">add adjustment</button>
         </div>
       </div>
     </div>

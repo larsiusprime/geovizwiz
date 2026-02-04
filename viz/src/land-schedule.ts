@@ -8,6 +8,9 @@ import { getCategoricalValues } from './filters';
 import { setFiltersContext, cloneFilters, invalidateFiltersContextIf } from './filters';
 import type {
   FilterRule,
+  LandScheduleAdjustment,
+  LandScheduleAdjustmentOperation,
+  LandScheduleAdjustmentSizeUnit,
   LandScheduleEntry,
   LandScheduleRow,
   LandScheduleTable,
@@ -22,6 +25,17 @@ const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: stri
   { value: 'sqm', label: 'area (sqm)', header: 'sqm' },
   { value: 'hectare', label: 'area (hectare)', header: 'hectare' },
   { value: 'm', label: 'frontage (m)', header: 'm' },
+];
+
+const ADJUSTMENT_OPERATION_OPTIONS: Array<{ value: LandScheduleAdjustmentOperation; label: string }> = [
+  { value: 'multiply', label: 'Multiply' },
+  { value: 'add', label: 'Add' },
+];
+
+const ADJUSTMENT_UNIT_OPTIONS: Array<{ value: LandScheduleAdjustmentSizeUnit; label: string }> = [
+  { value: 'area', label: 'Per area (sqft/acre or sqm/hectare)' },
+  { value: 'frontage', label: 'Frontage (feet or meters)' },
+  { value: 'flat', label: 'Flat amount (no unit)' },
 ];
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
@@ -39,6 +53,9 @@ let landScheduleAddTableButton: HTMLButtonElement;
 let landScheduleTableContainer: HTMLDivElement;
 let landScheduleCurveChart: HTMLDivElement;
 let landScheduleTablesSection: HTMLDivElement;
+let landScheduleAdjustmentsSection: HTMLDivElement;
+let landScheduleAdjustmentsContainer: HTMLDivElement;
+let landScheduleAddAdjustmentButton: HTMLButtonElement;
 let landScheduleFilterButton: HTMLButtonElement | null = null;
 
 let showFiltersPanel: (() => void) | null = null;
@@ -53,6 +70,9 @@ export function initLandScheduleElements(els: {
   landScheduleTableContainer: HTMLDivElement;
   landScheduleCurveChart: HTMLDivElement;
   landScheduleTablesSection: HTMLDivElement;
+  landScheduleAdjustmentsSection: HTMLDivElement;
+  landScheduleAdjustmentsContainer: HTMLDivElement;
+  landScheduleAddAdjustmentButton: HTMLButtonElement;
 }) {
   landScheduleFieldSelect = els.landScheduleFieldSelect;
   landScheduleValueSelect = els.landScheduleValueSelect;
@@ -63,6 +83,9 @@ export function initLandScheduleElements(els: {
   landScheduleTableContainer = els.landScheduleTableContainer;
   landScheduleCurveChart = els.landScheduleCurveChart;
   landScheduleTablesSection = els.landScheduleTablesSection;
+  landScheduleAdjustmentsSection = els.landScheduleAdjustmentsSection;
+  landScheduleAdjustmentsContainer = els.landScheduleAdjustmentsContainer;
+  landScheduleAddAdjustmentButton = els.landScheduleAddAdjustmentButton;
 }
 
 export function initLandScheduleCallbacks(cbs: { showFiltersPanel?: () => void }) {
@@ -84,6 +107,7 @@ function getLandScheduleEntry(field: string, valueKey: string): LandScheduleEntr
     entry = {
       tables: [],
       activeTableId: null,
+      adjustments: [],
     };
     fieldMap.set(valueKey, entry);
   }
@@ -242,11 +266,21 @@ function hasActiveTableFilters(table: LandScheduleTable) {
   return table.filters.some(filter => filter.active);
 }
 
+function hasActiveAdjustmentFilters(adjustment: LandScheduleAdjustment) {
+  return adjustment.filters.some(filter => filter.active);
+}
+
 function updateLandScheduleFilterButtonState(table: LandScheduleTable | null) {
   if (!landScheduleFilterButton) return;
   const isActive = table ? hasActiveTableFilters(table) : false;
   landScheduleFilterButton.classList.toggle('is-active', isActive);
   landScheduleFilterButton.classList.toggle('is-muted', !isActive);
+}
+
+function updateAdjustmentFilterButtonState(button: HTMLButtonElement, adjustment: LandScheduleAdjustment) {
+  const isActive = hasActiveAdjustmentFilters(adjustment);
+  button.classList.toggle('is-active', isActive);
+  button.classList.toggle('is-muted', !isActive);
 }
 
 function createTableRow(table: LandScheduleTable, rowIndex: number, tbody: HTMLTableSectionElement) {
@@ -536,6 +570,133 @@ function renderActiveTable(entry: LandScheduleEntry) {
   updateLandScheduleCurve(activeTable);
 }
 
+function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
+  landScheduleAdjustmentsContainer.replaceChildren();
+  entry.adjustments = entry.adjustments ?? [];
+
+  entry.adjustments.forEach(adjustment => {
+    const card = document.createElement('div');
+    card.className = 'land-adjustment-card';
+    card.dataset.adjustmentId = adjustment.id;
+
+    const header = document.createElement('div');
+    header.className = 'land-adjustment-header';
+    const nameLabel = document.createElement('label');
+    nameLabel.textContent = 'Name:';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = adjustment.name;
+    nameInput.addEventListener('input', () => {
+      adjustment.name = nameInput.value;
+    });
+    nameLabel.appendChild(nameInput);
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'land-adjustment-delete';
+    deleteBtn.textContent = '×';
+    deleteBtn.title = 'Delete adjustment';
+    deleteBtn.addEventListener('click', () => {
+      entry.adjustments = entry.adjustments.filter(item => item.id !== adjustment.id);
+      renderLandScheduleAdjustments(entry);
+    });
+
+    header.append(nameLabel, deleteBtn);
+
+    const conditionsRow = document.createElement('div');
+    conditionsRow.className = 'land-adjustment-row';
+    const conditionsBtn = document.createElement('button');
+    conditionsBtn.type = 'button';
+    conditionsBtn.className = 'land-table-filter';
+    conditionsBtn.title = 'Conditions';
+    conditionsBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions`;
+    updateAdjustmentFilterButtonState(conditionsBtn, adjustment);
+    const adjustmentContextKey = `adj:${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:${adjustment.id}`;
+    conditionsBtn.addEventListener('click', () => {
+      setFiltersContext({
+        type: 'landSchedule',
+        getFilters: () => adjustment.filters,
+        getFilterInvert: () => adjustment.filterInvert,
+        setFilters: (filters: FilterRule[], filterInvert: boolean) => {
+          adjustment.filters = cloneFilters(filters);
+          adjustment.filterInvert = filterInvert;
+          updateAdjustmentFilterButtonState(conditionsBtn, adjustment);
+        },
+        label: `Land schedule adjustment: ${S.currentLandScheduleField ?? '—'} = ${S.currentLandScheduleValue ?? '—'} / ${adjustment.name || 'Untitled adjustment'}`,
+        key: adjustmentContextKey,
+      });
+      showFiltersPanel?.();
+    });
+    conditionsRow.appendChild(conditionsBtn);
+
+    const operationRow = document.createElement('div');
+    operationRow.className = 'land-adjustment-row';
+    const operationLabel = document.createElement('span');
+    operationLabel.textContent = 'Operation:';
+    const operationSelect = document.createElement('select');
+    ADJUSTMENT_OPERATION_OPTIONS.forEach(option => {
+      operationSelect.appendChild(new Option(option.label, option.value));
+    });
+    operationSelect.value = adjustment.operation;
+    operationRow.append(operationLabel, operationSelect);
+
+    const unitRow = document.createElement('div');
+    unitRow.className = 'land-adjustment-row';
+    const unitLabel = document.createElement('span');
+    unitLabel.textContent = 'Size unit:';
+    const unitSelect = document.createElement('select');
+    ADJUSTMENT_UNIT_OPTIONS.forEach(option => {
+      unitSelect.appendChild(new Option(option.label, option.value));
+    });
+    unitSelect.value = adjustment.sizeUnit;
+    unitRow.append(unitLabel, unitSelect);
+
+    const valueRow = document.createElement('div');
+    valueRow.className = 'land-adjustment-row';
+    const valueLabel = document.createElement('span');
+    valueLabel.textContent = 'Value:';
+    const valueWrap = document.createElement('div');
+    valueWrap.className = 'land-adjustment-value';
+    const valueInput = document.createElement('input');
+    valueInput.type = 'number';
+    valueInput.inputMode = 'decimal';
+    valueInput.step = '0.01';
+    const valueSuffix = document.createElement('span');
+    valueSuffix.className = 'land-adjustment-value-suffix';
+    valueSuffix.textContent = 'x';
+    valueWrap.append(valueInput, valueSuffix);
+    valueRow.append(valueLabel, valueWrap);
+
+    const syncValueUI = () => {
+      const isMultiply = adjustment.operation === 'multiply';
+      valueWrap.classList.toggle('is-multiply', isMultiply);
+      valueSuffix.style.display = isMultiply ? 'inline-flex' : 'none';
+      if (isMultiply && adjustment.value === null) {
+        adjustment.value = 1;
+      }
+      setLandScheduleInputValue(valueInput, adjustment.value);
+    };
+
+    operationSelect.addEventListener('change', () => {
+      adjustment.operation = operationSelect.value as LandScheduleAdjustmentOperation;
+      syncValueUI();
+    });
+
+    unitSelect.addEventListener('change', () => {
+      adjustment.sizeUnit = unitSelect.value as LandScheduleAdjustmentSizeUnit;
+    });
+
+    valueInput.addEventListener('input', () => {
+      adjustment.value = parseOptionalNumber(valueInput.value);
+    });
+
+    syncValueUI();
+
+    card.append(header, conditionsRow, operationRow, unitRow, valueRow);
+    landScheduleAdjustmentsContainer.appendChild(card);
+  });
+}
+
 /* ------------------------------------------------------------------ */
 /*  Exported functions                                                */
 /* ------------------------------------------------------------------ */
@@ -572,12 +733,17 @@ export function renderLandScheduleTables() {
   const entry = getCurrentEntry();
   landScheduleTableContainer.replaceChildren();
   landScheduleFilterButton = null;
+  landScheduleAdjustmentsContainer.replaceChildren();
 
   invalidateFiltersContextIf(context => {
     if (context.type !== 'landSchedule') return false;
     if (!entry) return true;
+    const baseKey = `${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:`;
+    if (context.key?.startsWith('adj:')) {
+      return !context.key.startsWith(`adj:${baseKey}`);
+    }
     const activeId = entry.activeTableId ?? '';
-    const expectedKey = `${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:${activeId}`;
+    const expectedKey = `${baseKey}${activeId}`;
     return context.key !== expectedKey;
   });
 
@@ -585,23 +751,28 @@ export function renderLandScheduleTables() {
     landScheduleTablesSection.style.display = 'none';
     landScheduleTableSelectRow.style.display = 'none';
     landScheduleAddTableButton.disabled = true;
+    landScheduleAdjustmentsSection.style.display = 'none';
+    landScheduleAddAdjustmentButton.disabled = true;
     updateLandScheduleCurve(null);
     return;
   }
 
   landScheduleTablesSection.style.display = 'grid';
   landScheduleAddTableButton.disabled = false;
+  landScheduleAdjustmentsSection.style.display = 'grid';
+  landScheduleAddAdjustmentButton.disabled = false;
 
   if (entry.tables.length === 0) {
     landScheduleTableSelectRow.style.display = 'none';
     landScheduleTableContainer.appendChild(landScheduleAddTableButton);
     updateLandScheduleCurve(null);
-    return;
+  } else {
+    landScheduleTableSelectRow.style.display = 'flex';
+    renderTableSelectOptions(entry);
+    renderActiveTable(entry);
   }
 
-  landScheduleTableSelectRow.style.display = 'flex';
-  renderTableSelectOptions(entry);
-  renderActiveTable(entry);
+  renderLandScheduleAdjustments(entry);
 }
 
 export function addLandScheduleTable() {
@@ -620,6 +791,23 @@ export function addLandScheduleTable() {
   entry.tables.push(newTable);
   entry.activeTableId = newTable.id;
   renderLandScheduleTables();
+}
+
+export function addLandScheduleAdjustment() {
+  const entry = getCurrentEntry();
+  if (!entry) return;
+  const nextIndex = entry.adjustments.length + 1;
+  const newAdjustment: LandScheduleAdjustment = {
+    id: `adj-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    name: `Adjustment ${nextIndex}`,
+    operation: 'add',
+    sizeUnit: 'flat',
+    value: null,
+    filters: [],
+    filterInvert: false,
+  };
+  entry.adjustments.push(newAdjustment);
+  renderLandScheduleAdjustments(entry);
 }
 
 export function setActiveLandScheduleTable(tableId: string | null) {

@@ -9,6 +9,7 @@ import type {
   SerializedDataSource,
   SerializedLayer,
   SerializedLandScheduleEntry,
+  SerializedLandScheduleAdjustment,
   SerializedLandScheduleTable
 } from './types.js';
 import { persistCurrentLayerState, renderDataStoreList, renderLayerList, registerLayer, applyLayerState, applyLayerOrderToMap } from './layers.js';
@@ -89,11 +90,21 @@ function serializeLandSchedules(): SerializedLandScheduleEntry[] {
         filters: cloneFilters(table.filters ?? []),
         filterInvert: table.filterInvert ?? false,
       }));
+      const adjustments: SerializedLandScheduleAdjustment[] = (entry.adjustments ?? []).map(adjustment => ({
+        id: adjustment.id,
+        name: adjustment.name,
+        operation: adjustment.operation,
+        sizeUnit: adjustment.sizeUnit,
+        value: adjustment.value,
+        filters: cloneFilters(adjustment.filters ?? []),
+        filterInvert: adjustment.filterInvert ?? false,
+      }));
       result.push({
         field,
         valueKey,
         tables,
         activeTableId: entry.activeTableId,
+        adjustments,
       });
     });
   });
@@ -276,6 +287,15 @@ export async function loadProjectFile(file: File) {
             filterInvert: table.filterInvert ?? false,
           })),
           activeTableId: entry.activeTableId,
+          adjustments: (entry.adjustments ?? []).map(adjustment => ({
+            id: adjustment.id,
+            name: adjustment.name,
+            operation: adjustment.operation ?? 'add',
+            sizeUnit: adjustment.sizeUnit ?? 'flat',
+            value: adjustment.value ?? null,
+            filters: adjustment.filters.map(f => ({ ...f })),
+            filterInvert: adjustment.filterInvert ?? false,
+          })),
         });
       });
     }

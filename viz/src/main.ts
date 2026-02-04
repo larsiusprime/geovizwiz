@@ -113,6 +113,7 @@ import {
   getMultiplierValue, getUnitFactor, getOpacityValue,
 } from './rendering';
 import {
+  addLandScheduleAdjustment,
   addLandScheduleTable,
   initLandScheduleCallbacks,
   initLandScheduleElements,
@@ -409,6 +410,11 @@ const landScheduleTablesContent = document.getElementById('landScheduleTablesCon
 const landScheduleCurveToggle = document.getElementById('landScheduleCurveToggle') as HTMLButtonElement;
 const landScheduleCurveContent = document.getElementById('landScheduleCurveContent') as HTMLDivElement;
 const landScheduleCurveChart = document.getElementById('landScheduleCurveChart') as HTMLDivElement;
+const landScheduleAdjustmentsSection = document.getElementById('landScheduleAdjustmentsSection') as HTMLDivElement;
+const landScheduleAdjustmentsToggle = document.getElementById('landScheduleAdjustmentsToggle') as HTMLButtonElement;
+const landScheduleAdjustmentsContent = document.getElementById('landScheduleAdjustmentsContent') as HTMLDivElement;
+const landScheduleAdjustmentsContainer = document.getElementById('landScheduleAdjustmentsContainer') as HTMLDivElement;
+const landScheduleAddAdjustmentButton = document.getElementById('landScheduleAddAdjustment') as HTMLButtonElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -520,8 +526,17 @@ const setLandScheduleCurveCollapsed = (collapsed: boolean) => {
   refreshWindowMinHeight(landScheduleControlsEl);
 };
 
+const setLandScheduleAdjustmentsCollapsed = (collapsed: boolean) => {
+  S.isLandScheduleAdjustmentsCollapsed = collapsed;
+  landScheduleAdjustmentsContent.style.display = collapsed ? 'none' : 'grid';
+  landScheduleAdjustmentsToggle.classList.toggle('is-collapsed', collapsed);
+  landScheduleAdjustmentsToggle.title = collapsed ? 'Expand Adjustments' : 'Collapse Adjustments';
+  refreshWindowMinHeight(landScheduleControlsEl);
+};
+
 setLandScheduleTablesCollapsed(S.isLandScheduleTablesCollapsed);
 setLandScheduleCurveCollapsed(S.isLandScheduleCurveCollapsed);
+setLandScheduleAdjustmentsCollapsed(S.isLandScheduleAdjustmentsCollapsed);
 
 landScheduleTablesToggle.addEventListener('click', () => {
   setLandScheduleTablesCollapsed(!S.isLandScheduleTablesCollapsed);
@@ -529,6 +544,10 @@ landScheduleTablesToggle.addEventListener('click', () => {
 
 landScheduleCurveToggle.addEventListener('click', () => {
   setLandScheduleCurveCollapsed(!S.isLandScheduleCurveCollapsed);
+});
+
+landScheduleAdjustmentsToggle.addEventListener('click', () => {
+  setLandScheduleAdjustmentsCollapsed(!S.isLandScheduleAdjustmentsCollapsed);
 });
 
 // Color ramp choices
@@ -884,6 +903,9 @@ initLandScheduleElements({
   landScheduleTableContainer,
   landScheduleCurveChart,
   landScheduleTablesSection,
+  landScheduleAdjustmentsSection,
+  landScheduleAdjustmentsContainer,
+  landScheduleAddAdjustmentButton,
 });
 initLandScheduleCallbacks({
   showFiltersPanel: showFilters,
@@ -1891,6 +1913,10 @@ landScheduleValueSelect.addEventListener('change', () => {
 
 landScheduleAddTableButton.addEventListener('click', () => {
   addLandScheduleTable();
+});
+
+landScheduleAddAdjustmentButton.addEventListener('click', () => {
+  addLandScheduleAdjustment();
 });
 
 landScheduleTableSelect.addEventListener('change', () => {

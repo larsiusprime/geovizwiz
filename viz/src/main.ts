@@ -1157,32 +1157,46 @@ function parseRowGeometry(raw: any): GeoJSON.Geometry | null {
   if (!raw) return null;
   const bytes = toUint8Array(raw) ?? (typeof raw === 'string' ? hexToUint8Array(raw) : null);
   if (bytes) {
-    console.debug('[GeoDiag] parseRowGeometry: detected WKB bytes.', { byteLength: bytes.length });
+    if (geoDiagLogBudget > 0) {
+      console.debug('[GeoDiag] parseRowGeometry: detected WKB bytes.', { byteLength: bytes.length });
+      geoDiagLogBudget -= 1;
+    }
     return parseWkbGeometry2d(bytes);
   }
   if (typeof raw === 'string') {
     const trimmed = raw.trim();
     if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
       try {
-        console.debug('[GeoDiag] parseRowGeometry: attempting JSON parse of string geometry.', {
-          sample: raw.slice(0, 120)
-        });
+        if (geoDiagLogBudget > 0) {
+          console.debug('[GeoDiag] parseRowGeometry: attempting JSON parse of string geometry.', {
+            sample: raw.slice(0, 120)
+          });
+          geoDiagLogBudget -= 1;
+        }
         return normalizeGeometry(JSON.parse(raw));
       } catch {}
     }
     const binaryBytes = stringToUint8Array(raw);
     if (binaryBytes) {
-      console.debug('[GeoDiag] parseRowGeometry: detected binary string WKB.', {
-        byteLength: binaryBytes.length
-      });
+      if (geoDiagLogBudget > 0) {
+        console.debug('[GeoDiag] parseRowGeometry: detected binary string WKB.', {
+          byteLength: binaryBytes.length
+        });
+        geoDiagLogBudget -= 1;
+      }
       return parseWkbGeometry2d(binaryBytes);
     }
   }
-  console.debug('[GeoDiag] parseRowGeometry: attempting normalizeGeometry of raw object.', {
-    rawType: typeof raw
-  });
+  if (geoDiagLogBudget > 0) {
+    console.debug('[GeoDiag] parseRowGeometry: attempting normalizeGeometry of raw object.', {
+      rawType: typeof raw
+    });
+    geoDiagLogBudget -= 1;
+  }
   return normalizeGeometry(raw);
 }
+
+let geoDiagLogBudget = 6;
 
 function stringToUint8Array(value: string): Uint8Array | null {
   if (!value) return null;
@@ -1242,16 +1256,19 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
       ensureAvailable(offset, 4);
       offset += 4;
     }
-    console.debug('[GeoDiag] WKB geometry header:', {
-      byteOrder,
-      littleEndian,
-      rawType: view.getUint32(startOffset + 1, littleEndian),
-      type,
-      hasZ,
-      hasM,
-      hasSrid,
-      startOffset
-    });
+    if (geoDiagLogBudget > 0) {
+      console.debug('[GeoDiag] WKB geometry header:', {
+        byteOrder,
+        littleEndian,
+        rawType: view.getUint32(startOffset + 1, littleEndian),
+        type,
+        hasZ,
+        hasM,
+        hasSrid,
+        startOffset
+      });
+      geoDiagLogBudget -= 1;
+    }
 
     const readUInt32 = () => {
       ensureAvailable(offset, 4);
@@ -1275,12 +1292,18 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
 
     if (type === 3 || type === 22) {
       const ringCount = readUInt32();
-      console.debug('[GeoDiag] WKB Polygon:', { ringCount, type });
+      if (geoDiagLogBudget > 0) {
+        console.debug('[GeoDiag] WKB Polygon:', { ringCount, type });
+        geoDiagLogBudget -= 1;
+      }
       const rings: number[][][] = [];
       for (let i = 0; i < ringCount; i++) {
         const pointCount = readUInt32();
         if (i < 3) {
-          console.debug('[GeoDiag] WKB Polygon ring points:', { ringIndex: i, pointCount });
+          if (geoDiagLogBudget > 0) {
+            console.debug('[GeoDiag] WKB Polygon ring points:', { ringIndex: i, pointCount });
+            geoDiagLogBudget -= 1;
+          }
         }
         const ring: number[][] = [];
         for (let j = 0; j < pointCount; j++) {
@@ -1293,7 +1316,10 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
 
     if (type === 6 || type === 21) {
       const polygonCount = readUInt32();
-      console.debug('[GeoDiag] WKB MultiPolygon/TIN:', { polygonCount, type });
+      if (geoDiagLogBudget > 0) {
+        console.debug('[GeoDiag] WKB MultiPolygon/TIN:', { polygonCount, type });
+        geoDiagLogBudget -= 1;
+      }
       const polygons: number[][][][] = [];
       for (let i = 0; i < polygonCount; i++) {
         const parsed = readGeometry(offset);
@@ -1312,7 +1338,10 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
 
   try {
     const result = readGeometry(0).geometry;
-    console.debug('[GeoDiag] WKB parse result:', { type: result?.type });
+    if (geoDiagLogBudget > 0) {
+      console.debug('[GeoDiag] WKB parse result:', { type: result?.type });
+      geoDiagLogBudget -= 1;
+    }
     return result;
   } catch (error) {
     console.warn('[GeoDiag] WKB parse failed:', error);
@@ -1463,18 +1492,21 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   console.debug('[GeoDiag] toGeoJsonFlatteningZ rows:', { rowCount: rows.length });
 
   const features: GeoJSON.Feature[] = [];
+  let parsedCount = 0;
+  let skippedCount = 0;
+  let nonPolygonCount = 0;
+  const geomTypeSamples = new Map<string, number>();
   rows.forEach((row: Record<string, any>, index: number) => {
     const geometry = parseRowGeometry(row?.[primaryGeom]);
     if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) {
-      if (index < 5 || index % 1000 === 0) {
-        console.debug('[GeoDiag] Skipping non-polygon geometry row.', {
-          index,
-          geomType: geometry?.type,
-          geomValueSample: row?.[primaryGeom]
-        });
+      skippedCount += 1;
+      if (geometry?.type) {
+        nonPolygonCount += 1;
+        geomTypeSamples.set(geometry.type, (geomTypeSamples.get(geometry.type) ?? 0) + 1);
       }
       return;
     }
+    parsedCount += 1;
     const properties: Record<string, any> = {};
     for (const [key, value] of Object.entries(row)) {
       if (key !== primaryGeom) properties[key] = value;
@@ -1490,7 +1522,13 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     features.push(feature);
   });
 
-  console.debug('[GeoDiag] toGeoJsonFlatteningZ features:', { featureCount: features.length });
+  console.debug('[GeoDiag] toGeoJsonFlatteningZ features:', {
+    featureCount: features.length,
+    parsedCount,
+    skippedCount,
+    nonPolygonCount,
+    sampleGeomTypes: Array.from(geomTypeSamples.entries()).slice(0, 5)
+  });
   console.groupEnd();
   return { type: 'FeatureCollection', features };
 }
@@ -1612,6 +1650,12 @@ async function loadSelectedColumns() {
     
     // Set field select to "-- choose --" (empty value)
     fieldSelect.value = '';
+
+    const dataBbox = bbox(S.currentGeoJSON);
+    console.debug('[GeoDiag] GeoJSON bbox after load:', {
+      bbox: dataBbox ?? null,
+      featureCount: S.currentGeoJSON.features.length
+    });
 
     addOrUpdateSource(S.currentGeoJSON);
 

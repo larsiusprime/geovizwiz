@@ -1208,12 +1208,25 @@ function stringToUint8Array(value: string): Uint8Array | null {
 
 function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const byteLength = view.byteLength;
+
+  const ensureAvailable = (offset: number, length: number) => {
+    if (offset + length > byteLength) {
+      throw new RangeError(`WKB parse out of bounds (offset ${offset}, length ${length}, total ${byteLength}).`);
+    }
+  };
 
   const readGeometry = (startOffset: number): { geometry: GeoJSON.Geometry | null; offset: number } => {
     let offset = startOffset;
+    ensureAvailable(offset, 1);
     const byteOrder = view.getUint8(offset);
     offset += 1;
+    if (byteOrder !== 0 && byteOrder !== 1) {
+      console.warn('[GeoDiag] WKB geometry header: invalid byte order.', { byteOrder, startOffset });
+      return { geometry: null, offset };
+    }
     const littleEndian = byteOrder === 1;
+    ensureAvailable(offset, 4);
     let type = view.getUint32(offset, littleEndian);
     offset += 4;
     const hasZFlag = (type & 0x80000000) !== 0;
@@ -1225,7 +1238,10 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     const hasZ = hasZFlag || type >= 1000;
     const hasM = hasMFlag;
     if (type >= 1000) type -= 1000;
-    if (hasSrid) offset += 4;
+    if (hasSrid) {
+      ensureAvailable(offset, 4);
+      offset += 4;
+    }
     console.debug('[GeoDiag] WKB geometry header:', {
       byteOrder,
       littleEndian,
@@ -1238,11 +1254,13 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     });
 
     const readUInt32 = () => {
+      ensureAvailable(offset, 4);
       const value = view.getUint32(offset, littleEndian);
       offset += 4;
       return value;
     };
     const readDouble = () => {
+      ensureAvailable(offset, 8);
       const value = view.getFloat64(offset, littleEndian);
       offset += 8;
       return value;
@@ -1292,9 +1310,14 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
     return { geometry: null, offset };
   };
 
-  const result = readGeometry(0).geometry;
-  console.debug('[GeoDiag] WKB parse result:', { type: result?.type });
-  return result;
+  try {
+    const result = readGeometry(0).geometry;
+    console.debug('[GeoDiag] WKB parse result:', { type: result?.type });
+    return result;
+  } catch (error) {
+    console.warn('[GeoDiag] WKB parse failed:', error);
+    return null;
+  }
 }
 
 function getPrimaryGeometryColumn(md: any): string {

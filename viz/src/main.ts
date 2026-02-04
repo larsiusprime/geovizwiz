@@ -1343,9 +1343,53 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
         console.debug('[GeoDiag] WKB MultiPolygon/TIN:', { polygonCount, type });
         geoDiagLogBudget -= 1;
       }
+
+      const readPolygonRaw = (start: number): { geometry: GeoJSON.Geometry | null; offset: number } => {
+        let localOffset = start;
+        ensureAvailable(localOffset, 4);
+        const firstCount = view.getUint32(localOffset, littleEndian);
+        localOffset += 4;
+        let ringCount = firstCount;
+        let pointCountOverride: number | null = null;
+        if (ringCount > 10) {
+          ringCount = 1;
+          pointCountOverride = firstCount;
+        }
+        const rings: number[][][] = [];
+        for (let i = 0; i < ringCount; i++) {
+          if (pointCountOverride === null) {
+            ensureAvailable(localOffset, 4);
+          }
+          const pointCount = pointCountOverride ?? view.getUint32(localOffset, littleEndian);
+          localOffset += 4;
+          const ring: number[][] = [];
+          for (let j = 0; j < pointCount; j++) {
+            ensureAvailable(localOffset, 16);
+            const x = view.getFloat64(localOffset, littleEndian);
+            localOffset += 8;
+            const y = view.getFloat64(localOffset, littleEndian);
+            localOffset += 8;
+            if (hasZ) {
+              ensureAvailable(localOffset, 8);
+              localOffset += 8;
+            }
+            if (hasM) {
+              ensureAvailable(localOffset, 8);
+              localOffset += 8;
+            }
+            ring.push([x, y]);
+          }
+          rings.push(ring);
+        }
+        return { geometry: { type: 'Polygon', coordinates: rings }, offset: localOffset };
+      };
+
       const polygons: number[][][][] = [];
       for (let i = 0; i < polygonCount; i++) {
-        const parsed = readGeometry(offset);
+        const nextByte = offset < byteLength ? view.getUint8(offset) : 255;
+        const parsed = (nextByte === 0 || nextByte === 1)
+          ? readGeometry(offset)
+          : readPolygonRaw(offset);
         offset = parsed.offset;
         if (parsed.geometry?.type === 'Polygon') {
           polygons.push(parsed.geometry.coordinates as number[][][]);

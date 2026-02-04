@@ -5,11 +5,13 @@ import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
+import * as hyparquet from 'hyparquet';
 
 
 // Local imports
 import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
 import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
+import type { AsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
 import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
 import type {
@@ -1070,13 +1072,218 @@ function hideLoading() { loadingOverlay.classList.remove('show'); }
   clearData();
 };
 
+function isUnsupported3dPolygonError(err: unknown) {
+  const message = String((err as any)?.message ?? err ?? '');
+  return message.includes('Unsupported geometry type: 1006');
+}
+
+function toUint8Array(data: unknown): Uint8Array | null {
+  if (!data) return null;
+  if (data instanceof Uint8Array) return data;
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) {
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  }
+  const maybeBuffer = (data as any)?.buffer;
+  if (maybeBuffer instanceof ArrayBuffer) {
+    const byteOffset = (data as any)?.byteOffset ?? 0;
+    const byteLength = (data as any)?.byteLength ?? maybeBuffer.byteLength;
+    return new Uint8Array(maybeBuffer, byteOffset, byteLength);
+  }
+  const dataArray = (data as any)?.data;
+  if (dataArray instanceof ArrayBuffer) return new Uint8Array(dataArray);
+  if (Array.isArray(dataArray)) return new Uint8Array(dataArray);
+  return null;
+}
+
+function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+  const readGeometry = (startOffset: number): { geometry: GeoJSON.Geometry | null; offset: number } => {
+    let offset = startOffset;
+    const byteOrder = view.getUint8(offset);
+    offset += 1;
+    const littleEndian = byteOrder === 1;
+    let type = view.getUint32(offset, littleEndian);
+    offset += 4;
+    let hasZ = false;
+    let hasM = false;
+    const hasSrid = (type & 0x20000000) !== 0;
+    if ((type & 0x80000000) !== 0) hasZ = true;
+    if ((type & 0x40000000) !== 0) hasM = true;
+    if ((type & 0xe0000000) !== 0) {
+      type &= 0x1fffffff;
+    }
+    if (type >= 3000) {
+      hasZ = true;
+      hasM = true;
+      type -= 3000;
+    } else if (type >= 2000) {
+      hasM = true;
+      type -= 2000;
+    } else if (type >= 1000) {
+      hasZ = true;
+      type -= 1000;
+    }
+
+    const readUInt32 = () => {
+      const value = view.getUint32(offset, littleEndian);
+      offset += 4;
+      return value;
+    };
+    const readDouble = () => {
+      const value = view.getFloat64(offset, littleEndian);
+      offset += 8;
+      return value;
+    };
+    const readPoint = () => {
+      const x = readDouble();
+      const y = readDouble();
+      if (hasZ) readDouble();
+      if (hasM) readDouble();
+      return [x, y];
+    };
+
+    if (hasSrid) {
+      readUInt32();
+    }
+
+    if (type === 3) {
+      const ringCount = readUInt32();
+      const rings: number[][][] = [];
+      for (let i = 0; i < ringCount; i++) {
+        const pointCount = readUInt32();
+        const ring: number[][] = [];
+        for (let j = 0; j < pointCount; j++) {
+          ring.push(readPoint());
+        }
+        rings.push(ring);
+      }
+      return { geometry: { type: 'Polygon', coordinates: rings }, offset };
+    }
+
+    if (type === 6) {
+      const polygonCount = readUInt32();
+      const polygons: number[][][][] = [];
+      for (let i = 0; i < polygonCount; i++) {
+        const parsed = readGeometry(offset);
+        offset = parsed.offset;
+        if (parsed.geometry?.type === 'Polygon') {
+          polygons.push(parsed.geometry.coordinates as number[][][]);
+        } else if (parsed.geometry?.type === 'MultiPolygon') {
+          polygons.push(...(parsed.geometry.coordinates as number[][][][]));
+        }
+      }
+      return { geometry: { type: 'MultiPolygon', coordinates: polygons }, offset };
+    }
+
+    return { geometry: null, offset };
+  };
+
+  return readGeometry(0).geometry;
+}
+
+function getPrimaryGeometryColumn(md: any): string {
+  const kv = md?.key_value_metadata || md?.keyValueMetadata || [];
+  const geoKV = kv.find((e: any) => String(e.key).toLowerCase() === 'geo');
+  let primaryGeom = 'geometry';
+  try {
+    if (geoKV?.value) {
+      const parsed = JSON.parse(geoKV.value);
+      if (parsed?.primary_column) primaryGeom = parsed.primary_column;
+    }
+  } catch {}
+  return primaryGeom;
+}
+
+function getTopLevelColumns(md: any): string[] {
+  const schemaTree: any = parquetSchema(md);
+  const top = Array.isArray(schemaTree?.children) ? schemaTree.children : [];
+  return top
+    .map((node: any) => node?.element?.name ?? node?.name)
+    .filter((name: string | undefined) => Boolean(name));
+}
+
+async function readParquetRows(file: AsyncBuffer, columns: string[]) {
+  const parquetRead =
+    (hyparquet as any).parquetRead ??
+    (hyparquet as any).parquetReadAsync ??
+    (hyparquet as any).readParquet ??
+    (hyparquet as any).readParquetAsync;
+
+  if (!parquetRead) {
+    throw new Error('GeoParquet fallback reader unavailable.');
+  }
+
+  return parquetRead({ file, columns, compressors });
+}
+
+function normalizeParquetRows(rowsResult: any): Record<string, any>[] {
+  if (Array.isArray(rowsResult)) return rowsResult;
+  const rows = rowsResult?.rows ?? rowsResult?.data;
+  if (Array.isArray(rows)) return rows;
+  const columns = rowsResult?.columns ?? rowsResult?.columnData;
+  if (!columns || typeof columns !== 'object') return [];
+  const columnEntries = Object.entries(columns).filter(([, value]) => Array.isArray(value));
+  const rowCount = columnEntries.reduce((max, [, value]) => Math.max(max, (value as any[]).length), 0);
+  const normalized: Record<string, any>[] = Array.from({ length: rowCount }, () => ({}));
+  for (const [key, values] of columnEntries) {
+    (values as any[]).forEach((value, index) => {
+      normalized[index][key] = value;
+    });
+  }
+  return normalized;
+}
+
+async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureCollection> {
+  const md = await parquetMetadataAsync(file);
+  const primaryGeom = getPrimaryGeometryColumn(md);
+  const columns = getTopLevelColumns(md);
+  if (!columns.includes(primaryGeom)) columns.push(primaryGeom);
+
+  const rowsResult = await readParquetRows(file, columns);
+  const rows = normalizeParquetRows(rowsResult);
+
+  if (!Array.isArray(rows)) throw new Error('GeoParquet fallback produced no rows.');
+
+  const features: GeoJSON.Feature[] = [];
+  rows.forEach((row: Record<string, any>, index: number) => {
+    const geomBytes = toUint8Array(row?.[primaryGeom]);
+    if (!geomBytes) return;
+    const geometry = parseWkbGeometry2d(geomBytes);
+    if (!geometry || (geometry.type !== 'Polygon' && geometry.type !== 'MultiPolygon')) return;
+    const properties: Record<string, any> = {};
+    for (const [key, value] of Object.entries(row)) {
+      if (key !== primaryGeom) properties[key] = value;
+    }
+    const feature: GeoJSON.Feature = {
+      type: 'Feature',
+      geometry,
+      properties
+    };
+    if (feature.id === undefined) {
+      feature.id = row?.id ?? row?.ID ?? row?.fid ?? row?.FID ?? index;
+    }
+    features.push(feature);
+  });
+
+  return { type: 'FeatureCollection', features };
+}
+
 /* ---------------- Load selected columns (+ geometry) ---------------- */
 async function loadSelectedColumns() {
   if (!S.lastAsyncBuffer || !S.lastFile) return;
   showLoading('Reading geometry + selected fields…');
 
   try {
-    const result: any = await toGeoJson({ file: S.lastAsyncBuffer, compressors });
+    let result: any;
+    try {
+      result = await toGeoJson({ file: S.lastAsyncBuffer, compressors });
+    } catch (err) {
+      if (!isUnsupported3dPolygonError(err)) throw err;
+      console.warn('GeoParquet 3D polygon detected; flattening Z coordinates.', err);
+      result = await toGeoJsonFlatteningZ(S.lastAsyncBuffer);
+    }
     if (S.cancelRequested) return;
 
     const fc: GeoJSON.FeatureCollection | undefined =

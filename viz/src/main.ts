@@ -1367,6 +1367,31 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
         geoDiagLogBudget -= 1;
       }
 
+      const readTriangleRaw = (start: number): { geometry: GeoJSON.Geometry | null; offset: number } => {
+        let localOffset = start;
+        const ring: number[][] = [];
+        for (let j = 0; j < 3; j++) {
+          ensureAvailable(localOffset, 16);
+          const x = view.getFloat64(localOffset, littleEndian);
+          localOffset += 8;
+          const y = view.getFloat64(localOffset, littleEndian);
+          localOffset += 8;
+          if (hasZ) {
+            ensureAvailable(localOffset, 8);
+            localOffset += 8;
+          }
+          if (hasM) {
+            ensureAvailable(localOffset, 8);
+            localOffset += 8;
+          }
+          ring.push([x, y]);
+        }
+        if (ring.length === 3) {
+          ring.push([...ring[0]]);
+        }
+        return { geometry: { type: 'Polygon', coordinates: [ring] }, offset: localOffset };
+      };
+
       const readPolygonRaw = (start: number): { geometry: GeoJSON.Geometry | null; offset: number } => {
         let localOffset = start;
         ensureAvailable(localOffset, 4);
@@ -1431,7 +1456,7 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
         const nextByte = offset < byteLength ? view.getUint8(offset) : 255;
         const parsed = (nextByte === 0 || nextByte === 1)
           ? readGeometry(offset)
-          : readPolygonRaw(offset);
+          : (type === 21 ? readTriangleRaw(offset) : readPolygonRaw(offset));
         offset = parsed.offset;
         if (parsed.geometry?.type === 'Polygon') {
           polygons.push(parsed.geometry.coordinates as number[][][]);

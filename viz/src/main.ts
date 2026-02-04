@@ -1301,7 +1301,7 @@ async function getTopLevelColumns(md: any): Promise<string[]> {
     .filter((name: string | undefined) => Boolean(name));
 }
 
-async function readParquetRows(file: AsyncBuffer, columns: string[]) {
+async function readParquetRows(file: AsyncBuffer, columns: string[], rowGroupIndexes: number[] = []) {
   const hyparquetModule = await getHyparquetModule();
   const parquetRead =
     resolveHyparquetExport<any>(hyparquetModule, 'parquetRead') ??
@@ -1349,10 +1349,17 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
     const result = await parquetRead({
       file,
       compressors,
+      rowGroups: rowGroupIndexes.length ? rowGroupIndexes : undefined,
+      rowGroupIndexes: rowGroupIndexes.length ? rowGroupIndexes : undefined,
+      rowGroupIndex: rowGroupIndexes.length ? rowGroupIndexes[0] : undefined,
+      rowGroup: rowGroupIndexes.length ? rowGroupIndexes[0] : undefined,
       rowCallback: (row: any) => rows.push(row),
       onRow: (row: any) => rows.push(row),
       onRecord: (row: any) => rows.push(row),
       onData: (row: any) => rows.push(row),
+      rowFunction: (row: any) => rows.push(row),
+      rowHandler: (row: any) => rows.push(row),
+      rowProcessor: (row: any) => rows.push(row),
       onComplete: () => finish(rows),
       onFinish: () => finish(rows),
       onDone: () => finish(rows),
@@ -1407,6 +1414,7 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
     { label: 'columnList', options: { columnList: columns } },
     { label: 'fields', options: { fields: columns } },
     { label: 'select', options: { select: columns } },
+    { label: 'projection', options: { projection: columns } },
     { label: 'all-columns', options: {} }
   ];
 
@@ -1467,13 +1475,16 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   const primaryGeom = getPrimaryGeometryColumn(md);
   const columns = await getTopLevelColumns(md);
   if (!columns.includes(primaryGeom)) columns.push(primaryGeom);
+  const rowGroupCount = Array.isArray(md?.row_groups) ? md.row_groups.length : 0;
+  const rowGroupIndexes = rowGroupCount ? Array.from({ length: rowGroupCount }, (_, i) => i) : [];
   console.debug('[GeoDiag] toGeoJsonFlatteningZ metadata:', {
     primaryGeom,
     columnCount: columns.length,
-    columns
+    columns,
+    rowGroupCount
   });
 
-  const rowsResult = await readParquetRows(file, columns);
+  const rowsResult = await readParquetRows(file, columns, rowGroupIndexes);
   let rows = coerceRowsFromResult(rowsResult, columns) ?? [];
   if (rows.length === 0 && Array.isArray(rowsResult?.rowGroups)) {
     const groupRows = rowsResult.rowGroups.flatMap((group: any) => group?.rows ?? []);

@@ -1298,7 +1298,22 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
     throw new Error('GeoParquet fallback reader unavailable.');
   }
 
+  console.debug('[GeoDiag] readParquetRows start:', {
+    columnsRequested: columns.length,
+    columns
+  });
+  console.debug('[GeoDiag] hyparquet exports:', {
+    keys: Object.keys(hyparquet as any).slice(0, 20)
+  });
   const result = await parquetRead({ file, columns, compressors });
+  if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
+    console.debug('[GeoDiag] readParquetRows result is async iterable.');
+    const rows: any[] = [];
+    for await (const row of result as any) {
+      rows.push(row);
+    }
+    return rows;
+  }
   const resultType = Array.isArray(result) ? 'array' : typeof result;
   console.debug('[GeoDiag] readParquetRows result summary:', {
     resultType,
@@ -1309,6 +1324,36 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
       : result?.rows?.length ?? result?.data?.length ?? result?.rowCount ?? null
   });
   return result;
+}
+
+function coerceRowsFromResult(result: any, columns: string[]) {
+  if (Array.isArray(result)) return result;
+  if (!result || typeof result !== 'object') return null;
+  const rows = result?.rows ?? result?.data;
+  if (Array.isArray(rows)) return rows;
+
+  const columnData =
+    result?.columnData ??
+    result?.columns ??
+    result?.data ??
+    result?.columnArrays ??
+    null;
+  if (columnData && typeof columnData === 'object' && !Array.isArray(columnData)) {
+    const firstCol = columns.find(col => Array.isArray((columnData as any)[col]));
+    if (!firstCol) return null;
+    const rowCount = (columnData as any)[firstCol].length ?? 0;
+    const rowsOut: Record<string, any>[] = [];
+    for (let i = 0; i < rowCount; i++) {
+      const row: Record<string, any> = {};
+      for (const col of columns) {
+        const colValues = (columnData as any)[col];
+        if (Array.isArray(colValues)) row[col] = colValues[i];
+      }
+      rowsOut.push(row);
+    }
+    return rowsOut;
+  }
+  return null;
 }
 
 async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureCollection> {
@@ -1324,9 +1369,7 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   });
 
   const rowsResult = await readParquetRows(file, columns);
-  let rows = Array.isArray(rowsResult)
-    ? rowsResult
-    : rowsResult?.rows ?? rowsResult?.data ?? [];
+  let rows = coerceRowsFromResult(rowsResult, columns) ?? [];
   if (rows.length === 0 && Array.isArray(rowsResult?.rowGroups)) {
     const groupRows = rowsResult.rowGroups.flatMap((group: any) => group?.rows ?? []);
     console.debug('[GeoDiag] toGeoJsonFlatteningZ rowGroups flatten:', {
@@ -1336,6 +1379,13 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
     rows = groupRows;
   }
 
+  if (rows.length === 0) {
+    console.debug('[GeoDiag] toGeoJsonFlatteningZ raw result snapshot:', {
+      type: typeof rowsResult,
+      keys: rowsResult && typeof rowsResult === 'object' ? Object.keys(rowsResult) : null,
+      resultSample: rowsResult
+    });
+  }
   if (!Array.isArray(rows)) throw new Error('GeoParquet fallback produced no rows.');
   console.debug('[GeoDiag] toGeoJsonFlatteningZ rows:', { rowCount: rows.length });
 

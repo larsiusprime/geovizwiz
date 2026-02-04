@@ -1301,15 +1301,13 @@ async function getTopLevelColumns(md: any): Promise<string[]> {
     .filter((name: string | undefined) => Boolean(name));
 }
 
-async function readParquetRows(file: AsyncBuffer, columns: string[], rowGroupIndexes: number[] = []) {
+async function readParquetRows(file: AsyncBuffer, columns: string[]) {
   const hyparquetModule = await getHyparquetModule();
-  const parquetRead =
-    resolveHyparquetExport<any>(hyparquetModule, 'parquetRead') ??
-    resolveHyparquetExport<any>(hyparquetModule, 'parquetReadAsync') ??
-    resolveHyparquetExport<any>(hyparquetModule, 'readParquet') ??
-    resolveHyparquetExport<any>(hyparquetModule, 'readParquetAsync');
+  const parquetReadObjects =
+    resolveHyparquetExport<any>(hyparquetModule, 'parquetReadObjects') ??
+    resolveHyparquetExport<any>(hyparquetModule, 'readParquetObjects');
 
-  if (!parquetRead) {
+  if (!parquetReadObjects) {
     throw new Error('GeoParquet fallback reader unavailable.');
   }
 
@@ -1321,119 +1319,25 @@ async function readParquetRows(file: AsyncBuffer, columns: string[], rowGroupInd
     keys: Object.keys(hyparquetModule as any).slice(0, 20)
   });
   console.debug('[GeoDiag] readParquetRows chosen reader:', {
-    name: (parquetRead as any)?.name ?? 'anonymous',
-    argCount: (parquetRead as any)?.length ?? null
+    name: (parquetReadObjects as any)?.name ?? 'anonymous',
+    argCount: (parquetReadObjects as any)?.length ?? null
   });
 
-  const attemptRead = async (label: string, options: Record<string, any>) => {
-    const rows: any[] = [];
-    let doneCalled = false;
-    let doneResolve: (value: any) => void;
-    let doneReject: (err: any) => void;
-    const donePromise = new Promise<any>((resolve, reject) => {
-      doneResolve = resolve;
-      doneReject = reject;
-    });
-    const finish = (value: any) => {
-      if (!doneCalled) {
-        doneCalled = true;
-        doneResolve(value);
-      }
-    };
-    const fail = (err: any) => {
-      if (!doneCalled) {
-        doneCalled = true;
-        doneReject(err);
-      }
-    };
-    const result = await parquetRead({
-      file,
-      compressors,
-      rowGroups: rowGroupIndexes.length ? rowGroupIndexes : undefined,
-      rowGroupIndexes: rowGroupIndexes.length ? rowGroupIndexes : undefined,
-      rowGroupIndex: rowGroupIndexes.length ? rowGroupIndexes[0] : undefined,
-      rowGroup: rowGroupIndexes.length ? rowGroupIndexes[0] : undefined,
-      rowCallback: (row: any) => rows.push(row),
-      onRow: (row: any) => rows.push(row),
-      onRecord: (row: any) => rows.push(row),
-      onData: (row: any) => rows.push(row),
-      rowFunction: (row: any) => rows.push(row),
-      rowHandler: (row: any) => rows.push(row),
-      rowProcessor: (row: any) => rows.push(row),
-      onComplete: () => finish(rows),
-      onFinish: () => finish(rows),
-      onDone: () => finish(rows),
-      onError: (err: any) => fail(err),
-      ...options
-    });
+  const result = await parquetReadObjects({
+    file,
+    compressors,
+    columns: columns.length ? columns : undefined
+  });
 
-    if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
-      console.debug('[GeoDiag] readParquetRows result is async iterable.', { label });
-      const iterableRows: any[] = [];
-      for await (const row of result as any) {
-        iterableRows.push(row);
-      }
-      return { result: iterableRows, rowCount: iterableRows.length };
-    }
+  const rowCount = Array.isArray(result) ? result.length : null;
+  console.debug('[GeoDiag] readParquetRows result summary:', {
+    resultType: Array.isArray(result) ? 'array' : typeof result,
+    keys: result && typeof result === 'object' ? Object.keys(result) : null,
+    isArray: Array.isArray(result),
+    rowCount
+  });
 
-    if (result === undefined) {
-      console.debug('[GeoDiag] readParquetRows returned undefined; awaiting callbacks.', { label });
-      const timeoutMs = 15000;
-      const timeoutPromise = new Promise<any>((resolve) => {
-        setTimeout(() => {
-          if (!doneCalled) {
-            console.warn('[GeoDiag] readParquetRows callback timeout; returning collected rows so far.', {
-              label,
-              rowCount: rows.length
-            });
-            resolve(rows);
-          }
-        }, timeoutMs);
-      });
-      const finalResult = await Promise.race([donePromise, timeoutPromise]);
-      return { result: finalResult, rowCount: Array.isArray(finalResult) ? finalResult.length : null };
-    }
-
-    const resultType = Array.isArray(result) ? 'array' : typeof result;
-    const rowCount = Array.isArray(result)
-      ? result.length
-      : result?.rows?.length ?? result?.data?.length ?? result?.rowCount ?? null;
-    console.debug('[GeoDiag] readParquetRows result summary:', {
-      label,
-      resultType,
-      keys: result && typeof result === 'object' ? Object.keys(result) : null,
-      isArray: Array.isArray(result),
-      rowCount
-    });
-    return { result, rowCount };
-  };
-
-  const attempts: Array<{ label: string; options: Record<string, any> }> = [
-    { label: 'columns', options: { columns } },
-    { label: 'columnNames', options: { columnNames: columns } },
-    { label: 'columnList', options: { columnList: columns } },
-    { label: 'fields', options: { fields: columns } },
-    { label: 'select', options: { select: columns } },
-    { label: 'projection', options: { projection: columns } },
-    { label: 'all-columns', options: {} }
-  ];
-
-  for (const attempt of attempts) {
-    const { result, rowCount } = await attemptRead(attempt.label, attempt.options);
-    if (rowCount && rowCount > 0) return result;
-    if (Array.isArray(result) && result.length > 0) return result;
-    if (result && typeof result === 'object' && !Array.isArray(result)) {
-      const maybeRows = result?.rows ?? result?.data ?? null;
-      if (Array.isArray(maybeRows) && maybeRows.length > 0) return result;
-      if (result?.rowGroups?.length) return result;
-    }
-    console.debug('[GeoDiag] readParquetRows attempt yielded no rows.', {
-      label: attempt.label,
-      rowCount: rowCount ?? null
-    });
-  }
-
-  return [];
+  return result ?? [];
 }
 
 function coerceRowsFromResult(result: any, columns: string[]) {
@@ -1475,16 +1379,14 @@ async function toGeoJsonFlatteningZ(file: AsyncBuffer): Promise<GeoJSON.FeatureC
   const primaryGeom = getPrimaryGeometryColumn(md);
   const columns = await getTopLevelColumns(md);
   if (!columns.includes(primaryGeom)) columns.push(primaryGeom);
-  const rowGroupCount = Array.isArray(md?.row_groups) ? md.row_groups.length : 0;
-  const rowGroupIndexes = rowGroupCount ? Array.from({ length: rowGroupCount }, (_, i) => i) : [];
   console.debug('[GeoDiag] toGeoJsonFlatteningZ metadata:', {
     primaryGeom,
     columnCount: columns.length,
     columns,
-    rowGroupCount
+    rowGroupCount: Array.isArray(md?.row_groups) ? md.row_groups.length : 0
   });
 
-  const rowsResult = await readParquetRows(file, columns, rowGroupIndexes);
+  const rowsResult = await readParquetRows(file, columns);
   let rows = coerceRowsFromResult(rowsResult, columns) ?? [];
   if (rows.length === 0 && Array.isArray(rowsResult?.rowGroups)) {
     const groupRows = rowsResult.rowGroups.flatMap((group: any) => group?.rows ?? []);

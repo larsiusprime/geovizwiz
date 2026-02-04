@@ -628,17 +628,13 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 
     const operationRow = document.createElement('div');
     operationRow.className = 'land-adjustment-row';
-    const operationLabel = document.createElement('span');
-    operationLabel.textContent = 'Operation:';
     const operationSelect = document.createElement('select');
     ADJUSTMENT_OPERATION_OPTIONS.forEach(option => {
       operationSelect.appendChild(new Option(option.label, option.value));
     });
     operationSelect.value = adjustment.operation;
-    operationRow.append(operationLabel, operationSelect);
+    operationRow.append(operationSelect);
 
-    const valueLabel = document.createElement('span');
-    valueLabel.textContent = 'Value:';
     const valueWrap = document.createElement('div');
     valueWrap.className = 'land-adjustment-value';
     const valueInput = document.createElement('input');
@@ -649,18 +645,16 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     valueSuffix.className = 'land-adjustment-value-suffix';
     valueSuffix.textContent = 'x';
     valueWrap.append(valueInput, valueSuffix);
-    operationRow.append(valueLabel, valueWrap);
+    operationRow.append(valueWrap);
 
     const unitRow = document.createElement('div');
     unitRow.className = 'land-adjustment-row';
-    const unitLabel = document.createElement('span');
-    unitLabel.textContent = 'Size unit:';
     const unitSelect = document.createElement('select');
     ADJUSTMENT_UNIT_OPTIONS.forEach(option => {
       unitSelect.appendChild(new Option(option.label, option.value));
     });
     unitSelect.value = adjustment.sizeUnit;
-    unitRow.append(unitLabel, unitSelect);
+    unitRow.append(unitSelect);
 
     const syncValueUI = () => {
       const isMultiply = adjustment.operation === 'multiply';

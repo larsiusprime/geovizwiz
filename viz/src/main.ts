@@ -1356,12 +1356,31 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
           pointCountOverride = firstCount;
         }
         const rings: number[][][] = [];
+        const pointStride = 16 + (hasZ ? 8 : 0) + (hasM ? 8 : 0);
         for (let i = 0; i < ringCount; i++) {
           if (pointCountOverride === null) {
             ensureAvailable(localOffset, 4);
           }
-          const pointCount = pointCountOverride ?? view.getUint32(localOffset, littleEndian);
+          let pointCount = pointCountOverride ?? view.getUint32(localOffset, littleEndian);
           localOffset += 4;
+          const remainingBytes = byteLength - localOffset;
+          if (pointCount <= 0 || pointCount * pointStride > remainingBytes) {
+            const maxPoints = Math.floor(remainingBytes / pointStride);
+            const fallbackCount = maxPoints >= 4 ? 4 : maxPoints >= 3 ? 3 : 0;
+            if (fallbackCount === 0) {
+              return { geometry: null, offset: localOffset };
+            }
+            if (geoDiagLogBudget > 0) {
+              console.warn('[GeoDiag] WKB raw polygon fallback point count.', {
+                requested: pointCount,
+                fallbackCount,
+                remainingBytes,
+                pointStride
+              });
+              geoDiagLogBudget -= 1;
+            }
+            pointCount = fallbackCount;
+          }
           const ring: number[][] = [];
           for (let j = 0; j < pointCount; j++) {
             ensureAvailable(localOffset, 16);

@@ -1320,15 +1320,72 @@ async function readParquetRows(file: AsyncBuffer, columns: string[]) {
   console.debug('[GeoDiag] hyparquet exports:', {
     keys: Object.keys(hyparquetModule as any).slice(0, 20)
   });
-  const result = await parquetRead({ file, columns, compressors });
+  console.debug('[GeoDiag] readParquetRows chosen reader:', {
+    name: (parquetRead as any)?.name ?? 'anonymous',
+    argCount: (parquetRead as any)?.length ?? null
+  });
+
+  const rows: any[] = [];
+  let doneCalled = false;
+  let doneResolve: (value: any) => void;
+  let doneReject: (err: any) => void;
+  const donePromise = new Promise<any>((resolve, reject) => {
+    doneResolve = resolve;
+    doneReject = reject;
+  });
+  const finish = (value: any) => {
+    if (!doneCalled) {
+      doneCalled = true;
+      doneResolve(value);
+    }
+  };
+  const fail = (err: any) => {
+    if (!doneCalled) {
+      doneCalled = true;
+      doneReject(err);
+    }
+  };
+
+  const result = await parquetRead({
+    file,
+    columns,
+    compressors,
+    rowCallback: (row: any) => rows.push(row),
+    onRow: (row: any) => rows.push(row),
+    onRecord: (row: any) => rows.push(row),
+    onData: (row: any) => rows.push(row),
+    onComplete: () => finish(rows),
+    onFinish: () => finish(rows),
+    onDone: () => finish(rows),
+    onError: (err: any) => fail(err)
+  });
+
   if (result && typeof (result as any)[Symbol.asyncIterator] === 'function') {
     console.debug('[GeoDiag] readParquetRows result is async iterable.');
-    const rows: any[] = [];
+    const iterableRows: any[] = [];
     for await (const row of result as any) {
-      rows.push(row);
+      iterableRows.push(row);
     }
-    return rows;
+    return iterableRows;
   }
+
+  if (result === undefined) {
+    console.debug('[GeoDiag] readParquetRows returned undefined; awaiting callbacks.');
+    const timeoutMs = 15000;
+    const timeoutPromise = new Promise<any>((resolve) => {
+      setTimeout(() => {
+        if (!doneCalled) {
+          console.warn('[GeoDiag] readParquetRows callback timeout; returning collected rows so far.', {
+            rowCount: rows.length
+          });
+          resolve(rows);
+        }
+      }, timeoutMs);
+    });
+    const finalResult = await Promise.race([donePromise, timeoutPromise]);
+    return finalResult;
+  }
+
   const resultType = Array.isArray(result) ? 'array' : typeof result;
   console.debug('[GeoDiag] readParquetRows result summary:', {
     resultType,

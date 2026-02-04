@@ -1255,9 +1255,9 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
       return [x, y];
     };
 
-    if (type === 3) {
+    if (type === 3 || type === 22) {
       const ringCount = readUInt32();
-      console.debug('[GeoDiag] WKB Polygon:', { ringCount });
+      console.debug('[GeoDiag] WKB Polygon:', { ringCount, type });
       const rings: number[][][] = [];
       for (let i = 0; i < ringCount; i++) {
         const pointCount = readUInt32();
@@ -1273,9 +1273,9 @@ function parseWkbGeometry2d(data: Uint8Array): GeoJSON.Geometry | null {
       return { geometry: { type: 'Polygon', coordinates: rings }, offset };
     }
 
-    if (type === 6) {
+    if (type === 6 || type === 21) {
       const polygonCount = readUInt32();
-      console.debug('[GeoDiag] WKB MultiPolygon:', { polygonCount });
+      console.debug('[GeoDiag] WKB MultiPolygon/TIN:', { polygonCount, type });
       const polygons: number[][][][] = [];
       for (let i = 0; i < polygonCount; i++) {
         const parsed = readGeometry(offset);

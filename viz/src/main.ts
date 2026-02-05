@@ -423,6 +423,14 @@ const landScheduleAdjustmentsToggle = document.getElementById('landScheduleAdjus
 const landScheduleAdjustmentsContent = document.getElementById('landScheduleAdjustmentsContent') as HTMLDivElement;
 const landScheduleAdjustmentsContainer = document.getElementById('landScheduleAdjustmentsContainer') as HTMLDivElement;
 const landScheduleAddAdjustmentButton = document.getElementById('landScheduleAddAdjustment') as HTMLButtonElement;
+const timeAdjustmentSettingsToggle = document.getElementById('timeAdjustmentSettingsToggle') as HTMLButtonElement;
+const timeAdjustmentSettingsBody = document.getElementById('timeAdjustmentSettingsBody') as HTMLDivElement;
+const timeAdjustmentEntriesToggle = document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement;
+const timeAdjustmentEntriesBody = document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement;
+const timeAdjustmentOutliersToggle = document.getElementById('timeAdjustmentOutliersToggle') as HTMLButtonElement;
+const timeAdjustmentOutliersBody = document.getElementById('timeAdjustmentOutliersBody') as HTMLDivElement;
+const timeAdjustmentDataToggle = document.getElementById('timeAdjustmentDataToggle') as HTMLButtonElement;
+const timeAdjustmentDataBody = document.getElementById('timeAdjustmentDataBody') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -557,6 +565,60 @@ landScheduleCurveToggle.addEventListener('click', () => {
 
 landScheduleAdjustmentsToggle.addEventListener('click', () => {
   setLandScheduleAdjustmentsCollapsed(!S.isLandScheduleAdjustmentsCollapsed);
+});
+
+// Time Adjustment collapse toggles
+const setTimeAdjustmentSettingsCollapsed = (collapsed: boolean) => {
+  S.isTimeAdjustmentSettingsCollapsed = collapsed;
+  timeAdjustmentSettingsBody.style.display = collapsed ? 'none' : 'grid';
+  timeAdjustmentSettingsToggle.classList.toggle('is-collapsed', collapsed);
+  timeAdjustmentSettingsToggle.title = collapsed ? 'Expand Settings' : 'Collapse Settings';
+  refreshWindowMinHeight(timeAdjustmentControlsEl);
+};
+
+const setTimeAdjustmentEntriesCollapsed = (collapsed: boolean) => {
+  S.isTimeAdjustmentEntriesCollapsed = collapsed;
+  timeAdjustmentEntriesBody.style.display = collapsed ? 'none' : 'grid';
+  timeAdjustmentEntriesToggle.classList.toggle('is-collapsed', collapsed);
+  timeAdjustmentEntriesToggle.title = collapsed ? 'Expand Time Adjustments' : 'Collapse Time Adjustments';
+  refreshWindowMinHeight(timeAdjustmentControlsEl);
+};
+
+const setTimeAdjustmentOutliersCollapsed = (collapsed: boolean) => {
+  S.isTimeAdjustmentOutliersCollapsed = collapsed;
+  timeAdjustmentOutliersBody.style.display = collapsed ? 'none' : 'grid';
+  timeAdjustmentOutliersToggle.classList.toggle('is-collapsed', collapsed);
+  timeAdjustmentOutliersToggle.title = collapsed ? 'Expand outliers' : 'Collapse outliers';
+  refreshWindowMinHeight(timeAdjustmentControlsEl);
+};
+
+const setTimeAdjustmentDataCollapsed = (collapsed: boolean) => {
+  S.isTimeAdjustmentDataCollapsed = collapsed;
+  timeAdjustmentDataBody.style.display = collapsed ? 'none' : 'grid';
+  timeAdjustmentDataToggle.classList.toggle('is-collapsed', collapsed);
+  timeAdjustmentDataToggle.title = collapsed ? 'Expand Data / Trend' : 'Collapse Data / Trend';
+  refreshWindowMinHeight(timeAdjustmentControlsEl);
+};
+
+setTimeAdjustmentSettingsCollapsed(S.isTimeAdjustmentSettingsCollapsed);
+setTimeAdjustmentEntriesCollapsed(S.isTimeAdjustmentEntriesCollapsed);
+setTimeAdjustmentOutliersCollapsed(S.isTimeAdjustmentOutliersCollapsed);
+setTimeAdjustmentDataCollapsed(S.isTimeAdjustmentDataCollapsed);
+
+timeAdjustmentSettingsToggle.addEventListener('click', () => {
+  setTimeAdjustmentSettingsCollapsed(!S.isTimeAdjustmentSettingsCollapsed);
+});
+
+timeAdjustmentEntriesToggle.addEventListener('click', () => {
+  setTimeAdjustmentEntriesCollapsed(!S.isTimeAdjustmentEntriesCollapsed);
+});
+
+timeAdjustmentOutliersToggle.addEventListener('click', () => {
+  setTimeAdjustmentOutliersCollapsed(!S.isTimeAdjustmentOutliersCollapsed);
+});
+
+timeAdjustmentDataToggle.addEventListener('click', () => {
+  setTimeAdjustmentDataCollapsed(!S.isTimeAdjustmentDataCollapsed);
 });
 
 // Color ramp choices
@@ -955,6 +1017,7 @@ initTimeAdjustmentElements({
   addEntryButton: document.getElementById('timeAdjustmentAddEntry') as HTMLButtonElement,
   entrySelect: document.getElementById('timeAdjustmentEntrySelect') as HTMLSelectElement,
   entryDetails: document.getElementById('timeAdjustmentEntryDetails') as HTMLDivElement,
+  deleteEntryButton: document.getElementById('timeAdjustmentDeleteEntry') as HTMLButtonElement,
   undoDeleteButton: document.getElementById('timeAdjustmentUndoDelete') as HTMLButtonElement,
   sampleCount: document.getElementById('timeAdjustmentSampleCount') as HTMLSpanElement,
   displaySelect: document.getElementById('timeAdjustmentDisplay') as HTMLSelectElement,
@@ -2223,6 +2286,7 @@ makeDraggable(statisticsControlsEl);
 makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
 makeDraggable(landScheduleControlsEl);
+makeDraggable(timeAdjustmentControlsEl);
 positionSettingsPanel();
 positionFiltersPanel();
 positionLandSchedulePanel();

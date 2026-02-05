@@ -96,6 +96,7 @@ export type TimeAdjustmentDisplayMode = 'improved' | 'vacant';
 export type TimeAdjustmentEntry = {
   id: string;
   name: string;
+  isDefault?: boolean;
   startDate: string | null;
   valuationDate: string | null;
   dateField: string;

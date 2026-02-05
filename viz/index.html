@@ -1901,17 +1901,17 @@
     </div>
     <div id="timeAdjustmentContent" data-window-content class="time-adjustment-content" style="padding: 12px; display: grid; gap: 10px;">
       <div class="time-adjustment-header">
-        <button id="timeAdjustmentSettingsToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" title="Expand Settings">▶</button>
+        <button id="timeAdjustmentSettingsToggle" type="button" class="land-schedule-collapse-toggle" title="Collapse Settings">▼</button>
         <div class="land-schedule-subtitle">Settings</div>
       </div>
-      <div id="timeAdjustmentSettingsBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
+      <div id="timeAdjustmentSettingsBody" class="time-adjustment-collapse-body" style="display:grid; gap:6px;">
         <div class="time-adjustment-row">
           <span class="time-adjustment-label-text">Sale price field</span>
           <select id="timeAdjustmentSalePriceField">
             <option value="" disabled selected>sale price</option>
           </select>
         </div>
-        <div class="time-adjustment-row">
+        <div class="time-adjustment-row compact">
           <span class="time-adjustment-label-text">Improved filter</span>
           <button id="timeAdjustmentImprovedFilter" type="button" class="land-table-filter time-adjustment-conditions">
             <img src="./src/svg/filters.svg" alt="Filters" /> conditions
@@ -1934,77 +1934,80 @@
       </div>
       <div class="divider"></div>
       <div class="time-adjustment-header">
-        <button id="timeAdjustmentEntriesToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" title="Expand Time Adjustments">▶</button>
+        <button id="timeAdjustmentEntriesToggle" type="button" class="land-schedule-collapse-toggle" title="Collapse Time Adjustments">▼</button>
         <div class="land-schedule-subtitle">Time Adjustments</div>
       </div>
-      <div id="timeAdjustmentEntriesBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:8px;">
+      <div id="timeAdjustmentEntriesBody" class="time-adjustment-collapse-body" style="display:grid; gap:8px;">
         <div style="display:grid; grid-template-columns: 1fr auto auto; gap:6px; align-items:center;">
           <input id="timeAdjustmentEntryName" type="text" placeholder="enter name" />
           <button id="timeAdjustmentAddEntry" type="button" class="land-schedule-button">+</button>
           <button id="timeAdjustmentUndoDelete" type="button" class="land-schedule-button" style="display:none;">undo</button>
         </div>
-        <select id="timeAdjustmentEntrySelect"><option value="" disabled selected>select time adjustment</option></select>
+        <div style="display:grid; grid-template-columns: 1fr auto; gap:6px; align-items:center;">
+          <select id="timeAdjustmentEntrySelect"><option value="" disabled selected>select time adjustment</option></select>
+          <button id="timeAdjustmentDeleteEntry" type="button" class="land-schedule-button" style="display:none; padding:2px 6px;">❌</button>
+        </div>
         <div id="timeAdjustmentEntryDetails" style="display:none; gap:8px;"></div>
-      </div>
-      <div class="divider"></div>
-      <div style="display:grid; gap:6px;">
-        <div class="time-adjustment-row six">
-          <span class="time-adjustment-label-text">Sales in sample:</span><strong id="timeAdjustmentSampleCount">0</strong>
-          <span class="time-adjustment-label-text">Min sample</span><input id="timeAdjustmentMinSample" type="number" min="1" step="1" value="5" />
-          <span></span><span></span>
+        <div class="divider"></div>
+        <div style="display:grid; gap:6px;">
+          <div class="time-adjustment-row six">
+            <span class="time-adjustment-label-text">Sales in sample:</span><strong id="timeAdjustmentSampleCount">0</strong>
+            <span class="time-adjustment-label-text">Min sample</span><input id="timeAdjustmentMinSample" type="number" min="1" step="1" value="5" />
+            <span></span><span></span>
+          </div>
+          <div class="time-adjustment-row compact">
+            <span class="time-adjustment-label-text">Display</span><select id="timeAdjustmentDisplay"><option value="improved" selected>improved</option><option value="vacant">vacant</option></select>
+            <span class="time-adjustment-label-text">Group by</span><select id="timeAdjustmentGroupBy"><option value="" selected>(None)</option></select>
+          </div>
+          <div class="time-adjustment-row compact">
+            <span class="time-adjustment-label-text">Granularity</span><select id="timeAdjustmentGranularity"><option value="month" selected>Monthly</option><option value="peak">Peak</option><option value="quarter">Quarter</option><option value="year">Year</option></select>
+            <span class="time-adjustment-label-text">Method</span><select id="timeAdjustmentMethod"><option value="median" selected>Median</option><option value="mean">Mean</option><option value="regression">Regression</option></select>
+          </div>
+          <div class="time-adjustment-header">
+            <button id="timeAdjustmentOutliersToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" title="Expand outliers">▼</button>
+            <div class="land-schedule-subtitle">Exclude outliers outside</div>
+          </div>
+          <div id="timeAdjustmentOutliersBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
+            <table class="time-adjustment-outlier-table">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Price</th>
+                  <th id="timeAdjustmentSizeHeader">Size</th>
+                  <th id="timeAdjustmentRatioHeader">Price/Size</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th>Low</th>
+                  <td><input id="timeAdjustmentPriceLow" type="number" /></td>
+                  <td><input id="timeAdjustmentSizeLow" type="number" /></td>
+                  <td><input id="timeAdjustmentRatioLow" type="number" /></td>
+                </tr>
+                <tr>
+                  <th>High</th>
+                  <td><input id="timeAdjustmentPriceHigh" type="number" /></td>
+                  <td><input id="timeAdjustmentSizeHigh" type="number" /></td>
+                  <td><input id="timeAdjustmentRatioHigh" type="number" /></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-        <div class="time-adjustment-row compact">
-          <span class="time-adjustment-label-text">Display</span><select id="timeAdjustmentDisplay"><option value="improved" selected>improved</option><option value="vacant">vacant</option></select>
-          <span class="time-adjustment-label-text">Group by</span><select id="timeAdjustmentGroupBy"><option value="" selected>(None)</option></select>
-        </div>
-        <div class="time-adjustment-row compact">
-          <span class="time-adjustment-label-text">Granularity</span><select id="timeAdjustmentGranularity"><option value="month" selected>Monthly</option><option value="peak">Peak</option><option value="quarter">Quarter</option><option value="year">Year</option></select>
-          <span class="time-adjustment-label-text">Method</span><select id="timeAdjustmentMethod"><option value="median" selected>Median</option><option value="mean">Mean</option><option value="regression">Regression</option></select>
-        </div>
+        <div class="divider"></div>
         <div class="time-adjustment-header">
-          <button id="timeAdjustmentOutliersToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" title="Expand outliers">▶</button>
-          <div class="land-schedule-subtitle">Exclude outliers outside</div>
+          <button id="timeAdjustmentDataToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" title="Expand Data / Trend">▼</button>
+          <div class="land-schedule-subtitle">Data / Trend</div>
         </div>
-        <div id="timeAdjustmentOutliersBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
-          <table class="time-adjustment-outlier-table">
-            <thead>
-              <tr>
-                <th></th>
-                <th>Price</th>
-                <th id="timeAdjustmentSizeHeader">Size</th>
-                <th id="timeAdjustmentRatioHeader">Price/Size</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <th>Low</th>
-                <td><input id="timeAdjustmentPriceLow" type="number" /></td>
-                <td><input id="timeAdjustmentSizeLow" type="number" /></td>
-                <td><input id="timeAdjustmentRatioLow" type="number" /></td>
-              </tr>
-              <tr>
-                <th>High</th>
-                <td><input id="timeAdjustmentPriceHigh" type="number" /></td>
-                <td><input id="timeAdjustmentSizeHigh" type="number" /></td>
-                <td><input id="timeAdjustmentRatioHigh" type="number" /></td>
-              </tr>
-            </tbody>
-          </table>
+        <div id="timeAdjustmentDataBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button id="timeAdjustmentPlotTrend" type="button" class="land-schedule-button">Plot trend</button>
+            <div id="timeAdjustmentSpinner" class="muted" style="display:none;">Calculating…</div>
+          </div>
+          <div id="timeAdjustmentChartMessage" class="muted"></div>
+          <div id="timeAdjustmentChart" style="height: 240px;"></div>
+          <div style="display:flex; gap:8px; align-items:center;"><span>Export:</span><button id="timeAdjustmentExportCsv" type="button" class="land-schedule-button">📄</button><button id="timeAdjustmentExportExcel" type="button" class="land-schedule-button">📊</button></div>
         </div>
-      </div>
-      <div class="divider"></div>
-      <div class="time-adjustment-header">
-        <button id="timeAdjustmentDataToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" title="Expand Data / Trend">▶</button>
-        <div class="land-schedule-subtitle">Data / Trend</div>
-      </div>
-      <div id="timeAdjustmentDataBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button id="timeAdjustmentPlotTrend" type="button" class="land-schedule-button">Plot trend</button>
-          <div id="timeAdjustmentSpinner" class="muted" style="display:none;">Calculating…</div>
-        </div>
-        <div id="timeAdjustmentChartMessage" class="muted"></div>
-        <div id="timeAdjustmentChart" style="height: 240px;"></div>
-        <div style="display:flex; gap:8px; align-items:center;"><span>Export:</span><button id="timeAdjustmentExportCsv" type="button" class="land-schedule-button">📄</button><button id="timeAdjustmentExportExcel" type="button" class="land-schedule-button">📊</button></div>
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>

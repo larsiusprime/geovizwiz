@@ -30,6 +30,7 @@ type Elements = {
   addEntryButton: HTMLButtonElement;
   entrySelect: HTMLSelectElement;
   entryDetails: HTMLDivElement;
+  deleteEntryButton: HTMLButtonElement;
   undoDeleteButton: HTMLButtonElement;
   sampleCount: HTMLSpanElement;
   displaySelect: HTMLSelectElement;
@@ -69,6 +70,40 @@ let lastDeleted: TimeAdjustmentEntry | null = null;
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+function ensureDefaultEntry() {
+  const hasDefault = S.timeAdjustmentEntries.some((entry) => entry.isDefault);
+  if (!hasDefault) {
+    const defaultEntry: TimeAdjustmentEntry = {
+      id: uid('taf'),
+      name: 'Default',
+      isDefault: true,
+      startDate: null,
+      valuationDate: null,
+      dateField: 'sale_date',
+      displayMode: 'improved',
+      groupByField: null,
+      granularity: 'month',
+      method: 'median',
+      minSample: 5,
+      outlierPriceLow: null,
+      outlierPriceHigh: null,
+      outlierSizeLow: null,
+      outlierSizeHigh: null,
+      outlierRatioLow: null,
+      outlierRatioHigh: null,
+      includeFilters: [],
+      includeFilterInvert: false,
+      excludeFilters: [],
+      excludeFilterInvert: false,
+      trendVisible: false,
+    };
+    S.timeAdjustmentEntries.unshift(defaultEntry);
+    if (!S.currentTimeAdjustmentEntryId) {
+      S.currentTimeAdjustmentEntryId = defaultEntry.id;
+    }
+  }
 }
 
 function getPlotly(): any | null {
@@ -212,13 +247,63 @@ function updateConditionsButton(button: HTMLButtonElement, filters: FilterRule[]
   button.classList.toggle('is-active', activeCount > 0);
 }
 
+function guessFieldByKeywords(fields: string[], keywords: string[]): string | null {
+  const lowerKeywords = keywords.map((k) => k.toLowerCase());
+  for (const field of fields) {
+    const lowerField = field.toLowerCase();
+    if (lowerKeywords.some((kw) => lowerField.includes(kw))) {
+      return field;
+    }
+  }
+  return null;
+}
+
+function prefillFromMetadata() {
+  const store = S.currentDataStoreId ? S.dataStores.get(S.currentDataStoreId) : null;
+  const numeric = numericFields();
+
+  // Prefill improved size field from metadata
+  if (!S.timeAdjustmentSettings.improvedSizeField && store?.bldgSizeField && numeric.includes(store.bldgSizeField)) {
+    S.timeAdjustmentSettings.improvedSizeField = store.bldgSizeField;
+  }
+
+  // Prefill land size field from metadata
+  if (!S.timeAdjustmentSettings.landSizeField && store?.landSizeField && numeric.includes(store.landSizeField)) {
+    S.timeAdjustmentSettings.landSizeField = store.landSizeField;
+  }
+
+  // Guess sale price field using heuristic
+  if (!S.timeAdjustmentSettings.salePriceField) {
+    const guessed = guessFieldByKeywords(numeric, ['sale_price', 'saleprice', 'sale', 'price', 'sold']);
+    if (guessed) {
+      S.timeAdjustmentSettings.salePriceField = guessed;
+    }
+  }
+}
+
 function refreshFieldOptions() {
   const numeric = numericFields();
   const categorical = categoricalFields();
+
+  // Prefill from metadata if fields are empty
+  prefillFromMetadata();
+
   populateSelect(els.salePriceField, numeric, 'sale price');
   populateSelect(els.improvedSizeField, numeric, 'bldg sqft');
   populateSelect(els.landSizeField, numeric, 'land sqft');
   populateSelect(els.groupBySelect, categorical, 'group', true);
+
+  // Apply prefilled values to selects
+  if (S.timeAdjustmentSettings.salePriceField && numeric.includes(S.timeAdjustmentSettings.salePriceField)) {
+    els.salePriceField.value = S.timeAdjustmentSettings.salePriceField;
+  }
+  if (S.timeAdjustmentSettings.improvedSizeField && numeric.includes(S.timeAdjustmentSettings.improvedSizeField)) {
+    els.improvedSizeField.value = S.timeAdjustmentSettings.improvedSizeField;
+  }
+  if (S.timeAdjustmentSettings.landSizeField && numeric.includes(S.timeAdjustmentSettings.landSizeField)) {
+    els.landSizeField.value = S.timeAdjustmentSettings.landSizeField;
+  }
+
   updateConditionsButton(els.improvedFilterButton, S.timeAdjustmentSettings.improvedFilters);
   updateConditionsButton(els.vacantFilterButton, S.timeAdjustmentSettings.vacantFilters);
 }
@@ -392,6 +477,20 @@ function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): Array
   return [jan, peak, dec];
 }
 
+function getConfigWarnings(entry: TimeAdjustmentEntry): string[] {
+  const warnings: string[] = [];
+  if (!S.timeAdjustmentSettings.salePriceField) {
+    warnings.push('No sale price field selected');
+  }
+  if (!entry.startDate || !entry.valuationDate) {
+    warnings.push('Start and valuation dates required');
+  }
+  if (!S.currentGeoJSON || !S.currentGeoJSON.features.length) {
+    warnings.push('No data loaded');
+  }
+  return warnings;
+}
+
 function renderChart() {
   const plotly = getPlotly();
   if (!plotly) return;
@@ -399,11 +498,24 @@ function renderChart() {
   if (!entry) {
     plotly.purge(els.chart);
     els.sampleCount.textContent = '0';
+    els.chartMessage.textContent = '';
     return;
   }
 
   const { points, grouped } = computeSales(entry);
   els.sampleCount.textContent = String(points.length);
+
+  // Show warnings if no sales and there are configuration issues
+  if (points.length === 0) {
+    const warnings = getConfigWarnings(entry);
+    if (warnings.length) {
+      els.chartMessage.textContent = warnings.join('; ');
+    } else {
+      els.chartMessage.textContent = 'No matching sales found in date range';
+    }
+  } else {
+    els.chartMessage.textContent = '';
+  }
 
   const xInlier: string[] = [];
   const yInlier: number[] = [];
@@ -504,39 +616,31 @@ function bindEntryDetails() {
   const entry = currentEntry();
   if (!entry) {
     els.entryDetails.style.display = 'none';
+    els.deleteEntryButton.style.display = 'none';
     return;
   }
   ensureDefaults(entry);
 
+  // Update static delete button visibility
+  els.deleteEntryButton.style.display = entry.isDefault ? 'none' : 'inline-flex';
+
   els.entryDetails.style.display = 'grid';
   els.entryDetails.innerHTML = `
-    <div class="time-adjustment-row compact">
+    <div class="time-adjustment-row compact" style="grid-template-columns: auto 1fr auto 1fr auto 1fr;">
       <span class="time-adjustment-label-text">Date field</span>
-      <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" />
+      <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" style="min-width:80px;" />
       <span class="time-adjustment-label-text">Start</span>
       <input type="date" data-role="start" value="${entry.startDate ?? ''}" />
-      <span class="time-adjustment-label-text">Valuation date</span>
+      <span class="time-adjustment-label-text">Valuation</span>
       <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" />
     </div>
-    <div style="display:grid; gap:6px; ${entry.startDate && entry.valuationDate ? '' : 'opacity:.5; pointer-events:none;'}">
-      <div class="time-adjustment-row six">
-        <span class="time-adjustment-label-text">Include</span>
-        <button type="button" data-role="include" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
-        <span class="time-adjustment-label-text">Exclude</span>
-        <button type="button" data-role="exclude" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
-        <button type="button" data-role="delete" class="land-schedule-button" style="padding:2px 6px; justify-self:end;">❌</button>
-        <span></span>
-      </div>
+    <div class="time-adjustment-row" style="grid-template-columns: auto 1fr auto 1fr;">
+      <span class="time-adjustment-label-text">Include</span>
+      <button type="button" data-role="include" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
+      <span class="time-adjustment-label-text">Exclude</span>
+      <button type="button" data-role="exclude" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
     </div>
   `;
-
-  const deleteBtn = els.entryDetails.querySelector('[data-role="delete"]') as HTMLButtonElement;
-  deleteBtn.addEventListener('click', () => {
-    lastDeleted = { ...entry, includeFilters: cloneFilters(entry.includeFilters), excludeFilters: cloneFilters(entry.excludeFilters) };
-    S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter((item) => item.id !== entry.id);
-    S.currentTimeAdjustmentEntryId = S.timeAdjustmentEntries[0]?.id ?? null;
-    render();
-  });
 
   const startInput = els.entryDetails.querySelector('[data-role="start"]') as HTMLInputElement;
   const valuationInput = els.entryDetails.querySelector('[data-role="valuation"]') as HTMLInputElement;
@@ -649,14 +753,11 @@ function render() {
   scheduleTrendRender();
 }
 
-function toggleSection(button: HTMLButtonElement, body: HTMLDivElement) {
-  const collapsed = body.classList.toggle('is-hidden');
-  button.classList.toggle('is-collapsed', collapsed);
-  button.textContent = collapsed ? '▶' : '▼';
-}
-
 export function initTimeAdjustmentElements(elements: Elements) {
   els = elements;
+
+  // Ensure a default entry exists and is selected
+  ensureDefaultEntry();
 
   bindFilterButton(
     els.improvedFilterButton,
@@ -680,11 +781,7 @@ export function initTimeAdjustmentElements(elements: Elements) {
       S.timeAdjustmentSettings.vacantFilterInvert = invert;
     }
   );
-
-  els.entriesToggle.addEventListener('click', () => toggleSection(els.entriesToggle, els.entriesBody));
-  els.settingsToggle.addEventListener('click', () => toggleSection(els.settingsToggle, els.settingsBody));
-  els.dataToggle.addEventListener('click', () => toggleSection(els.dataToggle, els.dataBody));
-  els.outliersToggle.addEventListener('click', () => toggleSection(els.outliersToggle, els.outliersBody));
+  // Note: Collapse toggle event listeners are handled in main.ts for consistency
 
   els.addEntryButton.addEventListener('click', () => {
     const name = els.entryNameInput.value.trim();
@@ -728,6 +825,15 @@ export function initTimeAdjustmentElements(elements: Elements) {
     S.timeAdjustmentEntries.push(lastDeleted);
     S.currentTimeAdjustmentEntryId = lastDeleted.id;
     lastDeleted = null;
+    render();
+  });
+
+  els.deleteEntryButton.addEventListener('click', () => {
+    const entry = currentEntry();
+    if (!entry || entry.isDefault) return;
+    lastDeleted = { ...entry, includeFilters: cloneFilters(entry.includeFilters), excludeFilters: cloneFilters(entry.excludeFilters) };
+    S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter((item) => item.id !== entry.id);
+    S.currentTimeAdjustmentEntryId = S.timeAdjustmentEntries[0]?.id ?? null;
     render();
   });
 
@@ -788,6 +894,9 @@ export function initTimeAdjustmentElements(elements: Elements) {
   els.exportExcelButton.addEventListener('click', () => {
     window.alert('Excel export requires wiring an XLSX library.');
   });
+
+  // Initial render to populate UI
+  render();
 }
 
 export function refreshTimeAdjustmentPanel() {

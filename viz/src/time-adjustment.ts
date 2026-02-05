@@ -511,14 +511,12 @@ function bindEntryDetails() {
   els.entryDetails.style.display = 'grid';
   els.entryDetails.innerHTML = `
     <div class="time-adjustment-row compact">
+      <span class="time-adjustment-label-text">Date field</span>
+      <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" />
       <span class="time-adjustment-label-text">Start</span>
       <input type="date" data-role="start" value="${entry.startDate ?? ''}" />
       <span class="time-adjustment-label-text">Valuation date</span>
       <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" />
-    </div>
-    <div class="time-adjustment-row">
-      <span class="time-adjustment-label-text">Date field</span>
-      <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" />
     </div>
     <div style="display:grid; gap:6px; ${entry.startDate && entry.valuationDate ? '' : 'opacity:.5; pointer-events:none;'}">
       <div class="time-adjustment-row six">

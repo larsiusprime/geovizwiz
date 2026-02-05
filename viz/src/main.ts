@@ -58,7 +58,7 @@ import {
 import {
   createWindowManager, initWindowCallbacks, initPositionElements,
   positionSettingsPanel, positionStatisticsPanel,
-  positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel,
+  positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel, positionTimeAdjustmentPanel,
   updateFiltersPanelLayout, refreshWindowMinHeight,
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
@@ -122,6 +122,11 @@ import {
   setActiveLandScheduleTable,
   updateLandScheduleValueOptions,
 } from './land-schedule';
+
+import {
+  initTimeAdjustmentElements,
+  refreshTimeAdjustmentPanel,
+} from './time-adjustment';
 import {
   initLayerElements, initLayerCallbacks,
   getCurrentLayer, getCurrentLayerIds, getCurrentSourceId,
@@ -359,6 +364,7 @@ const btnPinFilters = document.getElementById('btnPinFilters') as HTMLButtonElem
 const btnPinStatistics = document.getElementById('btnPinStatistics') as HTMLButtonElement;
 const btnPinScatterplot = document.getElementById('btnPinScatterplot') as HTMLButtonElement;
 const btnPinLandSchedule = document.getElementById('btnPinLandSchedule') as HTMLButtonElement;
+const btnPinTimeAdjustment = document.getElementById('btnPinTimeAdjustment') as HTMLButtonElement;
 const btnPinLegend = document.getElementById('btnPinLegend') as HTMLButtonElement;
 
 const statsSubjectControls = buildSubjectSelector(statsSubjectSection);
@@ -396,6 +402,8 @@ const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTML
 const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
 const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
 const landScheduleControlsEl = document.getElementById('landScheduleControls') as HTMLDivElement;
+const timeAdjustmentControlsEl = document.getElementById('timeAdjustmentControls') as HTMLDivElement;
+const timeAdjustmentContent = document.getElementById('timeAdjustmentContent') as HTMLDivElement;
 const landScheduleContent = document.getElementById('landScheduleContent') as HTMLDivElement;
 const landScheduleFieldSelect = document.getElementById('landScheduleFieldSelect') as HTMLSelectElement;
 const landScheduleValueRow = document.getElementById('landScheduleValueRow') as HTMLDivElement;
@@ -465,6 +473,7 @@ const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') a
 const btnMinimizeScatterplot = document.getElementById('btnMinimizeScatterplot') as HTMLButtonElement;
 const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
 const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
+const btnMinimizeTimeAdjustment = document.getElementById('btnMinimizeTimeAdjustment') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
@@ -639,6 +648,15 @@ const landScheduleWin = createWindowManager({
   },
 });
 
+const timeAdjustmentWin = createWindowManager({
+  getMinimized: () => S.isTimeAdjustmentMinimized,
+  setMinimized: (v) => { S.isTimeAdjustmentMinimized = v; },
+  contentEl: timeAdjustmentContent,
+  controlsEl: timeAdjustmentControlsEl,
+  positionFn: positionTimeAdjustmentPanel,
+  onShow: () => { refreshTimeAdjustmentPanel(); },
+});
+
 // Convenience aliases matching the old function names
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
@@ -656,6 +674,8 @@ const showFilters = filtersWin.show;
 const minimizeLandSchedule = landScheduleWin.minimize;
 const showLandSchedule = landScheduleWin.show;
 const toggleLandSchedule = landScheduleWin.toggle;
+const minimizeTimeAdjustment = timeAdjustmentWin.minimize;
+const toggleTimeAdjustment = timeAdjustmentWin.toggle;
 
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
@@ -671,6 +691,7 @@ initPositionElements({
   filtersContent,
   filtersListEl,
   landScheduleControlsEl,
+  timeAdjustmentControlsEl,
 });
 initWindowDocking({
   pinnedContainer: pinnedPanelsEl,
@@ -683,6 +704,7 @@ initWindowDocking({
   btnPinStatistics,
   btnPinScatterplot,
   btnPinLandSchedule,
+  btnPinTimeAdjustment,
   btnPinLegend,
 ].forEach(initPinButton);
 registerDockableWindow(controlsEl, btnPinLayers);
@@ -691,6 +713,7 @@ registerDockableWindow(filtersControlsEl, btnPinFilters);
 registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
+registerDockableWindow(timeAdjustmentControlsEl, btnPinTimeAdjustment);
 registerDockableWindow(floatingLegend, btnPinLegend);
 enableWindowResizing(controlsEl);
 enableWindowResizing(settingsControlsEl);
@@ -698,6 +721,7 @@ enableWindowResizing(filtersControlsEl);
 enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
 enableWindowResizing(landScheduleControlsEl);
+enableWindowResizing(timeAdjustmentControlsEl);
 enableWindowResizing(floatingLegend);
 
 // Wire DOM elements and callbacks into the filters module
@@ -909,6 +933,40 @@ initLandScheduleElements({
 });
 initLandScheduleCallbacks({
   showFiltersPanel: showFilters,
+});
+
+initTimeAdjustmentElements({
+  panel: timeAdjustmentControlsEl,
+  salePriceField: document.getElementById('timeAdjustmentSalePriceField') as HTMLSelectElement,
+  improvedFilterField: document.getElementById('timeAdjustmentImprovedFilter') as HTMLSelectElement,
+  improvedSizeField: document.getElementById('timeAdjustmentImprovedSize') as HTMLSelectElement,
+  vacantFilterField: document.getElementById('timeAdjustmentVacantFilter') as HTMLSelectElement,
+  landSizeField: document.getElementById('timeAdjustmentLandSize') as HTMLSelectElement,
+  entriesToggle: document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement,
+  entriesBody: document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement,
+  entryNameInput: document.getElementById('timeAdjustmentEntryName') as HTMLInputElement,
+  addEntryButton: document.getElementById('timeAdjustmentAddEntry') as HTMLButtonElement,
+  entrySelect: document.getElementById('timeAdjustmentEntrySelect') as HTMLSelectElement,
+  entryDetails: document.getElementById('timeAdjustmentEntryDetails') as HTMLDivElement,
+  undoDeleteButton: document.getElementById('timeAdjustmentUndoDelete') as HTMLButtonElement,
+  sampleCount: document.getElementById('timeAdjustmentSampleCount') as HTMLSpanElement,
+  displaySelect: document.getElementById('timeAdjustmentDisplay') as HTMLSelectElement,
+  groupBySelect: document.getElementById('timeAdjustmentGroupBy') as HTMLSelectElement,
+  granularitySelect: document.getElementById('timeAdjustmentGranularity') as HTMLSelectElement,
+  methodSelect: document.getElementById('timeAdjustmentMethod') as HTMLSelectElement,
+  minSampleInput: document.getElementById('timeAdjustmentMinSample') as HTMLInputElement,
+  priceLowInput: document.getElementById('timeAdjustmentPriceLow') as HTMLInputElement,
+  priceHighInput: document.getElementById('timeAdjustmentPriceHigh') as HTMLInputElement,
+  sizeLowInput: document.getElementById('timeAdjustmentSizeLow') as HTMLInputElement,
+  sizeHighInput: document.getElementById('timeAdjustmentSizeHigh') as HTMLInputElement,
+  ratioLowInput: document.getElementById('timeAdjustmentRatioLow') as HTMLInputElement,
+  ratioHighInput: document.getElementById('timeAdjustmentRatioHigh') as HTMLInputElement,
+  trendToggleButton: document.getElementById('timeAdjustmentPlotTrend') as HTMLButtonElement,
+  exportCsvButton: document.getElementById('timeAdjustmentExportCsv') as HTMLButtonElement,
+  exportExcelButton: document.getElementById('timeAdjustmentExportExcel') as HTMLButtonElement,
+  chart: document.getElementById('timeAdjustmentChart') as HTMLDivElement,
+  spinner: document.getElementById('timeAdjustmentSpinner') as HTMLDivElement,
+  chartMessage: document.getElementById('timeAdjustmentChartMessage') as HTMLDivElement,
 });
 
 // Wire DOM elements and callbacks into the layers module
@@ -1158,6 +1216,7 @@ async function loadSelectedColumns() {
     refreshStatisticsPanel();
     refreshScatterPanel();
     refreshLandSchedulePanel();
+refreshTimeAdjustmentPanel();
 
     fitToData(S.currentGeoJSON);
     persistCurrentLayerState();
@@ -1899,6 +1958,7 @@ btnMinimizeStatistics.addEventListener('click', minimizeStatistics);
 btnMinimizeScatterplot.addEventListener('click', minimizeScatterplot);
 btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
+btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
 
 landScheduleFieldSelect.addEventListener('change', () => {
   S.currentLandScheduleField = landScheduleFieldSelect.value || null;
@@ -2308,6 +2368,7 @@ renderDataStoreList();
 refreshStatisticsPanel();
 refreshScatterPanel();
 refreshLandSchedulePanel();
+refreshTimeAdjustmentPanel();
 
 /* ---------------- Vertical Toolbar (see ./toolbar.ts) ---------------- */
 
@@ -2319,6 +2380,7 @@ initToolbarCallbacks({
   showLegend,
   minimizeLegend,
   toggleLandSchedule,
+  toggleTimeAdjustment,
 });
 
 // Initialize toolbar when DOM is ready

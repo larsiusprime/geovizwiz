@@ -13,6 +13,7 @@ let _toggleSettingsMenu: () => void = () => {};
 let _showLegend: () => void = () => {};
 let _minimizeLegend: () => void = () => {};
 let _toggleLandSchedule: () => void = () => {};
+let _toggleTimeAdjustment: () => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
@@ -21,6 +22,7 @@ export interface ToolbarCallbacks {
   showLegend: () => void;
   minimizeLegend: () => void;
   toggleLandSchedule: () => void;
+  toggleTimeAdjustment: () => void;
 }
 
 export function initToolbarCallbacks(cb: ToolbarCallbacks) {
@@ -30,6 +32,7 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _showLegend = cb.showLegend;
   _minimizeLegend = cb.minimizeLegend;
   _toggleLandSchedule = cb.toggleLandSchedule;
+  _toggleTimeAdjustment = cb.toggleTimeAdjustment;
 }
 
 /* ---------- DOM elements ---------- */
@@ -43,6 +46,7 @@ const selectSubmenu = document.getElementById('selectSubmenu') as HTMLDivElement
 const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListOf<HTMLButtonElement>;
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
+const timeAdjustmentToolButton = document.getElementById('timeAdjustmentToolButton') as HTMLButtonElement;
 
 /* ---------- Constants ---------- */
 
@@ -278,6 +282,14 @@ export function updateToolbarButtonStates() {
     landScheduleToolButton.classList.add('active');
   }
 
+  if (S.isTimeAdjustmentMinimized) {
+    timeAdjustmentToolButton.classList.add('inactive');
+    timeAdjustmentToolButton.classList.remove('active');
+  } else {
+    timeAdjustmentToolButton.classList.remove('inactive');
+    timeAdjustmentToolButton.classList.add('active');
+  }
+
 }
 
 /* ---------- Initialize ---------- */
@@ -401,6 +413,12 @@ export function initializeToolbar() {
     e.stopPropagation();
     closeAllSubmenus();
     _toggleLandSchedule();
+  });
+
+  timeAdjustmentToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+    _toggleTimeAdjustment();
   });
 
   // Handle submenu button clicks

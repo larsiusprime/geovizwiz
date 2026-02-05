@@ -1219,6 +1219,11 @@
           <img src="./src/svg/land.svg" alt="Land Schedule" />
           <span class="hotkey">L</span>
         </button>
+
+        <button id="timeAdjustmentToolButton" class="toolbar-button" title="Time Adjustment">
+          <img src="./src/svg/clock.svg" alt="Time Adjustment" />
+          <span class="hotkey">T</span>
+        </button>
         
         <button id="settingsToolButton" class="toolbar-button" title="Settings">
           <img src="./src/svg/settings.svg" alt="Settings" />
@@ -1803,6 +1808,65 @@
       <img src="./src/svg/expand.svg" alt="" />
     </div>
   </div>
+
+  <div id="timeAdjustmentControls" class="viz-window" style="position: absolute; top: 10px; left: 1380px; width: min(calc(92vw - 80px), 460px); min-width: 420px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Time Adjustment</div>
+      <div class="window-actions">
+        <button id="btnPinTimeAdjustment" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeTimeAdjustment" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="timeAdjustmentContent" data-window-content style="padding: 12px; display: grid; gap: 10px;">
+      <div style="font-weight: 600; font-size: 12px;">Settings</div>
+      <label>Sale price field <select id="timeAdjustmentSalePriceField"><option value="" disabled selected>sale price</option></select></label>
+      <label>Improved filter <select id="timeAdjustmentImprovedFilter"><option value="" disabled selected>conditions</option></select></label>
+      <label>Improved size <select id="timeAdjustmentImprovedSize"><option value="" disabled selected>bldg sqft</option></select></label>
+      <label>Vacant filter <select id="timeAdjustmentVacantFilter"><option value="" disabled selected>conditions</option></select></label>
+      <label>Land size <select id="timeAdjustmentLandSize"><option value="" disabled selected>land sqft</option></select></label>
+      <div class="divider"></div>
+      <button id="timeAdjustmentEntriesToggle" type="button" class="land-schedule-collapse-toggle" style="justify-self:start;">▼ Time Adjustments</button>
+      <div id="timeAdjustmentEntriesBody" style="display:grid; gap:8px;">
+        <div style="display:grid; grid-template-columns: 1fr auto auto; gap:6px; align-items:center;">
+          <input id="timeAdjustmentEntryName" type="text" placeholder="enter name" />
+          <button id="timeAdjustmentAddEntry" type="button" class="land-schedule-button">+</button>
+          <button id="timeAdjustmentUndoDelete" type="button" class="land-schedule-button" style="display:none;">undo</button>
+        </div>
+        <select id="timeAdjustmentEntrySelect"><option value="" disabled selected>select time adjustment</option></select>
+        <div id="timeAdjustmentEntryDetails" style="display:none; gap:8px;"></div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:grid; gap:6px;">
+        <div>Sales in sample: <strong id="timeAdjustmentSampleCount">0</strong></div>
+        <label>Display <select id="timeAdjustmentDisplay"><option value="improved" selected>improved</option><option value="vacant">vacant</option></select></label>
+        <label>Group by <select id="timeAdjustmentGroupBy"><option value="" selected>(None)</option></select></label>
+        <label>Granularity <select id="timeAdjustmentGranularity"><option value="month" selected>Monthly</option><option value="peak">Peak</option><option value="quarter">Quarter</option><option value="year">Year</option></select></label>
+        <label>Method <select id="timeAdjustmentMethod"><option value="median" selected>Median</option><option value="mean">Mean</option><option value="regression">Regression</option></select></label>
+        <label>Min sample <input id="timeAdjustmentMinSample" type="number" min="1" step="1" value="5" /></label>
+        <div style="font-size:12px; color:#4b5563;">Exclude outliers outside:</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;"><label>Price low <input id="timeAdjustmentPriceLow" type="number" /></label><label>Price high <input id="timeAdjustmentPriceHigh" type="number" /></label></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;"><label>Size low <input id="timeAdjustmentSizeLow" type="number" /></label><label>Size high <input id="timeAdjustmentSizeHigh" type="number" /></label></div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;"><label>Price/Size low <input id="timeAdjustmentRatioLow" type="number" /></label><label>Price/Size high <input id="timeAdjustmentRatioHigh" type="number" /></label></div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:grid; gap:6px;">
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button id="timeAdjustmentPlotTrend" type="button" class="land-schedule-button">Plot trend</button>
+          <div id="timeAdjustmentSpinner" class="muted" style="display:none;">Calculating…</div>
+        </div>
+        <div id="timeAdjustmentChartMessage" class="muted"></div>
+        <div id="timeAdjustmentChart" style="height: 240px;"></div>
+        <div style="display:flex; gap:8px; align-items:center;"><span>Export:</span><button id="timeAdjustmentExportCsv" type="button" class="land-schedule-button">📄</button><button id="timeAdjustmentExportExcel" type="button" class="land-schedule-button">📊</button></div>
+      </div>
+    </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true"><img src="./src/svg/expand.svg" alt="" /></div>
+  </div>
+
 
   <!-- Modal 1: Numeric field chooser -->
   <div id="numericModalOverlay" class="overlay">

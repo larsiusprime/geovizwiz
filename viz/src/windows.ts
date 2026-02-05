@@ -250,6 +250,7 @@ export type PositionElements = {
   filtersContent: HTMLDivElement;
   filtersListEl: HTMLDivElement;
   landScheduleControlsEl: HTMLDivElement;
+  timeAdjustmentControlsEl: HTMLDivElement;
 };
 
 let els: PositionElements;
@@ -365,6 +366,31 @@ export function positionLandSchedulePanel() {
   els.landScheduleControlsEl.style.left = `${rect.right + gap}px`;
   els.landScheduleControlsEl.style.top = `${rect.top}px`;
   els.landScheduleControlsEl.style.transform = 'none';
+}
+
+
+export function positionTimeAdjustmentPanel() {
+  if (!els.timeAdjustmentControlsEl) return;
+  if (isPinned(els.timeAdjustmentControlsEl)) return;
+  if (els.timeAdjustmentControlsEl.dataset.userPositioned === 'true') return;
+  const anchor = (!S.isLandScheduleMinimized && els.landScheduleControlsEl)
+    ? els.landScheduleControlsEl
+    : (!S.isFiltersMinimized && els.filtersControlsEl)
+      ? els.filtersControlsEl
+      : (!S.isScatterplotMinimized && els.scatterplotControlsEl)
+        ? els.scatterplotControlsEl
+        : (!S.isStatisticsMinimized && els.statisticsControlsEl)
+          ? els.statisticsControlsEl
+          : (!S.isSettingsMenuMinimized && els.settingsControlsEl)
+            ? els.settingsControlsEl
+            : els.controlsEl;
+  if (!anchor) return;
+  const rect = anchor.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return;
+  const gap = 10;
+  els.timeAdjustmentControlsEl.style.left = `${rect.right + gap}px`;
+  els.timeAdjustmentControlsEl.style.top = `${rect.top}px`;
+  els.timeAdjustmentControlsEl.style.transform = 'none';
 }
 
 // ---------------------------------------------------------------------------

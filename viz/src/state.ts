@@ -9,7 +9,8 @@ import type {
   LayerState, DataStore, FilterRule, SavedFilterEntry,
   ParcelPatchMap, ColorMode, CategoricalColorMode, QualityMode,
   UpdateMode, SubjectMode, FilterMode, FilterActionMode,
-  LandScheduleStore, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator
+  LandScheduleStore, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator,
+  TimeAdjustmentEntry, TimeAdjustmentSettings
 } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 
@@ -88,6 +89,7 @@ export const S = {
   isLandScheduleTablesCollapsed: false,
   isLandScheduleCurveCollapsed: false,
   isLandScheduleAdjustmentsCollapsed: false,
+  isTimeAdjustmentMinimized: true,
   hiddenLegendItems: new Set<string>(),
 
   // --- Statistics ---
@@ -125,6 +127,17 @@ export const S = {
   currentLandScheduleField: null as string | null,
   currentLandScheduleValue: null as string | null,
   isUpdatingLandScheduleUI: false,
+
+  // --- Time adjustment ---
+  timeAdjustmentEntries: [] as TimeAdjustmentEntry[],
+  currentTimeAdjustmentEntryId: null as string | null,
+  timeAdjustmentSettings: {
+    salePriceField: '',
+    improvedFilterField: '',
+    improvedSizeField: '',
+    vacantFilterField: '',
+    landSizeField: '',
+  } as TimeAdjustmentSettings,
 
   // --- Selection ---
   selectedLegendItems: new Set<string>(),

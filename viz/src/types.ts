@@ -89,6 +89,38 @@ export type LandScheduleEntry = {
 
 export type LandScheduleStore = Map<string, Map<string, LandScheduleEntry>>;
 
+export type TimeAdjustmentGranularity = 'year' | 'peak' | 'quarter' | 'month';
+export type TimeAdjustmentMethod = 'median' | 'mean' | 'regression';
+export type TimeAdjustmentDisplayMode = 'improved' | 'vacant';
+
+export type TimeAdjustmentEntry = {
+  id: string;
+  name: string;
+  startDate: string | null;
+  valuationDate: string | null;
+  dateField: string;
+  displayMode: TimeAdjustmentDisplayMode;
+  groupByField: string | null;
+  granularity: TimeAdjustmentGranularity;
+  method: TimeAdjustmentMethod;
+  minSample: number;
+  outlierPriceLow: number | null;
+  outlierPriceHigh: number | null;
+  outlierSizeLow: number | null;
+  outlierSizeHigh: number | null;
+  outlierRatioLow: number | null;
+  outlierRatioHigh: number | null;
+  trendVisible: boolean;
+};
+
+export type TimeAdjustmentSettings = {
+  salePriceField: string;
+  improvedFilterField: string;
+  improvedSizeField: string;
+  vacantFilterField: string;
+  landSizeField: string;
+};
+
 export type LayerState = {
   id: string;
   name: string;

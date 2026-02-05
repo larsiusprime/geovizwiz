@@ -20,8 +20,12 @@ type Elements = {
   landSizeField: HTMLSelectElement;
   entriesToggle: HTMLButtonElement;
   entriesBody: HTMLDivElement;
+  settingsToggle: HTMLButtonElement;
+  settingsBody: HTMLDivElement;
   dataToggle: HTMLButtonElement;
   dataBody: HTMLDivElement;
+  outliersToggle: HTMLButtonElement;
+  outliersBody: HTMLDivElement;
   entryNameInput: HTMLInputElement;
   addEntryButton: HTMLButtonElement;
   entrySelect: HTMLSelectElement;
@@ -45,6 +49,8 @@ type Elements = {
   chart: HTMLDivElement;
   spinner: HTMLDivElement;
   chartMessage: HTMLDivElement;
+  sizeHeader: HTMLTableCellElement;
+  ratioHeader: HTMLTableCellElement;
 };
 
 type SalePoint = {
@@ -504,16 +510,25 @@ function bindEntryDetails() {
 
   els.entryDetails.style.display = 'grid';
   els.entryDetails.innerHTML = `
-    <div class="time-adjustment-label" style="display:flex; align-items:center; justify-content:space-between;">
-      <span><strong>Name:</strong> ${entry.name}</span>
-      <button type="button" data-role="delete" class="land-schedule-button" style="padding:2px 6px;">❌</button>
+    <div class="time-adjustment-row compact">
+      <span class="time-adjustment-label-text">Start</span>
+      <input type="date" data-role="start" value="${entry.startDate ?? ''}" />
+      <span class="time-adjustment-label-text">Valuation date</span>
+      <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" />
     </div>
-    <label>Start <input type="date" data-role="start" value="${entry.startDate ?? ''}" /></label>
-    <label>Valuation date <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" /></label>
-    <label>Date field <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" /></label>
+    <div class="time-adjustment-row">
+      <span class="time-adjustment-label-text">Date field</span>
+      <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" />
+    </div>
     <div style="display:grid; gap:6px; ${entry.startDate && entry.valuationDate ? '' : 'opacity:.5; pointer-events:none;'}">
-      <label>Include <button type="button" data-role="include" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button></label>
-      <label>Exclude <button type="button" data-role="exclude" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button></label>
+      <div class="time-adjustment-row six">
+        <span class="time-adjustment-label-text">Include</span>
+        <button type="button" data-role="include" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
+        <span class="time-adjustment-label-text">Exclude</span>
+        <button type="button" data-role="exclude" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
+        <button type="button" data-role="delete" class="land-schedule-button" style="padding:2px 6px; justify-self:end;">❌</button>
+        <span></span>
+      </div>
     </div>
   `;
 
@@ -629,14 +644,17 @@ function render() {
     els.trendToggleButton.textContent = entry.trendVisible ? 'Hide trend' : 'Plot trend';
   }
 
+  const sizeLabel = entry?.displayMode === 'vacant' ? 'Land size' : 'Improved size';
+  els.sizeHeader.textContent = sizeLabel;
+  els.ratioHeader.textContent = `Price/${sizeLabel}`;
+
   scheduleTrendRender();
 }
 
 function toggleSection(button: HTMLButtonElement, body: HTMLDivElement) {
   const collapsed = body.classList.toggle('is-hidden');
   button.classList.toggle('is-collapsed', collapsed);
-  const label = button.textContent?.replace(/[▶▼]/g, '').trim() ?? '';
-  button.textContent = `${collapsed ? '▶' : '▼'} ${label}`;
+  button.textContent = collapsed ? '▶' : '▼';
 }
 
 export function initTimeAdjustmentElements(elements: Elements) {
@@ -666,7 +684,9 @@ export function initTimeAdjustmentElements(elements: Elements) {
   );
 
   els.entriesToggle.addEventListener('click', () => toggleSection(els.entriesToggle, els.entriesBody));
+  els.settingsToggle.addEventListener('click', () => toggleSection(els.settingsToggle, els.settingsBody));
   els.dataToggle.addEventListener('click', () => toggleSection(els.dataToggle, els.dataBody));
+  els.outliersToggle.addEventListener('click', () => toggleSection(els.outliersToggle, els.outliersBody));
 
   els.addEntryButton.addEventListener('click', () => {
     const name = els.entryNameInput.value.trim();

@@ -945,8 +945,12 @@ initTimeAdjustmentElements({
   landSizeField: document.getElementById('timeAdjustmentLandSize') as HTMLSelectElement,
   entriesToggle: document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement,
   entriesBody: document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement,
+  settingsToggle: document.getElementById('timeAdjustmentSettingsToggle') as HTMLButtonElement,
+  settingsBody: document.getElementById('timeAdjustmentSettingsBody') as HTMLDivElement,
   dataToggle: document.getElementById('timeAdjustmentDataToggle') as HTMLButtonElement,
   dataBody: document.getElementById('timeAdjustmentDataBody') as HTMLDivElement,
+  outliersToggle: document.getElementById('timeAdjustmentOutliersToggle') as HTMLButtonElement,
+  outliersBody: document.getElementById('timeAdjustmentOutliersBody') as HTMLDivElement,
   entryNameInput: document.getElementById('timeAdjustmentEntryName') as HTMLInputElement,
   addEntryButton: document.getElementById('timeAdjustmentAddEntry') as HTMLButtonElement,
   entrySelect: document.getElementById('timeAdjustmentEntrySelect') as HTMLSelectElement,
@@ -970,6 +974,8 @@ initTimeAdjustmentElements({
   chart: document.getElementById('timeAdjustmentChart') as HTMLDivElement,
   spinner: document.getElementById('timeAdjustmentSpinner') as HTMLDivElement,
   chartMessage: document.getElementById('timeAdjustmentChartMessage') as HTMLDivElement,
+  sizeHeader: document.getElementById('timeAdjustmentSizeHeader') as HTMLTableCellElement,
+  ratioHeader: document.getElementById('timeAdjustmentRatioHeader') as HTMLTableCellElement,
 });
 
 // Wire DOM elements and callbacks into the layers module

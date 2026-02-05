@@ -937,13 +937,16 @@ initLandScheduleCallbacks({
 
 initTimeAdjustmentElements({
   panel: timeAdjustmentControlsEl,
+  showFiltersPanel: showFilters,
   salePriceField: document.getElementById('timeAdjustmentSalePriceField') as HTMLSelectElement,
-  improvedFilterField: document.getElementById('timeAdjustmentImprovedFilter') as HTMLSelectElement,
+  improvedFilterButton: document.getElementById('timeAdjustmentImprovedFilter') as HTMLButtonElement,
   improvedSizeField: document.getElementById('timeAdjustmentImprovedSize') as HTMLSelectElement,
-  vacantFilterField: document.getElementById('timeAdjustmentVacantFilter') as HTMLSelectElement,
+  vacantFilterButton: document.getElementById('timeAdjustmentVacantFilter') as HTMLButtonElement,
   landSizeField: document.getElementById('timeAdjustmentLandSize') as HTMLSelectElement,
   entriesToggle: document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement,
   entriesBody: document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement,
+  dataToggle: document.getElementById('timeAdjustmentDataToggle') as HTMLButtonElement,
+  dataBody: document.getElementById('timeAdjustmentDataBody') as HTMLDivElement,
   entryNameInput: document.getElementById('timeAdjustmentEntryName') as HTMLInputElement,
   addEntryButton: document.getElementById('timeAdjustmentAddEntry') as HTMLButtonElement,
   entrySelect: document.getElementById('timeAdjustmentEntrySelect') as HTMLSelectElement,

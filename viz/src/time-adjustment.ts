@@ -1,15 +1,27 @@
 import { S } from './state';
-import type { TimeAdjustmentEntry, TimeAdjustmentGranularity, TimeAdjustmentMethod, TimeAdjustmentDisplayMode } from './types';
+import { cloneFilters, setFiltersContext } from './filters';
+import type {
+  FilterRule,
+  TimeAdjustmentEntry,
+  TimeAdjustmentGranularity,
+  TimeAdjustmentMethod,
+  TimeAdjustmentDisplayMode
+} from './types';
+
+const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
 type Elements = {
   panel: HTMLDivElement;
+  showFiltersPanel: () => void;
   salePriceField: HTMLSelectElement;
-  improvedFilterField: HTMLSelectElement;
+  improvedFilterButton: HTMLButtonElement;
   improvedSizeField: HTMLSelectElement;
-  vacantFilterField: HTMLSelectElement;
+  vacantFilterButton: HTMLButtonElement;
   landSizeField: HTMLSelectElement;
   entriesToggle: HTMLButtonElement;
   entriesBody: HTMLDivElement;
+  dataToggle: HTMLButtonElement;
+  dataBody: HTMLDivElement;
   entryNameInput: HTMLInputElement;
   addEntryButton: HTMLButtonElement;
   entrySelect: HTMLSelectElement;
@@ -35,10 +47,6 @@ type Elements = {
   chartMessage: HTMLDivElement;
 };
 
-let els: Elements;
-let pendingTrendTimer: number | null = null;
-let lastDeleted: TimeAdjustmentEntry | null = null;
-
 type SalePoint = {
   date: Date;
   value: number;
@@ -48,6 +56,10 @@ type SalePoint = {
 };
 
 type GroupedPoints = Array<{ key: string; values: number[]; dates: Date[] }>;
+
+let els: Elements;
+let pendingTrendTimer: number | null = null;
+let lastDeleted: TimeAdjustmentEntry | null = null;
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -90,8 +102,7 @@ function formatPeriodLabel(date: Date, granularity: TimeAdjustmentGranularity): 
 
 function getAllFields(): string[] {
   const first = S.currentGeoJSON?.features?.[0]?.properties;
-  if (!first) return [];
-  return Object.keys(first);
+  return first ? Object.keys(first) : [];
 }
 
 function numericFields(): string[] {
@@ -111,11 +122,57 @@ function ensureDefaults(entry: TimeAdjustmentEntry) {
   if (!entry.granularity) entry.granularity = 'month';
   if (!entry.method) entry.method = 'median';
   if (!Number.isFinite(entry.minSample)) entry.minSample = 5;
+  entry.includeFilters = entry.includeFilters ?? [];
+  entry.excludeFilters = entry.excludeFilters ?? [];
+  entry.includeFilterInvert = entry.includeFilterInvert ?? false;
+  entry.excludeFilterInvert = entry.excludeFilterInvert ?? false;
 }
 
 function currentEntry(): TimeAdjustmentEntry | null {
   if (!S.currentTimeAdjustmentEntryId) return null;
   return S.timeAdjustmentEntries.find((entry) => entry.id === S.currentTimeAdjustmentEntryId) ?? null;
+}
+
+function matchesRule(props: Record<string, any>, filter: FilterRule): boolean {
+  if (!filter.active || !filter.field || !filter.fieldType || !filter.operator) return true;
+  const value = props[filter.field];
+
+  if (filter.fieldType === 'numeric') {
+    const left = safeNum(value);
+    const right = safeNum(filter.value);
+    if (left === null || right === null) return false;
+    switch (filter.operator) {
+      case 'lt': return left < right;
+      case 'gt': return left > right;
+      case 'lte': return left <= right;
+      case 'gte': return left >= right;
+      case 'eq': return left === right;
+      case 'neq': return left !== right;
+      default: return false;
+    }
+  }
+
+  if (filter.fieldType === 'categorical') {
+    const left = value == null ? '' : String(value);
+    if (filter.operator === 'eq') return left === String(filter.value ?? '');
+    if (filter.operator === 'neq') return left !== String(filter.value ?? '');
+    if (filter.operator === 'any') return Array.isArray(filter.value) ? filter.value.includes(left) : false;
+    if (filter.operator === 'not-any') return Array.isArray(filter.value) ? !filter.value.includes(left) : true;
+  }
+
+  if (filter.fieldType === 'reference') {
+    if (filter.operator === 'ref-true') return value === true;
+    if (filter.operator === 'ref-false') return value === false;
+  }
+
+  return true;
+}
+
+function matchesFilters(props: Record<string, any>, filters: FilterRule[], invert: boolean): boolean {
+  const active = filters.filter((filter) => filter.active);
+  if (!active.length) return !invert;
+  const hit = active.every((filter) => matchesRule(props, filter));
+  return invert ? !hit : hit;
 }
 
 function populateSelect(select: HTMLSelectElement, fields: string[], placeholder: string, includeNone = false) {
@@ -140,20 +197,24 @@ function populateSelect(select: HTMLSelectElement, fields: string[], placeholder
     option.textContent = field;
     select.append(option);
   });
-  if (previous && fields.includes(previous)) {
-    select.value = previous;
-  }
+  if (previous && fields.includes(previous)) select.value = previous;
+}
+
+function updateConditionsButton(button: HTMLButtonElement, filters: FilterRule[]) {
+  const activeCount = filters.filter((filter) => filter.active).length;
+  button.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> conditions${activeCount ? ` (${activeCount})` : ''}`;
+  button.classList.toggle('is-active', activeCount > 0);
 }
 
 function refreshFieldOptions() {
-  const n = numericFields();
-  const c = categoricalFields();
-  populateSelect(els.salePriceField, n, 'sale price');
-  populateSelect(els.improvedSizeField, n, 'bldg sqft');
-  populateSelect(els.landSizeField, n, 'land sqft');
-  populateSelect(els.improvedFilterField, c, 'conditions');
-  populateSelect(els.vacantFilterField, c, 'conditions');
-  populateSelect(els.groupBySelect, c, 'group', true);
+  const numeric = numericFields();
+  const categorical = categoricalFields();
+  populateSelect(els.salePriceField, numeric, 'sale price');
+  populateSelect(els.improvedSizeField, numeric, 'bldg sqft');
+  populateSelect(els.landSizeField, numeric, 'land sqft');
+  populateSelect(els.groupBySelect, categorical, 'group', true);
+  updateConditionsButton(els.improvedFilterButton, S.timeAdjustmentSettings.improvedFilters);
+  updateConditionsButton(els.vacantFilterButton, S.timeAdjustmentSettings.vacantFilters);
 }
 
 function renderEntrySelect() {
@@ -183,8 +244,8 @@ function renderEntrySelect() {
 function median(values: number[]): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle];
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
 function mean(values: number[]): number {
@@ -207,106 +268,90 @@ function linearSolve(matrix: number[][], vector: number[]): number[] | null {
     for (let row = 0; row < n; row += 1) {
       if (row === col) continue;
       const factor = a[row][col];
-      for (let j = col; j <= n; j += 1) {
-        a[row][j] -= factor * a[col][j];
-      }
+      for (let j = col; j <= n; j += 1) a[row][j] -= factor * a[col][j];
     }
   }
   return a.map((row) => row[n]);
 }
 
 function regressionFactors(grouped: Array<{ key: string; values: number[] }>, baselineKey: string): Record<string, number> {
-  const groups = grouped.filter((item) => item.values.length > 0);
-  const baselineIdx = groups.findIndex((item) => item.key === baselineKey);
-  if (baselineIdx < 0 || groups.length < 2) {
-    return Object.fromEntries(groups.map((item) => [item.key, median(item.values)]));
-  }
-
-  const keys = groups.map((item) => item.key);
-  const columns = keys.filter((key) => key !== baselineKey);
+  const groups = grouped.filter((group) => group.values.length > 0);
+  const columns = groups.map((group) => group.key).filter((key) => key !== baselineKey);
   const xRows: number[][] = [];
-  const y: number[] = [];
+  const yVals: number[] = [];
 
   groups.forEach((group) => {
     group.values.forEach((value) => {
       if (value <= 0) return;
-      const row = [1, ...columns.map((key) => (key === group.key ? 1 : 0))];
-      xRows.push(row);
-      y.push(Math.log(value));
+      xRows.push([1, ...columns.map((key) => (key === group.key ? 1 : 0))]);
+      yVals.push(Math.log(value));
     });
   });
 
   const p = columns.length + 1;
-  if (xRows.length <= p) {
-    return Object.fromEntries(groups.map((item) => [item.key, median(item.values)]));
-  }
+  if (xRows.length <= p) return Object.fromEntries(groups.map((group) => [group.key, median(group.values)]));
 
   const xtx = Array.from({ length: p }, () => Array.from({ length: p }, () => 0));
   const xty = Array.from({ length: p }, () => 0);
   xRows.forEach((row, i) => {
     for (let a = 0; a < p; a += 1) {
-      xty[a] += row[a] * y[i];
-      for (let b = 0; b < p; b += 1) {
-        xtx[a][b] += row[a] * row[b];
-      }
+      xty[a] += row[a] * yVals[i];
+      for (let b = 0; b < p; b += 1) xtx[a][b] += row[a] * row[b];
     }
   });
+
   const beta = linearSolve(xtx, xty);
-  if (!beta) {
-    return Object.fromEntries(groups.map((item) => [item.key, median(item.values)]));
-  }
-  const output: Record<string, number> = { [baselineKey]: Math.exp(beta[0]) };
-  columns.forEach((key, idx) => {
-    output[key] = Math.exp(beta[0] + beta[idx + 1]);
-  });
-  return output;
+  if (!beta) return Object.fromEntries(groups.map((group) => [group.key, median(group.values)]));
+
+  const out: Record<string, number> = { [baselineKey]: Math.exp(beta[0]) };
+  columns.forEach((key, idx) => { out[key] = Math.exp(beta[0] + beta[idx + 1]); });
+  return out;
 }
 
 function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; grouped: GroupedPoints } {
   ensureDefaults(entry);
-  const start = entry.startDate ? parseDate(entry.startDate) : null;
-  const valuation = entry.valuationDate ? parseDate(entry.valuationDate) : null;
-  if (!start || !valuation || !S.currentGeoJSON) {
-    return { points: [], grouped: [] };
-  }
+  const start = parseDate(entry.startDate);
+  const valuation = parseDate(entry.valuationDate);
+  if (!start || !valuation || !S.currentGeoJSON) return { points: [], grouped: [] };
 
   const dateField = entry.dateField || 'sale_date';
   const priceField = S.timeAdjustmentSettings.salePriceField;
   const improvedSizeField = S.timeAdjustmentSettings.improvedSizeField;
   const landSizeField = S.timeAdjustmentSettings.landSizeField;
-  const improvedFilterField = S.timeAdjustmentSettings.improvedFilterField;
-  const vacantFilterField = S.timeAdjustmentSettings.vacantFilterField;
 
   const points: SalePoint[] = S.currentGeoJSON.features.flatMap((feature: GeoJSON.Feature) => {
-    const props = feature.properties ?? {};
+    const props = (feature.properties ?? {}) as Record<string, any>;
     const date = parseDate(props[dateField]);
     if (!date || date < start || date > valuation) return [];
 
     const rawPrice = safeNum(props[priceField]);
     if (rawPrice === null) return [];
 
-    const isImproved = improvedFilterField ? Boolean(props[improvedFilterField]) : true;
-    const isVacant = vacantFilterField ? Boolean(props[vacantFilterField]) : !isImproved;
+    const improved = matchesFilters(props, S.timeAdjustmentSettings.improvedFilters, S.timeAdjustmentSettings.improvedFilterInvert);
+    const vacant = matchesFilters(props, S.timeAdjustmentSettings.vacantFilters, S.timeAdjustmentSettings.vacantFilterInvert);
+    const modeMatch = entry.displayMode === 'vacant' ? vacant : improved;
+    if (!modeMatch) return [];
+
+    const includeMatch = matchesFilters(props, entry.includeFilters, entry.includeFilterInvert);
+    const excludeMatch = matchesFilters(props, entry.excludeFilters, entry.excludeFilterInvert);
+    if (!includeMatch || excludeMatch) return [];
 
     const sizeRaw = entry.displayMode === 'vacant' ? safeNum(props[landSizeField]) : safeNum(props[improvedSizeField]);
     const sizeForRatio = sizeRaw ?? 1;
     const ratio = sizeForRatio === 0 ? null : rawPrice / sizeForRatio;
 
-    const outlierPrice = (entry.outlierPriceLow !== null && entry.outlierPriceLow !== undefined && rawPrice < entry.outlierPriceLow)
-      || (entry.outlierPriceHigh !== null && entry.outlierPriceHigh !== undefined && rawPrice > entry.outlierPriceHigh);
-    const outlierSize = (sizeRaw !== null) && ((entry.outlierSizeLow !== null && entry.outlierSizeLow !== undefined && sizeRaw < entry.outlierSizeLow)
-      || (entry.outlierSizeHigh !== null && entry.outlierSizeHigh !== undefined && sizeRaw > entry.outlierSizeHigh));
-    const outlierRatio = (ratio !== null) && ((entry.outlierRatioLow !== null && entry.outlierRatioLow !== undefined && ratio < entry.outlierRatioLow)
-      || (entry.outlierRatioHigh !== null && entry.outlierRatioHigh !== undefined && ratio > entry.outlierRatioHigh));
-
-    const useMode = entry.displayMode === 'vacant' ? isVacant : isImproved;
-    if (!useMode) return [];
+    const outlierPrice = (entry.outlierPriceLow != null && rawPrice < entry.outlierPriceLow)
+      || (entry.outlierPriceHigh != null && rawPrice > entry.outlierPriceHigh);
+    const outlierSize = (sizeRaw !== null) && ((entry.outlierSizeLow != null && sizeRaw < entry.outlierSizeLow)
+      || (entry.outlierSizeHigh != null && sizeRaw > entry.outlierSizeHigh));
+    const outlierRatio = (ratio !== null) && ((entry.outlierRatioLow != null && ratio < entry.outlierRatioLow)
+      || (entry.outlierRatioHigh != null && ratio > entry.outlierRatioHigh));
 
     return [{ date, value: ratio ?? rawPrice, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
   });
 
   const groupedMap = new Map<string, { values: number[]; dates: Date[] }>();
-  points.forEach((point: SalePoint) => {
+  points.forEach((point) => {
     const key = formatPeriodLabel(point.date, entry.granularity === 'peak' ? 'month' : entry.granularity);
     if (!groupedMap.has(key)) groupedMap.set(key, { values: [], dates: [] });
     groupedMap.get(key)!.values.push(point.value);
@@ -319,47 +364,26 @@ function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; groupe
 }
 
 function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): Array<{ key: string; factor: number }> {
-  const minSample = entry.minSample;
-  const eligible = grouped.filter((group) => group.values.length >= minSample);
-  if (!eligible.length) return [] as Array<{ key: string; factor: number }>;
+  const eligible = grouped.filter((group) => group.values.length >= entry.minSample);
+  if (!eligible.length) return [];
 
   const baseline = eligible.reduce((best, group) => (group.values.length > best.values.length ? group : best), eligible[0]).key;
 
-  let rawFactors: Record<string, number> = {};
-  if (entry.method === 'mean') {
-    rawFactors = Object.fromEntries(eligible.map((group) => [group.key, mean(group.values)]));
-  } else if (entry.method === 'regression') {
-    rawFactors = regressionFactors(eligible.map((g) => ({ key: g.key, values: g.values })), baseline);
-  } else {
-    rawFactors = Object.fromEntries(eligible.map((group) => [group.key, median(group.values)]));
-  }
+  let raw: Record<string, number> = {};
+  if (entry.method === 'mean') raw = Object.fromEntries(eligible.map((g) => [g.key, mean(g.values)]));
+  else if (entry.method === 'regression') raw = regressionFactors(eligible.map((g) => ({ key: g.key, values: g.values })), baseline);
+  else raw = Object.fromEntries(eligible.map((g) => [g.key, median(g.values)]));
 
   const valuationDate = parseDate(entry.valuationDate);
   const valuationKey = valuationDate ? formatPeriodLabel(valuationDate, entry.granularity === 'peak' ? 'month' : entry.granularity) : eligible[eligible.length - 1].key;
-  const anchor = rawFactors[valuationKey] ?? rawFactors[eligible[eligible.length - 1].key] ?? 1;
-  const normalized = eligible.map((group) => ({ key: group.key, factor: anchor === 0 ? 1 : (rawFactors[group.key] ?? 1) / anchor }));
+  const anchor = raw[valuationKey] ?? raw[eligible[eligible.length - 1].key] ?? 1;
+  const normalized = eligible.map((group) => ({ key: group.key, factor: anchor === 0 ? 1 : (raw[group.key] ?? 1) / anchor }));
 
   if (entry.granularity !== 'peak' || normalized.length <= 2) return normalized;
   const jan = normalized[0];
   const dec = normalized[normalized.length - 1];
   const peak = normalized.reduce((best, curr) => (curr.factor > best.factor ? curr : best), normalized[0]);
   return [jan, peak, dec];
-}
-
-function scheduleTrendRender() {
-  if (pendingTrendTimer) window.clearTimeout(pendingTrendTimer);
-  els.spinner.style.display = 'block';
-  pendingTrendTimer = window.setTimeout(() => {
-    pendingTrendTimer = null;
-    try {
-      renderChart();
-      els.chartMessage.textContent = '';
-    } catch (error) {
-      els.chartMessage.textContent = `Trend error: ${(error as Error).message}`;
-    } finally {
-      els.spinner.style.display = 'none';
-    }
-  }, 600);
 }
 
 function renderChart() {
@@ -371,15 +395,15 @@ function renderChart() {
     els.sampleCount.textContent = '0';
     return;
   }
+
   const { points, grouped } = computeSales(entry);
   els.sampleCount.textContent = String(points.length);
 
-  const xOutlier: string[] = [];
-  const yOutlier: number[] = [];
   const xInlier: string[] = [];
   const yInlier: number[] = [];
-
-  points.forEach((point: SalePoint) => {
+  const xOutlier: string[] = [];
+  const yOutlier: number[] = [];
+  points.forEach((point) => {
     const key = formatPeriodLabel(point.date, entry.granularity === 'peak' ? 'month' : entry.granularity);
     if (point.outlier) {
       xOutlier.push(key);
@@ -396,9 +420,8 @@ function renderChart() {
     type: 'scatter',
     mode: 'markers',
     name: 'Sales',
-    marker: { size: 6, color: '#1f2937' }
+    marker: { size: 5, color: '#1f2937' }
   }];
-
   if (xOutlier.length) {
     traces.push({
       x: xOutlier,
@@ -413,8 +436,8 @@ function renderChart() {
   if (entry.trendVisible) {
     const trend = computeTrend(entry, grouped);
     traces.push({
-      x: trend.map((t) => t.key),
-      y: trend.map((t) => t.factor),
+      x: trend.map((item) => item.key),
+      y: trend.map((item) => item.factor),
       yaxis: 'y2',
       type: 'scatter',
       mode: 'lines+markers',
@@ -424,17 +447,51 @@ function renderChart() {
     });
   }
 
-  const layout: any = {
-    margin: { l: 42, r: 42, t: 20, b: 42 },
-    showlegend: true,
+  const layout = {
+    margin: { l: 40, r: 44, t: 14, b: 40 },
     xaxis: { title: 'Time period' },
     yaxis: { title: 'Sale price' },
     yaxis2: { title: 'Factor', overlaying: 'y', side: 'right', tickformat: '.2f' },
+    showlegend: true,
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(0,0,0,0)'
   };
 
   plotly.react(els.chart, traces, layout, { displayModeBar: false, responsive: true });
+}
+
+function scheduleTrendRender() {
+  if (pendingTrendTimer) window.clearTimeout(pendingTrendTimer);
+  els.spinner.style.display = 'block';
+  pendingTrendTimer = window.setTimeout(() => {
+    pendingTrendTimer = null;
+    try {
+      renderChart();
+      els.chartMessage.textContent = '';
+    } catch (error) {
+      els.chartMessage.textContent = `Trend error: ${(error as Error).message}`;
+    } finally {
+      els.spinner.style.display = 'none';
+    }
+  }, 650);
+}
+
+function bindFilterButton(button: HTMLButtonElement, key: string, label: string, getFilters: () => FilterRule[], getInvert: () => boolean, setFilters: (filters: FilterRule[], invert: boolean) => void) {
+  button.addEventListener('click', () => {
+    setFiltersContext({
+      type: 'landSchedule',
+      getFilters,
+      getFilterInvert: getInvert,
+      setFilters: (filters: FilterRule[], invert: boolean) => {
+        setFilters(filters, invert);
+        updateConditionsButton(button, getFilters());
+        scheduleTrendRender();
+      },
+      label,
+      key,
+    });
+    els.showFiltersPanel();
+  });
 }
 
 function bindEntryDetails() {
@@ -444,21 +501,25 @@ function bindEntryDetails() {
     return;
   }
   ensureDefaults(entry);
+
   els.entryDetails.style.display = 'grid';
   els.entryDetails.innerHTML = `
-    <div class="time-adjustment-entry-head"><strong>Name:</strong> ${entry.name} <button type="button" data-role="delete" class="land-schedule-button" style="padding:2px 6px;">❌</button></div>
-    <label>Start: <input type="date" data-role="start" value="${entry.startDate ?? ''}" /></label>
-    <label>Valuation date: <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" /></label>
-    <label>Date field: <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" /></label>
-    <div class="divider"></div>
-    <div style="display:grid; gap:8px; ${entry.startDate && entry.valuationDate ? '' : 'opacity:.5; pointer-events:none;'}">
-      <div>Sales in sample: <strong id="timeAdjustmentSampleInEntry">0</strong></div>
+    <div class="time-adjustment-label" style="display:flex; align-items:center; justify-content:space-between;">
+      <span><strong>Name:</strong> ${entry.name}</span>
+      <button type="button" data-role="delete" class="land-schedule-button" style="padding:2px 6px;">❌</button>
+    </div>
+    <label>Start <input type="date" data-role="start" value="${entry.startDate ?? ''}" /></label>
+    <label>Valuation date <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" /></label>
+    <label>Date field <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" /></label>
+    <div style="display:grid; gap:6px; ${entry.startDate && entry.valuationDate ? '' : 'opacity:.5; pointer-events:none;'}">
+      <label>Include <button type="button" data-role="include" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button></label>
+      <label>Exclude <button type="button" data-role="exclude" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button></label>
     </div>
   `;
 
   const deleteBtn = els.entryDetails.querySelector('[data-role="delete"]') as HTMLButtonElement;
   deleteBtn.addEventListener('click', () => {
-    lastDeleted = { ...entry };
+    lastDeleted = { ...entry, includeFilters: cloneFilters(entry.includeFilters), excludeFilters: cloneFilters(entry.excludeFilters) };
     S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter((item) => item.id !== entry.id);
     S.currentTimeAdjustmentEntryId = S.timeAdjustmentEntries[0]?.id ?? null;
     render();
@@ -467,19 +528,42 @@ function bindEntryDetails() {
   const startInput = els.entryDetails.querySelector('[data-role="start"]') as HTMLInputElement;
   const valuationInput = els.entryDetails.querySelector('[data-role="valuation"]') as HTMLInputElement;
   const dateFieldInput = els.entryDetails.querySelector('[data-role="dateField"]') as HTMLInputElement;
+  startInput.addEventListener('change', () => { entry.startDate = startInput.value || null; scheduleTrendRender(); });
+  valuationInput.addEventListener('change', () => { entry.valuationDate = valuationInput.value || null; scheduleTrendRender(); });
+  dateFieldInput.addEventListener('change', () => { entry.dateField = dateFieldInput.value || 'sale_date'; scheduleTrendRender(); });
 
-  startInput.addEventListener('change', () => {
-    entry.startDate = startInput.value || null;
-    scheduleTrendRender();
-  });
-  valuationInput.addEventListener('change', () => {
-    entry.valuationDate = valuationInput.value || null;
-    scheduleTrendRender();
-  });
-  dateFieldInput.addEventListener('change', () => {
-    entry.dateField = dateFieldInput.value || 'sale_date';
-    scheduleTrendRender();
-  });
+  const includeBtn = els.entryDetails.querySelector('[data-role="include"]') as HTMLButtonElement;
+  const excludeBtn = els.entryDetails.querySelector('[data-role="exclude"]') as HTMLButtonElement;
+  updateConditionsButton(includeBtn, entry.includeFilters);
+  updateConditionsButton(excludeBtn, entry.excludeFilters);
+  bindFilterButton(
+    includeBtn,
+    `timeAdjustment:entry:${entry.id}:include`,
+    `Time adjustment entry include: ${entry.name}`,
+    () => entry.includeFilters,
+    () => entry.includeFilterInvert,
+    (filters, invert) => {
+      entry.includeFilters = cloneFilters(filters);
+      entry.includeFilterInvert = invert;
+    }
+  );
+  bindFilterButton(
+    excludeBtn,
+    `timeAdjustment:entry:${entry.id}:exclude`,
+    `Time adjustment entry exclude: ${entry.name}`,
+    () => entry.excludeFilters,
+    () => entry.excludeFilterInvert,
+    (filters, invert) => {
+      entry.excludeFilters = cloneFilters(filters);
+      entry.excludeFilterInvert = invert;
+    }
+  );
+}
+
+function parseOptionalNumeric(input: HTMLInputElement): number | null {
+  if (!input.value.trim()) return null;
+  const n = Number(input.value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function exportMainAndDaily(entry: TimeAdjustmentEntry) {
@@ -493,7 +577,6 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   const header = entry.granularity === 'year' ? 'Year' : entry.granularity === 'quarter' ? 'Quarter' : 'Month';
   const rows = trend.map((item) => `${item.key},${item.factor.toFixed(6)}`);
   const csv = `${header},Factor\n${rows.join('\n')}`;
-
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
@@ -501,28 +584,27 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   a.click();
   URL.revokeObjectURL(a.href);
 
-  // Daily interpolation export (not zipped without extra dependency)
   const days: string[] = [];
   const start = parseDate(entry.startDate);
   const end = parseDate(entry.valuationDate);
   if (start && end) {
     const sorted = [...trend].sort((a, b) => a.key.localeCompare(b.key));
-    const dayMs = 24 * 60 * 60 * 1000;
-    for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+    const step = 24 * 60 * 60 * 1000;
+    for (let t = start.getTime(); t <= end.getTime(); t += step) {
       const d = new Date(t);
       const key = formatPeriodLabel(d, entry.granularity === 'peak' ? 'month' : entry.granularity);
-      const exact = sorted.find((item) => item.key === key)?.factor ?? sorted[sorted.length - 1].factor;
-      days.push(`${toDateInput(d)},${exact.toFixed(6)}`);
+      const factor = sorted.find((item) => item.key === key)?.factor ?? sorted[sorted.length - 1].factor;
+      days.push(`${toDateInput(d)},${factor.toFixed(6)}`);
     }
-    const daily = new Blob([`Day,Factor\n${days.join('\n')}`], { type: 'text/csv;charset=utf-8' });
-    const dailyA = document.createElement('a');
-    dailyA.href = URL.createObjectURL(daily);
-    dailyA.download = `${entry.name}_time_adjustment_daily.csv`;
-    dailyA.click();
-    URL.revokeObjectURL(dailyA.href);
   }
+  const dailyBlob = new Blob([`Day,Factor\n${days.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+  const dailyLink = document.createElement('a');
+  dailyLink.href = URL.createObjectURL(dailyBlob);
+  dailyLink.download = `${entry.name}_time_adjustment_daily.csv`;
+  dailyLink.click();
+  URL.revokeObjectURL(dailyLink.href);
 
-  window.alert('CSV files were exported separately. Zip packaging and Excel workbook export require adding a dedicated library.');
+  window.alert('CSV files exported. Zip packaging / Excel workbook export still needs a dedicated library.');
 }
 
 function render() {
@@ -534,6 +616,7 @@ function render() {
   if (entry) {
     ensureDefaults(entry);
     els.displaySelect.value = entry.displayMode;
+    els.groupBySelect.value = entry.groupByField ?? '';
     els.granularitySelect.value = entry.granularity;
     els.methodSelect.value = entry.method;
     els.minSampleInput.value = String(entry.minSample);
@@ -549,20 +632,41 @@ function render() {
   scheduleTrendRender();
 }
 
-function parseOptionalNumeric(input: HTMLInputElement): number | null {
-  if (!input.value.trim()) return null;
-  const n = Number(input.value);
-  return Number.isFinite(n) ? n : null;
+function toggleSection(button: HTMLButtonElement, body: HTMLDivElement) {
+  const collapsed = body.classList.toggle('is-hidden');
+  button.classList.toggle('is-collapsed', collapsed);
+  const label = button.textContent?.replace(/[▶▼]/g, '').trim() ?? '';
+  button.textContent = `${collapsed ? '▶' : '▼'} ${label}`;
 }
 
 export function initTimeAdjustmentElements(elements: Elements) {
   els = elements;
 
-  els.entriesToggle.addEventListener('click', () => {
-    const collapsed = els.entriesBody.style.display === 'none';
-    els.entriesBody.style.display = collapsed ? 'grid' : 'none';
-    els.entriesToggle.textContent = collapsed ? '▼ Time Adjustments' : '▶ Time Adjustments';
-  });
+  bindFilterButton(
+    els.improvedFilterButton,
+    'timeAdjustment:settings:improved',
+    'Time adjustment settings: improved filter',
+    () => S.timeAdjustmentSettings.improvedFilters,
+    () => S.timeAdjustmentSettings.improvedFilterInvert,
+    (filters, invert) => {
+      S.timeAdjustmentSettings.improvedFilters = cloneFilters(filters);
+      S.timeAdjustmentSettings.improvedFilterInvert = invert;
+    }
+  );
+  bindFilterButton(
+    els.vacantFilterButton,
+    'timeAdjustment:settings:vacant',
+    'Time adjustment settings: vacant filter',
+    () => S.timeAdjustmentSettings.vacantFilters,
+    () => S.timeAdjustmentSettings.vacantFilterInvert,
+    (filters, invert) => {
+      S.timeAdjustmentSettings.vacantFilters = cloneFilters(filters);
+      S.timeAdjustmentSettings.vacantFilterInvert = invert;
+    }
+  );
+
+  els.entriesToggle.addEventListener('click', () => toggleSection(els.entriesToggle, els.entriesBody));
+  els.dataToggle.addEventListener('click', () => toggleSection(els.dataToggle, els.dataBody));
 
   els.addEntryButton.addEventListener('click', () => {
     const name = els.entryNameInput.value.trim();
@@ -584,6 +688,10 @@ export function initTimeAdjustmentElements(elements: Elements) {
       outlierSizeHigh: null,
       outlierRatioLow: null,
       outlierRatioHigh: null,
+      includeFilters: [],
+      includeFilterInvert: false,
+      excludeFilters: [],
+      excludeFilterInvert: false,
       trendVisible: false,
     };
     S.timeAdjustmentEntries.push(entry);
@@ -609,14 +717,6 @@ export function initTimeAdjustmentElements(elements: Elements) {
     S.timeAdjustmentSettings.salePriceField = els.salePriceField.value;
     scheduleTrendRender();
   });
-  els.improvedFilterField.addEventListener('change', () => {
-    S.timeAdjustmentSettings.improvedFilterField = els.improvedFilterField.value;
-    scheduleTrendRender();
-  });
-  els.vacantFilterField.addEventListener('change', () => {
-    S.timeAdjustmentSettings.vacantFilterField = els.vacantFilterField.value;
-    scheduleTrendRender();
-  });
   els.improvedSizeField.addEventListener('change', () => {
     S.timeAdjustmentSettings.improvedSizeField = els.improvedSizeField.value;
     scheduleTrendRender();
@@ -626,25 +726,17 @@ export function initTimeAdjustmentElements(elements: Elements) {
     scheduleTrendRender();
   });
 
-  const bindEntrySetting = (fn: (entry: TimeAdjustmentEntry) => void) => {
+  const bindEntrySetting = (setter: (entry: TimeAdjustmentEntry) => void) => {
     const entry = currentEntry();
     if (!entry) return;
-    fn(entry);
+    setter(entry);
     scheduleTrendRender();
   };
 
-  els.displaySelect.addEventListener('change', () => bindEntrySetting((entry) => {
-    entry.displayMode = els.displaySelect.value as TimeAdjustmentDisplayMode;
-  }));
-  els.groupBySelect.addEventListener('change', () => bindEntrySetting((entry) => {
-    entry.groupByField = els.groupBySelect.value || null;
-  }));
-  els.granularitySelect.addEventListener('change', () => bindEntrySetting((entry) => {
-    entry.granularity = els.granularitySelect.value as TimeAdjustmentGranularity;
-  }));
-  els.methodSelect.addEventListener('change', () => bindEntrySetting((entry) => {
-    entry.method = els.methodSelect.value as TimeAdjustmentMethod;
-  }));
+  els.displaySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.displayMode = els.displaySelect.value as TimeAdjustmentDisplayMode; }));
+  els.groupBySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.groupByField = els.groupBySelect.value || null; }));
+  els.granularitySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.granularity = els.granularitySelect.value as TimeAdjustmentGranularity; }));
+  els.methodSelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.method = els.methodSelect.value as TimeAdjustmentMethod; }));
   els.minSampleInput.addEventListener('change', () => bindEntrySetting((entry) => {
     const value = Number(els.minSampleInput.value);
     entry.minSample = Number.isFinite(value) ? Math.max(1, Math.floor(value)) : 5;

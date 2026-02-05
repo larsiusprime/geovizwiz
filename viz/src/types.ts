@@ -110,14 +110,20 @@ export type TimeAdjustmentEntry = {
   outlierSizeHigh: number | null;
   outlierRatioLow: number | null;
   outlierRatioHigh: number | null;
+  includeFilters: FilterRule[];
+  includeFilterInvert: boolean;
+  excludeFilters: FilterRule[];
+  excludeFilterInvert: boolean;
   trendVisible: boolean;
 };
 
 export type TimeAdjustmentSettings = {
   salePriceField: string;
-  improvedFilterField: string;
+  improvedFilters: FilterRule[];
+  improvedFilterInvert: boolean;
   improvedSizeField: string;
-  vacantFilterField: string;
+  vacantFilters: FilterRule[];
+  vacantFilterInvert: boolean;
   landSizeField: string;
 };
 

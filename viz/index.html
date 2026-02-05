@@ -31,17 +31,17 @@
       position: relative;
       overflow-y: auto;
       overflow-x: hidden;
-      --pinned-gutter: 8px;
+      --pinned-gutter: 16px;
       padding-right: var(--pinned-gutter);
       background: #f3f4f6;
     }
 
     .pinned-column-resize-handle {
       position: absolute;
-      right: -4px;
+      right: -8px;
       top: 0;
       bottom: 0;
-      width: 8px;
+      width: 16px;
       cursor: ew-resize;
       z-index: 2;
     }
@@ -934,6 +934,40 @@
       cursor: not-allowed;
     }
 
+    .time-adjustment-content {
+      font-size: 12px;
+    }
+
+    .time-adjustment-content label,
+    .time-adjustment-content .time-adjustment-label {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+      color: #333;
+    }
+
+    .time-adjustment-content select,
+    .time-adjustment-content input {
+      font-size: 12px;
+    }
+
+    .time-adjustment-collapse-body.is-hidden {
+      display: none !important;
+    }
+
+    .time-adjustment-conditions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      width: fit-content;
+    }
+
+    .time-adjustment-conditions img {
+      width: 14px;
+      height: 14px;
+      display: block;
+    }
+
     .land-table-card {
       border: 1px solid #e1e1e1;
       border-radius: 10px;
@@ -1809,7 +1843,7 @@
     </div>
   </div>
 
-  <div id="timeAdjustmentControls" class="viz-window" style="position: absolute; top: 10px; left: 1380px; width: min(calc(92vw - 80px), 460px); min-width: 420px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="timeAdjustmentControls" class="viz-window" style="position: absolute; top: 10px; left: 1380px; width: min(calc(92vw - 80px), 560px); min-width: 540px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Time Adjustment</div>
       <div class="window-actions">
@@ -1821,16 +1855,16 @@
         </button>
       </div>
     </div>
-    <div id="timeAdjustmentContent" data-window-content style="padding: 12px; display: grid; gap: 10px;">
+    <div id="timeAdjustmentContent" data-window-content class="time-adjustment-content" style="padding: 12px; display: grid; gap: 10px;">
       <div style="font-weight: 600; font-size: 12px;">Settings</div>
       <label>Sale price field <select id="timeAdjustmentSalePriceField"><option value="" disabled selected>sale price</option></select></label>
-      <label>Improved filter <select id="timeAdjustmentImprovedFilter"><option value="" disabled selected>conditions</option></select></label>
+      <label>Improved filter <button id="timeAdjustmentImprovedFilter" type="button" class="land-table-filter time-adjustment-conditions"><img src="./src/svg/filters.svg" alt="Filters" /> conditions</button></label>
       <label>Improved size <select id="timeAdjustmentImprovedSize"><option value="" disabled selected>bldg sqft</option></select></label>
-      <label>Vacant filter <select id="timeAdjustmentVacantFilter"><option value="" disabled selected>conditions</option></select></label>
+      <label>Vacant filter <button id="timeAdjustmentVacantFilter" type="button" class="land-table-filter time-adjustment-conditions"><img src="./src/svg/filters.svg" alt="Filters" /> conditions</button></label>
       <label>Land size <select id="timeAdjustmentLandSize"><option value="" disabled selected>land sqft</option></select></label>
       <div class="divider"></div>
-      <button id="timeAdjustmentEntriesToggle" type="button" class="land-schedule-collapse-toggle" style="justify-self:start;">▼ Time Adjustments</button>
-      <div id="timeAdjustmentEntriesBody" style="display:grid; gap:8px;">
+      <button id="timeAdjustmentEntriesToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" style="justify-self:start;">▶ Time Adjustments</button>
+      <div id="timeAdjustmentEntriesBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:8px;">
         <div style="display:grid; grid-template-columns: 1fr auto auto; gap:6px; align-items:center;">
           <input id="timeAdjustmentEntryName" type="text" placeholder="enter name" />
           <button id="timeAdjustmentAddEntry" type="button" class="land-schedule-button">+</button>
@@ -1853,7 +1887,8 @@
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:6px;"><label>Price/Size low <input id="timeAdjustmentRatioLow" type="number" /></label><label>Price/Size high <input id="timeAdjustmentRatioHigh" type="number" /></label></div>
       </div>
       <div class="divider"></div>
-      <div style="display:grid; gap:6px;">
+      <button id="timeAdjustmentDataToggle" type="button" class="land-schedule-collapse-toggle is-collapsed" style="justify-self:start;">▶ Data / Trend</button>
+      <div id="timeAdjustmentDataBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
         <div style="display:flex; gap:6px; align-items:center;">
           <button id="timeAdjustmentPlotTrend" type="button" class="land-schedule-button">Plot trend</button>
           <div id="timeAdjustmentSpinner" class="muted" style="display:none;">Calculating…</div>

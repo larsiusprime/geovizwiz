@@ -133,9 +133,11 @@ export const S = {
   currentTimeAdjustmentEntryId: null as string | null,
   timeAdjustmentSettings: {
     salePriceField: '',
-    improvedFilterField: '',
+    improvedFilters: [],
+    improvedFilterInvert: false,
     improvedSizeField: '',
-    vacantFilterField: '',
+    vacantFilters: [],
+    vacantFilterInvert: false,
     landSizeField: '',
   } as TimeAdjustmentSettings,
 

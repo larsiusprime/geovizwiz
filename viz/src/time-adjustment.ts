@@ -558,14 +558,6 @@ function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): 
     return [{ date, value: ratio ?? rawPrice, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
   });
 
-  // DEBUG: Check outlier detection on first few points
-  if (points.length > 0) {
-    const sample = points.slice(0, 3);
-    sample.forEach((p, i) => {
-      console.log(`OUTLIER CHECK #${i}:`, { value: p.value, rawPrice: p.rawPrice, rawSize: p.rawSize, outlier: p.outlier, outlierRatioHigh: entry.outlierRatioHigh });
-    });
-  }
-
   // Only include non-outlier points in grouped values for trend calculation
   const groupedMap = new Map<string, { values: number[]; dates: Date[] }>();
   points.forEach((point) => {
@@ -588,10 +580,6 @@ type TrendResult = {
 
 function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): TrendResult {
   const eligible = grouped.filter((group) => group.values.length >= entry.minSample);
-  console.log('computeTrend: grouped.length=', grouped.length, 'minSample=', entry.minSample, 'eligible.length=', eligible.length);
-  if (grouped.length > 0) {
-    console.log('computeTrend: first group sample:', { key: grouped[0].key, count: grouped[0].values.length, values: grouped[0].values.slice(0, 3) });
-  }
   if (!eligible.length) return { items: [], anchor: 1 };
 
   const baseline = eligible.reduce((best, group) => (group.values.length > best.values.length ? group : best), eligible[0]).key;
@@ -736,16 +724,6 @@ function renderChart() {
   // Compute trend once for reuse
   const trendResult = entry.trendVisible ? computeTrend(entry, grouped) : { items: [], anchor: 1 };
   const trendItems = trendResult.items;
-
-  // DEBUG: Investigate why trend is at y=0
-  console.log('=== TREND DEBUG ===');
-  console.log('chartMode:', chartMode);
-  console.log('entry.outlierRatioHigh:', entry.outlierRatioHigh);
-  console.log('points total:', points.length);
-  console.log('inliers:', xInlier.length, 'outliers:', xOutlier.length);
-  console.log('yInlier range:', yInlier.length > 0 ? [Math.min(...yInlier), Math.max(...yInlier)] : 'empty');
-  console.log('yOutlier range:', yOutlier.length > 0 ? [Math.min(...yOutlier), Math.max(...yOutlier)] : 'empty');
-  console.log('trendItems sample:', trendItems.slice(0, 3).map(t => ({ key: t.key, rawValue: t.rawValue })));
 
   if (entry.trendVisible && trendItems.length > 0) {
     // Plot raw values on primary Y-axis (same scale as sales)
@@ -990,7 +968,7 @@ function render() {
     els.trendToggleButton.textContent = entry.trendVisible ? 'Hide trend' : 'Plot trend';
   }
 
-  const sizeLabel = entry?.displayMode === 'vacant' ? 'Land size' : 'Improved size';
+  const sizeLabel = chartMode === 'vacant' ? 'Land size' : 'Improved size';
   els.sizeHeader.textContent = sizeLabel;
   els.ratioHeader.textContent = `Price/${sizeLabel}`;
 
@@ -1105,7 +1083,11 @@ export function initTimeAdjustmentElements(elements: Elements) {
     scheduleTrendRender();
   };
 
-  els.groupBySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.groupByField = els.groupBySelect.value || null; }));
+  els.groupBySelect.addEventListener('change', () => bindEntrySetting((entry) => {
+    entry.groupByField = els.groupBySelect.value || null;
+    // Update chart group value dropdown when group by field changes
+    populateChartGroupSelect(entry.groupByField);
+  }));
   els.granularitySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.granularity = els.granularitySelect.value as TimeAdjustmentGranularity; }));
   els.methodSelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.method = els.methodSelect.value as TimeAdjustmentMethod; }));
   els.minSampleInput.addEventListener('change', () => bindEntrySetting((entry) => {
@@ -1134,6 +1116,10 @@ export function initTimeAdjustmentElements(elements: Elements) {
 
   els.chartModeSelect.addEventListener('change', () => {
     chartMode = els.chartModeSelect.value as 'improved' | 'vacant';
+    // Update outlier table headers to match current chart mode
+    const sizeLabel = chartMode === 'vacant' ? 'Land size' : 'Improved size';
+    els.sizeHeader.textContent = sizeLabel;
+    els.ratioHeader.textContent = `Price/${sizeLabel}`;
     scheduleTrendRender();
   });
 

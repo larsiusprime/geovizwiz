@@ -120,10 +120,30 @@ function safeNum(value: unknown): number | null {
 }
 
 function parseDate(value: unknown): Date | null {
-  if (typeof value !== 'string' || !value) return null;
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return null;
-  return date;
+  // Handle Date objects (already parsed by GeoParquet)
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  // Handle numeric timestamps (milliseconds since epoch)
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    const date = new Date(value);
+    if (!Number.isNaN(date.getTime())) return date;
+    return null;
+  }
+  // Handle string dates
+  if (typeof value === 'string' && value.trim()) {
+    // Try ISO format first (e.g., "2024-01-01")
+    const date = new Date(`${value}T00:00:00`);
+    if (!Number.isNaN(date.getTime())) return date;
+    // Try parsing as numeric string (timestamp stored as string)
+    const n = Number(value);
+    if (Number.isFinite(n)) {
+      const numDate = new Date(n);
+      if (!Number.isNaN(numDate.getTime())) return numDate;
+    }
+    return null;
+  }
+  return null;
 }
 
 function toDateInput(date: Date): string {
@@ -131,6 +151,47 @@ function toDateInput(date: Date): string {
   const m = String(date.getMonth() + 1).padStart(2, '0');
   const d = String(date.getDate()).padStart(2, '0');
   return `${y}-${m}-${d}`;
+}
+
+function findDateRange(dateField: string): { min: Date | null; max: Date | null } {
+  if (!S.currentGeoJSON?.features?.length) return { min: null, max: null };
+
+  // DEBUG: Sample first 5 raw values to see what we're working with
+  const sampleValues = S.currentGeoJSON.features.slice(0, 5).map((f: GeoJSON.Feature) => {
+    const props = (f.properties ?? {}) as Record<string, any>;
+    const raw = props[dateField];
+    return { raw, type: typeof raw, parsed: parseDate(raw) };
+  });
+  console.log('[TimeAdjust] findDateRange samples:', { dateField, sampleValues });
+
+  let min: Date | null = null;
+  let max: Date | null = null;
+
+  for (const feature of S.currentGeoJSON.features) {
+    const props = (feature as GeoJSON.Feature).properties ?? {};
+    const date = parseDate(props[dateField]);
+    if (!date) continue;
+    if (!min || date < min) min = date;
+    if (!max || date > max) max = date;
+  }
+
+  return { min, max };
+}
+
+function prefillEntryDates(entry: TimeAdjustmentEntry) {
+  if (entry.startDate && entry.valuationDate) return; // Already has dates
+
+  const dateField = entry.dateField || 'sale_date';
+  const { min, max } = findDateRange(dateField);
+
+  console.log('[TimeAdjust] Date range found:', { dateField, min, max });
+
+  if (min && !entry.startDate) {
+    entry.startDate = toDateInput(min);
+  }
+  if (max && !entry.valuationDate) {
+    entry.valuationDate = toDateInput(max);
+  }
 }
 
 function formatPeriodLabel(date: Date, granularity: TimeAdjustmentGranularity): string {
@@ -209,9 +270,9 @@ function matchesRule(props: Record<string, any>, filter: FilterRule): boolean {
   return true;
 }
 
-function matchesFilters(props: Record<string, any>, filters: FilterRule[], invert: boolean): boolean {
+function matchesFilters(props: Record<string, any>, filters: FilterRule[], invert: boolean, default_if_empty: boolean): boolean {
   const active = filters.filter((filter) => filter.active);
-  if (!active.length) return !invert;
+  if (!active.length) return default_if_empty;  // No filters = return default
   const hit = active.every((filter) => matchesRule(props, filter));
   return invert ? !hit : hit;
 }
@@ -403,29 +464,84 @@ function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; groupe
   ensureDefaults(entry);
   const start = parseDate(entry.startDate);
   const valuation = parseDate(entry.valuationDate);
-  if (!start || !valuation || !S.currentGeoJSON) return { points: [], grouped: [] };
+
+  // DEBUG: Log the date parsing for start/valuation
+  console.log('[TimeAdjust] Date parsing:', {
+    entryStartDate: entry.startDate,
+    entryValuationDate: entry.valuationDate,
+    parsedStart: start,
+    parsedValuation: valuation,
+    startTime: start?.getTime(),
+    valuationTime: valuation?.getTime(),
+  });
+
+  if (!start || !valuation || !S.currentGeoJSON) {
+    console.log('[TimeAdjust] Early exit:', { hasStart: !!start, hasValuation: !!valuation, hasGeoJSON: !!S.currentGeoJSON });
+    return { points: [], grouped: [] };
+  }
 
   const dateField = entry.dateField || 'sale_date';
   const priceField = S.timeAdjustmentSettings.salePriceField;
   const improvedSizeField = S.timeAdjustmentSettings.improvedSizeField;
   const landSizeField = S.timeAdjustmentSettings.landSizeField;
 
+  // DEBUG: Sample first 3 features to see what the date field contains
+  const sampleFeatures = S.currentGeoJSON.features.slice(0, 3);
+  console.log('[TimeAdjust] Sample date values from first 3 features:', sampleFeatures.map((f: GeoJSON.Feature) => {
+    const props = (f.properties ?? {}) as Record<string, any>;
+    const rawValue = props[dateField];
+    const parsed = parseDate(rawValue);
+    return {
+      rawValue,
+      rawType: typeof rawValue,
+      parsed,
+      parsedTime: parsed?.getTime(),
+      inRange: parsed ? (parsed >= start && parsed <= valuation) : false,
+    };
+  }));
+
+  // Diagnostic counters
+  let totalFeatures = 0;
+  let hadDateField = 0;
+  let parsedOk = 0;
+  let inRange = 0;
+  let passedPrice = 0;
+  let passedModeFilter = 0;
+  let passedIncludeExclude = 0;
+
+  // Log filter config
+  console.log('[TimeAdjust] Filter config:', {
+    displayMode: entry.displayMode,
+    improvedFilters: S.timeAdjustmentSettings.improvedFilters,
+    improvedFilterInvert: S.timeAdjustmentSettings.improvedFilterInvert,
+    vacantFilters: S.timeAdjustmentSettings.vacantFilters,
+    vacantFilterInvert: S.timeAdjustmentSettings.vacantFilterInvert,
+  });
+
   const points: SalePoint[] = S.currentGeoJSON.features.flatMap((feature: GeoJSON.Feature) => {
+    totalFeatures++;
     const props = (feature.properties ?? {}) as Record<string, any>;
-    const date = parseDate(props[dateField]);
+    const rawDateValue = props[dateField];
+    if (rawDateValue !== undefined && rawDateValue !== null) hadDateField++;
+    const date = parseDate(rawDateValue);
+    if (date) parsedOk++;
     if (!date || date < start || date > valuation) return [];
+    inRange++;
 
     const rawPrice = safeNum(props[priceField]);
     if (rawPrice === null) return [];
+    passedPrice++;
 
-    const improved = matchesFilters(props, S.timeAdjustmentSettings.improvedFilters, S.timeAdjustmentSettings.improvedFilterInvert);
-    const vacant = matchesFilters(props, S.timeAdjustmentSettings.vacantFilters, S.timeAdjustmentSettings.vacantFilterInvert);
+    const improved = matchesFilters(props, S.timeAdjustmentSettings.improvedFilters, S.timeAdjustmentSettings.improvedFilterInvert, true);
+    const vacant = matchesFilters(props, S.timeAdjustmentSettings.vacantFilters, S.timeAdjustmentSettings.vacantFilterInvert, true);
     const modeMatch = entry.displayMode === 'vacant' ? vacant : improved;
     if (!modeMatch) return [];
-
-    const includeMatch = matchesFilters(props, entry.includeFilters, entry.includeFilterInvert);
-    const excludeMatch = matchesFilters(props, entry.excludeFilters, entry.excludeFilterInvert);
+    passedModeFilter++;
+    
+    const includeMatch = matchesFilters(props, entry.includeFilters, entry.includeFilterInvert, true);
+    const excludeMatch = matchesFilters(props, entry.excludeFilters, entry.excludeFilterInvert, false);
     if (!includeMatch || excludeMatch) return [];
+    passedIncludeExclude++;
 
     const sizeRaw = entry.displayMode === 'vacant' ? safeNum(props[landSizeField]) : safeNum(props[improvedSizeField]);
     const sizeForRatio = sizeRaw ?? 1;
@@ -439,6 +555,18 @@ function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; groupe
       || (entry.outlierRatioHigh != null && ratio > entry.outlierRatioHigh));
 
     return [{ date, value: ratio ?? rawPrice, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
+  });
+
+  // DEBUG: Summary of filtering
+  console.log('[TimeAdjust] Filter summary:', {
+    totalFeatures,
+    hadDateField,
+    parsedOk,
+    inRange,
+    passedPrice,
+    passedModeFilter,
+    passedIncludeExclude,
+    finalCount: points.length,
   });
 
   const groupedMap = new Map<string, { values: number[]; dates: Date[] }>();
@@ -620,6 +748,9 @@ function bindEntryDetails() {
     return;
   }
   ensureDefaults(entry);
+
+  // Prefill dates from data if not already set
+  prefillEntryDates(entry);
 
   // Update static delete button visibility
   els.deleteEntryButton.style.display = entry.isDefault ? 'none' : 'inline-flex';

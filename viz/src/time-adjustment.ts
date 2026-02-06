@@ -550,14 +550,26 @@ function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): 
       || (entry.outlierPriceHigh != null && rawPrice > entry.outlierPriceHigh);
     const outlierSize = (sizeRaw !== null) && ((entry.outlierSizeLow != null && sizeRaw < entry.outlierSizeLow)
       || (entry.outlierSizeHigh != null && sizeRaw > entry.outlierSizeHigh));
-    const outlierRatio = (ratio !== null) && ((entry.outlierRatioLow != null && ratio < entry.outlierRatioLow)
-      || (entry.outlierRatioHigh != null && ratio > entry.outlierRatioHigh));
+    // Check the actual value being plotted (ratio if available, otherwise rawPrice)
+    const valueToPlot = ratio ?? rawPrice;
+    const outlierRatio = (entry.outlierRatioLow != null && valueToPlot < entry.outlierRatioLow)
+      || (entry.outlierRatioHigh != null && valueToPlot > entry.outlierRatioHigh);
 
     return [{ date, value: ratio ?? rawPrice, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
   });
 
+  // DEBUG: Check outlier detection on first few points
+  if (points.length > 0) {
+    const sample = points.slice(0, 3);
+    sample.forEach((p, i) => {
+      console.log(`OUTLIER CHECK #${i}:`, { value: p.value, rawPrice: p.rawPrice, rawSize: p.rawSize, outlier: p.outlier, outlierRatioHigh: entry.outlierRatioHigh });
+    });
+  }
+
+  // Only include non-outlier points in grouped values for trend calculation
   const groupedMap = new Map<string, { values: number[]; dates: Date[] }>();
   points.forEach((point) => {
+    if (point.outlier) return; // Skip outliers for trend calculation
     const key = formatPeriodLabel(point.date, entry.granularity === 'peak' ? 'month' : entry.granularity);
     if (!groupedMap.has(key)) groupedMap.set(key, { values: [], dates: [] });
     groupedMap.get(key)!.values.push(point.value);

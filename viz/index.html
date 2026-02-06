@@ -2000,8 +2000,10 @@
           <div class="land-schedule-subtitle">Data / Trend</div>
         </div>
         <div id="timeAdjustmentDataBody" class="time-adjustment-collapse-body is-hidden" style="display:grid; gap:6px;">
-          <div style="display:flex; gap:6px; align-items:center;">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
             <button id="timeAdjustmentPlotTrend" type="button" class="land-schedule-button">Plot trend</button>
+            <select id="timeAdjustmentChartMode" style="min-width:80px;"><option value="improved" selected>improved</option><option value="vacant">vacant</option></select>
+            <select id="timeAdjustmentChartGroup" style="min-width:80px;"><option value="" selected>(All)</option></select>
             <div id="timeAdjustmentSpinner" class="muted" style="display:none;">Calculating…</div>
           </div>
           <div id="timeAdjustmentChartMessage" class="muted"></div>

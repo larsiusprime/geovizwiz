@@ -586,7 +586,7 @@ const setTimeAdjustmentEntriesCollapsed = (collapsed: boolean) => {
 
 const setTimeAdjustmentOutliersCollapsed = (collapsed: boolean) => {
   S.isTimeAdjustmentOutliersCollapsed = collapsed;
-  timeAdjustmentOutliersBody.style.display = collapsed ? 'none' : 'grid';
+  timeAdjustmentOutliersBody.classList.toggle('is-hidden', collapsed);
   timeAdjustmentOutliersToggle.classList.toggle('is-collapsed', collapsed);
   timeAdjustmentOutliersToggle.title = collapsed ? 'Expand outliers' : 'Collapse outliers';
   refreshWindowMinHeight(timeAdjustmentControlsEl);
@@ -594,7 +594,7 @@ const setTimeAdjustmentOutliersCollapsed = (collapsed: boolean) => {
 
 const setTimeAdjustmentDataCollapsed = (collapsed: boolean) => {
   S.isTimeAdjustmentDataCollapsed = collapsed;
-  timeAdjustmentDataBody.style.display = collapsed ? 'none' : 'grid';
+  timeAdjustmentDataBody.classList.toggle('is-hidden', collapsed);
   timeAdjustmentDataToggle.classList.toggle('is-collapsed', collapsed);
   timeAdjustmentDataToggle.title = collapsed ? 'Expand Data / Trend' : 'Collapse Data / Trend';
   refreshWindowMinHeight(timeAdjustmentControlsEl);
@@ -1032,6 +1032,8 @@ initTimeAdjustmentElements({
   ratioLowInput: document.getElementById('timeAdjustmentRatioLow') as HTMLInputElement,
   ratioHighInput: document.getElementById('timeAdjustmentRatioHigh') as HTMLInputElement,
   trendToggleButton: document.getElementById('timeAdjustmentPlotTrend') as HTMLButtonElement,
+  chartModeSelect: document.getElementById('timeAdjustmentChartMode') as HTMLSelectElement,
+  chartGroupSelect: document.getElementById('timeAdjustmentChartGroup') as HTMLSelectElement,
   exportCsvButton: document.getElementById('timeAdjustmentExportCsv') as HTMLButtonElement,
   exportExcelButton: document.getElementById('timeAdjustmentExportExcel') as HTMLButtonElement,
   chart: document.getElementById('timeAdjustmentChart') as HTMLDivElement,

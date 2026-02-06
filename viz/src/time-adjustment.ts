@@ -45,6 +45,8 @@ type Elements = {
   ratioLowInput: HTMLInputElement;
   ratioHighInput: HTMLInputElement;
   trendToggleButton: HTMLButtonElement;
+  chartModeSelect: HTMLSelectElement;
+  chartGroupSelect: HTMLSelectElement;
   exportCsvButton: HTMLButtonElement;
   exportExcelButton: HTMLButtonElement;
   chart: HTMLDivElement;
@@ -67,6 +69,8 @@ type GroupedPoints = Array<{ key: string; values: number[]; dates: Date[] }>;
 let els: Elements;
 let pendingTrendTimer: number | null = null;
 let lastDeleted: TimeAdjustmentEntry | null = null;
+let chartMode: 'improved' | 'vacant' = 'improved';
+let chartGroupValue: string = ''; // empty string means "(All)"
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -156,14 +160,6 @@ function toDateInput(date: Date): string {
 function findDateRange(dateField: string): { min: Date | null; max: Date | null } {
   if (!S.currentGeoJSON?.features?.length) return { min: null, max: null };
 
-  // DEBUG: Sample first 5 raw values to see what we're working with
-  const sampleValues = S.currentGeoJSON.features.slice(0, 5).map((f: GeoJSON.Feature) => {
-    const props = (f.properties ?? {}) as Record<string, any>;
-    const raw = props[dateField];
-    return { raw, type: typeof raw, parsed: parseDate(raw) };
-  });
-  console.log('[TimeAdjust] findDateRange samples:', { dateField, sampleValues });
-
   let min: Date | null = null;
   let max: Date | null = null;
 
@@ -183,8 +179,6 @@ function prefillEntryDates(entry: TimeAdjustmentEntry) {
 
   const dateField = entry.dateField || 'sale_date';
   const { min, max } = findDateRange(dateField);
-
-  console.log('[TimeAdjust] Date range found:', { dateField, min, max });
 
   if (min && !entry.startDate) {
     entry.startDate = toDateInput(min);
@@ -275,6 +269,45 @@ function matchesFilters(props: Record<string, any>, filters: FilterRule[], inver
   if (!active.length) return default_if_empty;  // No filters = return default
   const hit = active.every((filter) => matchesRule(props, filter));
   return invert ? !hit : hit;
+}
+
+function getUniqueGroupValues(groupByField: string | null): string[] {
+  if (!groupByField || !S.currentGeoJSON?.features?.length) return [];
+  const values = new Set<string>();
+  for (const feature of S.currentGeoJSON.features) {
+    const props = (feature as GeoJSON.Feature).properties ?? {};
+    const val = props[groupByField];
+    if (val != null && val !== '') {
+      values.add(String(val));
+    }
+  }
+  return Array.from(values).sort();
+}
+
+function populateChartGroupSelect(groupByField: string | null) {
+  const previous = els.chartGroupSelect.value;
+  els.chartGroupSelect.replaceChildren();
+
+  const allOption = document.createElement('option');
+  allOption.value = '';
+  allOption.textContent = '(All)';
+  els.chartGroupSelect.append(allOption);
+
+  const uniqueValues = getUniqueGroupValues(groupByField);
+  for (const val of uniqueValues) {
+    const opt = document.createElement('option');
+    opt.value = val;
+    opt.textContent = val;
+    els.chartGroupSelect.append(opt);
+  }
+
+  // Restore previous selection if still valid
+  if (previous && uniqueValues.includes(previous)) {
+    els.chartGroupSelect.value = previous;
+  } else {
+    els.chartGroupSelect.value = '';
+    chartGroupValue = '';
+  }
 }
 
 function populateSelect(select: HTMLSelectElement, fields: string[], placeholder: string, includeNone = false) {
@@ -460,23 +493,18 @@ function regressionFactors(grouped: Array<{ key: string; values: number[] }>, ba
   return out;
 }
 
-function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; grouped: GroupedPoints } {
+type ChartFilters = {
+  mode: 'improved' | 'vacant';
+  groupField: string | null;
+  groupValue: string; // empty = all
+};
+
+function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): { points: SalePoint[]; grouped: GroupedPoints } {
   ensureDefaults(entry);
   const start = parseDate(entry.startDate);
   const valuation = parseDate(entry.valuationDate);
 
-  // DEBUG: Log the date parsing for start/valuation
-  console.log('[TimeAdjust] Date parsing:', {
-    entryStartDate: entry.startDate,
-    entryValuationDate: entry.valuationDate,
-    parsedStart: start,
-    parsedValuation: valuation,
-    startTime: start?.getTime(),
-    valuationTime: valuation?.getTime(),
-  });
-
   if (!start || !valuation || !S.currentGeoJSON) {
-    console.log('[TimeAdjust] Early exit:', { hasStart: !!start, hasValuation: !!valuation, hasGeoJSON: !!S.currentGeoJSON });
     return { points: [], grouped: [] };
   }
 
@@ -485,65 +513,35 @@ function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; groupe
   const improvedSizeField = S.timeAdjustmentSettings.improvedSizeField;
   const landSizeField = S.timeAdjustmentSettings.landSizeField;
 
-  // DEBUG: Sample first 3 features to see what the date field contains
-  const sampleFeatures = S.currentGeoJSON.features.slice(0, 3);
-  console.log('[TimeAdjust] Sample date values from first 3 features:', sampleFeatures.map((f: GeoJSON.Feature) => {
-    const props = (f.properties ?? {}) as Record<string, any>;
-    const rawValue = props[dateField];
-    const parsed = parseDate(rawValue);
-    return {
-      rawValue,
-      rawType: typeof rawValue,
-      parsed,
-      parsedTime: parsed?.getTime(),
-      inRange: parsed ? (parsed >= start && parsed <= valuation) : false,
-    };
-  }));
-
-  // Diagnostic counters
-  let totalFeatures = 0;
-  let hadDateField = 0;
-  let parsedOk = 0;
-  let inRange = 0;
-  let passedPrice = 0;
-  let passedModeFilter = 0;
-  let passedIncludeExclude = 0;
-
-  // Log filter config
-  console.log('[TimeAdjust] Filter config:', {
-    displayMode: entry.displayMode,
-    improvedFilters: S.timeAdjustmentSettings.improvedFilters,
-    improvedFilterInvert: S.timeAdjustmentSettings.improvedFilterInvert,
-    vacantFilters: S.timeAdjustmentSettings.vacantFilters,
-    vacantFilterInvert: S.timeAdjustmentSettings.vacantFilterInvert,
-  });
+  // Use chart-specific filters if provided, otherwise use entry defaults
+  const effectiveMode = chartFilters?.mode ?? entry.displayMode;
+  const groupField = chartFilters?.groupField ?? entry.groupByField;
+  const groupValue = chartFilters?.groupValue ?? '';
 
   const points: SalePoint[] = S.currentGeoJSON.features.flatMap((feature: GeoJSON.Feature) => {
-    totalFeatures++;
     const props = (feature.properties ?? {}) as Record<string, any>;
-    const rawDateValue = props[dateField];
-    if (rawDateValue !== undefined && rawDateValue !== null) hadDateField++;
-    const date = parseDate(rawDateValue);
-    if (date) parsedOk++;
+    const date = parseDate(props[dateField]);
     if (!date || date < start || date > valuation) return [];
-    inRange++;
 
     const rawPrice = safeNum(props[priceField]);
     if (rawPrice === null) return [];
-    passedPrice++;
 
     const improved = matchesFilters(props, S.timeAdjustmentSettings.improvedFilters, S.timeAdjustmentSettings.improvedFilterInvert, true);
     const vacant = matchesFilters(props, S.timeAdjustmentSettings.vacantFilters, S.timeAdjustmentSettings.vacantFilterInvert, true);
-    const modeMatch = entry.displayMode === 'vacant' ? vacant : improved;
+    const modeMatch = effectiveMode === 'vacant' ? vacant : improved;
     if (!modeMatch) return [];
-    passedModeFilter++;
-    
+
+    // Filter by group value if specified
+    if (groupField && groupValue) {
+      const propVal = props[groupField];
+      if (propVal == null || String(propVal) !== groupValue) return [];
+    }
+
     const includeMatch = matchesFilters(props, entry.includeFilters, entry.includeFilterInvert, true);
     const excludeMatch = matchesFilters(props, entry.excludeFilters, entry.excludeFilterInvert, false);
     if (!includeMatch || excludeMatch) return [];
-    passedIncludeExclude++;
 
-    const sizeRaw = entry.displayMode === 'vacant' ? safeNum(props[landSizeField]) : safeNum(props[improvedSizeField]);
+    const sizeRaw = effectiveMode === 'vacant' ? safeNum(props[landSizeField]) : safeNum(props[improvedSizeField]);
     const sizeForRatio = sizeRaw ?? 1;
     const ratio = sizeForRatio === 0 ? null : rawPrice / sizeForRatio;
 
@@ -555,18 +553,6 @@ function computeSales(entry: TimeAdjustmentEntry): { points: SalePoint[]; groupe
       || (entry.outlierRatioHigh != null && ratio > entry.outlierRatioHigh));
 
     return [{ date, value: ratio ?? rawPrice, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
-  });
-
-  // DEBUG: Summary of filtering
-  console.log('[TimeAdjust] Filter summary:', {
-    totalFeatures,
-    hadDateField,
-    parsedOk,
-    inRange,
-    passedPrice,
-    passedModeFilter,
-    passedIncludeExclude,
-    finalCount: points.length,
   });
 
   const groupedMap = new Map<string, { values: number[]; dates: Date[] }>();
@@ -630,7 +616,14 @@ function renderChart() {
     return;
   }
 
-  const { points, grouped } = computeSales(entry);
+  // Use chart-specific filters
+  const chartFilters: ChartFilters = {
+    mode: chartMode,
+    groupField: entry.groupByField,
+    groupValue: chartGroupValue,
+  };
+
+  const { points, grouped } = computeSales(entry, chartFilters);
   els.sampleCount.textContent = String(points.length);
 
   // Show warnings if no sales and there are configuration issues
@@ -693,17 +686,41 @@ function renderChart() {
     });
   }
 
-  const layout = {
-    margin: { l: 40, r: 44, t: 14, b: 40 },
-    xaxis: { title: 'Time period' },
-    yaxis: { title: 'Sale price' },
-    yaxis2: { title: 'Factor', overlaying: 'y', side: 'right', tickformat: '.2f' },
+  // Calculate Y-axis range from inliers only (start at 0, extend to max + 10% buffer)
+  const yMax = yInlier.length > 0 ? Math.max(...yInlier) * 1.1 : 100;
+  const yRange: [number, number] = [0, yMax];
+
+  // Y-axis label depends on mode
+  const sizeUnit = chartMode === 'vacant' ? 'land sqft' : 'bldg sqft';
+  const yAxisLabel = `Price / ${sizeUnit}`;
+
+  // Factor axis range (start at 0)
+  const factorMax = entry.trendVisible && points.length > 0
+    ? Math.max(...computeTrend(entry, grouped).map((t) => t.factor), 1) * 1.1
+    : 2;
+
+  const layout: Record<string, any> = {
+    autosize: true,
+    margin: { l: 60, r: 50, t: 14, b: 40 },
+    xaxis: { title: 'Time period', automargin: true, fixedrange: true },
+    yaxis: { title: yAxisLabel, range: yRange, rangemode: 'tozero', fixedrange: true },
+    yaxis2: { title: 'Factor', overlaying: 'y', side: 'right', tickformat: '.2f', range: [0, factorMax], fixedrange: true },
     showlegend: true,
+    legend: { x: 0, y: 1, xanchor: 'left', yanchor: 'top', orientation: 'h' },
     paper_bgcolor: 'rgba(0,0,0,0)',
-    plot_bgcolor: 'rgba(0,0,0,0)'
+    plot_bgcolor: 'rgba(0,0,0,0)',
+    dragmode: false,
   };
 
-  plotly.react(els.chart, traces, layout, { displayModeBar: false, responsive: true });
+  const config = {
+    displayModeBar: false,
+    responsive: true,
+    scrollZoom: false,
+    doubleClick: false,
+    staticPlot: false, // false to allow hover
+  };
+
+  plotly.react(els.chart, traces, layout, config);
 }
 
 function scheduleTrendRender() {
@@ -815,11 +832,27 @@ function parseOptionalNumeric(input: HTMLInputElement): number | null {
 }
 
 function exportMainAndDaily(entry: TimeAdjustmentEntry) {
-  const { grouped } = computeSales(entry);
+  // Use chart-specific filters for export
+  const chartFilters: ChartFilters = {
+    mode: chartMode,
+    groupField: entry.groupByField,
+    groupValue: chartGroupValue,
+  };
+
+  const { grouped } = computeSales(entry, chartFilters);
   const trend = computeTrend(entry, grouped);
   if (!trend.length) {
     window.alert('No trend data to export.');
     return;
+  }
+
+  // Build filename suffix with mode and group info
+  let filenameSuffix = `_${chartMode}`;
+  if (entry.groupByField && chartGroupValue) {
+    // Sanitize field and value for filename
+    const safeField = entry.groupByField.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeValue = chartGroupValue.replace(/[^a-zA-Z0-9_-]/g, '_');
+    filenameSuffix += `_${safeField}_${safeValue}`;
   }
 
   const header = entry.granularity === 'year' ? 'Year' : entry.granularity === 'quarter' ? 'Quarter' : 'Month';
@@ -828,7 +861,7 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `${entry.name}_time_adjustment.csv`;
+  a.download = `${entry.name}${filenameSuffix}_time_adjustment.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 
@@ -848,7 +881,7 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   const dailyBlob = new Blob([`Day,Factor\n${days.join('\n')}`], { type: 'text/csv;charset=utf-8' });
   const dailyLink = document.createElement('a');
   dailyLink.href = URL.createObjectURL(dailyBlob);
-  dailyLink.download = `${entry.name}_time_adjustment_daily.csv`;
+  dailyLink.download = `${entry.name}${filenameSuffix}_time_adjustment_daily.csv`;
   dailyLink.click();
   URL.revokeObjectURL(dailyLink.href);
 
@@ -880,6 +913,10 @@ function render() {
   const sizeLabel = entry?.displayMode === 'vacant' ? 'Land size' : 'Improved size';
   els.sizeHeader.textContent = sizeLabel;
   els.ratioHeader.textContent = `Price/${sizeLabel}`;
+
+  // Populate chart-specific dropdowns
+  els.chartModeSelect.value = chartMode;
+  populateChartGroupSelect(entry?.groupByField ?? null);
 
   scheduleTrendRender();
 }
@@ -1014,6 +1051,16 @@ export function initTimeAdjustmentElements(elements: Elements) {
     if (!entry) return;
     entry.trendVisible = !entry.trendVisible;
     render();
+  });
+
+  els.chartModeSelect.addEventListener('change', () => {
+    chartMode = els.chartModeSelect.value as 'improved' | 'vacant';
+    scheduleTrendRender();
+  });
+
+  els.chartGroupSelect.addEventListener('change', () => {
+    chartGroupValue = els.chartGroupSelect.value;
+    scheduleTrendRender();
   });
 
   els.exportCsvButton.addEventListener('click', () => {

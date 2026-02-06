@@ -1020,7 +1020,6 @@ initTimeAdjustmentElements({
   deleteEntryButton: document.getElementById('timeAdjustmentDeleteEntry') as HTMLButtonElement,
   undoDeleteButton: document.getElementById('timeAdjustmentUndoDelete') as HTMLButtonElement,
   sampleCount: document.getElementById('timeAdjustmentSampleCount') as HTMLSpanElement,
-  displaySelect: document.getElementById('timeAdjustmentDisplay') as HTMLSelectElement,
   groupBySelect: document.getElementById('timeAdjustmentGroupBy') as HTMLSelectElement,
   granularitySelect: document.getElementById('timeAdjustmentGranularity') as HTMLSelectElement,
   methodSelect: document.getElementById('timeAdjustmentMethod') as HTMLSelectElement,

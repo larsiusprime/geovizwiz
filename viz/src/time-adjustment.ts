@@ -5,7 +5,6 @@ import type {
   TimeAdjustmentEntry,
   TimeAdjustmentGranularity,
   TimeAdjustmentMethod,
-  TimeAdjustmentDisplayMode
 } from './types';
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
@@ -33,7 +32,6 @@ type Elements = {
   deleteEntryButton: HTMLButtonElement;
   undoDeleteButton: HTMLButtonElement;
   sampleCount: HTMLSpanElement;
-  displaySelect: HTMLSelectElement;
   groupBySelect: HTMLSelectElement;
   granularitySelect: HTMLSelectElement;
   methodSelect: HTMLSelectElement;
@@ -180,8 +178,11 @@ function prefillEntryDates(entry: TimeAdjustmentEntry) {
   const dateField = entry.dateField || 'sale_date';
   const { min, max } = findDateRange(dateField);
 
-  if (min && !entry.startDate) {
-    entry.startDate = toDateInput(min);
+  if (min && max && !entry.startDate) {
+    // Clamp start date to no earlier than Jan 1 of 5 years before max date
+    const fiveYearsBeforeMax = new Date(max.getFullYear() - 5, 0, 1);
+    const clampedMin = min < fiveYearsBeforeMax ? fiveYearsBeforeMax : min;
+    entry.startDate = toDateInput(clampedMin);
   }
   if (max && !entry.valuationDate) {
     entry.valuationDate = toDateInput(max);
@@ -568,9 +569,18 @@ function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): 
   return { points, grouped };
 }
 
-function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): Array<{ key: string; factor: number }> {
+type TrendResult = {
+  items: Array<{ key: string; factor: number; rawValue: number }>;
+  anchor: number;
+};
+
+function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): TrendResult {
   const eligible = grouped.filter((group) => group.values.length >= entry.minSample);
-  if (!eligible.length) return [];
+  console.log('computeTrend: grouped.length=', grouped.length, 'minSample=', entry.minSample, 'eligible.length=', eligible.length);
+  if (grouped.length > 0) {
+    console.log('computeTrend: first group sample:', { key: grouped[0].key, count: grouped[0].values.length, values: grouped[0].values.slice(0, 3) });
+  }
+  if (!eligible.length) return { items: [], anchor: 1 };
 
   const baseline = eligible.reduce((best, group) => (group.values.length > best.values.length ? group : best), eligible[0]).key;
 
@@ -582,13 +592,52 @@ function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): Array
   const valuationDate = parseDate(entry.valuationDate);
   const valuationKey = valuationDate ? formatPeriodLabel(valuationDate, entry.granularity === 'peak' ? 'month' : entry.granularity) : eligible[eligible.length - 1].key;
   const anchor = raw[valuationKey] ?? raw[eligible[eligible.length - 1].key] ?? 1;
-  const normalized = eligible.map((group) => ({ key: group.key, factor: anchor === 0 ? 1 : (raw[group.key] ?? 1) / anchor }));
+  const normalized = eligible.map((group) => ({
+    key: group.key,
+    factor: anchor === 0 ? 1 : (raw[group.key] ?? 1) / anchor,
+    rawValue: raw[group.key] ?? 0,
+  }));
 
-  if (entry.granularity !== 'peak' || normalized.length <= 2) return normalized;
-  const jan = normalized[0];
-  const dec = normalized[normalized.length - 1];
-  const peak = normalized.reduce((best, curr) => (curr.factor > best.factor ? curr : best), normalized[0]);
-  return [jan, peak, dec];
+  // Sort normalized by key to ensure chronological order
+  normalized.sort((a, b) => a.key.localeCompare(b.key));
+
+  if (entry.granularity !== 'peak') return { items: normalized, anchor };
+
+  // Peak mode: for each year, include January, peak month, and December
+  // Group by year first
+  const byYear = new Map<string, Array<{ key: string; factor: number; rawValue: number }>>();
+  for (const item of normalized) {
+    // Key format is "YYYY-MM", extract year
+    const year = item.key.substring(0, 4);
+    if (!byYear.has(year)) byYear.set(year, []);
+    byYear.get(year)!.push(item);
+  }
+
+  const result: Array<{ key: string; factor: number; rawValue: number }> = [];
+  const sortedYears = Array.from(byYear.keys()).sort();
+
+  for (const year of sortedYears) {
+    const yearData = byYear.get(year)!;
+    if (yearData.length === 0) continue;
+
+    // Sort by month within the year
+    yearData.sort((a, b) => a.key.localeCompare(b.key));
+
+    // Find January (YYYY-01), December (YYYY-12), and peak month
+    const jan = yearData.find((d) => d.key === `${year}-01`);
+    const dec = yearData.find((d) => d.key === `${year}-12`);
+    const peak = yearData.reduce((best, curr) => (curr.factor > best.factor ? curr : best), yearData[0]);
+
+    // Add points in chronological order, avoiding duplicates
+    const added = new Set<string>();
+    if (jan && !added.has(jan.key)) { result.push(jan); added.add(jan.key); }
+    if (peak && !added.has(peak.key)) { result.push(peak); added.add(peak.key); }
+    if (dec && !added.has(dec.key)) { result.push(dec); added.add(dec.key); }
+  }
+
+  // Sort final result chronologically
+  result.sort((a, b) => a.key.localeCompare(b.key));
+  return { items: result, anchor };
 }
 
 function getConfigWarnings(entry: TimeAdjustmentEntry): string[] {
@@ -659,7 +708,7 @@ function renderChart() {
     type: 'scatter',
     mode: 'markers',
     name: 'Sales',
-    marker: { size: 5, color: '#1f2937' }
+    marker: { size: 4, opacity: 0.5, color: '#1f2937' }
   }];
   if (xOutlier.length) {
     traces.push({
@@ -672,39 +721,58 @@ function renderChart() {
     });
   }
 
-  if (entry.trendVisible) {
-    const trend = computeTrend(entry, grouped);
+  // Compute trend once for reuse
+  const trendResult = entry.trendVisible ? computeTrend(entry, grouped) : { items: [], anchor: 1 };
+  const trendItems = trendResult.items;
+
+  // DEBUG: Investigate why trend is at y=0
+  console.log('=== TREND DEBUG ===');
+  console.log('chartMode:', chartMode);
+  console.log('entry.outlierRatioHigh:', entry.outlierRatioHigh);
+  console.log('points total:', points.length);
+  console.log('inliers:', xInlier.length, 'outliers:', xOutlier.length);
+  console.log('yInlier range:', yInlier.length > 0 ? [Math.min(...yInlier), Math.max(...yInlier)] : 'empty');
+  console.log('yOutlier range:', yOutlier.length > 0 ? [Math.min(...yOutlier), Math.max(...yOutlier)] : 'empty');
+  console.log('trendItems sample:', trendItems.slice(0, 3).map(t => ({ key: t.key, rawValue: t.rawValue })));
+
+  if (entry.trendVisible && trendItems.length > 0) {
+    // Plot raw values on primary Y-axis (same scale as sales)
     traces.push({
-      x: trend.map((item) => item.key),
-      y: trend.map((item) => item.factor),
-      yaxis: 'y2',
+      x: trendItems.map((item) => item.key),
+      y: trendItems.map((item) => item.rawValue),
       type: 'scatter',
       mode: 'lines+markers',
-      name: 'Trend factor',
+      name: 'Trend',
       line: { color: '#2563eb', width: 2 },
       marker: { size: 6 }
     });
   }
 
-  // Calculate Y-axis range from inliers only (start at 0, extend to max + 10% buffer)
-  const yMax = yInlier.length > 0 ? Math.max(...yInlier) * 1.1 : 100;
+  // Calculate Y-axis range from inliers and trend values (start at 0, extend to max + 10% buffer)
+  const trendMaxY = trendItems.length > 0 ? Math.max(...trendItems.map((t) => t.rawValue)) : 0;
+  const yMax = Math.max(yInlier.length > 0 ? Math.max(...yInlier) : 0, trendMaxY) * 1.1 || 100;
   const yRange: [number, number] = [0, yMax];
 
   // Y-axis label depends on mode
   const sizeUnit = chartMode === 'vacant' ? 'land sqft' : 'bldg sqft';
   const yAxisLabel = `Price / ${sizeUnit}`;
 
-  // Factor axis range (start at 0)
-  const factorMax = entry.trendVisible && points.length > 0
-    ? Math.max(...computeTrend(entry, grouped).map((t) => t.factor), 1) * 1.1
-    : 2;
+  // Collect all unique x categories and sort them chronologically
+  const allCategories = new Set<string>([...xInlier, ...xOutlier]);
+  trendItems.forEach((t) => allCategories.add(t.key));
+  const sortedCategories = Array.from(allCategories).sort();
 
   const layout: Record<string, any> = {
     autosize: true,
-    margin: { l: 60, r: 50, t: 14, b: 40 },
-    xaxis: { title: 'Time period', automargin: true, fixedrange: true },
+    margin: { l: 60, r: 30, t: 14, b: 40 },
+    xaxis: {
+      title: 'Time period',
+      automargin: true,
+      fixedrange: true,
+      categoryorder: 'array',
+      categoryarray: sortedCategories,
+    },
     yaxis: { title: yAxisLabel, range: yRange, rangemode: 'tozero', fixedrange: true },
-    yaxis2: { title: 'Factor', overlaying: 'y', side: 'right', tickformat: '.2f', range: [0, factorMax], fixedrange: true },
     showlegend: true,
     legend: { x: 0, y: 1, xanchor: 'left', yanchor: 'top', orientation: 'h' },
     paper_bgcolor: 'rgba(0,0,0,0)',
@@ -840,7 +908,8 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   };
 
   const { grouped } = computeSales(entry, chartFilters);
-  const trend = computeTrend(entry, grouped);
+  const trendResult = computeTrend(entry, grouped);
+  const trend = trendResult.items;
   if (!trend.length) {
     window.alert('No trend data to export.');
     return;
@@ -896,7 +965,6 @@ function render() {
   const entry = currentEntry();
   if (entry) {
     ensureDefaults(entry);
-    els.displaySelect.value = entry.displayMode;
     els.groupBySelect.value = entry.groupByField ?? '';
     els.granularitySelect.value = entry.granularity;
     els.methodSelect.value = entry.method;
@@ -1025,7 +1093,6 @@ export function initTimeAdjustmentElements(elements: Elements) {
     scheduleTrendRender();
   };
 
-  els.displaySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.displayMode = els.displaySelect.value as TimeAdjustmentDisplayMode; }));
   els.groupBySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.groupByField = els.groupBySelect.value || null; }));
   els.granularitySelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.granularity = els.granularitySelect.value as TimeAdjustmentGranularity; }));
   els.methodSelect.addEventListener('change', () => bindEntrySetting((entry) => { entry.method = els.methodSelect.value as TimeAdjustmentMethod; }));

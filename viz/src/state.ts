@@ -90,10 +90,8 @@ export const S = {
   isLandScheduleCurveCollapsed: false,
   isLandScheduleAdjustmentsCollapsed: false,
   isTimeAdjustmentMinimized: true,
-  isTimeAdjustmentSettingsCollapsed: false,
-  isTimeAdjustmentEntriesCollapsed: false,
-  isTimeAdjustmentOutliersCollapsed: true,
-  isTimeAdjustmentDataCollapsed: true,
+  isTimeAdjustmentTrendCollapsed: false,
+  isTimeAdjustmentFiltersCollapsed: true,
   hiddenLegendItems: new Set<string>(),
 
   // --- Statistics ---

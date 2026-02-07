@@ -423,12 +423,10 @@ const landScheduleAdjustmentsToggle = document.getElementById('landScheduleAdjus
 const landScheduleAdjustmentsContent = document.getElementById('landScheduleAdjustmentsContent') as HTMLDivElement;
 const landScheduleAdjustmentsContainer = document.getElementById('landScheduleAdjustmentsContainer') as HTMLDivElement;
 const landScheduleAddAdjustmentButton = document.getElementById('landScheduleAddAdjustment') as HTMLButtonElement;
-const timeAdjustmentEntriesToggle = document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement;
-const timeAdjustmentEntriesBody = document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement;
-const timeAdjustmentOutliersToggle = document.getElementById('timeAdjustmentOutliersToggle') as HTMLButtonElement;
-const timeAdjustmentOutliersBody = document.getElementById('timeAdjustmentOutliersBody') as HTMLDivElement;
-const timeAdjustmentDataToggle = document.getElementById('timeAdjustmentDataToggle') as HTMLButtonElement;
-const timeAdjustmentDataBody = document.getElementById('timeAdjustmentDataBody') as HTMLDivElement;
+const timeAdjustmentTrendToggle = document.getElementById('timeAdjustmentTrendToggle') as HTMLButtonElement;
+const timeAdjustmentTrendBody = document.getElementById('timeAdjustmentTrendBody') as HTMLDivElement;
+const timeAdjustmentFiltersToggle = document.getElementById('timeAdjustmentFiltersToggle') as HTMLButtonElement;
+const timeAdjustmentFiltersBody = document.getElementById('timeAdjustmentFiltersBody') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -577,44 +575,31 @@ landScheduleAdjustmentsToggle.addEventListener('click', () => {
 });
 
 // Time Adjustment collapse toggles
-const setTimeAdjustmentEntriesCollapsed = (collapsed: boolean) => {
-  S.isTimeAdjustmentEntriesCollapsed = collapsed;
-  timeAdjustmentEntriesBody.style.display = collapsed ? 'none' : 'grid';
-  timeAdjustmentEntriesToggle.classList.toggle('is-collapsed', collapsed);
-  timeAdjustmentEntriesToggle.title = collapsed ? 'Expand Time Adjustments' : 'Collapse Time Adjustments';
+const setTimeAdjustmentTrendCollapsed = (collapsed: boolean) => {
+  S.isTimeAdjustmentTrendCollapsed = collapsed;
+  timeAdjustmentTrendBody.classList.toggle('is-hidden', collapsed);
+  timeAdjustmentTrendToggle.classList.toggle('is-collapsed', collapsed);
+  timeAdjustmentTrendToggle.title = collapsed ? 'Expand Trend' : 'Collapse Trend';
   refreshWindowMinHeight(timeAdjustmentControlsEl);
 };
 
-const setTimeAdjustmentOutliersCollapsed = (collapsed: boolean) => {
-  S.isTimeAdjustmentOutliersCollapsed = collapsed;
-  timeAdjustmentOutliersBody.classList.toggle('is-hidden', collapsed);
-  timeAdjustmentOutliersToggle.classList.toggle('is-collapsed', collapsed);
-  timeAdjustmentOutliersToggle.title = collapsed ? 'Expand outliers' : 'Collapse outliers';
+const setTimeAdjustmentFiltersCollapsed = (collapsed: boolean) => {
+  S.isTimeAdjustmentFiltersCollapsed = collapsed;
+  timeAdjustmentFiltersBody.classList.toggle('is-hidden', collapsed);
+  timeAdjustmentFiltersToggle.classList.toggle('is-collapsed', collapsed);
+  timeAdjustmentFiltersToggle.title = collapsed ? 'Expand Filters' : 'Collapse Filters';
   refreshWindowMinHeight(timeAdjustmentControlsEl);
 };
 
-const setTimeAdjustmentDataCollapsed = (collapsed: boolean) => {
-  S.isTimeAdjustmentDataCollapsed = collapsed;
-  timeAdjustmentDataBody.classList.toggle('is-hidden', collapsed);
-  timeAdjustmentDataToggle.classList.toggle('is-collapsed', collapsed);
-  timeAdjustmentDataToggle.title = collapsed ? 'Expand Data / Trend' : 'Collapse Data / Trend';
-  refreshWindowMinHeight(timeAdjustmentControlsEl);
-};
+setTimeAdjustmentTrendCollapsed(S.isTimeAdjustmentTrendCollapsed);
+setTimeAdjustmentFiltersCollapsed(S.isTimeAdjustmentFiltersCollapsed);
 
-setTimeAdjustmentEntriesCollapsed(S.isTimeAdjustmentEntriesCollapsed);
-setTimeAdjustmentOutliersCollapsed(S.isTimeAdjustmentOutliersCollapsed);
-setTimeAdjustmentDataCollapsed(S.isTimeAdjustmentDataCollapsed);
-
-timeAdjustmentEntriesToggle.addEventListener('click', () => {
-  setTimeAdjustmentEntriesCollapsed(!S.isTimeAdjustmentEntriesCollapsed);
+timeAdjustmentTrendToggle.addEventListener('click', () => {
+  setTimeAdjustmentTrendCollapsed(!S.isTimeAdjustmentTrendCollapsed);
 });
 
-timeAdjustmentOutliersToggle.addEventListener('click', () => {
-  setTimeAdjustmentOutliersCollapsed(!S.isTimeAdjustmentOutliersCollapsed);
-});
-
-timeAdjustmentDataToggle.addEventListener('click', () => {
-  setTimeAdjustmentDataCollapsed(!S.isTimeAdjustmentDataCollapsed);
+timeAdjustmentFiltersToggle.addEventListener('click', () => {
+  setTimeAdjustmentFiltersCollapsed(!S.isTimeAdjustmentFiltersCollapsed);
 });
 
 // Color ramp choices
@@ -1000,37 +985,36 @@ initLandScheduleCallbacks({
 initTimeAdjustmentElements({
   panel: timeAdjustmentControlsEl,
   showFiltersPanel: showFilters,
-  entriesToggle: document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement,
-  entriesBody: document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement,
-  dataToggle: document.getElementById('timeAdjustmentDataToggle') as HTMLButtonElement,
-  dataBody: document.getElementById('timeAdjustmentDataBody') as HTMLDivElement,
-  outliersToggle: document.getElementById('timeAdjustmentOutliersToggle') as HTMLButtonElement,
-  outliersBody: document.getElementById('timeAdjustmentOutliersBody') as HTMLDivElement,
-  entryNameInput: document.getElementById('timeAdjustmentEntryName') as HTMLInputElement,
-  addEntryButton: document.getElementById('timeAdjustmentAddEntry') as HTMLButtonElement,
-  entrySelect: document.getElementById('timeAdjustmentEntrySelect') as HTMLSelectElement,
-  entryDetails: document.getElementById('timeAdjustmentEntryDetails') as HTMLDivElement,
-  deleteEntryButton: document.getElementById('timeAdjustmentDeleteEntry') as HTMLButtonElement,
-  undoDeleteButton: document.getElementById('timeAdjustmentUndoDelete') as HTMLButtonElement,
+  // Date range inputs
+  startInput: document.getElementById('timeAdjustmentStart') as HTMLInputElement,
+  valuationInput: document.getElementById('timeAdjustmentValuation') as HTMLInputElement,
+  // Trend section
+  trendToggle: document.getElementById('timeAdjustmentTrendToggle') as HTMLButtonElement,
+  trendBody: document.getElementById('timeAdjustmentTrendBody') as HTMLDivElement,
   sampleCount: document.getElementById('timeAdjustmentSampleCount') as HTMLSpanElement,
   groupBySelect: document.getElementById('timeAdjustmentGroupBy') as HTMLSelectElement,
+  chartGroupSelect: document.getElementById('timeAdjustmentChartGroup') as HTMLSelectElement,
   granularitySelect: document.getElementById('timeAdjustmentGranularity') as HTMLSelectElement,
   methodSelect: document.getElementById('timeAdjustmentMethod') as HTMLSelectElement,
-  minSampleInput: document.getElementById('timeAdjustmentMinSample') as HTMLInputElement,
+  chartModeSelect: document.getElementById('timeAdjustmentChartMode') as HTMLSelectElement,
+  trendToggleButton: document.getElementById('timeAdjustmentPlotTrend') as HTMLButtonElement,
+  chart: document.getElementById('timeAdjustmentChart') as HTMLDivElement,
+  spinner: document.getElementById('timeAdjustmentSpinner') as HTMLDivElement,
+  chartMessage: document.getElementById('timeAdjustmentChartMessage') as HTMLDivElement,
+  exportCsvButton: document.getElementById('timeAdjustmentExportCsv') as HTMLButtonElement,
+  exportExcelButton: document.getElementById('timeAdjustmentExportExcel') as HTMLButtonElement,
+  // Filters section
+  filtersToggle: document.getElementById('timeAdjustmentFiltersToggle') as HTMLButtonElement,
+  filtersBody: document.getElementById('timeAdjustmentFiltersBody') as HTMLDivElement,
+  includeButton: document.getElementById('timeAdjustmentIncludeBtn') as HTMLButtonElement,
+  excludeButton: document.getElementById('timeAdjustmentExcludeBtn') as HTMLButtonElement,
   priceLowInput: document.getElementById('timeAdjustmentPriceLow') as HTMLInputElement,
   priceHighInput: document.getElementById('timeAdjustmentPriceHigh') as HTMLInputElement,
   sizeLowInput: document.getElementById('timeAdjustmentSizeLow') as HTMLInputElement,
   sizeHighInput: document.getElementById('timeAdjustmentSizeHigh') as HTMLInputElement,
   ratioLowInput: document.getElementById('timeAdjustmentRatioLow') as HTMLInputElement,
   ratioHighInput: document.getElementById('timeAdjustmentRatioHigh') as HTMLInputElement,
-  trendToggleButton: document.getElementById('timeAdjustmentPlotTrend') as HTMLButtonElement,
-  chartModeSelect: document.getElementById('timeAdjustmentChartMode') as HTMLSelectElement,
-  chartGroupSelect: document.getElementById('timeAdjustmentChartGroup') as HTMLSelectElement,
-  exportCsvButton: document.getElementById('timeAdjustmentExportCsv') as HTMLButtonElement,
-  exportExcelButton: document.getElementById('timeAdjustmentExportExcel') as HTMLButtonElement,
-  chart: document.getElementById('timeAdjustmentChart') as HTMLDivElement,
-  spinner: document.getElementById('timeAdjustmentSpinner') as HTMLDivElement,
-  chartMessage: document.getElementById('timeAdjustmentChartMessage') as HTMLDivElement,
+  minSampleInput: document.getElementById('timeAdjustmentMinSample') as HTMLInputElement,
   sizeHeader: document.getElementById('timeAdjustmentSizeHeader') as HTMLTableCellElement,
   ratioHeader: document.getElementById('timeAdjustmentRatioHeader') as HTMLTableCellElement,
 });

@@ -12,37 +12,36 @@ const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 type Elements = {
   panel: HTMLDivElement;
   showFiltersPanel: () => void;
-  entriesToggle: HTMLButtonElement;
-  entriesBody: HTMLDivElement;
-  dataToggle: HTMLButtonElement;
-  dataBody: HTMLDivElement;
-  outliersToggle: HTMLButtonElement;
-  outliersBody: HTMLDivElement;
-  entryNameInput: HTMLInputElement;
-  addEntryButton: HTMLButtonElement;
-  entrySelect: HTMLSelectElement;
-  entryDetails: HTMLDivElement;
-  deleteEntryButton: HTMLButtonElement;
-  undoDeleteButton: HTMLButtonElement;
+  // Date range inputs
+  startInput: HTMLInputElement;
+  valuationInput: HTMLInputElement;
+  // Trend section
+  trendToggle: HTMLButtonElement;
+  trendBody: HTMLDivElement;
   sampleCount: HTMLSpanElement;
   groupBySelect: HTMLSelectElement;
+  chartGroupSelect: HTMLSelectElement;
   granularitySelect: HTMLSelectElement;
   methodSelect: HTMLSelectElement;
-  minSampleInput: HTMLInputElement;
+  chartModeSelect: HTMLSelectElement;
+  trendToggleButton: HTMLButtonElement;
+  chart: HTMLDivElement;
+  spinner: HTMLDivElement;
+  chartMessage: HTMLDivElement;
+  exportCsvButton: HTMLButtonElement;
+  exportExcelButton: HTMLButtonElement;
+  // Filters section
+  filtersToggle: HTMLButtonElement;
+  filtersBody: HTMLDivElement;
+  includeButton: HTMLButtonElement;
+  excludeButton: HTMLButtonElement;
   priceLowInput: HTMLInputElement;
   priceHighInput: HTMLInputElement;
   sizeLowInput: HTMLInputElement;
   sizeHighInput: HTMLInputElement;
   ratioLowInput: HTMLInputElement;
   ratioHighInput: HTMLInputElement;
-  trendToggleButton: HTMLButtonElement;
-  chartModeSelect: HTMLSelectElement;
-  chartGroupSelect: HTMLSelectElement;
-  exportCsvButton: HTMLButtonElement;
-  exportExcelButton: HTMLButtonElement;
-  chart: HTMLDivElement;
-  spinner: HTMLDivElement;
-  chartMessage: HTMLDivElement;
+  minSampleInput: HTMLInputElement;
   sizeHeader: HTMLTableCellElement;
   ratioHeader: HTMLTableCellElement;
 };
@@ -59,9 +58,9 @@ type GroupedPoints = Array<{ key: string; values: number[]; dates: Date[] }>;
 
 let els: Elements;
 let pendingTrendTimer: number | null = null;
-let lastDeleted: TimeAdjustmentEntry | null = null;
 let chartMode: 'improved' | 'vacant' = 'improved';
 let chartGroupValue: string = ''; // empty string means "(All)"
+let hasAutoTriggeredTrend = false; // Track if we've auto-clicked "Plot trend" on first load
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -459,30 +458,6 @@ function refreshFieldOptions() {
   populateSelect(els.groupBySelect, categorical, 'group', true);
 }
 
-function renderEntrySelect() {
-  const previous = els.entrySelect.value;
-  els.entrySelect.replaceChildren();
-  const base = document.createElement('option');
-  base.value = '';
-  base.textContent = 'select time adjustment';
-  base.disabled = true;
-  base.selected = true;
-  els.entrySelect.append(base);
-
-  S.timeAdjustmentEntries.forEach((entry) => {
-    const option = document.createElement('option');
-    option.value = entry.id;
-    option.textContent = entry.name;
-    els.entrySelect.append(option);
-  });
-
-  const selected = S.currentTimeAdjustmentEntryId ?? previous;
-  if (selected && S.timeAdjustmentEntries.some((entry) => entry.id === selected)) {
-    els.entrySelect.value = selected;
-  }
-  els.undoDeleteButton.style.display = lastDeleted ? 'inline-flex' : 'none';
-}
-
 function median(values: number[]): number {
   if (!values.length) return 0;
   const sorted = [...values].sort((a, b) => a - b);
@@ -877,70 +852,20 @@ function bindFilterButton(button: HTMLButtonElement, key: string, label: string,
 
 function bindEntryDetails() {
   const entry = currentEntry();
-  if (!entry) {
-    els.entryDetails.style.display = 'none';
-    els.deleteEntryButton.style.display = 'none';
-    return;
-  }
+  if (!entry) return;
+
   ensureDefaults(entry);
 
   // Prefill dates from data if not already set
   prefillEntryDates(entry);
 
-  // Update static delete button visibility
-  els.deleteEntryButton.style.display = entry.isDefault ? 'none' : 'inline-flex';
+  // Update static date inputs
+  els.startInput.value = entry.startDate ?? '';
+  els.valuationInput.value = entry.valuationDate ?? '';
 
-  els.entryDetails.style.display = 'grid';
-  els.entryDetails.innerHTML = `
-    <div class="time-adjustment-row compact" style="grid-template-columns: auto 1fr auto 1fr auto 1fr;">
-      <span class="time-adjustment-label-text">Date field</span>
-      <input type="text" data-role="dateField" value="${entry.dateField ?? 'sale_date'}" style="min-width:80px;" />
-      <span class="time-adjustment-label-text">Start</span>
-      <input type="date" data-role="start" value="${entry.startDate ?? ''}" />
-      <span class="time-adjustment-label-text">Valuation</span>
-      <input type="date" data-role="valuation" value="${entry.valuationDate ?? ''}" />
-    </div>
-    <div class="time-adjustment-row" style="grid-template-columns: auto 1fr auto 1fr;">
-      <span class="time-adjustment-label-text">Include</span>
-      <button type="button" data-role="include" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
-      <span class="time-adjustment-label-text">Exclude</span>
-      <button type="button" data-role="exclude" class="land-table-filter time-adjustment-conditions"><img src="${FILTER_ICON}" alt="Filters" /> conditions</button>
-    </div>
-  `;
-
-  const startInput = els.entryDetails.querySelector('[data-role="start"]') as HTMLInputElement;
-  const valuationInput = els.entryDetails.querySelector('[data-role="valuation"]') as HTMLInputElement;
-  const dateFieldInput = els.entryDetails.querySelector('[data-role="dateField"]') as HTMLInputElement;
-  startInput.addEventListener('change', () => { entry.startDate = startInput.value || null; scheduleTrendRender(); });
-  valuationInput.addEventListener('change', () => { entry.valuationDate = valuationInput.value || null; scheduleTrendRender(); });
-  dateFieldInput.addEventListener('change', () => { entry.dateField = dateFieldInput.value || 'sale_date'; scheduleTrendRender(); });
-
-  const includeBtn = els.entryDetails.querySelector('[data-role="include"]') as HTMLButtonElement;
-  const excludeBtn = els.entryDetails.querySelector('[data-role="exclude"]') as HTMLButtonElement;
-  updateConditionsButton(includeBtn, entry.includeFilters);
-  updateConditionsButton(excludeBtn, entry.excludeFilters);
-  bindFilterButton(
-    includeBtn,
-    `timeAdjustment:entry:${entry.id}:include`,
-    `Time adjustment entry include: ${entry.name}`,
-    () => entry.includeFilters,
-    () => entry.includeFilterInvert,
-    (filters, invert) => {
-      entry.includeFilters = cloneFilters(filters);
-      entry.includeFilterInvert = invert;
-    }
-  );
-  bindFilterButton(
-    excludeBtn,
-    `timeAdjustment:entry:${entry.id}:exclude`,
-    `Time adjustment entry exclude: ${entry.name}`,
-    () => entry.excludeFilters,
-    () => entry.excludeFilterInvert,
-    (filters, invert) => {
-      entry.excludeFilters = cloneFilters(filters);
-      entry.excludeFilterInvert = invert;
-    }
-  );
+  // Update Include/Exclude buttons
+  updateConditionsButton(els.includeButton, entry.includeFilters);
+  updateConditionsButton(els.excludeButton, entry.excludeFilters);
 }
 
 function parseOptionalNumeric(input: HTMLInputElement): number | null {
@@ -1017,7 +942,6 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
 
 function render() {
   refreshFieldOptions();
-  renderEntrySelect();
   bindEntryDetails();
 
   const entry = currentEntry();
@@ -1055,59 +979,65 @@ export function initTimeAdjustmentElements(elements: Elements) {
 
   // Note: Collapse toggle event listeners are handled in main.ts for consistency
 
-  els.addEntryButton.addEventListener('click', () => {
-    const name = els.entryNameInput.value.trim();
-    if (!name) return;
-    const entry: TimeAdjustmentEntry = {
-      id: uid('taf'),
-      name,
-      startDate: null,
-      valuationDate: null,
-      dateField: 'sale_date',
-      displayMode: 'improved',
-      groupByField: null,
-      granularity: 'month',
-      method: 'median',
-      minSample: 5,
-      outlierPriceLow: null,
-      outlierPriceHigh: null,
-      outlierSizeLow: null,
-      outlierSizeHigh: null,
-      outlierRatioLow: null,
-      outlierRatioHigh: null,
-      includeFilters: [],
-      includeFilterInvert: false,
-      excludeFilters: [],
-      excludeFilterInvert: false,
-      trendVisible: false,
-    };
-    S.timeAdjustmentEntries.push(entry);
-    S.currentTimeAdjustmentEntryId = entry.id;
-    els.entryNameInput.value = '';
-    render();
-  });
+  // Set up filter icon images
+  const includeIcon = els.includeButton.querySelector('img');
+  const excludeIcon = els.excludeButton.querySelector('img');
+  if (includeIcon) includeIcon.src = FILTER_ICON;
+  if (excludeIcon) excludeIcon.src = FILTER_ICON;
 
-  els.entrySelect.addEventListener('change', () => {
-    S.currentTimeAdjustmentEntryId = els.entrySelect.value || null;
-    render();
-  });
-
-  els.undoDeleteButton.addEventListener('click', () => {
-    if (!lastDeleted) return;
-    S.timeAdjustmentEntries.push(lastDeleted);
-    S.currentTimeAdjustmentEntryId = lastDeleted.id;
-    lastDeleted = null;
-    render();
-  });
-
-  els.deleteEntryButton.addEventListener('click', () => {
+  // Date input listeners
+  els.startInput.addEventListener('change', () => {
     const entry = currentEntry();
-    if (!entry || entry.isDefault) return;
-    lastDeleted = { ...entry, includeFilters: cloneFilters(entry.includeFilters), excludeFilters: cloneFilters(entry.excludeFilters) };
-    S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter((item) => item.id !== entry.id);
-    S.currentTimeAdjustmentEntryId = S.timeAdjustmentEntries[0]?.id ?? null;
-    render();
+    if (entry) {
+      entry.startDate = els.startInput.value || null;
+      scheduleTrendRender();
+    }
   });
+
+  els.valuationInput.addEventListener('change', () => {
+    const entry = currentEntry();
+    if (entry) {
+      entry.valuationDate = els.valuationInput.value || null;
+      scheduleTrendRender();
+    }
+  });
+
+  // Include/Exclude filter buttons
+  const entry = currentEntry();
+  if (entry) {
+    bindFilterButton(
+      els.includeButton,
+      `timeAdjustment:include`,
+      `Time adjustment include filters`,
+      () => currentEntry()?.includeFilters ?? [],
+      () => currentEntry()?.includeFilterInvert ?? false,
+      (filters, invert) => {
+        const e = currentEntry();
+        if (e) {
+          e.includeFilters = cloneFilters(filters);
+          e.includeFilterInvert = invert;
+          updateConditionsButton(els.includeButton, e.includeFilters);
+          scheduleTrendRender();
+        }
+      }
+    );
+    bindFilterButton(
+      els.excludeButton,
+      `timeAdjustment:exclude`,
+      `Time adjustment exclude filters`,
+      () => currentEntry()?.excludeFilters ?? [],
+      () => currentEntry()?.excludeFilterInvert ?? false,
+      (filters, invert) => {
+        const e = currentEntry();
+        if (e) {
+          e.excludeFilters = cloneFilters(filters);
+          e.excludeFilterInvert = invert;
+          updateConditionsButton(els.excludeButton, e.excludeFilters);
+          scheduleTrendRender();
+        }
+      }
+    );
+  }
 
   const bindEntrySetting = (setter: (entry: TimeAdjustmentEntry) => void) => {
     const entry = currentEntry();
@@ -1140,13 +1070,6 @@ export function initTimeAdjustmentElements(elements: Elements) {
   [els.priceLowInput, els.priceHighInput, els.sizeLowInput, els.sizeHighInput, els.ratioLowInput, els.ratioHighInput]
     .forEach((input) => input.addEventListener('change', bindOutliers));
 
-  els.trendToggleButton.addEventListener('click', () => {
-    const entry = currentEntry();
-    if (!entry) return;
-    entry.trendVisible = !entry.trendVisible;
-    render();
-  });
-
   els.chartModeSelect.addEventListener('change', () => {
     chartMode = els.chartModeSelect.value as 'improved' | 'vacant';
     // Update outlier table headers to match current chart mode
@@ -1159,6 +1082,13 @@ export function initTimeAdjustmentElements(elements: Elements) {
   els.chartGroupSelect.addEventListener('change', () => {
     chartGroupValue = els.chartGroupSelect.value;
     scheduleTrendRender();
+  });
+
+  els.trendToggleButton.addEventListener('click', () => {
+    const entry = currentEntry();
+    if (!entry) return;
+    entry.trendVisible = !entry.trendVisible;
+    render();
   });
 
   els.exportCsvButton.addEventListener('click', () => {
@@ -1176,5 +1106,17 @@ export function initTimeAdjustmentElements(elements: Elements) {
 }
 
 export function refreshTimeAdjustmentPanel() {
+  // Auto-trigger "Plot trend" on first load if there's valid data
+  if (!hasAutoTriggeredTrend) {
+    const entry = currentEntry();
+    if (entry) {
+      const warnings = getConfigWarnings(entry);
+      // If no warnings (valid config), auto-enable trend
+      if (warnings.length === 0) {
+        hasAutoTriggeredTrend = true;
+        entry.trendVisible = true;
+      }
+    }
+  }
   render();
 }

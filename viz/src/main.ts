@@ -997,7 +997,6 @@ initTimeAdjustmentElements({
   granularitySelect: document.getElementById('timeAdjustmentGranularity') as HTMLSelectElement,
   methodSelect: document.getElementById('timeAdjustmentMethod') as HTMLSelectElement,
   chartModeSelect: document.getElementById('timeAdjustmentChartMode') as HTMLSelectElement,
-  trendToggleButton: document.getElementById('timeAdjustmentPlotTrend') as HTMLButtonElement,
   chart: document.getElementById('timeAdjustmentChart') as HTMLDivElement,
   spinner: document.getElementById('timeAdjustmentSpinner') as HTMLDivElement,
   chartMessage: document.getElementById('timeAdjustmentChartMessage') as HTMLDivElement,

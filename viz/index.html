@@ -934,6 +934,12 @@
       cursor: not-allowed;
     }
 
+    .land-schedule-button img {
+      width: 32px;
+      height: 32px;
+      display: block;
+    }
+
     .time-adjustment-content {
       font-size: 12px;
     }
@@ -1502,7 +1508,7 @@
     </div>
   </div>
 
-  <div id="settingsControls" class="viz-window" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 320px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="settingsControls" class="viz-window" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 400px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Settings</div>
       <div class="window-actions">
@@ -2010,9 +2016,9 @@
           <select id="timeAdjustmentGranularity"><option value="month" selected>monthly</option><option value="quarter">quarterly</option><option value="year">yearly</option><option value="peak">peak</option></select>
           <select id="timeAdjustmentMethod"><option value="median" selected>median</option><option value="mean">mean</option><option value="regression">regression</option></select>
         </div>
-        <!-- Chart controls row -->
-        <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:4px 0;">
-          <button id="timeAdjustmentPlotTrend" type="button" class="land-schedule-button">Plot trend</button>
+        <!-- Chart mode selector -->
+        <div style="display:flex; gap:6px; align-items:center; margin:4px 0;">
+          <label class="time-adjustment-label-text">Mode</label>
           <select id="timeAdjustmentChartMode" style="min-width:80px;"><option value="improved" selected>improved</option><option value="vacant">vacant</option></select>
         </div>
         <!-- Chart -->
@@ -2022,8 +2028,8 @@
         <!-- Export buttons -->
         <div style="display:flex; gap:8px; align-items:center; margin-top:4px;">
           <span>Export:</span>
-          <button id="timeAdjustmentExportCsv" type="button" class="land-schedule-button" title="Export CSV">📄</button>
-          <button id="timeAdjustmentExportExcel" type="button" class="land-schedule-button" title="Export Excel" disabled>📊</button>
+          <button id="timeAdjustmentExportCsv" type="button" class="land-schedule-button" title="Export CSV"><img src="./src/svg/csv.svg" alt="CSV" /></button>
+          <button id="timeAdjustmentExportExcel" type="button" class="land-schedule-button" title="Export Excel"><img src="./src/svg/excel.svg" alt="Excel" /></button>
         </div>
       </div>
     </div>

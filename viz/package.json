@@ -2,7 +2,9 @@
   "dependencies": {
     "geoparquet": "^0.5.0",
     "hyparquet-compressors": "^1.1.1",
-    "maplibre-gl": "^5.6.2"
+    "jszip": "^3.10.1",
+    "maplibre-gl": "^5.6.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "typescript": "^5.9.2",

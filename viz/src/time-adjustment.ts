@@ -6,6 +6,8 @@ import type {
   TimeAdjustmentGranularity,
   TimeAdjustmentMethod,
 } from './types';
+import JSZip from 'jszip';
+import * as XLSX from 'xlsx';
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
@@ -24,7 +26,6 @@ type Elements = {
   granularitySelect: HTMLSelectElement;
   methodSelect: HTMLSelectElement;
   chartModeSelect: HTMLSelectElement;
-  trendToggleButton: HTMLButtonElement;
   chart: HTMLDivElement;
   spinner: HTMLDivElement;
   chartMessage: HTMLDivElement;
@@ -874,8 +875,34 @@ function parseOptionalNumeric(input: HTMLInputElement): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function exportMainAndDaily(entry: TimeAdjustmentEntry) {
-  // Use chart-specific filters for export
+function buildExportFilename(entry: TimeAdjustmentEntry, suffix?: string): string {
+  let filename = 'time_adjustment';
+
+  // Add group field and value if filtering by group
+  if (entry.groupByField && chartGroupValue) {
+    const safeField = entry.groupByField.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const safeValue = chartGroupValue.replace(/[^a-zA-Z0-9_-]/g, '_');
+    filename += `_${safeField}_${safeValue}`;
+  }
+
+  // Add mode (improved/vacant)
+  filename += `_${chartMode}`;
+
+  // Add optional suffix (e.g., "_daily")
+  if (suffix) {
+    filename += suffix;
+  }
+
+  return filename;
+}
+
+type ExportData = {
+  header: string;
+  mainRows: Array<{ period: string; factor: number }>;
+  dailyRows: Array<{ date: string; factor: number }>;
+};
+
+function generateExportData(entry: TimeAdjustmentEntry): ExportData | null {
   const chartFilters: ChartFilters = {
     mode: chartMode,
     groupField: entry.groupByField,
@@ -885,36 +912,19 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   const { grouped } = computeSales(entry, chartFilters);
   const trendResult = computeTrend(entry, grouped);
   const trend = trendResult.items;
-  if (!trend.length) {
-    window.alert('No trend data to export.');
-    return;
-  }
 
-  // Build filename suffix with mode and group info
-  let filenameSuffix = `_${chartMode}`;
-  if (entry.groupByField && chartGroupValue) {
-    // Sanitize field and value for filename
-    const safeField = entry.groupByField.replace(/[^a-zA-Z0-9_-]/g, '_');
-    const safeValue = chartGroupValue.replace(/[^a-zA-Z0-9_-]/g, '_');
-    filenameSuffix += `_${safeField}_${safeValue}`;
-  }
+  if (!trend.length) return null;
 
   const header = entry.granularity === 'year' ? 'Year' : entry.granularity === 'quarter' ? 'Quarter' : 'Month';
-  const rows = trend.map((item) => `${item.key},${item.factor.toFixed(6)}`);
-  const csv = `${header},Factor\n${rows.join('\n')}`;
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${entry.name}${filenameSuffix}_time_adjustment.csv`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  const mainRows = trend.map((item) => ({ period: item.key, factor: item.factor }));
 
-  const days: string[] = [];
+  // Build daily data with interpolation
+  const dailyRows: Array<{ date: string; factor: number }> = [];
   const start = parseDate(entry.startDate);
   const end = parseDate(entry.valuationDate);
+
   if (start && end) {
     const granularity = entry.granularity === 'peak' ? 'month' : entry.granularity;
-    // Build sorted trend with midpoint dates for interpolation
     const sortedWithMidpoints: TrendItemWithMidpoint[] = [...trend]
       .sort((a, b) => a.key.localeCompare(b.key))
       .map((item) => ({
@@ -927,17 +937,63 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
     for (let t = start.getTime(); t <= end.getTime(); t += step) {
       const d = new Date(t);
       const factor = interpolateFactor(d, sortedWithMidpoints);
-      days.push(`${toDateInput(d)},${factor.toFixed(6)}`);
+      dailyRows.push({ date: toDateInput(d), factor });
     }
   }
-  const dailyBlob = new Blob([`Day,Factor\n${days.join('\n')}`], { type: 'text/csv;charset=utf-8' });
-  const dailyLink = document.createElement('a');
-  dailyLink.href = URL.createObjectURL(dailyBlob);
-  dailyLink.download = `${entry.name}${filenameSuffix}_time_adjustment_daily.csv`;
-  dailyLink.click();
-  URL.revokeObjectURL(dailyLink.href);
 
-  window.alert('CSV files exported. Zip packaging / Excel workbook export still needs a dedicated library.');
+  return { header, mainRows, dailyRows };
+}
+
+async function exportCsvZip(entry: TimeAdjustmentEntry) {
+  const data = generateExportData(entry);
+  if (!data) {
+    window.alert('No trend data to export.');
+    return;
+  }
+
+  const baseFilename = buildExportFilename(entry);
+
+  // Build CSV strings
+  const mainCsv = `${data.header},Factor\n${data.mainRows.map((r) => `${r.period},${r.factor.toFixed(6)}`).join('\n')}`;
+  const dailyCsv = `Day,Factor\n${data.dailyRows.map((r) => `${r.date},${r.factor.toFixed(6)}`).join('\n')}`;
+
+  // Create zip
+  const zip = new JSZip();
+  zip.file(`${baseFilename}.csv`, mainCsv);
+  zip.file(`${baseFilename}_daily.csv`, dailyCsv);
+
+  const blob = await zip.generateAsync({ type: 'blob' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${baseFilename}.zip`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportExcel(entry: TimeAdjustmentEntry) {
+  const data = generateExportData(entry);
+  if (!data) {
+    window.alert('No trend data to export.');
+    return;
+  }
+
+  const baseFilename = buildExportFilename(entry);
+
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+
+  // Period sheet
+  const mainData = [[data.header, 'Factor'], ...data.mainRows.map((r) => [r.period, r.factor])];
+  const mainSheet = XLSX.utils.aoa_to_sheet(mainData);
+  XLSX.utils.book_append_sheet(wb, mainSheet, 'Period');
+
+  // Daily sheet
+  const dailyData = [['Day', 'Factor'], ...data.dailyRows.map((r) => [r.date, r.factor])];
+  const dailySheet = XLSX.utils.aoa_to_sheet(dailyData);
+  XLSX.utils.book_append_sheet(wb, dailySheet, 'Daily');
+
+  // Download
+  XLSX.writeFile(wb, `${baseFilename}.xlsx`);
 }
 
 function render() {
@@ -957,7 +1013,6 @@ function render() {
     els.sizeHighInput.value = entry.outlierSizeHigh == null ? '' : String(entry.outlierSizeHigh);
     els.ratioLowInput.value = entry.outlierRatioLow == null ? '' : String(entry.outlierRatioLow);
     els.ratioHighInput.value = entry.outlierRatioHigh == null ? '' : String(entry.outlierRatioHigh);
-    els.trendToggleButton.textContent = entry.trendVisible ? 'Hide trend' : 'Plot trend';
   }
 
   const sizeLabel = chartMode === 'vacant' ? 'Land size' : 'Improved size';
@@ -1084,21 +1139,16 @@ export function initTimeAdjustmentElements(elements: Elements) {
     scheduleTrendRender();
   });
 
-  els.trendToggleButton.addEventListener('click', () => {
-    const entry = currentEntry();
-    if (!entry) return;
-    entry.trendVisible = !entry.trendVisible;
-    render();
-  });
-
   els.exportCsvButton.addEventListener('click', () => {
     const entry = currentEntry();
     if (!entry) return;
-    exportMainAndDaily(entry);
+    exportCsvZip(entry);
   });
 
   els.exportExcelButton.addEventListener('click', () => {
-    window.alert('Excel export requires wiring an XLSX library.');
+    const entry = currentEntry();
+    if (!entry) return;
+    exportExcel(entry);
   });
 
   // Initial render to populate UI

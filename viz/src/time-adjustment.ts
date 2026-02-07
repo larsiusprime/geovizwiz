@@ -201,6 +201,76 @@ function formatPeriodLabel(date: Date, granularity: TimeAdjustmentGranularity): 
   return `${y}-${String(m).padStart(2, '0')}`;
 }
 
+/**
+ * Get the midpoint date of a period (for linear interpolation).
+ * Monthly: 15th of the month
+ * Quarterly: 15th of the middle month (Feb, May, Aug, Nov)
+ * Yearly: July 1st
+ */
+function periodMidpoint(key: string, granularity: TimeAdjustmentGranularity): Date {
+  if (granularity === 'year') {
+    // key = "2024"
+    const year = parseInt(key, 10);
+    return new Date(year, 6, 1); // July 1st
+  }
+  if (granularity === 'quarter') {
+    // key = "2024-Q1"
+    const [yearStr, qStr] = key.split('-Q');
+    const year = parseInt(yearStr, 10);
+    const quarter = parseInt(qStr, 10);
+    // Q1: Jan-Mar -> mid Feb (month 1, day 15)
+    // Q2: Apr-Jun -> mid May (month 4, day 15)
+    // Q3: Jul-Sep -> mid Aug (month 7, day 15)
+    // Q4: Oct-Dec -> mid Nov (month 10, day 15)
+    const midMonth = (quarter - 1) * 3 + 1; // 1, 4, 7, 10
+    return new Date(year, midMonth, 15);
+  }
+  // month: key = "2024-01"
+  const [yearStr, monthStr] = key.split('-');
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10) - 1; // 0-indexed
+  return new Date(year, month, 15); // 15th of month
+}
+
+type TrendItemWithMidpoint = { key: string; factor: number; midpoint: Date };
+
+/**
+ * Linearly interpolate factor for a given date between period midpoints.
+ * - Dates before first midpoint use first factor
+ * - Dates after last midpoint use last factor
+ * - Dates between midpoints are linearly interpolated
+ */
+function interpolateFactor(date: Date, sortedTrend: TrendItemWithMidpoint[]): number {
+  if (!sortedTrend.length) return 1;
+
+  const time = date.getTime();
+
+  // Edge case: before first midpoint
+  if (time <= sortedTrend[0].midpoint.getTime()) {
+    return sortedTrend[0].factor;
+  }
+
+  // Edge case: after last midpoint
+  const last = sortedTrend[sortedTrend.length - 1];
+  if (time >= last.midpoint.getTime()) {
+    return last.factor;
+  }
+
+  // Find bracketing items and interpolate
+  for (let i = 0; i < sortedTrend.length - 1; i++) {
+    const a = sortedTrend[i];
+    const b = sortedTrend[i + 1];
+    if (time >= a.midpoint.getTime() && time <= b.midpoint.getTime()) {
+      // Linear interpolation: t is the fraction between a and b
+      const t = (time - a.midpoint.getTime()) / (b.midpoint.getTime() - a.midpoint.getTime());
+      return a.factor + t * (b.factor - a.factor);
+    }
+  }
+
+  // Fallback (shouldn't reach here)
+  return last.factor;
+}
+
 function getAllFields(): string[] {
   const first = S.currentGeoJSON?.features?.[0]?.properties;
   return first ? Object.keys(first) : [];
@@ -532,19 +602,20 @@ function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): 
     if (!includeMatch || excludeMatch) return [];
 
     const sizeRaw = effectiveMode === 'vacant' ? safeNum(props[landSizeField]) : safeNum(props[improvedSizeField]);
-    const sizeForRatio = sizeRaw ?? 1;
-    const ratio = sizeForRatio === 0 ? null : rawPrice / sizeForRatio;
+    // Skip sales without valid size data - we can't compute price per sqft
+    if (sizeRaw === null || sizeRaw <= 0) return [];
+    const ratio = rawPrice / sizeRaw;
 
     const outlierPrice = (entry.outlierPriceLow != null && rawPrice < entry.outlierPriceLow)
       || (entry.outlierPriceHigh != null && rawPrice > entry.outlierPriceHigh);
     const outlierSize = (sizeRaw !== null) && ((entry.outlierSizeLow != null && sizeRaw < entry.outlierSizeLow)
       || (entry.outlierSizeHigh != null && sizeRaw > entry.outlierSizeHigh));
-    // Check the actual value being plotted (ratio if available, otherwise rawPrice)
-    const valueToPlot = ratio ?? rawPrice;
+    // Check the ratio value for outlier detection
+    const valueToPlot = ratio;
     const outlierRatio = (entry.outlierRatioLow != null && valueToPlot < entry.outlierRatioLow)
       || (entry.outlierRatioHigh != null && valueToPlot > entry.outlierRatioHigh);
 
-    return [{ date, value: ratio ?? rawPrice, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
+    return [{ date, value: ratio, rawPrice, rawSize: sizeRaw, outlier: outlierPrice || outlierSize || outlierRatio }];
   });
 
   // Only include non-outlier points in grouped values for trend calculation
@@ -917,12 +988,20 @@ function exportMainAndDaily(entry: TimeAdjustmentEntry) {
   const start = parseDate(entry.startDate);
   const end = parseDate(entry.valuationDate);
   if (start && end) {
-    const sorted = [...trend].sort((a, b) => a.key.localeCompare(b.key));
+    const granularity = entry.granularity === 'peak' ? 'month' : entry.granularity;
+    // Build sorted trend with midpoint dates for interpolation
+    const sortedWithMidpoints: TrendItemWithMidpoint[] = [...trend]
+      .sort((a, b) => a.key.localeCompare(b.key))
+      .map((item) => ({
+        key: item.key,
+        factor: item.factor,
+        midpoint: periodMidpoint(item.key, granularity),
+      }));
+
     const step = 24 * 60 * 60 * 1000;
     for (let t = start.getTime(); t <= end.getTime(); t += step) {
       const d = new Date(t);
-      const key = formatPeriodLabel(d, entry.granularity === 'peak' ? 'month' : entry.granularity);
-      const factor = sorted.find((item) => item.key === key)?.factor ?? sorted[sorted.length - 1].factor;
+      const factor = interpolateFactor(d, sortedWithMidpoints);
       days.push(`${toDateInput(d)},${factor.toFixed(6)}`);
     }
   }

@@ -65,6 +65,10 @@ let bldgFieldSel: HTMLSelectElement;
 let bldgUnitSel: HTMLSelectElement;
 let landFieldSel: HTMLSelectElement;
 let landUnitSel: HTMLSelectElement;
+let salePriceFieldSel: HTMLSelectElement;
+let saleDateFieldSel: HTMLSelectElement;
+let validSaleFieldSel: HTMLSelectElement;
+let vacantSaleFieldSel: HTMLSelectElement;
 let btnSizeBack: HTMLButtonElement;
 let btnSizeSkip: HTMLButtonElement;
 let btnSizeOk: HTMLButtonElement;
@@ -105,6 +109,10 @@ export function initModalElements(els: {
   bldgUnitSel: HTMLSelectElement;
   landFieldSel: HTMLSelectElement;
   landUnitSel: HTMLSelectElement;
+  salePriceFieldSel: HTMLSelectElement;
+  saleDateFieldSel: HTMLSelectElement;
+  validSaleFieldSel: HTMLSelectElement;
+  vacantSaleFieldSel: HTMLSelectElement;
   btnSizeBack: HTMLButtonElement;
   btnSizeSkip: HTMLButtonElement;
   btnSizeOk: HTMLButtonElement;
@@ -140,6 +148,10 @@ export function initModalElements(els: {
   bldgUnitSel = els.bldgUnitSel;
   landFieldSel = els.landFieldSel;
   landUnitSel = els.landUnitSel;
+  salePriceFieldSel = els.salePriceFieldSel;
+  saleDateFieldSel = els.saleDateFieldSel;
+  validSaleFieldSel = els.validSaleFieldSel;
+  vacantSaleFieldSel = els.vacantSaleFieldSel;
   btnSizeBack = els.btnSizeBack;
   btnSizeSkip = els.btnSizeSkip;
   btnSizeOk = els.btnSizeOk;
@@ -298,6 +310,101 @@ export function autoPickMainField(fields: string[]): string {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Sale data auto-pick heuristics                                     */
+/* ------------------------------------------------------------------ */
+
+type KeywordGroup = readonly string[];
+
+/**
+ * Normalize a string into lowercase tokens:
+ * - lowercase
+ * - replace non-alphanumeric separators with spaces
+ * - split on whitespace
+ *
+ * Examples:
+ *   "sale_price"   -> ["sale", "price"]
+ *   "isVacantSale" -> ["isvacantsale"] (camelCase not split)
+ */
+function normalizeToTokens(s: string): string[] {
+  return s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+/**
+ * Scan fields first, return the first field that matches ANY keyword group.
+ * A keyword group matches if ALL of its keywords are found in the field tokens.
+ */
+function guessFieldByKeywordGroups(
+  fields: string[],
+  keywordGroups: readonly KeywordGroup[]
+): string | null {
+  const normalizedGroups = keywordGroups.map(g => g.flatMap(normalizeToTokens));
+
+  for (const groupTokens of normalizedGroups) {
+    for (const field of fields) {
+      const tokenSet = new Set(normalizeToTokens(field));
+      if (groupTokens.every(t => tokenSet.has(t))) return field;
+    }
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Specific field heuristics                                          */
+/* ------------------------------------------------------------------ */
+
+export function autoPickVacantSaleField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["vacant", "sale"],
+    ["vacant", "sold"],
+    ["unimproved", "sale"],
+    ["unimproved", "sold"],
+    ["vacantsale"],
+    ["unimprovedsale"],
+    ["vacant"],
+    ["is", "vacant"]
+  ]);
+}
+
+export function autoPickSalePriceField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["sale", "price"],
+    ["sale", "amt"],
+    ["sold", "price"],
+    ["sold", "amt"],
+    ["saleprice"],
+    ["saleamt"],
+    ["soldprice"],
+    ["soldamt"]
+  ]);
+}
+
+export function autoPickSaleDateField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["sale", "date"],
+    ["sold", "date"],
+    ["sale", "dt"],
+    ["saledate"],
+    ["solddate"],
+    ["saledt"],
+  ]);
+}
+
+export function autoPickValidSaleField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["valid", "sale"],
+    ["valid"],
+    ["qualified"],
+    ["arms", "length"],
+    ["armslength"],
+  ]);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dropdown helpers                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -333,7 +440,18 @@ function valueToUnitLabel(key: string): string | null {
 /*  setSizeState                                                       */
 /* ------------------------------------------------------------------ */
 
-export function setSizeState(bField: string | null, bUnit: string | null, lField: string | null, lUnit: string | null) {
+export type SizeAndSaleState = {
+  bldgField: string | null;
+  bldgUnit: string | null;
+  landField: string | null;
+  landUnit: string | null;
+  salePriceField: string | null;
+  saleDateField: string | null;
+  validSaleField: string | null;
+  vacantSaleField: string | null;
+};
+
+export function setSizeState(bField: string | null, bUnit: string | null, lField: string | null, lUnit: string | null, saleData?: { price: string | null; date: string | null; valid: string | null; vacant: string | null }) {
   S.bldgSizeField = bField || null;
   S.bldgSizeUnitLabel = bUnit || null;
   S.landSizeField = lField || null;
@@ -352,6 +470,23 @@ export function setSizeState(bField: string | null, bUnit: string | null, lField
     activeStore.landSizeField = S.landSizeField;
     activeStore.landSizeUnitLabel = S.landSizeUnitLabel;
   }
+
+  // Handle sale data fields
+  if (saleData) {
+    S.timeAdjustmentSettings.salePriceField = saleData.price || '';
+    S.timeAdjustmentSettings.saleDateField = saleData.date || '';
+    S.timeAdjustmentSettings.validSaleField = saleData.valid || '';
+    S.timeAdjustmentSettings.vacantSaleField = saleData.vacant || '';
+    S.timeAdjustmentSettings.improvedSizeField = bField || '';
+    S.timeAdjustmentSettings.landSizeField = lField || '';
+    if (activeStore) {
+      activeStore.salePriceField = saleData.price || null;
+      activeStore.saleDateField = saleData.date || null;
+      activeStore.validSaleField = saleData.valid || null;
+      activeStore.vacantSaleField = saleData.vacant || null;
+    }
+  }
+
   // enable/disable normalization radios
   normLand.disabled = !S.landSizeField;
   normBldg.disabled = !S.bldgSizeField;
@@ -578,6 +713,13 @@ export function openSizeModal() {
   fillUnitSelect(bldgUnitSel);
   fillUnitSelect(landUnitSel);
 
+  // For sale data fields, use all available fields (numeric + categorical)
+  const allChosenFields = [...S.chosenNumericFields, ...S.chosenCategoricalFields];
+  fillFieldSelect(salePriceFieldSel, S.chosenNumericFields);
+  fillFieldSelect(saleDateFieldSel, allChosenFields);
+  fillFieldSelect(validSaleFieldSel, allChosenFields);
+  fillFieldSelect(vacantSaleFieldSel, allChosenFields);
+
   // --- AUTO-PICK using heuristic ---
   const bGuess = autoPickOne('building', S.chosenNumericFields);
   const lGuess = autoPickOne('land', S.chosenNumericFields);
@@ -592,6 +734,19 @@ export function openSizeModal() {
     const u = lGuess.unitKey || guessAreaUnitFromFieldName(lGuess.field);
     if (u) landUnitSel.value = u;
   }
+
+  // Auto-pick sale data fields
+  const salePriceGuess = autoPickSalePriceField(S.chosenNumericFields);
+  if (salePriceGuess) salePriceFieldSel.value = salePriceGuess;
+
+  const saleDateGuess = autoPickSaleDateField(allChosenFields);
+  if (saleDateGuess) saleDateFieldSel.value = saleDateGuess;
+
+  const validSaleGuess = autoPickValidSaleField(allChosenFields);
+  if (validSaleGuess) validSaleFieldSel.value = validSaleGuess;
+
+  const vacantSaleGuess = autoPickVacantSaleField(allChosenFields);
+  if (vacantSaleGuess) vacantSaleFieldSel.value = vacantSaleGuess;
 
   bldgFieldSel.onchange = () => {
     const g = guessAreaUnitFromFieldName(bldgFieldSel.value);
@@ -625,7 +780,13 @@ export function openSizeModal() {
       bldgFieldSel.value || null,
       valueToUnitLabel(bldgUnitSel.value || ''),
       landFieldSel.value || null,
-      valueToUnitLabel(landUnitSel.value || '')
+      valueToUnitLabel(landUnitSel.value || ''),
+      {
+        price: salePriceFieldSel.value || null,
+        date: saleDateFieldSel.value || null,
+        valid: validSaleFieldSel.value || null,
+        vacant: vacantSaleFieldSel.value || null,
+      }
     );
     sizeOverlay.classList.remove('show');
     _loadSelectedColumns();

@@ -120,6 +120,9 @@ export type TimeAdjustmentEntry = {
 
 export type TimeAdjustmentSettings = {
   salePriceField: string;
+  saleDateField: string;
+  validSaleField: string;
+  vacantSaleField: string;
   improvedFilters: FilterRule[];
   improvedFilterInvert: boolean;
   improvedSizeField: string;
@@ -184,6 +187,10 @@ export type DataStore = {
   landSizeUnitLabel: string | null;
   bldgSizeField: string | null;
   bldgSizeUnitLabel: string | null;
+  salePriceField: string | null;
+  saleDateField: string | null;
+  validSaleField: string | null;
+  vacantSaleField: string | null;
 };
 
 export type SubjectSelectorControls = {

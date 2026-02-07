@@ -86,7 +86,7 @@ import {
   initModalElements, initModalCallbacks,
   openNumericFieldChooserModal, openCategoricalFieldChooserModal,
   openSizeModal, openAddLayerModal, closeAddLayerModal,
-  setSizeState,
+  setSizeState, fillFieldSelect, fillUnitSelect,
 } from './modals';
 import {
   initToolbarCallbacks, initializeToolbar,
@@ -423,8 +423,6 @@ const landScheduleAdjustmentsToggle = document.getElementById('landScheduleAdjus
 const landScheduleAdjustmentsContent = document.getElementById('landScheduleAdjustmentsContent') as HTMLDivElement;
 const landScheduleAdjustmentsContainer = document.getElementById('landScheduleAdjustmentsContainer') as HTMLDivElement;
 const landScheduleAddAdjustmentButton = document.getElementById('landScheduleAddAdjustment') as HTMLButtonElement;
-const timeAdjustmentSettingsToggle = document.getElementById('timeAdjustmentSettingsToggle') as HTMLButtonElement;
-const timeAdjustmentSettingsBody = document.getElementById('timeAdjustmentSettingsBody') as HTMLDivElement;
 const timeAdjustmentEntriesToggle = document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement;
 const timeAdjustmentEntriesBody = document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement;
 const timeAdjustmentOutliersToggle = document.getElementById('timeAdjustmentOutliersToggle') as HTMLButtonElement;
@@ -504,6 +502,17 @@ const dataStoreList = document.getElementById('dataStoreList') as HTMLDivElement
 const btnBrowseDataSource = document.getElementById('btnBrowseDataSource') as HTMLButtonElement;
 const btnCancelAddLayer = document.getElementById('btnCancelAddLayer') as HTMLButtonElement;
 
+// Settings menu Fields section elements
+const settingsFieldsSection = document.getElementById('settingsFieldsSection') as HTMLElement;
+const settingsBldgSizeField = document.getElementById('settingsBldgSizeField') as HTMLSelectElement;
+const settingsBldgSizeUnit = document.getElementById('settingsBldgSizeUnit') as HTMLSelectElement;
+const settingsLandSizeField = document.getElementById('settingsLandSizeField') as HTMLSelectElement;
+const settingsLandSizeUnit = document.getElementById('settingsLandSizeUnit') as HTMLSelectElement;
+const settingsSalePriceField = document.getElementById('settingsSalePriceField') as HTMLSelectElement;
+const settingsSaleDateField = document.getElementById('settingsSaleDateField') as HTMLSelectElement;
+const settingsValidSaleField = document.getElementById('settingsValidSaleField') as HTMLSelectElement;
+const settingsVacantSaleField = document.getElementById('settingsVacantSaleField') as HTMLSelectElement;
+
 // Color scaling radios
 const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
 const colorQuant = document.getElementById('color-quant') as HTMLInputElement | null;
@@ -568,14 +577,6 @@ landScheduleAdjustmentsToggle.addEventListener('click', () => {
 });
 
 // Time Adjustment collapse toggles
-const setTimeAdjustmentSettingsCollapsed = (collapsed: boolean) => {
-  S.isTimeAdjustmentSettingsCollapsed = collapsed;
-  timeAdjustmentSettingsBody.style.display = collapsed ? 'none' : 'grid';
-  timeAdjustmentSettingsToggle.classList.toggle('is-collapsed', collapsed);
-  timeAdjustmentSettingsToggle.title = collapsed ? 'Expand Settings' : 'Collapse Settings';
-  refreshWindowMinHeight(timeAdjustmentControlsEl);
-};
-
 const setTimeAdjustmentEntriesCollapsed = (collapsed: boolean) => {
   S.isTimeAdjustmentEntriesCollapsed = collapsed;
   timeAdjustmentEntriesBody.style.display = collapsed ? 'none' : 'grid';
@@ -600,14 +601,9 @@ const setTimeAdjustmentDataCollapsed = (collapsed: boolean) => {
   refreshWindowMinHeight(timeAdjustmentControlsEl);
 };
 
-setTimeAdjustmentSettingsCollapsed(S.isTimeAdjustmentSettingsCollapsed);
 setTimeAdjustmentEntriesCollapsed(S.isTimeAdjustmentEntriesCollapsed);
 setTimeAdjustmentOutliersCollapsed(S.isTimeAdjustmentOutliersCollapsed);
 setTimeAdjustmentDataCollapsed(S.isTimeAdjustmentDataCollapsed);
-
-timeAdjustmentSettingsToggle.addEventListener('click', () => {
-  setTimeAdjustmentSettingsCollapsed(!S.isTimeAdjustmentSettingsCollapsed);
-});
 
 timeAdjustmentEntriesToggle.addEventListener('click', () => {
   setTimeAdjustmentEntriesCollapsed(!S.isTimeAdjustmentEntriesCollapsed);
@@ -898,6 +894,10 @@ initModalElements({
   bldgUnitSel: document.getElementById('bldgUnit') as HTMLSelectElement,
   landFieldSel: document.getElementById('landField') as HTMLSelectElement,
   landUnitSel: document.getElementById('landUnit') as HTMLSelectElement,
+  salePriceFieldSel: document.getElementById('salePriceField') as HTMLSelectElement,
+  saleDateFieldSel: document.getElementById('saleDateField') as HTMLSelectElement,
+  validSaleFieldSel: document.getElementById('validSaleField') as HTMLSelectElement,
+  vacantSaleFieldSel: document.getElementById('vacantSaleField') as HTMLSelectElement,
   btnSizeBack: document.getElementById('btnSizeBack') as HTMLButtonElement,
   btnSizeSkip: document.getElementById('btnSizeSkip') as HTMLButtonElement,
   btnSizeOk: document.getElementById('btnSizeOk') as HTMLButtonElement,
@@ -1000,15 +1000,8 @@ initLandScheduleCallbacks({
 initTimeAdjustmentElements({
   panel: timeAdjustmentControlsEl,
   showFiltersPanel: showFilters,
-  salePriceField: document.getElementById('timeAdjustmentSalePriceField') as HTMLSelectElement,
-  improvedFilterButton: document.getElementById('timeAdjustmentImprovedFilter') as HTMLButtonElement,
-  improvedSizeField: document.getElementById('timeAdjustmentImprovedSize') as HTMLSelectElement,
-  vacantFilterButton: document.getElementById('timeAdjustmentVacantFilter') as HTMLButtonElement,
-  landSizeField: document.getElementById('timeAdjustmentLandSize') as HTMLSelectElement,
   entriesToggle: document.getElementById('timeAdjustmentEntriesToggle') as HTMLButtonElement,
   entriesBody: document.getElementById('timeAdjustmentEntriesBody') as HTMLDivElement,
-  settingsToggle: document.getElementById('timeAdjustmentSettingsToggle') as HTMLButtonElement,
-  settingsBody: document.getElementById('timeAdjustmentSettingsBody') as HTMLDivElement,
   dataToggle: document.getElementById('timeAdjustmentDataToggle') as HTMLButtonElement,
   dataBody: document.getElementById('timeAdjustmentDataBody') as HTMLDivElement,
   outliersToggle: document.getElementById('timeAdjustmentOutliersToggle') as HTMLButtonElement,
@@ -1201,6 +1194,82 @@ function hideLoading() { loadingOverlay.classList.remove('show'); }
   clearData();
 };
 
+/* ---------------- Settings menu Fields section ---------------- */
+function refreshSettingsFieldsSection() {
+  if (!S.currentGeoJSON?.features?.length) {
+    settingsFieldsSection.style.display = 'none';
+    return;
+  }
+  settingsFieldsSection.style.display = 'block';
+
+  const numericFields = S.chosenNumericFields;
+  const allFields = [...S.chosenNumericFields, ...S.chosenCategoricalFields];
+
+  // Populate field selects
+  fillFieldSelect(settingsBldgSizeField, numericFields);
+  fillFieldSelect(settingsLandSizeField, numericFields);
+  fillFieldSelect(settingsSalePriceField, numericFields);
+  fillFieldSelect(settingsSaleDateField, allFields);
+  fillFieldSelect(settingsValidSaleField, allFields);
+  fillFieldSelect(settingsVacantSaleField, allFields);
+
+  // Populate unit selects
+  fillUnitSelect(settingsBldgSizeUnit, S.bldgSizeUnitLabel || undefined);
+  fillUnitSelect(settingsLandSizeUnit, S.landSizeUnitLabel || undefined);
+
+  // Set current values from state
+  if (S.bldgSizeField) settingsBldgSizeField.value = S.bldgSizeField;
+  if (S.landSizeField) settingsLandSizeField.value = S.landSizeField;
+  if (S.timeAdjustmentSettings.salePriceField) settingsSalePriceField.value = S.timeAdjustmentSettings.salePriceField;
+  if (S.timeAdjustmentSettings.saleDateField) settingsSaleDateField.value = S.timeAdjustmentSettings.saleDateField;
+  if (S.timeAdjustmentSettings.validSaleField) settingsValidSaleField.value = S.timeAdjustmentSettings.validSaleField;
+  if (S.timeAdjustmentSettings.vacantSaleField) settingsVacantSaleField.value = S.timeAdjustmentSettings.vacantSaleField;
+}
+
+// Settings menu Fields section event listeners
+settingsBldgSizeField.addEventListener('change', () => {
+  S.bldgSizeField = settingsBldgSizeField.value || null;
+  S.timeAdjustmentSettings.improvedSizeField = settingsBldgSizeField.value || '';
+  const activeLayer = getCurrentLayer();
+  if (activeLayer) activeLayer.bldgSizeField = S.bldgSizeField;
+  refreshTimeAdjustmentPanel();
+});
+settingsBldgSizeUnit.addEventListener('change', () => {
+  const unitLabel = settingsBldgSizeUnit.options[settingsBldgSizeUnit.selectedIndex]?.text || null;
+  S.bldgSizeUnitLabel = unitLabel;
+  const activeLayer = getCurrentLayer();
+  if (activeLayer) activeLayer.bldgSizeUnitLabel = unitLabel;
+});
+settingsLandSizeField.addEventListener('change', () => {
+  S.landSizeField = settingsLandSizeField.value || null;
+  S.timeAdjustmentSettings.landSizeField = settingsLandSizeField.value || '';
+  const activeLayer = getCurrentLayer();
+  if (activeLayer) activeLayer.landSizeField = S.landSizeField;
+  refreshTimeAdjustmentPanel();
+});
+settingsLandSizeUnit.addEventListener('change', () => {
+  const unitLabel = settingsLandSizeUnit.options[settingsLandSizeUnit.selectedIndex]?.text || null;
+  S.landSizeUnitLabel = unitLabel;
+  const activeLayer = getCurrentLayer();
+  if (activeLayer) activeLayer.landSizeUnitLabel = unitLabel;
+});
+settingsSalePriceField.addEventListener('change', () => {
+  S.timeAdjustmentSettings.salePriceField = settingsSalePriceField.value || '';
+  refreshTimeAdjustmentPanel();
+});
+settingsSaleDateField.addEventListener('change', () => {
+  S.timeAdjustmentSettings.saleDateField = settingsSaleDateField.value || '';
+  refreshTimeAdjustmentPanel();
+});
+settingsValidSaleField.addEventListener('change', () => {
+  S.timeAdjustmentSettings.validSaleField = settingsValidSaleField.value || '';
+  refreshTimeAdjustmentPanel();
+});
+settingsVacantSaleField.addEventListener('change', () => {
+  S.timeAdjustmentSettings.vacantSaleField = settingsVacantSaleField.value || '';
+  refreshTimeAdjustmentPanel();
+});
+
 /* ---------------- Load selected columns (+ geometry) ---------------- */
 async function loadSelectedColumns() {
   if (!S.lastAsyncBuffer || !S.lastFile) return;
@@ -1289,7 +1358,8 @@ async function loadSelectedColumns() {
     refreshStatisticsPanel();
     refreshScatterPanel();
     refreshLandSchedulePanel();
-refreshTimeAdjustmentPanel();
+    refreshTimeAdjustmentPanel();
+    refreshSettingsFieldsSection();
 
     fitToData(S.currentGeoJSON);
     persistCurrentLayerState();

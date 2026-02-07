@@ -137,6 +137,9 @@ export const S = {
   currentTimeAdjustmentEntryId: null as string | null,
   timeAdjustmentSettings: {
     salePriceField: '',
+    saleDateField: '',
+    validSaleField: '',
+    vacantSaleField: '',
     improvedFilters: [],
     improvedFilterInvert: false,
     improvedSizeField: '',

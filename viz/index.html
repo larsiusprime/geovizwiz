@@ -1541,6 +1541,38 @@
           <button id="btnImportProject" type="button">Import project…</button>
         </div>
       </fieldset>
+      <fieldset id="settingsFieldsSection" style="display:none;">
+        <label>Fields</label>
+        <div style="display:grid; gap:8px; font-size:12px;">
+          <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Building/Improvement</div>
+          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+            <span>Size:</span>
+            <select id="settingsBldgSizeField" style="font-size:11px;"></select>
+            <span>Unit:</span>
+            <select id="settingsBldgSizeUnit" style="font-size:11px;"></select>
+          </div>
+          <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Land</div>
+          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+            <span>Size:</span>
+            <select id="settingsLandSizeField" style="font-size:11px;"></select>
+            <span>Unit:</span>
+            <select id="settingsLandSizeUnit" style="font-size:11px;"></select>
+          </div>
+          <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Sale Data</div>
+          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+            <span>Price:</span>
+            <select id="settingsSalePriceField" style="font-size:11px;"></select>
+            <span>Date:</span>
+            <select id="settingsSaleDateField" style="font-size:11px;"></select>
+          </div>
+          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+            <span>Valid:</span>
+            <select id="settingsValidSaleField" style="font-size:11px;"></select>
+            <span>Vacant:</span>
+            <select id="settingsVacantSaleField" style="font-size:11px;"></select>
+          </div>
+        </div>
+      </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
     <div class="window-resize-handle" aria-hidden="true">
@@ -1901,39 +1933,6 @@
     </div>
     <div id="timeAdjustmentContent" data-window-content class="time-adjustment-content" style="padding: 12px; display: grid; gap: 10px;">
       <div class="time-adjustment-header">
-        <button id="timeAdjustmentSettingsToggle" type="button" class="land-schedule-collapse-toggle" title="Collapse Settings">▼</button>
-        <div class="land-schedule-subtitle">Settings</div>
-      </div>
-      <div id="timeAdjustmentSettingsBody" class="time-adjustment-collapse-body" style="display:grid; gap:6px;">
-        <div class="time-adjustment-row">
-          <span class="time-adjustment-label-text">Sale price field</span>
-          <select id="timeAdjustmentSalePriceField">
-            <option value="" disabled selected>sale price</option>
-          </select>
-        </div>
-        <div class="time-adjustment-row compact">
-          <span class="time-adjustment-label-text">Improved filter</span>
-          <button id="timeAdjustmentImprovedFilter" type="button" class="land-table-filter time-adjustment-conditions">
-            <img src="./src/svg/filters.svg" alt="Filters" /> conditions
-          </button>
-          <span class="time-adjustment-label-text">Vacant filter</span>
-          <button id="timeAdjustmentVacantFilter" type="button" class="land-table-filter time-adjustment-conditions">
-            <img src="./src/svg/filters.svg" alt="Filters" /> conditions
-          </button>
-        </div>
-        <div class="time-adjustment-row compact">
-          <span class="time-adjustment-label-text">Improved size field</span>
-          <select id="timeAdjustmentImprovedSize">
-            <option value="" disabled selected>bldg sqft</option>
-          </select>
-          <span class="time-adjustment-label-text">Land size field</span>
-          <select id="timeAdjustmentLandSize">
-            <option value="" disabled selected>land sqft</option>
-          </select>
-        </div>
-      </div>
-      <div class="divider"></div>
-      <div class="time-adjustment-header">
         <button id="timeAdjustmentEntriesToggle" type="button" class="land-schedule-collapse-toggle" title="Collapse Time Adjustments">▼</button>
         <div class="land-schedule-subtitle">Time Adjustments</div>
       </div>
@@ -2048,24 +2047,44 @@
     </div>
   </div>
 
-  <!-- Modal 2: Size identification -->
+  <!-- Modal 2: Size and Sale Data identification -->
   <div id="sizeOverlay" class="overlay">
-    <div class="modal">
-      <h3>Identify land & building size fields</h3>
-      <div class="muted">Please identify which of your loaded fields represent: (a) total finished floor area for all buildings, and (b) total land area.</div>
+    <div class="modal" style="max-width: 480px;">
+      <h3>Identify certain key fields</h3>
+      <div class="muted">Please identify which fields represent the size of land and buildings:</div>
 
-      <div style="display:grid; gap:8px;">
-        <label>Building size field</label>
-        <select id="bldgField"></select>
-        <label>Building size unit</label>
-        <select id="bldgUnit"></select>
+      <div style="display:grid; gap:12px; margin-top: 12px;">
+        <div class="section-subtitle">Building/Improvement</div>
+        <div style="display:grid; grid-template-columns: 50px 1fr; gap:6px; align-items:center;">
+          <label>Size:</label>
+          <select id="bldgField" style="width:100%;"></select>
+          <label>Unit:</label>
+          <select id="bldgUnit" style="width:100%;"></select>
+        </div>
+
+        <div class="section-subtitle">Land</div>
+        <div style="display:grid; grid-template-columns: 50px 1fr; gap:6px; align-items:center;">
+          <label>Size:</label>
+          <select id="landField" style="width:100%;"></select>
+          <label>Unit:</label>
+          <select id="landUnit" style="width:100%;"></select>
+        </div>
 
         <div class="divider"></div>
 
-        <label>Land size field</label>
-        <select id="landField"></select>
-        <label>Land size unit</label>
-        <select id="landUnit"></select>
+        <div class="muted">If your dataset contains sale data, please identify which fields identify these features:</div>
+
+        <div class="section-subtitle">Sale Data</div>
+        <div style="display:grid; grid-template-columns: 50px 1fr; gap:6px; align-items:center;">
+          <label>Price:</label>
+          <select id="salePriceField" style="width:100%;"></select>
+          <label>Date:</label>
+          <select id="saleDateField" style="width:100%;"></select>
+          <label>Valid:</label>
+          <select id="validSaleField" style="width:100%;"></select>
+          <label>Vacant:</label>
+          <select id="vacantSaleField" style="width:100%;"></select>
+        </div>
       </div>
 
       <div class="footer">

@@ -12,15 +12,8 @@ const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 type Elements = {
   panel: HTMLDivElement;
   showFiltersPanel: () => void;
-  salePriceField: HTMLSelectElement;
-  improvedFilterButton: HTMLButtonElement;
-  improvedSizeField: HTMLSelectElement;
-  vacantFilterButton: HTMLButtonElement;
-  landSizeField: HTMLSelectElement;
   entriesToggle: HTMLButtonElement;
   entriesBody: HTMLDivElement;
-  settingsToggle: HTMLButtonElement;
-  settingsBody: HTMLDivElement;
   dataToggle: HTMLButtonElement;
   dataBody: HTMLDivElement;
   outliersToggle: HTMLButtonElement;
@@ -119,6 +112,17 @@ function safeNum(value: unknown): number | null {
     if (Number.isFinite(n)) return n;
   }
   return null;
+}
+
+function isTruthy(value: unknown): boolean {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const lower = value.toLowerCase().trim();
+    return lower === 'true' || lower === 'yes' || lower === 'y' || lower === '1';
+  }
+  return Boolean(value);
 }
 
 function parseDate(value: unknown): Date | null {
@@ -377,30 +381,12 @@ function prefillFromMetadata() {
 }
 
 function refreshFieldOptions() {
-  const numeric = numericFields();
   const categorical = categoricalFields();
 
   // Prefill from metadata if fields are empty
   prefillFromMetadata();
 
-  populateSelect(els.salePriceField, numeric, 'sale price');
-  populateSelect(els.improvedSizeField, numeric, 'bldg sqft');
-  populateSelect(els.landSizeField, numeric, 'land sqft');
   populateSelect(els.groupBySelect, categorical, 'group', true);
-
-  // Apply prefilled values to selects
-  if (S.timeAdjustmentSettings.salePriceField && numeric.includes(S.timeAdjustmentSettings.salePriceField)) {
-    els.salePriceField.value = S.timeAdjustmentSettings.salePriceField;
-  }
-  if (S.timeAdjustmentSettings.improvedSizeField && numeric.includes(S.timeAdjustmentSettings.improvedSizeField)) {
-    els.improvedSizeField.value = S.timeAdjustmentSettings.improvedSizeField;
-  }
-  if (S.timeAdjustmentSettings.landSizeField && numeric.includes(S.timeAdjustmentSettings.landSizeField)) {
-    els.landSizeField.value = S.timeAdjustmentSettings.landSizeField;
-  }
-
-  updateConditionsButton(els.improvedFilterButton, S.timeAdjustmentSettings.improvedFilters);
-  updateConditionsButton(els.vacantFilterButton, S.timeAdjustmentSettings.vacantFilters);
 }
 
 function renderEntrySelect() {
@@ -527,10 +513,13 @@ function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): 
     const rawPrice = safeNum(props[priceField]);
     if (rawPrice === null) return [];
 
-    const improved = matchesFilters(props, S.timeAdjustmentSettings.improvedFilters, S.timeAdjustmentSettings.improvedFilterInvert, true);
-    const vacant = matchesFilters(props, S.timeAdjustmentSettings.vacantFilters, S.timeAdjustmentSettings.vacantFilterInvert, true);
-    const modeMatch = effectiveMode === 'vacant' ? vacant : improved;
-    if (!modeMatch) return [];
+    // Determine if sale is vacant based on vacantSaleField
+    const vacantSaleField = S.timeAdjustmentSettings.vacantSaleField;
+    const isVacantSale = vacantSaleField ? isTruthy(props[vacantSaleField]) : false;
+
+    // Filter by display mode (vacant vs improved)
+    if (effectiveMode === 'vacant' && !isVacantSale) return [];
+    if (effectiveMode === 'improved' && isVacantSale) return [];
 
     // Filter by group value if specified
     if (groupField && groupValue) {
@@ -985,28 +974,6 @@ export function initTimeAdjustmentElements(elements: Elements) {
   // Ensure a default entry exists and is selected
   ensureDefaultEntry();
 
-  bindFilterButton(
-    els.improvedFilterButton,
-    'timeAdjustment:settings:improved',
-    'Time adjustment settings: improved filter',
-    () => S.timeAdjustmentSettings.improvedFilters,
-    () => S.timeAdjustmentSettings.improvedFilterInvert,
-    (filters, invert) => {
-      S.timeAdjustmentSettings.improvedFilters = cloneFilters(filters);
-      S.timeAdjustmentSettings.improvedFilterInvert = invert;
-    }
-  );
-  bindFilterButton(
-    els.vacantFilterButton,
-    'timeAdjustment:settings:vacant',
-    'Time adjustment settings: vacant filter',
-    () => S.timeAdjustmentSettings.vacantFilters,
-    () => S.timeAdjustmentSettings.vacantFilterInvert,
-    (filters, invert) => {
-      S.timeAdjustmentSettings.vacantFilters = cloneFilters(filters);
-      S.timeAdjustmentSettings.vacantFilterInvert = invert;
-    }
-  );
   // Note: Collapse toggle event listeners are handled in main.ts for consistency
 
   els.addEntryButton.addEventListener('click', () => {
@@ -1061,19 +1028,6 @@ export function initTimeAdjustmentElements(elements: Elements) {
     S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter((item) => item.id !== entry.id);
     S.currentTimeAdjustmentEntryId = S.timeAdjustmentEntries[0]?.id ?? null;
     render();
-  });
-
-  els.salePriceField.addEventListener('change', () => {
-    S.timeAdjustmentSettings.salePriceField = els.salePriceField.value;
-    scheduleTrendRender();
-  });
-  els.improvedSizeField.addEventListener('change', () => {
-    S.timeAdjustmentSettings.improvedSizeField = els.improvedSizeField.value;
-    scheduleTrendRender();
-  });
-  els.landSizeField.addEventListener('change', () => {
-    S.timeAdjustmentSettings.landSizeField = els.landSizeField.value;
-    scheduleTrendRender();
   });
 
   const bindEntrySetting = (setter: (entry: TimeAdjustmentEntry) => void) => {

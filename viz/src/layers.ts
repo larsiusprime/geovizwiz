@@ -269,6 +269,10 @@ export function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore
     landTypeField: null,
     landZoningField: null,
     saleIdField: null,
+    fullMarketValueField: null,
+    assessedValueField: null,
+    landValueField: null,
+    improvementValueField: null,
   };
 }
 

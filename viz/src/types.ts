@@ -203,6 +203,10 @@ export type DataStore = {
   landTypeField: string | null;
   landZoningField: string | null;
   saleIdField: string | null;
+  fullMarketValueField: string | null;
+  assessedValueField: string | null;
+  landValueField: string | null;
+  improvementValueField: string | null;
 };
 
 export type SubjectSelectorControls = {
@@ -241,6 +245,10 @@ export type SerializedDataSource = {
   landTypeField?: string | null;
   landZoningField?: string | null;
   saleIdField?: string | null;
+  fullMarketValueField?: string | null;
+  assessedValueField?: string | null;
+  landValueField?: string | null;
+  improvementValueField?: string | null;
 };
 
 export type SerializedLayer = {

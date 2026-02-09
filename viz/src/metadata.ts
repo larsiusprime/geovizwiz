@@ -43,6 +43,10 @@ function serializeDataSource(store: DataStore): SerializedDataSource {
     landTypeField: store.landTypeField,
     landZoningField: store.landZoningField,
     saleIdField: store.saleIdField,
+    fullMarketValueField: store.fullMarketValueField,
+    assessedValueField: store.assessedValueField,
+    landValueField: store.landValueField,
+    improvementValueField: store.improvementValueField,
   };
 }
 
@@ -342,6 +346,10 @@ export async function loadProjectFile(file: File) {
         existingStore.landTypeField = dsData.landTypeField ?? null;
         existingStore.landZoningField = dsData.landZoningField ?? null;
         existingStore.saleIdField = dsData.saleIdField ?? null;
+        existingStore.fullMarketValueField = dsData.fullMarketValueField ?? null;
+        existingStore.assessedValueField = dsData.assessedValueField ?? null;
+        existingStore.landValueField = dsData.landValueField ?? null;
+        existingStore.improvementValueField = dsData.improvementValueField ?? null;
 
         // Handle "all fields" mode
         if (dsData.allNumericFields) {
@@ -389,6 +397,10 @@ export async function loadProjectFile(file: File) {
           landTypeField: dsData.landTypeField ?? null,
           landZoningField: dsData.landZoningField ?? null,
           saleIdField: dsData.saleIdField ?? null,
+          fullMarketValueField: dsData.fullMarketValueField ?? null,
+          assessedValueField: dsData.assessedValueField ?? null,
+          landValueField: dsData.landValueField ?? null,
+          improvementValueField: dsData.improvementValueField ?? null,
         };
 
         // Store reference to expected parquet file

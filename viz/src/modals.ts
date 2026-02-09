@@ -81,6 +81,10 @@ let bldgTypeFieldSel: HTMLSelectElement;
 let landTypeFieldSel: HTMLSelectElement;
 let landZoningFieldSel: HTMLSelectElement;
 let saleIdFieldSel: HTMLSelectElement;
+let fullMarketValueFieldSel: HTMLSelectElement;
+let assessedValueFieldSel: HTMLSelectElement;
+let landValueFieldSel: HTMLSelectElement;
+let improvementValueFieldSel: HTMLSelectElement;
 let btnSizeBack: HTMLButtonElement;
 let btnSizeSkip: HTMLButtonElement;
 let btnSizeOk: HTMLButtonElement;
@@ -137,6 +141,10 @@ export function initModalElements(els: {
   landTypeFieldSel: HTMLSelectElement;
   landZoningFieldSel: HTMLSelectElement;
   saleIdFieldSel: HTMLSelectElement;
+  fullMarketValueFieldSel: HTMLSelectElement;
+  assessedValueFieldSel: HTMLSelectElement;
+  landValueFieldSel: HTMLSelectElement;
+  improvementValueFieldSel: HTMLSelectElement;
   btnSizeBack: HTMLButtonElement;
   btnSizeSkip: HTMLButtonElement;
   btnSizeOk: HTMLButtonElement;
@@ -188,6 +196,10 @@ export function initModalElements(els: {
   landTypeFieldSel = els.landTypeFieldSel;
   landZoningFieldSel = els.landZoningFieldSel;
   saleIdFieldSel = els.saleIdFieldSel;
+  fullMarketValueFieldSel = els.fullMarketValueFieldSel;
+  assessedValueFieldSel = els.assessedValueFieldSel;
+  landValueFieldSel = els.landValueFieldSel;
+  improvementValueFieldSel = els.improvementValueFieldSel;
   btnSizeBack = els.btnSizeBack;
   btnSizeSkip = els.btnSizeSkip;
   btnSizeOk = els.btnSizeOk;
@@ -446,8 +458,11 @@ export function autoPickValidSaleField(allFields: string[]): string | null {
 
 export function autoPickParcelIdField(allFields: string[]): string | null {
   return guessFieldByKeywordGroups(allFields, [
+    ["key"],
     ["parcel", "id"],
     ["parcelid"],
+    ["geoid"],
+    ["geo", "id"],
     ["parcel", "num"],
     ["parcel", "no"],
     ["pin"],
@@ -480,6 +495,8 @@ export function autoPickBldgConditionField(allFields: string[]): string | null {
     ["cond"],
     ["bldg", "cond"],
     ["building", "cond"],
+    ["pct", "good"],
+    ["percent", "good"]
   ]);
 }
 
@@ -525,6 +542,8 @@ export function autoPickBldgTypeField(allFields: string[]): string | null {
     ["prop", "type"],
     ["property", "type"],
     ["use", "code"],
+    ["state", "class"],
+    ["state", "code"]
   ]);
 }
 
@@ -532,6 +551,7 @@ export function autoPickLandTypeField(allFields: string[]): string | null {
   return guessFieldByKeywordGroups(allFields, [
     ["land", "type"],
     ["land", "use"],
+    ["land", "class"]
   ]);
 }
 
@@ -544,10 +564,48 @@ export function autoPickLandZoningField(allFields: string[]): string | null {
 
 export function autoPickSaleIdField(allFields: string[]): string | null {
   return guessFieldByKeywordGroups(allFields, [
+    ["sale", "key"],
     ["sale", "id"],
     ["book"],
     ["instrument"],
     ["deed"],
+  ]);
+}
+
+export function autoPickFullMarketValueField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["full", "market", "value"],
+    ["full", "mkt", "value"],
+    ["market", "value"],
+    ["market"],
+    ["fmv"],
+  ]);
+}
+
+export function autoPickAssessedValueField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["assessed", "value"],
+    ["taxable", "value"],
+    ["total", "assessed"],
+    ["assessed"],
+  ]);
+}
+
+export function autoPickLandValueField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["land", "value"],
+    ["land", "assessed"],
+    ["land", "val"],
+  ]);
+}
+
+export function autoPickImprovementValueField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["improvement", "value"],
+    ["bldg", "value"],
+    ["building", "value"],
+    ["impr", "value"],
+    ["improvement", "val"],
   ]);
 }
 
@@ -608,6 +666,10 @@ export type SizeAndSaleState = {
   landTypeField: string | null;
   landZoningField: string | null;
   saleIdField: string | null;
+  fullMarketValueField: string | null;
+  assessedValueField: string | null;
+  landValueField: string | null;
+  improvementValueField: string | null;
 };
 
 export type ExtraKeyFields = {
@@ -623,6 +685,10 @@ export type ExtraKeyFields = {
   landType: string | null;
   landZoning: string | null;
   saleId: string | null;
+  fullMarketValue: string | null;
+  assessedValue: string | null;
+  landValue: string | null;
+  improvementValue: string | null;
 };
 
 export function setSizeState(
@@ -680,6 +746,10 @@ export function setSizeState(
     S.landTypeField = extraFields.landType || null;
     S.landZoningField = extraFields.landZoning || null;
     S.saleIdField = extraFields.saleId || null;
+    S.fullMarketValueField = extraFields.fullMarketValue || null;
+    S.assessedValueField = extraFields.assessedValue || null;
+    S.landValueField = extraFields.landValue || null;
+    S.improvementValueField = extraFields.improvementValue || null;
     if (activeStore) {
       activeStore.parcelIdField = extraFields.parcelId || null;
       activeStore.addressField = extraFields.address || null;
@@ -693,6 +763,10 @@ export function setSizeState(
       activeStore.landTypeField = extraFields.landType || null;
       activeStore.landZoningField = extraFields.landZoning || null;
       activeStore.saleIdField = extraFields.saleId || null;
+      activeStore.fullMarketValueField = extraFields.fullMarketValue || null;
+      activeStore.assessedValueField = extraFields.assessedValue || null;
+      activeStore.landValueField = extraFields.landValue || null;
+      activeStore.improvementValueField = extraFields.improvementValue || null;
     }
   }
 
@@ -718,7 +792,7 @@ export function setSizeState(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Modal 1: Numeric field chooser                                     */
+/*  Modal 2: Numeric field chooser (was Modal 1)                       */
 /* ------------------------------------------------------------------ */
 
 export function openNumericFieldChooserModal(opts: {
@@ -731,6 +805,7 @@ export function openNumericFieldChooserModal(opts: {
   numericFieldListEl.replaceChildren();
 
   const allNumeric = opts.numericFields;
+  const { lockedNumeric } = getLockedFieldsFromClassification();
 
   // Split numeric into key and other
   const keyNumeric = allNumeric.filter(isKeyField);
@@ -750,11 +825,15 @@ export function openNumericFieldChooserModal(opts: {
 
   // Helper: should a KEY numeric field be prechecked?
   const shouldPrecheckKey = (name: string) => {
+    if (lockedNumeric.has(name)) return true; // locked fields always checked
     const n = name.toLowerCase();
     if (bSet.has(n)) return n === bBestLC;
     if (lSet.has(n)) return n === lBestLC;
     return true;
   };
+
+  // Helper: should an OTHER numeric field be prechecked?
+  const shouldPrecheckOther = (name: string) => lockedNumeric.has(name);
 
   if (allNumeric.length === 0) {
     const p = document.createElement('div');
@@ -762,6 +841,10 @@ export function openNumericFieldChooserModal(opts: {
     p.className = 'muted';
     numericFieldListEl.appendChild(p);
   } else {
+    // Show locked fields first (if any are not already in keyNumeric)
+    const lockedNotKey = allNumeric.filter(n => lockedNumeric.has(n) && !isKeyField(n));
+    const otherNotLocked = otherNumeric.filter(n => !lockedNumeric.has(n));
+
     if (keyNumeric.length) {
       const t2 = document.createElement('div');
       t2.className = 'section-subtitle';
@@ -769,29 +852,44 @@ export function openNumericFieldChooserModal(opts: {
       numericFieldListEl.appendChild(t2);
       const g = document.createElement('div');
       g.className = 'fieldlist';
-      for (const name of keyNumeric) g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name), 'numeric'));
+      for (const name of keyNumeric) {
+        const isLocked = lockedNumeric.has(name);
+        g.appendChild(makeFieldCheckbox(name, shouldPrecheckKey(name), 'numeric', isLocked));
+      }
       numericFieldListEl.appendChild(g);
       numericFieldListEl.appendChild(divider());
     }
 
-    if (otherNumeric.length) {
+    if (lockedNotKey.length) {
+      const t2 = document.createElement('div');
+      t2.className = 'section-subtitle';
+      t2.textContent = 'Required by key field classification';
+      numericFieldListEl.appendChild(t2);
+      const g = document.createElement('div');
+      g.className = 'fieldlist';
+      for (const name of lockedNotKey) g.appendChild(makeFieldCheckbox(name, true, 'numeric', true));
+      numericFieldListEl.appendChild(g);
+      numericFieldListEl.appendChild(divider());
+    }
+
+    if (otherNotLocked.length) {
       const t2 = document.createElement('div');
       t2.className = 'section-subtitle';
       t2.textContent = 'Other numeric fields';
       numericFieldListEl.appendChild(t2);
       const g = document.createElement('div');
       g.className = 'fieldlist';
-      for (const name of otherNumeric) g.appendChild(makeFieldCheckbox(name, false, 'numeric'));
+      for (const name of otherNotLocked) g.appendChild(makeFieldCheckbox(name, shouldPrecheckOther(name), 'numeric'));
       numericFieldListEl.appendChild(g);
     }
   }
 
   // Buttons
   btnAllNumeric.onclick = () => {
-    numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+    numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]:not(:disabled)')
       .forEach(c => (c.checked = true));
   };
-  btnNoneNumeric.onclick = () => numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+  btnNoneNumeric.onclick = () => numericFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]:not(:disabled)')
     .forEach(c => (c.checked = false));
   btnCancelNumericModal.onclick = () => { numericModalOverlay.classList.remove('show'); _clearData(); };
   btnConfirmNumericModal.onclick = () => {
@@ -814,21 +912,36 @@ export function openNumericFieldChooserModal(opts: {
         categoricalFields: S.lastCategoricalFieldsFromSchema
       });
     } else {
-      // No categorical fields, proceed to size modal
+      // No categorical fields, proceed to load
       if (S.chosenNumericFields.length === 0) {
         alert('Please select at least one numeric field.');
         numericModalOverlay.classList.add('show');
         return;
       }
-      openSizeModal();
+      _loadSelectedColumns();
     }
   };
+
+  // Add a "Back" button to return to classification modal
+  const existingNumericBack = numericModalOverlay.querySelector<HTMLButtonElement>(
+    'button[data-role="back-to-classification"]'
+  );
+  if (existingNumericBack) existingNumericBack.remove();
+  const numericBackButton = document.createElement('button');
+  numericBackButton.textContent = 'Back';
+  numericBackButton.dataset.role = 'back-to-classification';
+  numericBackButton.onclick = () => {
+    numericModalOverlay.classList.remove('show');
+    openSizeModal();
+  };
+  const numericFooter = numericModalOverlay.querySelector('.footer');
+  if (numericFooter) numericFooter.insertBefore(numericBackButton, numericFooter.firstChild);
 
   numericModalOverlay.classList.add('show');
 }
 
 /* ------------------------------------------------------------------ */
-/*  Modal 2: Categorical field chooser                                 */
+/*  Modal 3: Categorical field chooser (was Modal 2)                   */
 /* ------------------------------------------------------------------ */
 
 export function openCategoricalFieldChooserModal(opts: {
@@ -841,6 +954,7 @@ export function openCategoricalFieldChooserModal(opts: {
   categoricalFieldListEl.replaceChildren();
 
   const allCategorical = opts.categoricalFields;
+  const { lockedCategorical } = getLockedFieldsFromClassification();
 
   if (allCategorical.length === 0) {
     const p = document.createElement('div');
@@ -848,18 +962,39 @@ export function openCategoricalFieldChooserModal(opts: {
     p.className = 'muted';
     categoricalFieldListEl.appendChild(p);
   } else {
-    const g = document.createElement('div');
-    g.className = 'fieldlist';
-    for (const name of allCategorical) g.appendChild(makeFieldCheckbox(name, false, 'categorical'));
-    categoricalFieldListEl.appendChild(g);
+    const lockedFields = allCategorical.filter(n => lockedCategorical.has(n));
+    const unlockedFields = allCategorical.filter(n => !lockedCategorical.has(n));
+
+    if (lockedFields.length) {
+      const t2 = document.createElement('div');
+      t2.className = 'section-subtitle';
+      t2.textContent = 'Required by key field classification';
+      categoricalFieldListEl.appendChild(t2);
+      const g = document.createElement('div');
+      g.className = 'fieldlist';
+      for (const name of lockedFields) g.appendChild(makeFieldCheckbox(name, true, 'categorical', true));
+      categoricalFieldListEl.appendChild(g);
+      categoricalFieldListEl.appendChild(divider());
+    }
+
+    if (unlockedFields.length) {
+      const t2 = document.createElement('div');
+      t2.className = 'section-subtitle';
+      t2.textContent = 'Other categorical fields';
+      categoricalFieldListEl.appendChild(t2);
+      const g = document.createElement('div');
+      g.className = 'fieldlist';
+      for (const name of unlockedFields) g.appendChild(makeFieldCheckbox(name, false, 'categorical'));
+      categoricalFieldListEl.appendChild(g);
+    }
   }
 
   // Buttons
   btnAllCategorical.onclick = () => {
-    categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+    categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]:not(:disabled)')
       .forEach(c => (c.checked = true));
   };
-  btnNoneCategorical.onclick = () => categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]')
+  btnNoneCategorical.onclick = () => categoricalFieldListEl.querySelectorAll<HTMLInputElement>('input[type=checkbox]:not(:disabled)')
     .forEach(c => (c.checked = false));
   btnCancelCategoricalModal.onclick = () => { categoricalModalOverlay.classList.remove('show'); _clearData(); };
   btnConfirmCategoricalModal.onclick = () => {
@@ -880,18 +1015,17 @@ export function openCategoricalFieldChooserModal(opts: {
     }
 
     categoricalModalOverlay.classList.remove('show');
-    openSizeModal();
+    // Final step: load the data
+    _loadSelectedColumns();
   };
 
   // Add a "Back" button to return to numeric modal
   const existingBackButton = categoricalModalOverlay.querySelector<HTMLButtonElement>(
     'button[data-role="back-to-numeric-fields"]'
   );
-  if (existingBackButton) {
-    existingBackButton.remove();
-  }
+  if (existingBackButton) existingBackButton.remove();
   const backButton = document.createElement('button');
-  backButton.textContent = 'Back to Numeric Fields';
+  backButton.textContent = 'Back';
   backButton.dataset.role = 'back-to-numeric-fields';
   backButton.onclick = () => {
     categoricalModalOverlay.classList.remove('show');
@@ -904,59 +1038,99 @@ export function openCategoricalFieldChooserModal(opts: {
 
   // Insert back button before the footer
   const footer = categoricalModalOverlay.querySelector('.footer');
-  if (footer) {
-    footer.insertBefore(backButton, footer.firstChild);
-  }
+  if (footer) footer.insertBefore(backButton, footer.firstChild);
 
   categoricalModalOverlay.classList.add('show');
 }
 
 /* ------------------------------------------------------------------ */
-/*  Modal 3: Size identification                                       */
+/*  Locked fields helper                                               */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Collect all non-empty field values from the classification dropdowns.
+ * Returns sets of locked numeric and categorical field names.
+ */
+function getLockedFieldsFromClassification(): { lockedNumeric: Set<string>; lockedCategorical: Set<string> } {
+  const numSet = new Set(S.lastNumericFieldsFromSchema.map(f => f.toLowerCase()));
+  const catSet = new Set(S.lastCategoricalFieldsFromSchema.map(f => f.toLowerCase()));
+  const lockedNumeric = new Set<string>();
+  const lockedCategorical = new Set<string>();
+
+  // All field-select elements in the classification modal
+  const selects: HTMLSelectElement[] = [
+    parcelIdFieldSel, addressFieldSel,
+    bldgFieldSel, bldgQualityFieldSel, bldgConditionFieldSel,
+    bldgAgeFieldSel, bldgEffAgeFieldSel, bldgBedsFieldSel, bldgBathsFieldSel, bldgTypeFieldSel,
+    landFieldSel, landTypeFieldSel, landZoningFieldSel,
+    fullMarketValueFieldSel, assessedValueFieldSel, landValueFieldSel, improvementValueFieldSel,
+    saleIdFieldSel, salePriceFieldSel, saleDateFieldSel, validSaleFieldSel, vacantSaleFieldSel,
+  ];
+
+  for (const sel of selects) {
+    const v = sel.value;
+    if (!v) continue;
+    const vLC = v.toLowerCase();
+    if (numSet.has(vLC)) lockedNumeric.add(v);
+    if (catSet.has(vLC)) lockedCategorical.add(v);
+  }
+
+  return { lockedNumeric, lockedCategorical };
+}
+
+/* ------------------------------------------------------------------ */
+/*  Modal 1: Key field classification (was Modal 3)                    */
 /* ------------------------------------------------------------------ */
 
 export function openSizeModal() {
-  // options: only among the fields the user kept
-  const numericFields = S.chosenNumericFields;
-  const allChosenFields = [...S.chosenNumericFields, ...S.chosenCategoricalFields];
+  // Now first step: use ALL schema fields (not just chosen ones)
+  const numericFields = S.lastNumericFieldsFromSchema;
+  const categoricalFields = S.lastCategoricalFieldsFromSchema;
+  const allFields = [...numericFields, ...categoricalFields];
 
-  // --- Populate dropdowns ---
+  // --- Populate dropdowns with type-restricted field pools ---
 
   // Top level
-  fillFieldSelect(parcelIdFieldSel, allChosenFields);
-  fillFieldSelect(addressFieldSel, allChosenFields);
+  fillFieldSelect(parcelIdFieldSel, allFields);            // any
+  fillFieldSelect(addressFieldSel, categoricalFields);     // categorical
 
   // Building/Improvement
-  fillFieldSelect(bldgFieldSel, numericFields);
-  fillUnitSelect(bldgUnitSel);
-  fillFieldSelect(bldgQualityFieldSel, allChosenFields);
-  fillFieldSelect(bldgConditionFieldSel, allChosenFields);
-  fillFieldSelect(bldgAgeFieldSel, numericFields);
-  fillFieldSelect(bldgEffAgeFieldSel, numericFields);
-  fillFieldSelect(bldgBedsFieldSel, numericFields);
-  fillFieldSelect(bldgBathsFieldSel, numericFields);
-  fillFieldSelect(bldgTypeFieldSel, allChosenFields);
+  fillFieldSelect(bldgFieldSel, numericFields);            // numeric
+  fillUnitSelect(bldgUnitSel);                             // hardcoded units
+  fillFieldSelect(bldgQualityFieldSel, numericFields);     // numeric
+  fillFieldSelect(bldgConditionFieldSel, numericFields);   // numeric
+  fillFieldSelect(bldgAgeFieldSel, numericFields);         // numeric
+  fillFieldSelect(bldgEffAgeFieldSel, numericFields);      // numeric
+  fillFieldSelect(bldgBedsFieldSel, numericFields);        // numeric
+  fillFieldSelect(bldgBathsFieldSel, numericFields);       // numeric
+  fillFieldSelect(bldgTypeFieldSel, categoricalFields);    // categorical
 
   // Land
-  fillFieldSelect(landFieldSel, numericFields);
-  fillUnitSelect(landUnitSel);
-  fillFieldSelect(landTypeFieldSel, allChosenFields);
-  fillFieldSelect(landZoningFieldSel, allChosenFields);
+  fillFieldSelect(landFieldSel, numericFields);            // numeric
+  fillUnitSelect(landUnitSel);                             // hardcoded units
+  fillFieldSelect(landTypeFieldSel, categoricalFields);    // categorical
+  fillFieldSelect(landZoningFieldSel, categoricalFields);  // categorical
+
+  // Assessed Values
+  fillFieldSelect(fullMarketValueFieldSel, numericFields);     // numeric
+  fillFieldSelect(assessedValueFieldSel, numericFields);       // numeric
+  fillFieldSelect(landValueFieldSel, numericFields);           // numeric
+  fillFieldSelect(improvementValueFieldSel, numericFields);    // numeric
 
   // Sale
-  fillFieldSelect(saleIdFieldSel, allChosenFields);
-  fillFieldSelect(salePriceFieldSel, numericFields);
-  fillFieldSelect(saleDateFieldSel, allChosenFields);
-  fillFieldSelect(validSaleFieldSel, allChosenFields);
-  fillFieldSelect(vacantSaleFieldSel, allChosenFields);
+  fillFieldSelect(saleIdFieldSel, categoricalFields);      // categorical
+  fillFieldSelect(salePriceFieldSel, numericFields);       // numeric
+  fillFieldSelect(saleDateFieldSel, allFields);            // any
+  fillFieldSelect(validSaleFieldSel, allFields);           // any (boolean)
+  fillFieldSelect(vacantSaleFieldSel, allFields);          // any (boolean)
 
   // --- AUTO-PICK using heuristics ---
 
   // Top level
-  const parcelIdGuess = autoPickParcelIdField(allChosenFields);
+  const parcelIdGuess = autoPickParcelIdField(allFields);
   if (parcelIdGuess) parcelIdFieldSel.value = parcelIdGuess;
 
-  const addressGuess = autoPickAddressField(allChosenFields);
+  const addressGuess = autoPickAddressField(categoricalFields);
   if (addressGuess) addressFieldSel.value = addressGuess;
 
   // Building size + unit
@@ -975,10 +1149,10 @@ export function openSizeModal() {
   }
 
   // Building extra fields
-  const bldgQualityGuess = autoPickBldgQualityField(allChosenFields);
+  const bldgQualityGuess = autoPickBldgQualityField(numericFields);
   if (bldgQualityGuess) bldgQualityFieldSel.value = bldgQualityGuess;
 
-  const bldgConditionGuess = autoPickBldgConditionField(allChosenFields);
+  const bldgConditionGuess = autoPickBldgConditionField(numericFields);
   if (bldgConditionGuess) bldgConditionFieldSel.value = bldgConditionGuess;
 
   const bldgAgeGuess = autoPickBldgAgeField(numericFields);
@@ -993,30 +1167,43 @@ export function openSizeModal() {
   const bldgBathsGuess = autoPickBldgBathsField(numericFields);
   if (bldgBathsGuess) bldgBathsFieldSel.value = bldgBathsGuess;
 
-  const bldgTypeGuess = autoPickBldgTypeField(allChosenFields);
+  const bldgTypeGuess = autoPickBldgTypeField(categoricalFields);
   if (bldgTypeGuess) bldgTypeFieldSel.value = bldgTypeGuess;
 
   // Land extra fields
-  const landTypeGuess = autoPickLandTypeField(allChosenFields);
+  const landTypeGuess = autoPickLandTypeField(categoricalFields);
   if (landTypeGuess) landTypeFieldSel.value = landTypeGuess;
 
-  const landZoningGuess = autoPickLandZoningField(allChosenFields);
+  const landZoningGuess = autoPickLandZoningField(categoricalFields);
   if (landZoningGuess) landZoningFieldSel.value = landZoningGuess;
 
+  // Assessed value fields
+  const fullMarketValueGuess = autoPickFullMarketValueField(numericFields);
+  if (fullMarketValueGuess) fullMarketValueFieldSel.value = fullMarketValueGuess;
+
+  const assessedValueGuess = autoPickAssessedValueField(numericFields);
+  if (assessedValueGuess) assessedValueFieldSel.value = assessedValueGuess;
+
+  const landValueGuess = autoPickLandValueField(numericFields);
+  if (landValueGuess) landValueFieldSel.value = landValueGuess;
+
+  const improvementValueGuess = autoPickImprovementValueField(numericFields);
+  if (improvementValueGuess) improvementValueFieldSel.value = improvementValueGuess;
+
   // Sale fields
-  const saleIdGuess = autoPickSaleIdField(allChosenFields);
+  const saleIdGuess = autoPickSaleIdField(categoricalFields);
   if (saleIdGuess) saleIdFieldSel.value = saleIdGuess;
 
   const salePriceGuess = autoPickSalePriceField(numericFields);
   if (salePriceGuess) salePriceFieldSel.value = salePriceGuess;
 
-  const saleDateGuess = autoPickSaleDateField(allChosenFields);
+  const saleDateGuess = autoPickSaleDateField(allFields);
   if (saleDateGuess) saleDateFieldSel.value = saleDateGuess;
 
-  const validSaleGuess = autoPickValidSaleField(allChosenFields);
+  const validSaleGuess = autoPickValidSaleField(allFields);
   if (validSaleGuess) validSaleFieldSel.value = validSaleGuess;
 
-  const vacantSaleGuess = autoPickVacantSaleField(allChosenFields);
+  const vacantSaleGuess = autoPickVacantSaleField(allFields);
   if (vacantSaleGuess) vacantSaleFieldSel.value = vacantSaleGuess;
 
   // --- onchange handlers for unit auto-guess ---
@@ -1030,30 +1217,25 @@ export function openSizeModal() {
   };
 
   // --- Button handlers ---
+  // Classification is now the FIRST step - no "Back" from here, just Cancel
   btnSizeBack.onclick = () => {
     sizeOverlay.classList.remove('show');
-    if (S.lastCategoricalFieldsFromSchema.length > 0) {
-      openCategoricalFieldChooserModal({
-        rowCount: Number(categoricalRowCountEl.textContent?.replace(/,/g, '') || '0'),
-        geometryCol: categoricalGeomColEl.textContent || 'geometry',
-        categoricalFields: S.lastCategoricalFieldsFromSchema
-      });
-    } else {
-      openNumericFieldChooserModal({
-        rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'),
-        geometryCol: geomColEl.textContent || 'geometry',
-        numericFields: S.lastNumericFieldsFromSchema
-      });
-    }
+    _clearData();
   };
+  btnSizeBack.textContent = 'Cancel';
 
   btnSizeSkip.onclick = () => {
-    setSizeState(null, null, null, null);
+    // Skip classification - go straight to numeric field chooser with no locked fields
     sizeOverlay.classList.remove('show');
-    _loadSelectedColumns();
+    openNumericFieldChooserModal({
+      rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'),
+      geometryCol: geomColEl.textContent || 'geometry',
+      numericFields: S.lastNumericFieldsFromSchema
+    });
   };
 
   btnSizeOk.onclick = () => {
+    // Save classification state
     setSizeState(
       bldgFieldSel.value || null,
       valueToUnitLabel(bldgUnitSel.value || ''),
@@ -1078,10 +1260,19 @@ export function openSizeModal() {
         landType: landTypeFieldSel.value || null,
         landZoning: landZoningFieldSel.value || null,
         saleId: saleIdFieldSel.value || null,
+        fullMarketValue: fullMarketValueFieldSel.value || null,
+        assessedValue: assessedValueFieldSel.value || null,
+        landValue: landValueFieldSel.value || null,
+        improvementValue: improvementValueFieldSel.value || null,
       }
     );
     sizeOverlay.classList.remove('show');
-    _loadSelectedColumns();
+    // Advance to numeric field chooser (step 2)
+    openNumericFieldChooserModal({
+      rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'),
+      geometryCol: geomColEl.textContent || 'geometry',
+      numericFields: S.lastNumericFieldsFromSchema
+    });
   };
 
   sizeOverlay.classList.add('show');

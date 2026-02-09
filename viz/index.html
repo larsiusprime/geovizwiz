@@ -23,6 +23,10 @@
       pointer-events: auto;
     }
 
+    .section-subtitle {
+      font-weight: bold;
+    }
+
     .pinned-column {
       display: flex;
       flex-direction: column;
@@ -2081,7 +2085,7 @@
       <div style="display:grid; gap:12px; margin-top: 12px;">
 
         <!-- Parcel ID / Address (top level, no section header) -->
-        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center;">
+        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center; font-size:12px;">
           <label>Parcel ID:</label>
           <select id="parcelIdField" style="width:100%;"></select>
           <label>Address:</label>
@@ -2090,7 +2094,7 @@
 
         <!-- Building/Improvement -->
         <div class="section-subtitle">Building/Improvement</div>
-        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center;">
+        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center; font-size:12px;">
           <label><strong>Size:</strong></label>
           <select id="bldgField" style="width:100%;"></select>
           <label><strong>Size unit:</strong></label>
@@ -2118,7 +2122,7 @@
 
         <!-- Land -->
         <div class="section-subtitle">Land</div>
-        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center;">
+        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center; font-size:12px;">
           <label><strong>Size:</strong></label>
           <select id="landField" style="width:100%;"></select>
           <label><strong>Size unit:</strong></label>
@@ -2130,9 +2134,23 @@
           <select id="landZoningField" style="width:100%;"></select>
         </div>
 
+        <!-- Assessed Values -->
+        <div class="section-subtitle">Assessed Values</div>
+        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center; font-size:12px;">
+          <label>Full market value:</label>
+          <select id="fullMarketValueField" style="width:100%;"></select>
+          <label>Assessed/taxable value:</label>
+          <select id="assessedValueField" style="width:100%;"></select>
+
+          <label>Land value:</label>
+          <select id="landValueField" style="width:100%;"></select>
+          <label>Improvement value:</label>
+          <select id="improvementValueField" style="width:100%;"></select>
+        </div>
+
         <!-- Sale -->
         <div class="section-subtitle">Sale</div>
-        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center;">
+        <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:6px 10px; align-items:center; font-size:12px;">
           <label>Sale ID:</label>
           <select id="saleIdField" style="width:100%;"></select>
           <span></span><span></span>

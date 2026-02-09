@@ -72,6 +72,10 @@ export const S = {
   landTypeField: null as string | null,
   landZoningField: null as string | null,
   saleIdField: null as string | null,
+  fullMarketValueField: null as string | null,
+  assessedValueField: null as string | null,
+  landValueField: null as string | null,
+  improvementValueField: null as string | null,
 
   // --- UI overlays ---
   welcomeEl: null as HTMLDivElement | null,

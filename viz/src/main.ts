@@ -895,6 +895,10 @@ initModalElements({
   landTypeFieldSel: document.getElementById('landTypeField') as HTMLSelectElement,
   landZoningFieldSel: document.getElementById('landZoningField') as HTMLSelectElement,
   saleIdFieldSel: document.getElementById('saleIdField') as HTMLSelectElement,
+  fullMarketValueFieldSel: document.getElementById('fullMarketValueField') as HTMLSelectElement,
+  assessedValueFieldSel: document.getElementById('assessedValueField') as HTMLSelectElement,
+  landValueFieldSel: document.getElementById('landValueField') as HTMLSelectElement,
+  improvementValueFieldSel: document.getElementById('improvementValueField') as HTMLSelectElement,
   btnSizeBack: document.getElementById('btnSizeBack') as HTMLButtonElement,
   btnSizeSkip: document.getElementById('btnSizeSkip') as HTMLButtonElement,
   btnSizeOk: document.getElementById('btnSizeOk') as HTMLButtonElement,
@@ -2000,19 +2004,12 @@ fileInput.addEventListener('change', async () => {
       // Skip wizard, load data directly
       await loadSelectedColumns();
     } else {
-      // Normal flow: show wizard
-      if (S.lastNumericFieldsFromSchema.length > 0) {
-        openNumericFieldChooserModal({
-          rowCount: numRows,
-          geometryCol: primaryGeom,
-          numericFields: S.lastNumericFieldsFromSchema
-        });
-      } else if (S.lastCategoricalFieldsFromSchema.length > 0) {
-        openCategoricalFieldChooserModal({
-          rowCount: numRows,
-          geometryCol: primaryGeom,
-          categoricalFields: S.lastCategoricalFieldsFromSchema
-        });
+      // Normal flow: show wizard starting with key field classification
+      if (S.lastNumericFieldsFromSchema.length > 0 || S.lastCategoricalFieldsFromSchema.length > 0) {
+        // Store row count / geom col for later modals to reference
+        (document.getElementById('rowCount') as HTMLElement).textContent = numRows.toLocaleString();
+        (document.getElementById('geomCol') as HTMLElement).textContent = primaryGeom || '(unknown)';
+        openSizeModal();
       } else {
         alert('No numeric or categorical fields found in the file.');
       }

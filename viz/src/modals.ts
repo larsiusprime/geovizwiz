@@ -69,6 +69,18 @@ let salePriceFieldSel: HTMLSelectElement;
 let saleDateFieldSel: HTMLSelectElement;
 let validSaleFieldSel: HTMLSelectElement;
 let vacantSaleFieldSel: HTMLSelectElement;
+let parcelIdFieldSel: HTMLSelectElement;
+let addressFieldSel: HTMLSelectElement;
+let bldgQualityFieldSel: HTMLSelectElement;
+let bldgConditionFieldSel: HTMLSelectElement;
+let bldgAgeFieldSel: HTMLSelectElement;
+let bldgEffAgeFieldSel: HTMLSelectElement;
+let bldgBedsFieldSel: HTMLSelectElement;
+let bldgBathsFieldSel: HTMLSelectElement;
+let bldgTypeFieldSel: HTMLSelectElement;
+let landTypeFieldSel: HTMLSelectElement;
+let landZoningFieldSel: HTMLSelectElement;
+let saleIdFieldSel: HTMLSelectElement;
 let btnSizeBack: HTMLButtonElement;
 let btnSizeSkip: HTMLButtonElement;
 let btnSizeOk: HTMLButtonElement;
@@ -113,6 +125,18 @@ export function initModalElements(els: {
   saleDateFieldSel: HTMLSelectElement;
   validSaleFieldSel: HTMLSelectElement;
   vacantSaleFieldSel: HTMLSelectElement;
+  parcelIdFieldSel: HTMLSelectElement;
+  addressFieldSel: HTMLSelectElement;
+  bldgQualityFieldSel: HTMLSelectElement;
+  bldgConditionFieldSel: HTMLSelectElement;
+  bldgAgeFieldSel: HTMLSelectElement;
+  bldgEffAgeFieldSel: HTMLSelectElement;
+  bldgBedsFieldSel: HTMLSelectElement;
+  bldgBathsFieldSel: HTMLSelectElement;
+  bldgTypeFieldSel: HTMLSelectElement;
+  landTypeFieldSel: HTMLSelectElement;
+  landZoningFieldSel: HTMLSelectElement;
+  saleIdFieldSel: HTMLSelectElement;
   btnSizeBack: HTMLButtonElement;
   btnSizeSkip: HTMLButtonElement;
   btnSizeOk: HTMLButtonElement;
@@ -152,6 +176,18 @@ export function initModalElements(els: {
   saleDateFieldSel = els.saleDateFieldSel;
   validSaleFieldSel = els.validSaleFieldSel;
   vacantSaleFieldSel = els.vacantSaleFieldSel;
+  parcelIdFieldSel = els.parcelIdFieldSel;
+  addressFieldSel = els.addressFieldSel;
+  bldgQualityFieldSel = els.bldgQualityFieldSel;
+  bldgConditionFieldSel = els.bldgConditionFieldSel;
+  bldgAgeFieldSel = els.bldgAgeFieldSel;
+  bldgEffAgeFieldSel = els.bldgEffAgeFieldSel;
+  bldgBedsFieldSel = els.bldgBedsFieldSel;
+  bldgBathsFieldSel = els.bldgBathsFieldSel;
+  bldgTypeFieldSel = els.bldgTypeFieldSel;
+  landTypeFieldSel = els.landTypeFieldSel;
+  landZoningFieldSel = els.landZoningFieldSel;
+  saleIdFieldSel = els.saleIdFieldSel;
   btnSizeBack = els.btnSizeBack;
   btnSizeSkip = els.btnSizeSkip;
   btnSizeOk = els.btnSizeOk;
@@ -405,6 +441,117 @@ export function autoPickValidSaleField(allFields: string[]): string | null {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Additional field auto-pick heuristics                              */
+/* ------------------------------------------------------------------ */
+
+export function autoPickParcelIdField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["parcel", "id"],
+    ["parcelid"],
+    ["parcel", "num"],
+    ["parcel", "no"],
+    ["pin"],
+    ["apn"],
+  ]);
+}
+
+export function autoPickAddressField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["address"],
+    ["addr"],
+    ["street", "addr"],
+    ["situs"],
+    ["situs", "addr"],
+  ]);
+}
+
+export function autoPickBldgQualityField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["quality"],
+    ["grade"],
+    ["bldg", "class"],
+    ["building", "class"],
+  ]);
+}
+
+export function autoPickBldgConditionField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["condition"],
+    ["cond"],
+    ["bldg", "cond"],
+    ["building", "cond"],
+  ]);
+}
+
+export function autoPickBldgAgeField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["actual", "age"],
+    ["age"],
+    ["yr", "built"],
+    ["year", "built"],
+  ]);
+}
+
+export function autoPickBldgEffAgeField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["eff", "age"],
+    ["effective", "age"],
+    ["effage"],
+  ]);
+}
+
+export function autoPickBldgBedsField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["bedrooms"],
+    ["bedroom"],
+    ["beds"],
+    ["bed"],
+  ]);
+}
+
+export function autoPickBldgBathsField(numericFields: string[]): string | null {
+  return guessFieldByKeywordGroups(numericFields, [
+    ["bathrooms"],
+    ["bathroom"],
+    ["baths"],
+    ["bath"],
+  ]);
+}
+
+export function autoPickBldgTypeField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["bldg", "type"],
+    ["building", "type"],
+    ["prop", "type"],
+    ["property", "type"],
+    ["use", "code"],
+  ]);
+}
+
+export function autoPickLandTypeField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["land", "type"],
+    ["land", "use"],
+  ]);
+}
+
+export function autoPickLandZoningField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["zoning"],
+    ["zone"],
+  ]);
+}
+
+export function autoPickSaleIdField(allFields: string[]): string | null {
+  return guessFieldByKeywordGroups(allFields, [
+    ["sale", "id"],
+    ["book"],
+    ["instrument"],
+    ["deed"],
+  ]);
+}
+
+/* ------------------------------------------------------------------ */
 /*  Dropdown helpers                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -449,9 +596,41 @@ export type SizeAndSaleState = {
   saleDateField: string | null;
   validSaleField: string | null;
   vacantSaleField: string | null;
+  parcelIdField: string | null;
+  addressField: string | null;
+  bldgQualityField: string | null;
+  bldgConditionField: string | null;
+  bldgAgeField: string | null;
+  bldgEffAgeField: string | null;
+  bldgBedsField: string | null;
+  bldgBathsField: string | null;
+  bldgTypeField: string | null;
+  landTypeField: string | null;
+  landZoningField: string | null;
+  saleIdField: string | null;
 };
 
-export function setSizeState(bField: string | null, bUnit: string | null, lField: string | null, lUnit: string | null, saleData?: { price: string | null; date: string | null; valid: string | null; vacant: string | null }) {
+export type ExtraKeyFields = {
+  parcelId: string | null;
+  address: string | null;
+  bldgQuality: string | null;
+  bldgCondition: string | null;
+  bldgAge: string | null;
+  bldgEffAge: string | null;
+  bldgBeds: string | null;
+  bldgBaths: string | null;
+  bldgType: string | null;
+  landType: string | null;
+  landZoning: string | null;
+  saleId: string | null;
+};
+
+export function setSizeState(
+  bField: string | null, bUnit: string | null,
+  lField: string | null, lUnit: string | null,
+  saleData?: { price: string | null; date: string | null; valid: string | null; vacant: string | null },
+  extraFields?: ExtraKeyFields
+) {
   S.bldgSizeField = bField || null;
   S.bldgSizeUnitLabel = bUnit || null;
   S.landSizeField = lField || null;
@@ -484,6 +663,36 @@ export function setSizeState(bField: string | null, bUnit: string | null, lField
       activeStore.saleDateField = saleData.date || null;
       activeStore.validSaleField = saleData.valid || null;
       activeStore.vacantSaleField = saleData.vacant || null;
+    }
+  }
+
+  // Handle extra key fields
+  if (extraFields) {
+    S.parcelIdField = extraFields.parcelId || null;
+    S.addressField = extraFields.address || null;
+    S.bldgQualityField = extraFields.bldgQuality || null;
+    S.bldgConditionField = extraFields.bldgCondition || null;
+    S.bldgAgeField = extraFields.bldgAge || null;
+    S.bldgEffAgeField = extraFields.bldgEffAge || null;
+    S.bldgBedsField = extraFields.bldgBeds || null;
+    S.bldgBathsField = extraFields.bldgBaths || null;
+    S.bldgTypeField = extraFields.bldgType || null;
+    S.landTypeField = extraFields.landType || null;
+    S.landZoningField = extraFields.landZoning || null;
+    S.saleIdField = extraFields.saleId || null;
+    if (activeStore) {
+      activeStore.parcelIdField = extraFields.parcelId || null;
+      activeStore.addressField = extraFields.address || null;
+      activeStore.bldgQualityField = extraFields.bldgQuality || null;
+      activeStore.bldgConditionField = extraFields.bldgCondition || null;
+      activeStore.bldgAgeField = extraFields.bldgAge || null;
+      activeStore.bldgEffAgeField = extraFields.bldgEffAge || null;
+      activeStore.bldgBedsField = extraFields.bldgBeds || null;
+      activeStore.bldgBathsField = extraFields.bldgBaths || null;
+      activeStore.bldgTypeField = extraFields.bldgType || null;
+      activeStore.landTypeField = extraFields.landType || null;
+      activeStore.landZoningField = extraFields.landZoning || null;
+      activeStore.saleIdField = extraFields.saleId || null;
     }
   }
 
@@ -708,21 +917,51 @@ export function openCategoricalFieldChooserModal(opts: {
 
 export function openSizeModal() {
   // options: only among the fields the user kept
-  fillFieldSelect(bldgFieldSel, S.chosenNumericFields);
-  fillFieldSelect(landFieldSel, S.chosenNumericFields);
-  fillUnitSelect(bldgUnitSel);
-  fillUnitSelect(landUnitSel);
-
-  // For sale data fields, use all available fields (numeric + categorical)
+  const numericFields = S.chosenNumericFields;
   const allChosenFields = [...S.chosenNumericFields, ...S.chosenCategoricalFields];
-  fillFieldSelect(salePriceFieldSel, S.chosenNumericFields);
+
+  // --- Populate dropdowns ---
+
+  // Top level
+  fillFieldSelect(parcelIdFieldSel, allChosenFields);
+  fillFieldSelect(addressFieldSel, allChosenFields);
+
+  // Building/Improvement
+  fillFieldSelect(bldgFieldSel, numericFields);
+  fillUnitSelect(bldgUnitSel);
+  fillFieldSelect(bldgQualityFieldSel, allChosenFields);
+  fillFieldSelect(bldgConditionFieldSel, allChosenFields);
+  fillFieldSelect(bldgAgeFieldSel, numericFields);
+  fillFieldSelect(bldgEffAgeFieldSel, numericFields);
+  fillFieldSelect(bldgBedsFieldSel, numericFields);
+  fillFieldSelect(bldgBathsFieldSel, numericFields);
+  fillFieldSelect(bldgTypeFieldSel, allChosenFields);
+
+  // Land
+  fillFieldSelect(landFieldSel, numericFields);
+  fillUnitSelect(landUnitSel);
+  fillFieldSelect(landTypeFieldSel, allChosenFields);
+  fillFieldSelect(landZoningFieldSel, allChosenFields);
+
+  // Sale
+  fillFieldSelect(saleIdFieldSel, allChosenFields);
+  fillFieldSelect(salePriceFieldSel, numericFields);
   fillFieldSelect(saleDateFieldSel, allChosenFields);
   fillFieldSelect(validSaleFieldSel, allChosenFields);
   fillFieldSelect(vacantSaleFieldSel, allChosenFields);
 
-  // --- AUTO-PICK using heuristic ---
-  const bGuess = autoPickOne('building', S.chosenNumericFields);
-  const lGuess = autoPickOne('land', S.chosenNumericFields);
+  // --- AUTO-PICK using heuristics ---
+
+  // Top level
+  const parcelIdGuess = autoPickParcelIdField(allChosenFields);
+  if (parcelIdGuess) parcelIdFieldSel.value = parcelIdGuess;
+
+  const addressGuess = autoPickAddressField(allChosenFields);
+  if (addressGuess) addressFieldSel.value = addressGuess;
+
+  // Building size + unit
+  const bGuess = autoPickOne('building', numericFields);
+  const lGuess = autoPickOne('land', numericFields);
 
   if (bGuess.field) {
     bldgFieldSel.value = bGuess.field;
@@ -735,8 +974,40 @@ export function openSizeModal() {
     if (u) landUnitSel.value = u;
   }
 
-  // Auto-pick sale data fields
-  const salePriceGuess = autoPickSalePriceField(S.chosenNumericFields);
+  // Building extra fields
+  const bldgQualityGuess = autoPickBldgQualityField(allChosenFields);
+  if (bldgQualityGuess) bldgQualityFieldSel.value = bldgQualityGuess;
+
+  const bldgConditionGuess = autoPickBldgConditionField(allChosenFields);
+  if (bldgConditionGuess) bldgConditionFieldSel.value = bldgConditionGuess;
+
+  const bldgAgeGuess = autoPickBldgAgeField(numericFields);
+  if (bldgAgeGuess) bldgAgeFieldSel.value = bldgAgeGuess;
+
+  const bldgEffAgeGuess = autoPickBldgEffAgeField(numericFields);
+  if (bldgEffAgeGuess) bldgEffAgeFieldSel.value = bldgEffAgeGuess;
+
+  const bldgBedsGuess = autoPickBldgBedsField(numericFields);
+  if (bldgBedsGuess) bldgBedsFieldSel.value = bldgBedsGuess;
+
+  const bldgBathsGuess = autoPickBldgBathsField(numericFields);
+  if (bldgBathsGuess) bldgBathsFieldSel.value = bldgBathsGuess;
+
+  const bldgTypeGuess = autoPickBldgTypeField(allChosenFields);
+  if (bldgTypeGuess) bldgTypeFieldSel.value = bldgTypeGuess;
+
+  // Land extra fields
+  const landTypeGuess = autoPickLandTypeField(allChosenFields);
+  if (landTypeGuess) landTypeFieldSel.value = landTypeGuess;
+
+  const landZoningGuess = autoPickLandZoningField(allChosenFields);
+  if (landZoningGuess) landZoningFieldSel.value = landZoningGuess;
+
+  // Sale fields
+  const saleIdGuess = autoPickSaleIdField(allChosenFields);
+  if (saleIdGuess) saleIdFieldSel.value = saleIdGuess;
+
+  const salePriceGuess = autoPickSalePriceField(numericFields);
   if (salePriceGuess) salePriceFieldSel.value = salePriceGuess;
 
   const saleDateGuess = autoPickSaleDateField(allChosenFields);
@@ -748,6 +1019,7 @@ export function openSizeModal() {
   const vacantSaleGuess = autoPickVacantSaleField(allChosenFields);
   if (vacantSaleGuess) vacantSaleFieldSel.value = vacantSaleGuess;
 
+  // --- onchange handlers for unit auto-guess ---
   bldgFieldSel.onchange = () => {
     const g = guessAreaUnitFromFieldName(bldgFieldSel.value);
     if (g) bldgUnitSel.value = g;
@@ -757,9 +1029,9 @@ export function openSizeModal() {
     if (g) landUnitSel.value = g;
   };
 
+  // --- Button handlers ---
   btnSizeBack.onclick = () => {
     sizeOverlay.classList.remove('show');
-    // Go back to the appropriate modal based on what was shown
     if (S.lastCategoricalFieldsFromSchema.length > 0) {
       openCategoricalFieldChooserModal({
         rowCount: Number(categoricalRowCountEl.textContent?.replace(/,/g, '') || '0'),
@@ -774,7 +1046,13 @@ export function openSizeModal() {
       });
     }
   };
-  btnSizeSkip.onclick = () => { setSizeState(null, null, null, null); sizeOverlay.classList.remove('show'); _loadSelectedColumns(); };
+
+  btnSizeSkip.onclick = () => {
+    setSizeState(null, null, null, null);
+    sizeOverlay.classList.remove('show');
+    _loadSelectedColumns();
+  };
+
   btnSizeOk.onclick = () => {
     setSizeState(
       bldgFieldSel.value || null,
@@ -786,6 +1064,20 @@ export function openSizeModal() {
         date: saleDateFieldSel.value || null,
         valid: validSaleFieldSel.value || null,
         vacant: vacantSaleFieldSel.value || null,
+      },
+      {
+        parcelId: parcelIdFieldSel.value || null,
+        address: addressFieldSel.value || null,
+        bldgQuality: bldgQualityFieldSel.value || null,
+        bldgCondition: bldgConditionFieldSel.value || null,
+        bldgAge: bldgAgeFieldSel.value || null,
+        bldgEffAge: bldgEffAgeFieldSel.value || null,
+        bldgBeds: bldgBedsFieldSel.value || null,
+        bldgBaths: bldgBathsFieldSel.value || null,
+        bldgType: bldgTypeFieldSel.value || null,
+        landType: landTypeFieldSel.value || null,
+        landZoning: landZoningFieldSel.value || null,
+        saleId: saleIdFieldSel.value || null,
       }
     );
     sizeOverlay.classList.remove('show');

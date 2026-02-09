@@ -191,6 +191,18 @@ export type DataStore = {
   saleDateField: string | null;
   validSaleField: string | null;
   vacantSaleField: string | null;
+  parcelIdField: string | null;
+  addressField: string | null;
+  bldgQualityField: string | null;
+  bldgConditionField: string | null;
+  bldgAgeField: string | null;
+  bldgEffAgeField: string | null;
+  bldgBedsField: string | null;
+  bldgBathsField: string | null;
+  bldgTypeField: string | null;
+  landTypeField: string | null;
+  landZoningField: string | null;
+  saleIdField: string | null;
 };
 
 export type SubjectSelectorControls = {
@@ -217,6 +229,18 @@ export type SerializedDataSource = {
   landSizeUnitLabel: string | null;
   bldgSizeField: string | null;
   bldgSizeUnitLabel: string | null;
+  parcelIdField?: string | null;
+  addressField?: string | null;
+  bldgQualityField?: string | null;
+  bldgConditionField?: string | null;
+  bldgAgeField?: string | null;
+  bldgEffAgeField?: string | null;
+  bldgBedsField?: string | null;
+  bldgBathsField?: string | null;
+  bldgTypeField?: string | null;
+  landTypeField?: string | null;
+  landZoningField?: string | null;
+  saleIdField?: string | null;
 };
 
 export type SerializedLayer = {

@@ -30,7 +30,19 @@ function serializeDataSource(store: DataStore): SerializedDataSource {
     landSizeField: store.landSizeField,
     landSizeUnitLabel: store.landSizeUnitLabel,
     bldgSizeField: store.bldgSizeField,
-    bldgSizeUnitLabel: store.bldgSizeUnitLabel
+    bldgSizeUnitLabel: store.bldgSizeUnitLabel,
+    parcelIdField: store.parcelIdField,
+    addressField: store.addressField,
+    bldgQualityField: store.bldgQualityField,
+    bldgConditionField: store.bldgConditionField,
+    bldgAgeField: store.bldgAgeField,
+    bldgEffAgeField: store.bldgEffAgeField,
+    bldgBedsField: store.bldgBedsField,
+    bldgBathsField: store.bldgBathsField,
+    bldgTypeField: store.bldgTypeField,
+    landTypeField: store.landTypeField,
+    landZoningField: store.landZoningField,
+    saleIdField: store.saleIdField,
   };
 }
 
@@ -318,6 +330,18 @@ export async function loadProjectFile(file: File) {
         existingStore.landSizeUnitLabel = dsData.landSizeUnitLabel;
         existingStore.bldgSizeField = dsData.bldgSizeField;
         existingStore.bldgSizeUnitLabel = dsData.bldgSizeUnitLabel;
+        existingStore.parcelIdField = dsData.parcelIdField ?? null;
+        existingStore.addressField = dsData.addressField ?? null;
+        existingStore.bldgQualityField = dsData.bldgQualityField ?? null;
+        existingStore.bldgConditionField = dsData.bldgConditionField ?? null;
+        existingStore.bldgAgeField = dsData.bldgAgeField ?? null;
+        existingStore.bldgEffAgeField = dsData.bldgEffAgeField ?? null;
+        existingStore.bldgBedsField = dsData.bldgBedsField ?? null;
+        existingStore.bldgBathsField = dsData.bldgBathsField ?? null;
+        existingStore.bldgTypeField = dsData.bldgTypeField ?? null;
+        existingStore.landTypeField = dsData.landTypeField ?? null;
+        existingStore.landZoningField = dsData.landZoningField ?? null;
+        existingStore.saleIdField = dsData.saleIdField ?? null;
 
         // Handle "all fields" mode
         if (dsData.allNumericFields) {
@@ -348,7 +372,23 @@ export async function loadProjectFile(file: File) {
           landSizeField: dsData.landSizeField,
           landSizeUnitLabel: dsData.landSizeUnitLabel,
           bldgSizeField: dsData.bldgSizeField,
-          bldgSizeUnitLabel: dsData.bldgSizeUnitLabel
+          bldgSizeUnitLabel: dsData.bldgSizeUnitLabel,
+          salePriceField: null,
+          saleDateField: null,
+          validSaleField: null,
+          vacantSaleField: null,
+          parcelIdField: dsData.parcelIdField ?? null,
+          addressField: dsData.addressField ?? null,
+          bldgQualityField: dsData.bldgQualityField ?? null,
+          bldgConditionField: dsData.bldgConditionField ?? null,
+          bldgAgeField: dsData.bldgAgeField ?? null,
+          bldgEffAgeField: dsData.bldgEffAgeField ?? null,
+          bldgBedsField: dsData.bldgBedsField ?? null,
+          bldgBathsField: dsData.bldgBathsField ?? null,
+          bldgTypeField: dsData.bldgTypeField ?? null,
+          landTypeField: dsData.landTypeField ?? null,
+          landZoningField: dsData.landZoningField ?? null,
+          saleIdField: dsData.saleIdField ?? null,
         };
 
         // Store reference to expected parquet file

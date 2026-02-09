@@ -60,6 +60,18 @@ export const S = {
   landSizeUnitLabel: null as string | null,
   bldgSizeField: null as string | null,
   bldgSizeUnitLabel: null as string | null,
+  parcelIdField: null as string | null,
+  addressField: null as string | null,
+  bldgQualityField: null as string | null,
+  bldgConditionField: null as string | null,
+  bldgAgeField: null as string | null,
+  bldgEffAgeField: null as string | null,
+  bldgBedsField: null as string | null,
+  bldgBathsField: null as string | null,
+  bldgTypeField: null as string | null,
+  landTypeField: null as string | null,
+  landZoningField: null as string | null,
+  saleIdField: null as string | null,
 
   // --- UI overlays ---
   welcomeEl: null as HTMLDivElement | null,

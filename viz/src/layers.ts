@@ -257,6 +257,18 @@ export function createDataStore(file: File, asyncBuffer: AsyncBuffer): DataStore
     saleDateField: null,
     validSaleField: null,
     vacantSaleField: null,
+    parcelIdField: null,
+    addressField: null,
+    bldgQualityField: null,
+    bldgConditionField: null,
+    bldgAgeField: null,
+    bldgEffAgeField: null,
+    bldgBedsField: null,
+    bldgBathsField: null,
+    bldgTypeField: null,
+    landTypeField: null,
+    landZoningField: null,
+    saleIdField: null,
   };
 }
 

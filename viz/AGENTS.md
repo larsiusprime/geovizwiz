@@ -908,6 +908,9 @@ The comp finder is a tool/menu combination. There is a TOOL button on the toolba
 Clicking the comp finder button makes it the currently selected tool (alongside inspect, select, and pan). Clicking a parcel while the comp finder is the current tool gives that parcel comp-finder focus and brings up the comp-finder menu. It looks like this:
 
 +------------------------------------------------------+
+| Comp-Finder                                          |
++------------------------------------------------------+
+|                                                      |
 | ▼ Subject:                                           |<--subject
 | Parcel ID: 123456                                    |
 | Address: 123 Apple St                                |

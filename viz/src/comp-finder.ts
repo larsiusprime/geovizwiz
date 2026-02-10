@@ -789,6 +789,25 @@ function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'categorica
   return { text: String(value), sign: 'negative' as const };
 }
 
+
+function expandPanelForCompsIfNeeded() {
+  if (!isMenuVisible || comps.length === 0) return;
+  const panel = els.panel;
+  const header = panel.querySelector('.window-header') as HTMLElement | null;
+  const content = panel.querySelector('[data-window-content]') as HTMLElement | null;
+  if (!content) return;
+
+  const panelRect = panel.getBoundingClientRect();
+  const headerHeight = header?.getBoundingClientRect().height ?? 0;
+  const neededHeight = headerHeight + content.scrollHeight + 2;
+  const viewportMaxHeight = Math.max(320, window.innerHeight - panelRect.top - 12);
+  const targetHeight = Math.min(viewportMaxHeight, neededHeight);
+
+  if (targetHeight > panelRect.height + 2) {
+    panel.style.height = `${Math.ceil(targetHeight)}px`;
+  }
+}
+
 async function findComps() {
   if (!subject) return;
   const compStore = getCompDataStore();
@@ -831,13 +850,14 @@ async function findComps() {
   }
 
   currentPage = 1;
-  hasAttemptedFind = false;
+  hasAttemptedFind = true;
   setCriteriaDirty(false);
   updateRefreshButtonLabel();
   updateActionButtons();
   updateNoCompsIndicator();
   renderCompsTable();
   updateMapArtifacts();
+  setTimeout(() => expandPanelForCompsIfNeeded(), 0);
   setFinding(false);
 }
 
@@ -1003,7 +1023,7 @@ function renderCompsUI() {
 function resetComps() {
   comps = [];
   currentPage = 1;
-  hasAttemptedFind = true;
+  hasAttemptedFind = false;
   setCriteriaDirty(false);
   renderCompsUI();
   clearCompMarkers();

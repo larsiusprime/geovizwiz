@@ -96,6 +96,7 @@ let _addPopupEditFunctionality: (parcelId: string) => void = () => {};
 let _updateCursor: () => void = () => {};
 let _isTextInputElement: (el: Element | null) => boolean = () => false;
 let _activateTool: (tool: string) => void = () => {};
+let _setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void = () => {};
 let _hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string } = {
   PAN: 'h',
   SELECT: 'v',
@@ -118,6 +119,7 @@ export type RenderingCallbacks = {
   updateCursor: () => void;
   isTextInputElement: (el: Element | null) => boolean;
   activateTool: (tool: string) => void;
+  setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void;
   hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string };
 };
 
@@ -136,6 +138,7 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   _updateCursor = cb.updateCursor;
   _isTextInputElement = cb.isTextInputElement;
   _activateTool = cb.activateTool;
+  _setCompFinderSubject = cb.setCompFinderSubject;
   _hotkeys = cb.hotkeys;
 }
 
@@ -242,6 +245,11 @@ export function addExtrusionLayer(layer: LayerState) {
       const props = (f.properties || {}) as Record<string, any>;
       const parcelId = getParcelId(f);
       _showPopup(props, e.lngLat, parcelId);
+      return;
+    }
+
+    if (S.isCompFinderToolActive) {
+      _setCompFinderSubject(f, layer.id);
       return;
     }
 

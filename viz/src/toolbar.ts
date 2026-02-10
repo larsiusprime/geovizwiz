@@ -16,6 +16,7 @@ let _toggleLandSchedule: () => void = () => {};
 let _toggleTimeAdjustment: () => void = () => {};
 let _showCompFinderMenu: () => void = () => {};
 let _minimizeCompFinderMenu: () => void = () => {};
+let _setCompFinderToolActive: (active: boolean) => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
@@ -27,6 +28,7 @@ export interface ToolbarCallbacks {
   toggleTimeAdjustment: () => void;
   showCompFinderMenu: () => void;
   minimizeCompFinderMenu: () => void;
+  setCompFinderToolActive: (active: boolean) => void;
 }
 
 export function initToolbarCallbacks(cb: ToolbarCallbacks) {
@@ -39,6 +41,7 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _toggleTimeAdjustment = cb.toggleTimeAdjustment;
   _showCompFinderMenu = cb.showCompFinderMenu;
   _minimizeCompFinderMenu = cb.minimizeCompFinderMenu;
+  _setCompFinderToolActive = cb.setCompFinderToolActive;
 }
 
 /* ---------- DOM elements ---------- */
@@ -220,6 +223,7 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
       // Enable drag pan for pan tool
       S.map.dragPan.enable();
       _minimizeCompFinderMenu();
+      _setCompFinderToolActive(false);
       break;
     case 'info':
       S.isInfoToolActive = true;
@@ -227,12 +231,14 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
       // Disable drag pan for info tool
       S.map.dragPan.disable();
       _minimizeCompFinderMenu();
+      _setCompFinderToolActive(false);
       break;
     case 'select':
       selectToolButton.classList.add('active-tool');
       // Disable drag pan for select tool
       S.map.dragPan.disable();
       _minimizeCompFinderMenu();
+      _setCompFinderToolActive(false);
       break;
     case 'comp-finder':
       S.isCompFinderToolActive = true;
@@ -240,6 +246,7 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
       // Disable drag pan for comp finder tool
       S.map.dragPan.disable();
       _showCompFinderMenu();
+      _setCompFinderToolActive(true);
       break;
   }
 

@@ -1332,6 +1332,24 @@
       gap: 6px;
       flex-wrap: wrap;
     }
+
+    .comp-finder-comps.is-dirty {
+      opacity: 0.55;
+    }
+
+    .comp-finder-marker {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #3b82f6;
+      border: 2px solid #1d4ed8;
+      box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9);
+    }
+
+    .comp-finder-marker.subject {
+      background: #f97316;
+      border-color: #c2410c;
+    }
   </style>
 </head>
   <body>
@@ -1950,36 +1968,16 @@
         </div>
         <div id="compFinderSubjectBody" class="comp-finder-section-body">
           <div class="comp-finder-meta">
-            <div><strong>Parcel ID:</strong> <span>—</span></div>
-            <div><strong>Address:</strong> <span>—</span></div>
+            <div><strong>Parcel ID:</strong> <span id="compFinderSubjectParcelId">—</span></div>
+            <div><strong>Address:</strong> <span id="compFinderSubjectAddress">—</span></div>
           </div>
           <div class="comp-finder-row">
             <label for="compFinderFieldSelect">Fields:</label>
-            <select id="compFinderFieldSelect" disabled>
-              <option value="" selected>Select fields</option>
-            </select>
+            <select id="compFinderFieldSelect"></select>
           </div>
           <table class="comp-finder-table">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Bldg</th>
-                <th>Land</th>
-                <th>Age</th>
-                <th>Qual</th>
-                <th>Cond</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-                <td>—</td>
-              </tr>
-            </tbody>
+            <thead id="compFinderSubjectTableHead"></thead>
+            <tbody id="compFinderSubjectTableBody"></tbody>
           </table>
         </div>
       </div>
@@ -2017,52 +2015,7 @@
                 <th></th>
               </tr>
             </thead>
-            <tbody>
-              <tr>
-                <td>
-                  <select>
-                    <option value="">bldg_area</option>
-                  </select>
-                </td>
-                <td>
-                  <div class="comp-finder-row">
-                    <span class="muted">+/-</span>
-                    <input type="number" inputmode="decimal" style="width: 90px;" />
-                  </div>
-                </td>
-                <td class="center"><input type="checkbox" /></td>
-                <td class="center"><button type="button">✖</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <select>
-                    <option value="">land_area</option>
-                  </select>
-                </td>
-                <td>
-                  <div class="comp-finder-row">
-                    <span class="muted">+/-</span>
-                    <input type="number" inputmode="decimal" style="width: 90px;" />
-                  </div>
-                </td>
-                <td class="center"><input type="checkbox" /></td>
-                <td class="center"><button type="button">✖</button></td>
-              </tr>
-              <tr>
-                <td>
-                  <select>
-                    <option value="">type</option>
-                  </select>
-                </td>
-                <td>
-                  <select>
-                    <option value="">a / b / c</option>
-                  </select>
-                </td>
-                <td class="muted">N/A</td>
-                <td class="center"><button type="button">✖</button></td>
-              </tr>
-            </tbody>
+            <tbody id="compFinderCriteriaTableBody"></tbody>
           </table>
           <div style="display: flex; justify-content: flex-end;">
             <button id="compFinderAddCriterion" type="button" class="land-schedule-button">add criterion</button>
@@ -2079,40 +2032,24 @@
         </div>
         <div id="compFinderCompsBody" class="comp-finder-section-body">
           <button id="compFinderRefresh" type="button" class="land-schedule-button">Find comps</button>
-          <div style="max-height: 220px; overflow: auto;">
+          <div id="compFinderCompsTableContainer" class="comp-finder-comps" style="max-height: 220px; overflow: auto;">
             <table class="comp-finder-table">
-              <thead>
+              <thead id="compFinderCompsTableHead">
                 <tr>
-                  <th class="center"><input type="checkbox" /></th>
+                  <th class="center"><input id="compFinderCompsSelectAll" type="checkbox" /></th>
                   <th>ID</th>
                   <th>Address</th>
-                  <th>Bldg</th>
-                  <th>Land</th>
-                  <th>Age</th>
-                  <th>Qual</th>
-                  <th>Cond</th>
                 </tr>
               </thead>
-              <tbody>
-                <tr>
-                  <td class="center"><input type="checkbox" /></td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                  <td>—</td>
-                </tr>
-              </tbody>
+              <tbody id="compFinderCompsTableBody"></tbody>
             </table>
           </div>
           <div class="comp-finder-actions">
             <span class="muted">Selected:</span>
-            <button type="button" class="land-schedule-button" disabled>mark</button>
-            <button type="button" class="land-schedule-button" disabled>zoom to</button>
-            <button type="button" class="land-schedule-button" disabled><img src="./src/svg/csv.svg" alt="CSV" /></button>
-            <button type="button" class="land-schedule-button" disabled><img src="./src/svg/excel.svg" alt="Excel" /></button>
+            <button id="compFinderMark" type="button" class="land-schedule-button" disabled>mark</button>
+            <button id="compFinderZoomTo" type="button" class="land-schedule-button" disabled>zoom to</button>
+            <button id="compFinderExportCsv" type="button" class="land-schedule-button" disabled><img src="./src/svg/csv.svg" alt="CSV" /></button>
+            <button id="compFinderExportExcel" type="button" class="land-schedule-button" disabled><img src="./src/svg/excel.svg" alt="Excel" /></button>
           </div>
         </div>
       </div>

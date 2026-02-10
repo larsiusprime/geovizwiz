@@ -89,6 +89,12 @@ import {
   setSizeState, fillFieldSelect, fillUnitSelect,
 } from './modals';
 import {
+  initCompFinderElements,
+  initCompFinderCallbacks,
+  setCompFinderSubject,
+  setCompFinderToolActive,
+} from './comp-finder';
+import {
   initToolbarCallbacks, initializeToolbar,
   updateToolbarButtonStates, updateCursor,
   activateTool, HOTKEYS,
@@ -495,6 +501,25 @@ const legendContent = document.getElementById('legendContent') as HTMLDivElement
 const compFinderControlsEl = document.getElementById('compFinderControls') as HTMLDivElement;
 const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
 const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
+const compFinderSubjectParcelId = document.getElementById('compFinderSubjectParcelId') as HTMLSpanElement;
+const compFinderSubjectAddress = document.getElementById('compFinderSubjectAddress') as HTMLSpanElement;
+const compFinderFieldSelect = document.getElementById('compFinderFieldSelect') as HTMLSelectElement;
+const compFinderSubjectTableHead = document.getElementById('compFinderSubjectTableHead') as HTMLTableSectionElement;
+const compFinderSubjectTableBody = document.getElementById('compFinderSubjectTableBody') as HTMLTableSectionElement;
+const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
+const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
+const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits') as HTMLSelectElement;
+const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaTableBody') as HTMLTableSectionElement;
+const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
+const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
+const compFinderCompsTableHead = document.getElementById('compFinderCompsTableHead') as HTMLTableSectionElement;
+const compFinderCompsTableBody = document.getElementById('compFinderCompsTableBody') as HTMLTableSectionElement;
+const compFinderCompsTableContainer = document.getElementById('compFinderCompsTableContainer') as HTMLDivElement;
+const compFinderCompsSelectAll = document.getElementById('compFinderCompsSelectAll') as HTMLInputElement;
+const compFinderMarkButton = document.getElementById('compFinderMark') as HTMLButtonElement;
+const compFinderZoomButton = document.getElementById('compFinderZoomTo') as HTMLButtonElement;
+const compFinderExportCsv = document.getElementById('compFinderExportCsv') as HTMLButtonElement;
+const compFinderExportExcel = document.getElementById('compFinderExportExcel') as HTMLButtonElement;
 
 // Modal overlays (managed by modals.ts via initModalElements)
 const numericModalOverlay = document.getElementById('numericModalOverlay')!;
@@ -889,6 +914,7 @@ initRenderingCallbacks({
   updateCursor,
   isTextInputElement,
   activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder'),
+  setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => setCompFinderSubject(feature, layerId),
   hotkeys: HOTKEYS,
 });
 
@@ -1095,6 +1121,32 @@ initTimeAdjustmentElements({
   minSampleInput: document.getElementById('timeAdjustmentMinSample') as HTMLInputElement,
   sizeHeader: document.getElementById('timeAdjustmentSizeHeader') as HTMLTableCellElement,
   ratioHeader: document.getElementById('timeAdjustmentRatioHeader') as HTMLTableCellElement,
+});
+
+initCompFinderElements({
+  panel: compFinderControlsEl,
+  subjectParcelId: compFinderSubjectParcelId,
+  subjectAddress: compFinderSubjectAddress,
+  subjectFieldSelect: compFinderFieldSelect,
+  subjectTableHead: compFinderSubjectTableHead,
+  subjectTableBody: compFinderSubjectTableBody,
+  dataSourceSelect: compFinderDataSourceSelect,
+  distanceInput: compFinderDistanceInput,
+  distanceUnitsSelect: compFinderDistanceUnits,
+  criteriaTableBody: compFinderCriteriaTableBody,
+  addCriterionButton: compFinderAddCriterion,
+  refreshButton: compFinderRefresh,
+  compsTableHead: compFinderCompsTableHead,
+  compsTableBody: compFinderCompsTableBody,
+  compsTableContainer: compFinderCompsTableContainer,
+  compsSelectAll: compFinderCompsSelectAll,
+  markButton: compFinderMarkButton,
+  zoomButton: compFinderZoomButton,
+  exportCsvButton: compFinderExportCsv,
+  exportExcelButton: compFinderExportExcel,
+});
+initCompFinderCallbacks({
+  showCompFinderMenu: showCompFinder,
 });
 
 // Wire DOM elements and callbacks into the layers module
@@ -2584,6 +2636,7 @@ initToolbarCallbacks({
   toggleTimeAdjustment,
   showCompFinderMenu: showCompFinder,
   minimizeCompFinderMenu: minimizeCompFinder,
+  setCompFinderToolActive: setCompFinderToolActive,
 });
 
 // Initialize toolbar when DOM is ready

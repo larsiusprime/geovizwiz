@@ -1388,6 +1388,114 @@
       flex-wrap: wrap;
     }
 
+    .comp-finder-refresh-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .comp-finder-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #bfdbfe;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: comp-finder-spin 0.8s linear infinite;
+      display: none;
+    }
+
+    @keyframes comp-finder-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .comp-finder-results-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+
+    .comp-finder-pager {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .comp-finder-page-btn {
+      border: 1px solid #d1d5db;
+      background: #fff;
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 1px 6px;
+      cursor: pointer;
+    }
+
+    .comp-finder-page-btn.is-active {
+      background: #1d4ed8;
+      color: #fff;
+      border-color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    .comp-finder-page-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .comp-finder-extra-row {
+      background: #fafafa;
+    }
+
+    .comp-finder-criteria-row {
+      background: #eff6ff;
+    }
+
+
+    .comp-finder-select-all-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .comp-finder-select-all-label {
+      font-size: 11px;
+      color: #4b5563;
+    }
+
+    .comp-finder-sort-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .comp-finder-delta-positive {
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    .comp-finder-delta-negative {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    .comp-finder-add-field-row {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .comp-finder-add-field-row select {
+      max-width: 170px;
+      min-width: 0;
+    }
+
     .comp-finder-comps.is-dirty {
       opacity: 0.55;
     }
@@ -2038,11 +2146,11 @@
         </div>
         <div id="compFinderCriteriaBody" class="comp-finder-section-body">
           <div class="comp-finder-row comp-finder-criteria-main">
-            <label for="compFinderDataSource">Data source for comps:</label>
+            <label for="compFinderDataSource">Data source:</label>
             <select id="compFinderDataSource">
               <option value="" selected>Choose data source</option>
             </select>
-            <label for="compFinderDistance">Distance from subject:</label>
+            <label for="compFinderDistance">Within:</label>
             <input id="compFinderDistance" type="number" inputmode="decimal" />
             <select id="compFinderDistanceUnits">
               <option value="ft">ft</option>
@@ -2077,18 +2185,29 @@
           <div class="land-schedule-subtitle">Comps</div>
         </div>
         <div id="compFinderCompsBody" class="comp-finder-section-body">
-          <button id="compFinderRefresh" type="button" class="land-schedule-button">Find comps</button>
+          <div class="comp-finder-refresh-row">
+            <button id="compFinderRefresh" type="button" class="land-schedule-button">Find comps</button>
+            <div id="compFinderSpinner" class="comp-finder-spinner" aria-label="Finding comps" title="Finding comps"></div>
+          </div>
+          <div class="comp-finder-results-row">
+            <span id="compFinderResultsSummary">Results: 0</span>
+            <div id="compFinderPager" class="comp-finder-pager"></div>
+          </div>
+          <input id="compFinderCompsSelectAll" type="checkbox" class="comp-finder-select-all" />
           <div id="compFinderCompsTableContainer" class="comp-finder-comps" style="max-height: 220px; overflow: auto;">
             <table class="comp-finder-table">
               <thead id="compFinderCompsTableHead">
                 <tr>
-                  <th class="center"><input id="compFinderCompsSelectAll" type="checkbox" /></th>
-                  <th>ID</th>
-                  <th>Address</th>
+                  <th>Field</th>
+                  <th>Subject</th>
                 </tr>
               </thead>
               <tbody id="compFinderCompsTableBody"></tbody>
             </table>
+          </div>
+          <div class="comp-finder-add-field-row">
+            <select id="compFinderAddFieldSelect"></select>
+            <button id="compFinderAddFieldButton" type="button" class="land-schedule-button">add field</button>
           </div>
           <div class="comp-finder-actions">
             <span class="muted">Selected:</span>

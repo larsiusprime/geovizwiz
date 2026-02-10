@@ -509,10 +509,15 @@ const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits
 const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaTableBody') as HTMLTableSectionElement;
 const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
 const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
+const compFinderSpinner = document.getElementById('compFinderSpinner') as HTMLDivElement;
+const compFinderResultsSummary = document.getElementById('compFinderResultsSummary') as HTMLSpanElement;
+const compFinderPager = document.getElementById('compFinderPager') as HTMLDivElement;
 const compFinderCompsTableHead = document.getElementById('compFinderCompsTableHead') as HTMLTableSectionElement;
 const compFinderCompsTableBody = document.getElementById('compFinderCompsTableBody') as HTMLTableSectionElement;
 const compFinderCompsTableContainer = document.getElementById('compFinderCompsTableContainer') as HTMLDivElement;
 const compFinderCompsSelectAll = document.getElementById('compFinderCompsSelectAll') as HTMLInputElement;
+const compFinderAddFieldSelect = document.getElementById('compFinderAddFieldSelect') as HTMLSelectElement;
+const compFinderAddFieldButton = document.getElementById('compFinderAddFieldButton') as HTMLButtonElement;
 const compFinderMarkButton = document.getElementById('compFinderMark') as HTMLButtonElement;
 const compFinderZoomButton = document.getElementById('compFinderZoomTo') as HTMLButtonElement;
 const compFinderExportCsv = document.getElementById('compFinderExportCsv') as HTMLButtonElement;
@@ -1130,10 +1135,15 @@ initCompFinderElements({
   criteriaTableBody: compFinderCriteriaTableBody,
   addCriterionButton: compFinderAddCriterion,
   refreshButton: compFinderRefresh,
+  spinner: compFinderSpinner,
+  resultsSummary: compFinderResultsSummary,
+  pager: compFinderPager,
   compsTableHead: compFinderCompsTableHead,
   compsTableBody: compFinderCompsTableBody,
   compsTableContainer: compFinderCompsTableContainer,
   compsSelectAll: compFinderCompsSelectAll,
+  addFieldSelect: compFinderAddFieldSelect,
+  addFieldButton: compFinderAddFieldButton,
   markButton: compFinderMarkButton,
   zoomButton: compFinderZoomButton,
   exportCsvButton: compFinderExportCsv,

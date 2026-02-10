@@ -17,7 +17,7 @@ type Criterion = {
 type CompRow = {
   id: string;
   feature: GeoJSON.Feature;
-  deltas: Array<{ text: string; error?: string }>;
+  deltas: Array<{ text: string; error?: string; sign?: 'positive' | 'negative' | 'neutral' | 'error' }>;
   parcelId: string;
   address: string;
 };
@@ -32,10 +32,15 @@ type Elements = {
   criteriaTableBody: HTMLTableSectionElement;
   addCriterionButton: HTMLButtonElement;
   refreshButton: HTMLButtonElement;
+  spinner: HTMLDivElement;
+  resultsSummary: HTMLSpanElement;
+  pager: HTMLDivElement;
   compsTableHead: HTMLTableSectionElement;
   compsTableBody: HTMLTableSectionElement;
   compsTableContainer: HTMLDivElement;
   compsSelectAll: HTMLInputElement;
+  addFieldSelect: HTMLSelectElement;
+  addFieldButton: HTMLButtonElement;
   markButton: HTMLButtonElement;
   zoomButton: HTMLButtonElement;
   exportCsvButton: HTMLButtonElement;
@@ -59,15 +64,21 @@ let subject: {
 } | null = null;
 
 let criteria: Criterion[] = [];
+let extraFields: Array<{ field: string; type: 'numeric' | 'categorical' }> = [];
 let comps: CompRow[] = [];
 let criteriaDirty = false;
 let compMarkers = new Map<string, maplibregl.Marker>();
 let subjectMarker: maplibregl.Marker | null = null;
 let selectedCompIds = new Set<string>();
 let isToolActive = false;
+let isFinding = false;
+let currentPage = 1;
+let sortField: string | null = null;
+let sortDirection: 'asc' | 'desc' = 'asc';
 
 const COMP_MARKER_CLASS = 'comp-finder-marker';
 const SUBJECT_MARKER_CLASS = 'comp-finder-marker subject';
+const COMPS_PER_PAGE = 3;
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -92,14 +103,16 @@ function getCompDataStore(): DataStore | null {
   return getDataStoreById(id);
 }
 
-function getCompDataStoreId(): string | null {
-  return els.dataSourceSelect.value || subject?.dataStoreId || null;
-}
-
 function ensureMarker(elClass: string): HTMLDivElement {
   const el = document.createElement('div');
   el.className = elClass;
   return el;
+}
+
+function setFinding(next: boolean) {
+  isFinding = next;
+  els.spinner.style.display = next ? 'inline-block' : 'none';
+  els.refreshButton.disabled = next;
 }
 
 function setCriteriaDirty(dirty: boolean) {
@@ -110,7 +123,7 @@ function setCriteriaDirty(dirty: boolean) {
 
 function updateRefreshButtonLabel() {
   if (comps.length > 0) {
-    els.refreshButton.textContent = criteriaDirty ? 'Refresh comps' : 'Refresh comps';
+    els.refreshButton.textContent = 'Refresh comps';
   } else {
     els.refreshButton.textContent = 'Find comps';
   }
@@ -224,6 +237,11 @@ function getIntersectionFields(): Array<{ field: string; type: 'numeric' | 'cate
   ];
 }
 
+function getFieldType(field: string): 'numeric' | 'categorical' | null {
+  const match = getIntersectionFields().find((entry) => entry.field === field);
+  return match?.type ?? null;
+}
+
 function formatSubjectValue(field: string | null, type: 'numeric' | 'categorical' | null): string {
   if (!subject || !field || !type) return '—';
   const value = getFieldValue(subject.feature, field);
@@ -231,15 +249,46 @@ function formatSubjectValue(field: string | null, type: 'numeric' | 'categorical
   return type === 'numeric' ? fmt(value) : String(value);
 }
 
-function getComparisonFields(): Array<{ field: string; type: 'numeric' | 'categorical' }> {
-  const fields: Array<{ field: string; type: 'numeric' | 'categorical' }> = [];
+function getComparisonFields(): Array<{ field: string; type: 'numeric' | 'categorical'; source: 'criteria' | 'extra' }> {
+  const out: Array<{ field: string; type: 'numeric' | 'categorical'; source: 'criteria' | 'extra' }> = [];
   const seen = new Set<string>();
   criteria.forEach((row) => {
     if (!row.field || !row.fieldType || seen.has(row.field)) return;
     seen.add(row.field);
-    fields.push({ field: row.field, type: row.fieldType });
+    out.push({ field: row.field, type: row.fieldType, source: 'criteria' });
   });
-  return fields;
+  extraFields.forEach((row) => {
+    if (seen.has(row.field)) return;
+    seen.add(row.field);
+    out.push({ field: row.field, type: row.type, source: 'extra' });
+  });
+  return out;
+}
+
+function getCategoricalValuesForField(field: string): string[] {
+  const store = getCompDataStore();
+  if (!store?.geojson) return [];
+  const values = new Set<string>();
+  for (const feature of store.geojson.features) {
+    const raw = feature.properties?.[field];
+    if (raw === undefined || raw === null || raw === '') continue;
+    values.add(String(raw));
+  }
+  return Array.from(values).sort();
+}
+
+function renderAddFieldOptions() {
+  const current = new Set([...criteria.map((c) => c.field).filter(Boolean) as string[], ...extraFields.map((f) => f.field)]);
+  const available = getIntersectionFields().filter((entry) => !current.has(entry.field));
+  els.addFieldSelect.innerHTML = '';
+  available.forEach((entry, idx) => {
+    const option = document.createElement('option');
+    option.value = entry.field;
+    option.textContent = entry.field;
+    if (idx === 0) option.selected = true;
+    els.addFieldSelect.appendChild(option);
+  });
+  els.addFieldButton.disabled = available.length === 0;
 }
 
 function renderCriteriaTable() {
@@ -266,19 +315,23 @@ function renderCriteriaTable() {
       option.value = field;
       option.textContent = field;
       option.dataset.fieldType = type;
-      if (row.field === field) {
-        option.selected = true;
-      }
+      if (row.field === field) option.selected = true;
       fieldSelect.appendChild(option);
     });
     fieldSelect.addEventListener('change', () => {
       const selected = fieldSelect.selectedOptions[0];
       row.field = selected?.value ?? null;
       row.fieldType = (selected?.dataset.fieldType as 'numeric' | 'categorical' | null) ?? null;
-      row.value = row.fieldType === 'categorical' ? [] : null;
-      row.usePercent = false;
+      if (row.fieldType === 'categorical' && row.field) {
+        const subjectValue = getFieldValue(subject!.feature, row.field);
+        row.value = (subjectValue === null || subjectValue === undefined || subjectValue === '') ? [] : [String(subjectValue)];
+      } else {
+        row.value = row.fieldType === 'numeric' ? 10 : null;
+      }
+      row.usePercent = row.fieldType === 'numeric';
       setCriteriaDirty(true);
       renderCriteriaTable();
+      renderCompsTable();
     });
     fieldCell.appendChild(fieldSelect);
     tr.appendChild(fieldCell);
@@ -300,7 +353,7 @@ function renderCriteriaTable() {
       const input = document.createElement('input');
       input.type = 'number';
       input.inputMode = 'decimal';
-      input.value = row.value !== null && row.value !== undefined ? String(row.value) : '';
+      input.value = row.value !== null && row.value !== undefined ? String(row.value) : '10';
       input.style.width = '90px';
       input.addEventListener('input', () => {
         row.value = numOrNull(input.value);
@@ -318,11 +371,6 @@ function renderCriteriaTable() {
       });
       percentCell.appendChild(checkbox);
     } else if (row.fieldType === 'categorical') {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'comp-finder-row';
-      const prefix = document.createElement('span');
-      prefix.className = 'muted';
-      prefix.textContent = '=';
       const select = document.createElement('select');
       select.className = 'comp-finder-criteria-categorical';
       select.multiple = true;
@@ -338,8 +386,7 @@ function renderCriteriaTable() {
         row.value = Array.from(select.selectedOptions).map((opt) => opt.value);
         setCriteriaDirty(true);
       });
-      wrapper.append(prefix, select);
-      toleranceCell.appendChild(wrapper);
+      toleranceCell.appendChild(select);
 
       percentCell.textContent = 'N/A';
       percentCell.classList.add('muted');
@@ -362,80 +409,99 @@ function renderCriteriaTable() {
       criteria = criteria.filter((item) => item.id !== row.id);
       setCriteriaDirty(true);
       renderCriteriaTable();
+      renderCompsTable();
     });
     deleteCell.appendChild(deleteButton);
     tr.appendChild(deleteCell);
 
     els.criteriaTableBody.appendChild(tr);
   });
+
+  renderAddFieldOptions();
 }
 
-function renderCompsTable() {
-  const comparisonFields = getComparisonFields();
-  els.compsTableHead.innerHTML = '';
-  els.compsTableBody.innerHTML = '';
+function buildCompsSortValue(comp: CompRow, field: string) {
+  if (field === '__id') return comp.parcelId;
+  if (field === '__address') return comp.address;
+  return getFieldValue(comp.feature, field);
+}
 
-  const headRow = document.createElement('tr');
-  const selectAllTh = document.createElement('th');
-  selectAllTh.className = 'center';
-  selectAllTh.appendChild(els.compsSelectAll);
-  headRow.appendChild(selectAllTh);
+function sortCompsRows(rows: CompRow[]): CompRow[] {
+  if (!sortField) return rows;
+  const dir = sortDirection === 'asc' ? 1 : -1;
+  return rows.slice().sort((a, b) => {
+    const va = buildCompsSortValue(a, sortField);
+    const vb = buildCompsSortValue(b, sortField);
+    const na = numOrNull(va);
+    const nb = numOrNull(vb);
+    if (na !== null && nb !== null) return (na - nb) * dir;
+    return String(va ?? '').localeCompare(String(vb ?? '')) * dir;
+  });
+}
 
-  const idTh = document.createElement('th');
-  idTh.textContent = 'ID';
-  headRow.appendChild(idTh);
+function getSortedComps(): CompRow[] {
+  return sortCompsRows(comps);
+}
 
-  const addressTh = document.createElement('th');
-  addressTh.textContent = 'Address';
-  headRow.appendChild(addressTh);
+function totalPages() {
+  return Math.max(1, Math.ceil(comps.length / COMPS_PER_PAGE));
+}
 
-  comparisonFields.forEach((entry) => {
-    const th = document.createElement('th');
-    th.textContent = entry.field;
-    headRow.appendChild(th);
+function getVisibleComps(): CompRow[] {
+  const sorted = getSortedComps();
+  const start = (currentPage - 1) * COMPS_PER_PAGE;
+  return sorted.slice(start, start + COMPS_PER_PAGE);
+}
+
+function getPageTokens(total: number, page: number): Array<number | '...'> {
+  if (total <= 5) return Array.from({ length: total }, (_, idx) => idx + 1);
+  if (page <= 2) return [1, 2, 3, 4, '...', total];
+  if (page >= total - 1) return [1, '...', total - 3, total - 2, total - 1, total];
+  return [1, '...', page - 1, page, page + 1, '...', total];
+}
+
+function renderPager() {
+  const total = totalPages();
+  currentPage = Math.min(Math.max(currentPage, 1), total);
+  els.pager.innerHTML = '';
+
+  const prev = document.createElement('button');
+  prev.className = 'comp-finder-page-btn';
+  prev.textContent = '◀';
+  prev.disabled = currentPage <= 1;
+  prev.addEventListener('click', () => {
+    currentPage = Math.max(1, currentPage - 1);
+    renderCompsTable();
+  });
+  els.pager.appendChild(prev);
+
+  getPageTokens(total, currentPage).forEach((token) => {
+    if (token === '...') {
+      const span = document.createElement('span');
+      span.textContent = '…';
+      els.pager.appendChild(span);
+      return;
+    }
+    const btn = document.createElement('button');
+    btn.className = 'comp-finder-page-btn';
+    if (token === currentPage) btn.classList.add('is-active');
+    btn.textContent = String(token);
+    btn.addEventListener('click', () => {
+      currentPage = token;
+      renderCompsTable();
+    });
+    els.pager.appendChild(btn);
   });
 
-  els.compsTableHead.appendChild(headRow);
-
-  comps.forEach((row) => {
-    const tr = document.createElement('tr');
-    const selectTd = document.createElement('td');
-    selectTd.className = 'center';
-    const checkbox = document.createElement('input');
-    checkbox.type = 'checkbox';
-    checkbox.checked = selectedCompIds.has(row.id);
-    checkbox.addEventListener('change', () => {
-      if (checkbox.checked) {
-        selectedCompIds.add(row.id);
-      } else {
-        selectedCompIds.delete(row.id);
-      }
-      updateSelectAllState();
-      updateActionButtons();
-      updateCompMarkers();
-    });
-    selectTd.appendChild(checkbox);
-    tr.appendChild(selectTd);
-
-    const idTd = document.createElement('td');
-    idTd.textContent = row.parcelId || '—';
-    tr.appendChild(idTd);
-
-    const addrTd = document.createElement('td');
-    addrTd.textContent = row.address || '—';
-    tr.appendChild(addrTd);
-
-    row.deltas.forEach((delta) => {
-      const td = document.createElement('td');
-      td.textContent = delta.text;
-      if (delta.error) {
-        td.title = delta.error;
-      }
-      tr.appendChild(td);
-    });
-
-    els.compsTableBody.appendChild(tr);
+  const next = document.createElement('button');
+  next.className = 'comp-finder-page-btn';
+  next.textContent = '▶';
+  next.disabled = currentPage >= total;
+  next.addEventListener('click', () => {
+    currentPage = Math.min(total, currentPage + 1);
+    renderCompsTable();
   });
+  els.pager.appendChild(next);
 }
 
 function updateSelectAllState() {
@@ -445,16 +511,148 @@ function updateSelectAllState() {
   els.compsSelectAll.indeterminate = !allSelected && selectedCompIds.size > 0;
 }
 
-function getCategoricalValuesForField(field: string): string[] {
-  const store = getCompDataStore();
-  if (!store?.geojson) return [];
-  const values = new Set<string>();
-  for (const feature of store.geojson.features) {
-    const raw = feature.properties?.[field];
-    if (raw === undefined || raw === null || raw === '') continue;
-    values.add(String(raw));
-  }
-  return Array.from(values).sort();
+function getDeltaClass(delta: { sign?: 'positive' | 'negative' | 'neutral' | 'error' }) {
+  if (delta.sign === 'positive') return 'comp-finder-delta-positive';
+  if (delta.sign === 'negative') return 'comp-finder-delta-negative';
+  return '';
+}
+
+function renderSortableRowLabel(label: string, fieldKey: string): HTMLElement {
+  const button = document.createElement('span');
+  button.className = 'comp-finder-sort-label';
+  const arrow = sortField === fieldKey ? (sortDirection === 'asc' ? '▾' : '▴') : '';
+  button.textContent = arrow ? `${label} ${arrow}` : label;
+  button.addEventListener('click', () => {
+    if (sortField === fieldKey) {
+      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortField = fieldKey;
+      sortDirection = 'asc';
+    }
+    renderCompsTable();
+  });
+  return button;
+}
+
+function renderCompsTable() {
+  const comparisonFields = getComparisonFields();
+  const visible = getVisibleComps();
+
+  els.resultsSummary.textContent = `Results: ${comps.length}`;
+  renderPager();
+
+  els.compsTableHead.innerHTML = '';
+  els.compsTableBody.innerHTML = '';
+
+  const head = document.createElement('tr');
+  const fieldTh = document.createElement('th');
+  fieldTh.textContent = 'Field';
+  const subjectTh = document.createElement('th');
+  subjectTh.textContent = 'Subject';
+  head.append(fieldTh, subjectTh);
+  visible.forEach((_, idx) => {
+    const th = document.createElement('th');
+    th.textContent = `Comp ${((currentPage - 1) * COMPS_PER_PAGE) + idx + 1}`;
+    head.appendChild(th);
+  });
+  els.compsTableHead.appendChild(head);
+
+  const selectRow = document.createElement('tr');
+  const selectField = document.createElement('td');
+  selectField.textContent = 'Select';
+  const selectSubject = document.createElement('td');
+  updateSelectAllState();
+  const selectAllWrap = document.createElement('label');
+  selectAllWrap.className = 'comp-finder-select-all-wrap';
+  const selectAllLabel = document.createElement('span');
+  selectAllLabel.className = 'comp-finder-select-all-label';
+  selectAllLabel.textContent = 'all';
+  selectAllWrap.append(els.compsSelectAll, selectAllLabel);
+  selectSubject.appendChild(selectAllWrap);
+  selectRow.append(selectField, selectSubject);
+  visible.forEach((comp) => {
+    const td = document.createElement('td');
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = selectedCompIds.has(comp.id);
+    check.addEventListener('change', () => {
+      if (check.checked) selectedCompIds.add(comp.id);
+      else selectedCompIds.delete(comp.id);
+      updateSelectAllState();
+      updateActionButtons();
+      updateCompMarkers();
+      renderCompsTable();
+    });
+    td.appendChild(check);
+    selectRow.appendChild(td);
+  });
+  els.compsTableBody.appendChild(selectRow);
+
+  const idRow = document.createElement('tr');
+  const idField = document.createElement('td');
+  idField.appendChild(renderSortableRowLabel('ID', '__id'));
+  const idSubject = document.createElement('td');
+  idSubject.textContent = subject?.parcelId || '—';
+  idRow.append(idField, idSubject);
+  visible.forEach((comp) => {
+    const td = document.createElement('td');
+    td.textContent = comp.parcelId || '—';
+    idRow.appendChild(td);
+  });
+  els.compsTableBody.appendChild(idRow);
+
+  const addrRow = document.createElement('tr');
+  const addrField = document.createElement('td');
+  addrField.appendChild(renderSortableRowLabel('Address', '__address'));
+  const addrSubject = document.createElement('td');
+  addrSubject.textContent = subject?.address || '—';
+  addrRow.append(addrField, addrSubject);
+  visible.forEach((comp) => {
+    const td = document.createElement('td');
+    td.textContent = comp.address || '—';
+    addrRow.appendChild(td);
+  });
+  els.compsTableBody.appendChild(addrRow);
+
+  comparisonFields.forEach((entry, entryIndex) => {
+    if (entry.source === 'extra' && entryIndex > 0 && comparisonFields[entryIndex - 1]?.source !== 'extra') {
+      const divider = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 2 + visible.length;
+      td.textContent = 'Extra fields';
+      td.className = 'muted';
+      divider.appendChild(td);
+      els.compsTableBody.appendChild(divider);
+    }
+
+    const row = document.createElement('tr');
+    row.className = entry.source === 'criteria' ? 'comp-finder-criteria-row' : 'comp-finder-extra-row';
+
+    const fieldTd = document.createElement('td');
+    fieldTd.appendChild(renderSortableRowLabel(entry.field, entry.field));
+    const subjectTd = document.createElement('td');
+    subjectTd.textContent = formatSubjectValue(entry.field, entry.type);
+    row.append(fieldTd, subjectTd);
+
+    visible.forEach((comp) => {
+      const td = document.createElement('td');
+      if (entry.source === 'criteria') {
+        const allFields = getComparisonFields().filter((f) => f.source === 'criteria');
+        const deltaIndex = allFields.findIndex((f) => f.field === entry.field);
+        const delta = comp.deltas[deltaIndex];
+        td.textContent = delta?.text ?? '—';
+        if (delta?.error) td.title = delta.error;
+        const cls = getDeltaClass(delta || {});
+        if (cls) td.classList.add(cls);
+      } else {
+        const val = getFieldValue(comp.feature, entry.field);
+        td.textContent = val === null || val === undefined || val === '' ? '—' : (entry.type === 'numeric' ? fmt(val) : String(val));
+      }
+      row.appendChild(td);
+    });
+
+    els.compsTableBody.appendChild(row);
+  });
 }
 
 function passesCriteria(feature: GeoJSON.Feature): boolean {
@@ -469,10 +667,8 @@ function passesCriteria(feature: GeoJSON.Feature): boolean {
       if (subjectValue === null || compValue === null) return false;
       const allowedRange = row.usePercent ? Math.abs(subjectValue) * (range / 100) : range;
       if (!Number.isFinite(allowedRange)) return false;
-      if (compValue < subjectValue - allowedRange || compValue > subjectValue + allowedRange) {
-        return false;
-      }
-    } else if (row.fieldType === 'categorical') {
+      if (compValue < subjectValue - allowedRange || compValue > subjectValue + allowedRange) return false;
+    } else {
       if (!Array.isArray(row.value) || row.value.length === 0) continue;
       const compValue = getFieldValue(feature, row.field);
       if (!row.value.includes(String(compValue))) return false;
@@ -485,32 +681,34 @@ function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'categorica
   if (type === 'numeric') {
     const compVal = numOrNull(value);
     const subjVal = numOrNull(subjectValue);
-    if (compVal === null || subjVal === null) {
-      return { text: 'ERROR', error: 'Missing numeric value' };
-    }
+    if (compVal === null || subjVal === null) return { text: 'ERROR', error: 'Missing numeric value', sign: 'error' as const };
     const delta = compVal - subjVal;
-    if (delta === 0) return { text: '=' };
+    if (delta === 0) return { text: '=', sign: 'neutral' as const };
     const sign = delta > 0 ? '+' : '';
-    return { text: `${sign}${fmt(delta)}` };
+    return { text: `${sign}${fmt(delta)}`, sign: delta > 0 ? 'positive' as const : 'negative' as const };
   }
   if (value === null || value === undefined || subjectValue === null || subjectValue === undefined) {
-    return { text: 'ERROR', error: 'Missing categorical value' };
+    return { text: 'ERROR', error: 'Missing categorical value', sign: 'error' as const };
   }
-  return { text: String(value) === String(subjectValue) ? '=' : '≠' };
+  return { text: String(value) === String(subjectValue) ? '=' : '≠', sign: 'neutral' as const };
 }
 
-function findComps() {
+async function findComps() {
   if (!subject) return;
   const compStore = getCompDataStore();
   if (!compStore?.geojson) return;
 
+  setFinding(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
   const subjectCenter = subject.center;
   const distanceLimit = getDistanceLimitMeters();
   const subjectParcelId = subject.parcelId;
+
   comps = [];
   selectedCompIds.clear();
 
-  const comparisonFields = getComparisonFields();
   for (const feature of compStore.geojson.features) {
     const compCenter = getFeatureCenter(feature);
     if (!compCenter) continue;
@@ -522,7 +720,7 @@ function findComps() {
     }
     if (!passesCriteria(feature)) continue;
 
-    const deltas = comparisonFields.map((entry) => {
+    const deltas = criteriaFields.map((entry) => {
       const compVal = getFieldValue(feature, entry.field);
       const subjVal = getFieldValue(subject.feature, entry.field);
       return buildDelta(compVal, subjVal, entry.type);
@@ -537,23 +735,24 @@ function findComps() {
     });
   }
 
+  currentPage = 1;
   setCriteriaDirty(false);
   updateRefreshButtonLabel();
   updateSelectAllState();
   updateActionButtons();
   renderCompsTable();
   updateCompMarkers();
+  setFinding(false);
 }
 
 function handleSelectAllToggle() {
-  if (els.compsSelectAll.checked) {
-    comps.forEach((row) => selectedCompIds.add(row.id));
-  } else {
-    selectedCompIds.clear();
-  }
-  renderCompsTable();
+  const checked = els.compsSelectAll.checked;
+  if (checked) comps.forEach((row) => selectedCompIds.add(row.id));
+  else selectedCompIds.clear();
+  updateSelectAllState();
   updateActionButtons();
   updateCompMarkers();
+  renderCompsTable();
 }
 
 function handleMarkComps() {
@@ -562,9 +761,7 @@ function handleMarkComps() {
 
 function handleZoomToComps() {
   if (selectedCompIds.size === 0) return;
-  const selectedFeatures = comps
-    .filter((row) => selectedCompIds.has(row.id))
-    .map((row) => row.feature);
+  const selectedFeatures = comps.filter((row) => selectedCompIds.has(row.id)).map((row) => row.feature);
   const bounds = bbox({ type: 'FeatureCollection', features: selectedFeatures });
   if (!bounds) return;
   S.map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 60, duration: 600 });
@@ -573,7 +770,9 @@ function handleZoomToComps() {
 function buildExportRows() {
   if (!subject) return [];
   const comparisonFields = getComparisonFields();
+  const criteriaFields = comparisonFields.filter((f) => f.source === 'criteria');
   const rows: Record<string, any>[] = [];
+
   const subjectRow: Record<string, any> = {
     is_subject: 'TRUE',
     parcel_id: subject.parcelId || '',
@@ -597,9 +796,20 @@ function buildExportRows() {
       parcel_id: row.parcelId,
       address: row.address,
     };
-    comparisonFields.forEach((entry, idx) => {
+    comparisonFields.forEach((entry) => {
       compRow[entry.field] = getFieldValue(row.feature, entry.field);
+    });
+    criteriaFields.forEach((entry, idx) => {
       compRow[`delta_${entry.field}`] = row.deltas[idx]?.text ?? '';
+    });
+    extraFields.forEach((entry) => {
+      if (!compRow.hasOwnProperty(`delta_${entry.field}`)) {
+        compRow[`delta_${entry.field}`] = buildDelta(
+          getFieldValue(row.feature, entry.field),
+          getFieldValue(subject.feature, entry.field),
+          entry.type,
+        ).text;
+      }
     });
     rows.push(compRow);
   });
@@ -621,9 +831,7 @@ function exportCsv() {
   const headers = Object.keys(rows[0]);
   const csv = [
     headers.join(','),
-    ...rows.map((row) =>
-      headers.map((header) => JSON.stringify(row[header] ?? '')).join(',')
-    ),
+    ...rows.map((row) => headers.map((header) => JSON.stringify(row[header] ?? '')).join(',')),
   ].join('\n');
   downloadBlob(new Blob([csv], { type: 'text/csv' }), 'comp_finder_comps.csv');
 }
@@ -653,9 +861,7 @@ function refreshDataSources() {
     option.textContent = store.name;
     els.dataSourceSelect.appendChild(option);
   });
-  if (subject?.dataStoreId) {
-    els.dataSourceSelect.value = subject.dataStoreId;
-  }
+  if (subject?.dataStoreId) els.dataSourceSelect.value = subject.dataStoreId;
 }
 
 function updateSubjectInfo() {
@@ -674,23 +880,31 @@ function syncCriteriaFields() {
       row.usePercent = false;
     }
   });
+  extraFields = extraFields.filter((row) => available.has(row.field));
 }
 
 function ensureDefaultCriteria(store: DataStore) {
-  if (criteria.length > 0) return;
+  if (criteria.length > 0 || !subject) return;
   const defaults = [
     store.bldgSizeField,
     store.landSizeField,
     store.bldgAgeField,
     store.bldgTypeField,
   ].filter(Boolean) as string[];
+
   defaults.forEach((field) => {
-    const isNumeric = store.chosenNumericFields.includes(field);
+    const fieldType = getFieldType(field);
+    if (!fieldType) return;
+    if (fieldType === 'numeric') {
+      criteria.push({ id: uid('criterion'), field, fieldType, value: 10, usePercent: true });
+      return;
+    }
+    const subjectValue = getFieldValue(subject.feature, field);
     criteria.push({
       id: uid('criterion'),
       field,
-      fieldType: isNumeric ? 'numeric' : 'categorical',
-      value: isNumeric ? null : [],
+      fieldType,
+      value: (subjectValue === null || subjectValue === undefined || subjectValue === '') ? [] : [String(subjectValue)],
       usePercent: false,
     });
   });
@@ -706,6 +920,7 @@ function renderCompsUI() {
 function resetComps() {
   comps = [];
   selectedCompIds.clear();
+  currentPage = 1;
   setCriteriaDirty(false);
   renderCompsUI();
   clearCompMarkers();
@@ -718,19 +933,25 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
   if (!store) return;
   const center = getFeatureCenter(feature);
   if (!center) return;
-  const parcelId = String(getFieldValue(feature, store.parcelIdField) ?? '');
-  const address = String(getFieldValue(feature, store.addressField) ?? '');
+
   subject = {
     feature,
     dataStoreId: store.id,
     layerId,
-    parcelId,
-    address,
+    parcelId: String(getFieldValue(feature, store.parcelIdField) ?? ''),
+    address: String(getFieldValue(feature, store.addressField) ?? ''),
     center,
   };
+
   callbacks.showCompFinderMenu();
   refreshDataSources();
   updateSubjectInfo();
+
+  if (!els.distanceInput.value) els.distanceInput.value = '1';
+  if (!els.distanceUnitsSelect.value) els.distanceUnitsSelect.value = 'mi';
+  els.distanceInput.value = '1';
+  els.distanceUnitsSelect.value = 'mi';
+
   ensureDefaultCriteria(store);
   syncCriteriaFields();
   renderCriteriaTable();
@@ -751,27 +972,18 @@ export function setCompFinderToolActive(active: boolean) {
 
 export function initCompFinderElements(elements: Elements) {
   els = elements;
+
   els.dataSourceSelect.addEventListener('change', () => {
     syncCriteriaFields();
     renderCriteriaTable();
     resetComps();
   });
 
-  els.distanceInput.addEventListener('input', () => {
-    setCriteriaDirty(true);
-  });
-  els.distanceUnitsSelect.addEventListener('change', () => {
-    setCriteriaDirty(true);
-  });
+  els.distanceInput.addEventListener('input', () => setCriteriaDirty(true));
+  els.distanceUnitsSelect.addEventListener('change', () => setCriteriaDirty(true));
 
   els.addCriterionButton.addEventListener('click', () => {
-    criteria.push({
-      id: uid('criterion'),
-      field: null,
-      fieldType: null,
-      value: null,
-      usePercent: false,
-    });
+    criteria.push({ id: uid('criterion'), field: null, fieldType: null, value: null, usePercent: false });
     setCriteriaDirty(true);
     renderCriteriaTable();
   });
@@ -781,10 +993,25 @@ export function initCompFinderElements(elements: Elements) {
   });
 
   els.compsSelectAll.addEventListener('change', handleSelectAllToggle);
+
+  els.addFieldButton.addEventListener('click', () => {
+    const field = els.addFieldSelect.value;
+    if (!field) return;
+    const type = getFieldType(field);
+    if (!type) return;
+    if (extraFields.some((entry) => entry.field === field)) return;
+    extraFields.push({ field, type });
+    renderCriteriaTable();
+    renderCompsTable();
+  });
+
   els.markButton.addEventListener('click', handleMarkComps);
   els.zoomButton.addEventListener('click', handleZoomToComps);
   els.exportCsvButton.addEventListener('click', exportCsv);
   els.exportExcelButton.addEventListener('click', exportExcel);
+
+  renderCompsUI();
+  renderAddFieldOptions();
 }
 
 export function initCompFinderCallbacks(cb: Callbacks) {

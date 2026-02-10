@@ -24,8 +24,6 @@ type CompRow = {
 
 type Elements = {
   panel: HTMLDivElement;
-  subjectParcelId: HTMLSpanElement;
-  subjectAddress: HTMLSpanElement;
   dataSourceSelect: HTMLSelectElement;
   distanceInput: HTMLInputElement;
   distanceUnitsSelect: HTMLSelectElement;
@@ -545,11 +543,13 @@ function renderCompsTable() {
   els.compsTableBody.innerHTML = '';
 
   const head = document.createElement('tr');
+  const removeTh = document.createElement('th');
+  removeTh.textContent = '';
   const fieldTh = document.createElement('th');
   fieldTh.textContent = 'Field';
   const subjectTh = document.createElement('th');
   subjectTh.textContent = 'Subject';
-  head.append(fieldTh, subjectTh);
+  head.append(removeTh, fieldTh, subjectTh);
   visible.forEach((_, idx) => {
     const th = document.createElement('th');
     th.textContent = `Comp ${((currentPage - 1) * COMPS_PER_PAGE) + idx + 1}`;
@@ -558,6 +558,8 @@ function renderCompsTable() {
   els.compsTableHead.appendChild(head);
 
   const selectRow = document.createElement('tr');
+  const selectRemove = document.createElement('td');
+  selectRemove.textContent = '';
   const selectField = document.createElement('td');
   selectField.textContent = 'Select';
   const selectSubject = document.createElement('td');
@@ -569,7 +571,7 @@ function renderCompsTable() {
   selectAllLabel.textContent = 'all';
   selectAllWrap.append(els.compsSelectAll, selectAllLabel);
   selectSubject.appendChild(selectAllWrap);
-  selectRow.append(selectField, selectSubject);
+  selectRow.append(selectRemove, selectField, selectSubject);
   visible.forEach((comp) => {
     const td = document.createElement('td');
     const check = document.createElement('input');
@@ -589,11 +591,13 @@ function renderCompsTable() {
   els.compsTableBody.appendChild(selectRow);
 
   const idRow = document.createElement('tr');
+  const idRemove = document.createElement('td');
+  idRemove.textContent = '';
   const idField = document.createElement('td');
   idField.appendChild(renderSortableRowLabel('ID', '__id'));
   const idSubject = document.createElement('td');
   idSubject.textContent = subject?.parcelId || '—';
-  idRow.append(idField, idSubject);
+  idRow.append(idRemove, idField, idSubject);
   visible.forEach((comp) => {
     const td = document.createElement('td');
     td.textContent = comp.parcelId || '—';
@@ -602,11 +606,13 @@ function renderCompsTable() {
   els.compsTableBody.appendChild(idRow);
 
   const addrRow = document.createElement('tr');
+  const addrRemove = document.createElement('td');
+  addrRemove.textContent = '';
   const addrField = document.createElement('td');
   addrField.appendChild(renderSortableRowLabel('Address', '__address'));
   const addrSubject = document.createElement('td');
   addrSubject.textContent = subject?.address || '—';
-  addrRow.append(addrField, addrSubject);
+  addrRow.append(addrRemove, addrField, addrSubject);
   visible.forEach((comp) => {
     const td = document.createElement('td');
     td.textContent = comp.address || '—';
@@ -618,7 +624,7 @@ function renderCompsTable() {
     if (entry.source === 'extra' && entryIndex > 0 && comparisonFields[entryIndex - 1]?.source !== 'extra') {
       const divider = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 2 + visible.length;
+      td.colSpan = 3 + visible.length;
       td.textContent = 'Extra fields';
       td.className = 'muted';
       divider.appendChild(td);
@@ -628,11 +634,26 @@ function renderCompsTable() {
     const row = document.createElement('tr');
     row.className = entry.source === 'criteria' ? 'comp-finder-criteria-row' : 'comp-finder-extra-row';
 
+    const removeTd = document.createElement('td');
+    if (entry.source === 'extra') {
+      const removeButton = document.createElement('button');
+      removeButton.type = 'button';
+      removeButton.className = 'comp-finder-delete-btn';
+      removeButton.textContent = '❌';
+      removeButton.title = 'Remove field';
+      removeButton.addEventListener('click', () => {
+        extraFields = extraFields.filter((item) => item.field !== entry.field);
+        setCriteriaDirty(true);
+        renderCompsTable();
+        updateAddFieldOptions();
+      });
+      removeTd.appendChild(removeButton);
+    }
     const fieldTd = document.createElement('td');
     fieldTd.appendChild(renderSortableRowLabel(entry.field, entry.field));
     const subjectTd = document.createElement('td');
     subjectTd.textContent = formatSubjectValue(entry.field, entry.type);
-    row.append(fieldTd, subjectTd);
+    row.append(removeTd, fieldTd, subjectTd);
 
     visible.forEach((comp) => {
       const td = document.createElement('td');
@@ -864,12 +885,6 @@ function refreshDataSources() {
   if (subject?.dataStoreId) els.dataSourceSelect.value = subject.dataStoreId;
 }
 
-function updateSubjectInfo() {
-  if (!subject) return;
-  els.subjectParcelId.textContent = subject.parcelId || '—';
-  els.subjectAddress.textContent = subject.address || '—';
-}
-
 function syncCriteriaFields() {
   const available = new Set(getIntersectionFields().map((item) => item.field));
   criteria.forEach((row) => {
@@ -945,7 +960,6 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
 
   callbacks.showCompFinderMenu();
   refreshDataSources();
-  updateSubjectInfo();
 
   if (!els.distanceInput.value) els.distanceInput.value = '1';
   if (!els.distanceUnitsSelect.value) els.distanceUnitsSelect.value = 'mi';

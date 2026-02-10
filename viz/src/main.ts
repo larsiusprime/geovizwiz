@@ -433,8 +433,6 @@ const timeAdjustmentTrendToggle = document.getElementById('timeAdjustmentTrendTo
 const timeAdjustmentTrendBody = document.getElementById('timeAdjustmentTrendBody') as HTMLDivElement;
 const timeAdjustmentFiltersToggle = document.getElementById('timeAdjustmentFiltersToggle') as HTMLButtonElement;
 const timeAdjustmentFiltersBody = document.getElementById('timeAdjustmentFiltersBody') as HTMLDivElement;
-const compFinderSubjectToggle = document.getElementById('compFinderSubjectToggle') as HTMLButtonElement;
-const compFinderSubjectBody = document.getElementById('compFinderSubjectBody') as HTMLDivElement;
 const compFinderCriteriaToggle = document.getElementById('compFinderCriteriaToggle') as HTMLButtonElement;
 const compFinderCriteriaBody = document.getElementById('compFinderCriteriaBody') as HTMLDivElement;
 const compFinderCompsToggle = document.getElementById('compFinderCompsToggle') as HTMLButtonElement;
@@ -501,8 +499,6 @@ const legendContent = document.getElementById('legendContent') as HTMLDivElement
 const compFinderControlsEl = document.getElementById('compFinderControls') as HTMLDivElement;
 const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
 const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
-const compFinderSubjectParcelId = document.getElementById('compFinderSubjectParcelId') as HTMLSpanElement;
-const compFinderSubjectAddress = document.getElementById('compFinderSubjectAddress') as HTMLSpanElement;
 const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
 const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
 const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits') as HTMLSelectElement;
@@ -640,14 +636,6 @@ timeAdjustmentFiltersToggle.addEventListener('click', () => {
   setTimeAdjustmentFiltersCollapsed(!S.isTimeAdjustmentFiltersCollapsed);
 });
 
-const setCompFinderSubjectCollapsed = (collapsed: boolean) => {
-  S.isCompFinderSubjectCollapsed = collapsed;
-  compFinderSubjectBody.style.display = collapsed ? 'none' : 'grid';
-  compFinderSubjectToggle.classList.toggle('is-collapsed', collapsed);
-  compFinderSubjectToggle.title = collapsed ? 'Expand Subject' : 'Collapse Subject';
-  refreshWindowMinHeight(compFinderControlsEl);
-};
-
 const setCompFinderCriteriaCollapsed = (collapsed: boolean) => {
   S.isCompFinderCriteriaCollapsed = collapsed;
   compFinderCriteriaBody.style.display = collapsed ? 'none' : 'grid';
@@ -664,13 +652,8 @@ const setCompFinderCompsCollapsed = (collapsed: boolean) => {
   refreshWindowMinHeight(compFinderControlsEl);
 };
 
-setCompFinderSubjectCollapsed(S.isCompFinderSubjectCollapsed);
 setCompFinderCriteriaCollapsed(S.isCompFinderCriteriaCollapsed);
 setCompFinderCompsCollapsed(S.isCompFinderCompsCollapsed);
-
-compFinderSubjectToggle.addEventListener('click', () => {
-  setCompFinderSubjectCollapsed(!S.isCompFinderSubjectCollapsed);
-});
 
 compFinderCriteriaToggle.addEventListener('click', () => {
   setCompFinderCriteriaCollapsed(!S.isCompFinderCriteriaCollapsed);
@@ -1127,8 +1110,6 @@ initTimeAdjustmentElements({
 
 initCompFinderElements({
   panel: compFinderControlsEl,
-  subjectParcelId: compFinderSubjectParcelId,
-  subjectAddress: compFinderSubjectAddress,
   dataSourceSelect: compFinderDataSourceSelect,
   distanceInput: compFinderDistanceInput,
   distanceUnitsSelect: compFinderDistanceUnits,
@@ -2639,7 +2620,6 @@ initToolbarCallbacks({
   toggleLandSchedule,
   toggleTimeAdjustment,
   showCompFinderMenu: showCompFinder,
-  minimizeCompFinderMenu: minimizeCompFinder,
   setCompFinderToolActive: setCompFinderToolActive,
 });
 

@@ -111,7 +111,7 @@ export const S = {
   isCompFinderMinimized: true,
   isCompFinderSubjectCollapsed: false,
   isCompFinderCriteriaCollapsed: false,
-  isCompFinderCompsCollapsed: false,
+  isCompFinderCompsCollapsed: true,
   hiddenLegendItems: new Set<string>(),
 
   // --- Statistics ---

@@ -1266,7 +1266,7 @@
 
     #compFinderContent {
       display: grid;
-      grid-template-rows: auto auto minmax(0, 1fr);
+      grid-template-rows: auto minmax(0, 1fr);
       align-content: start;
       min-height: 0;
       height: 100%;
@@ -2154,21 +2154,6 @@
     <div id="compFinderContent" data-window-content style="padding: 12px; gap: 12px;">
       <div class="comp-finder-section">
         <div class="comp-finder-section-header">
-          <button id="compFinderSubjectToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Subject">▼</button>
-          <div class="land-schedule-subtitle">Subject</div>
-        </div>
-        <div id="compFinderSubjectBody" class="comp-finder-section-body">
-          <div class="comp-finder-meta">
-            <div><strong>Parcel ID:</strong> <span id="compFinderSubjectParcelId">—</span></div>
-            <div><strong>Address:</strong> <span id="compFinderSubjectAddress">—</span></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="divider"></div>
-
-      <div class="comp-finder-section">
-        <div class="comp-finder-section-header">
           <button id="compFinderCriteriaToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Criteria">▼</button>
           <div class="land-schedule-subtitle">Criteria</div>
         </div>
@@ -2179,10 +2164,8 @@
               <option value="" selected>Choose data source</option>
             </select>
             <label for="compFinderDistance">Within:</label>
-            <input id="compFinderDistance" type="number" inputmode="decimal" />
+            <input id="compFinderDistance" type="number" inputmode="decimal" step="0.25" />
             <select id="compFinderDistanceUnits">
-              <option value="ft">ft</option>
-              <option value="m">m</option>
               <option value="mi">mi</option>
               <option value="km">km</option>
             </select>
@@ -2226,6 +2209,7 @@
             <table class="comp-finder-table">
               <thead id="compFinderCompsTableHead">
                 <tr>
+                  <th></th>
                   <th>Field</th>
                   <th>Subject</th>
                 </tr>

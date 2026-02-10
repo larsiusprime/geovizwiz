@@ -427,6 +427,12 @@ const timeAdjustmentTrendToggle = document.getElementById('timeAdjustmentTrendTo
 const timeAdjustmentTrendBody = document.getElementById('timeAdjustmentTrendBody') as HTMLDivElement;
 const timeAdjustmentFiltersToggle = document.getElementById('timeAdjustmentFiltersToggle') as HTMLButtonElement;
 const timeAdjustmentFiltersBody = document.getElementById('timeAdjustmentFiltersBody') as HTMLDivElement;
+const compFinderSubjectToggle = document.getElementById('compFinderSubjectToggle') as HTMLButtonElement;
+const compFinderSubjectBody = document.getElementById('compFinderSubjectBody') as HTMLDivElement;
+const compFinderCriteriaToggle = document.getElementById('compFinderCriteriaToggle') as HTMLButtonElement;
+const compFinderCriteriaBody = document.getElementById('compFinderCriteriaBody') as HTMLDivElement;
+const compFinderCompsToggle = document.getElementById('compFinderCompsToggle') as HTMLButtonElement;
+const compFinderCompsBody = document.getElementById('compFinderCompsBody') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -478,12 +484,17 @@ const btnMinimizeScatterplot = document.getElementById('btnMinimizeScatterplot')
 const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
 const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
 const btnMinimizeTimeAdjustment = document.getElementById('btnMinimizeTimeAdjustment') as HTMLButtonElement;
+const btnMinimizeCompFinder = document.getElementById('btnMinimizeCompFinder') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
 const btnMinimizeLegend = document.getElementById('btnMinimizeLegend') as HTMLButtonElement;
 const legendTitle = document.getElementById('legendTitle') as HTMLDivElement;
 const legendContent = document.getElementById('legendContent') as HTMLDivElement;
+
+const compFinderControlsEl = document.getElementById('compFinderControls') as HTMLDivElement;
+const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
+const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
 
 // Modal overlays (managed by modals.ts via initModalElements)
 const numericModalOverlay = document.getElementById('numericModalOverlay')!;
@@ -602,6 +613,46 @@ timeAdjustmentFiltersToggle.addEventListener('click', () => {
   setTimeAdjustmentFiltersCollapsed(!S.isTimeAdjustmentFiltersCollapsed);
 });
 
+const setCompFinderSubjectCollapsed = (collapsed: boolean) => {
+  S.isCompFinderSubjectCollapsed = collapsed;
+  compFinderSubjectBody.style.display = collapsed ? 'none' : 'grid';
+  compFinderSubjectToggle.classList.toggle('is-collapsed', collapsed);
+  compFinderSubjectToggle.title = collapsed ? 'Expand Subject' : 'Collapse Subject';
+  refreshWindowMinHeight(compFinderControlsEl);
+};
+
+const setCompFinderCriteriaCollapsed = (collapsed: boolean) => {
+  S.isCompFinderCriteriaCollapsed = collapsed;
+  compFinderCriteriaBody.style.display = collapsed ? 'none' : 'grid';
+  compFinderCriteriaToggle.classList.toggle('is-collapsed', collapsed);
+  compFinderCriteriaToggle.title = collapsed ? 'Expand Criteria' : 'Collapse Criteria';
+  refreshWindowMinHeight(compFinderControlsEl);
+};
+
+const setCompFinderCompsCollapsed = (collapsed: boolean) => {
+  S.isCompFinderCompsCollapsed = collapsed;
+  compFinderCompsBody.style.display = collapsed ? 'none' : 'grid';
+  compFinderCompsToggle.classList.toggle('is-collapsed', collapsed);
+  compFinderCompsToggle.title = collapsed ? 'Expand Comps' : 'Collapse Comps';
+  refreshWindowMinHeight(compFinderControlsEl);
+};
+
+setCompFinderSubjectCollapsed(S.isCompFinderSubjectCollapsed);
+setCompFinderCriteriaCollapsed(S.isCompFinderCriteriaCollapsed);
+setCompFinderCompsCollapsed(S.isCompFinderCompsCollapsed);
+
+compFinderSubjectToggle.addEventListener('click', () => {
+  setCompFinderSubjectCollapsed(!S.isCompFinderSubjectCollapsed);
+});
+
+compFinderCriteriaToggle.addEventListener('click', () => {
+  setCompFinderCriteriaCollapsed(!S.isCompFinderCriteriaCollapsed);
+});
+
+compFinderCompsToggle.addEventListener('click', () => {
+  setCompFinderCompsCollapsed(!S.isCompFinderCompsCollapsed);
+});
+
 // Color ramp choices
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
@@ -700,6 +751,13 @@ const timeAdjustmentWin = createWindowManager({
   onShow: () => { refreshTimeAdjustmentPanel(); },
 });
 
+const compFinderWin = createWindowManager({
+  getMinimized: () => S.isCompFinderMinimized,
+  setMinimized: (v) => { S.isCompFinderMinimized = v; },
+  contentEl: compFinderContent,
+  controlsEl: compFinderControlsEl,
+});
+
 // Convenience aliases matching the old function names
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
@@ -719,6 +777,8 @@ const showLandSchedule = landScheduleWin.show;
 const toggleLandSchedule = landScheduleWin.toggle;
 const minimizeTimeAdjustment = timeAdjustmentWin.minimize;
 const toggleTimeAdjustment = timeAdjustmentWin.toggle;
+const minimizeCompFinder = compFinderWin.minimize;
+const showCompFinder = compFinderWin.show;
 
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
@@ -746,6 +806,7 @@ initWindowDocking({
   btnPinFilters,
   btnPinStatistics,
   btnPinScatterplot,
+  btnPinCompFinder,
   btnPinLandSchedule,
   btnPinTimeAdjustment,
   btnPinLegend,
@@ -755,6 +816,7 @@ registerDockableWindow(settingsControlsEl, btnPinSettings);
 registerDockableWindow(filtersControlsEl, btnPinFilters);
 registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
+registerDockableWindow(compFinderControlsEl, btnPinCompFinder);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
 registerDockableWindow(timeAdjustmentControlsEl, btnPinTimeAdjustment);
 registerDockableWindow(floatingLegend, btnPinLegend);
@@ -763,6 +825,7 @@ enableWindowResizing(settingsControlsEl);
 enableWindowResizing(filtersControlsEl);
 enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
+enableWindowResizing(compFinderControlsEl);
 enableWindowResizing(landScheduleControlsEl);
 enableWindowResizing(timeAdjustmentControlsEl);
 enableWindowResizing(floatingLegend);
@@ -825,7 +888,7 @@ initRenderingCallbacks({
   addPopupEditFunctionality,
   updateCursor,
   isTextInputElement,
-  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select'),
+  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder'),
   hotkeys: HOTKEYS,
 });
 
@@ -2094,6 +2157,7 @@ btnMinimizeScatterplot.addEventListener('click', minimizeScatterplot);
 btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
+btnMinimizeCompFinder.addEventListener('click', minimizeCompFinder);
 
 landScheduleFieldSelect.addEventListener('change', () => {
   S.currentLandScheduleField = landScheduleFieldSelect.value || null;
@@ -2348,6 +2412,7 @@ makeDraggable(floatingLegend);
 makeDraggable(statisticsControlsEl);
 makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
+makeDraggable(compFinderControlsEl);
 makeDraggable(landScheduleControlsEl);
 makeDraggable(timeAdjustmentControlsEl);
 positionSettingsPanel();
@@ -2517,6 +2582,8 @@ initToolbarCallbacks({
   minimizeLegend,
   toggleLandSchedule,
   toggleTimeAdjustment,
+  showCompFinderMenu: showCompFinder,
+  minimizeCompFinderMenu: minimizeCompFinder,
 });
 
 // Initialize toolbar when DOM is ready

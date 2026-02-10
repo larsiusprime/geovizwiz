@@ -14,6 +14,8 @@ let _showLegend: () => void = () => {};
 let _minimizeLegend: () => void = () => {};
 let _toggleLandSchedule: () => void = () => {};
 let _toggleTimeAdjustment: () => void = () => {};
+let _showCompFinderMenu: () => void = () => {};
+let _minimizeCompFinderMenu: () => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
@@ -23,6 +25,8 @@ export interface ToolbarCallbacks {
   minimizeLegend: () => void;
   toggleLandSchedule: () => void;
   toggleTimeAdjustment: () => void;
+  showCompFinderMenu: () => void;
+  minimizeCompFinderMenu: () => void;
 }
 
 export function initToolbarCallbacks(cb: ToolbarCallbacks) {
@@ -33,6 +37,8 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _minimizeLegend = cb.minimizeLegend;
   _toggleLandSchedule = cb.toggleLandSchedule;
   _toggleTimeAdjustment = cb.toggleTimeAdjustment;
+  _showCompFinderMenu = cb.showCompFinderMenu;
+  _minimizeCompFinderMenu = cb.minimizeCompFinderMenu;
 }
 
 /* ---------- DOM elements ---------- */
@@ -47,6 +53,7 @@ const submenuButtons = document.querySelectorAll('.submenu-button') as NodeListO
 const legendToolButton = document.getElementById('legendToolButton') as HTMLButtonElement;
 const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
 const timeAdjustmentToolButton = document.getElementById('timeAdjustmentToolButton') as HTMLButtonElement;
+const compFinderToolButton = document.getElementById('compFinderToolButton') as HTMLButtonElement;
 
 /* ---------- Constants ---------- */
 
@@ -54,7 +61,8 @@ const timeAdjustmentToolButton = document.getElementById('timeAdjustmentToolButt
 export const HOTKEYS = {
   PAN: 'h',
   SELECT: 'v',
-  INFO: 'i'
+  INFO: 'i',
+  COMP_FINDER: 'c',
 };
 
 // Icon mappings for different selection modes
@@ -89,6 +97,8 @@ function handlePanMouseUp(_e: MouseEvent) {
 // Update cursor based on active tool
 export function updateCursor() {
   if (S.isInfoToolActive) {
+    S.map.getCanvas().style.cursor = 'pointer';
+  } else if (S.isCompFinderToolActive) {
     S.map.getCanvas().style.cursor = 'pointer';
   } else if (S.isPanToolActive) {
     S.map.getCanvas().style.cursor = 'grab';
@@ -162,6 +172,10 @@ export function setupSelectionModeHandlers() {
     return;
   }
 
+  if (S.isCompFinderToolActive) {
+    return;
+  }
+
   // Add event listeners based on current mode
   switch (S.currentSelectionMode) {
     case 'select-rectangle':
@@ -186,15 +200,17 @@ export function setupSelectionModeHandlers() {
 }
 
 // Function to activate a specific tool and deactivate others
-export function activateTool(tool: 'pan' | 'info' | 'select') {
+export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
   // Deactivate all tools first
   S.isPanToolActive = false;
   S.isInfoToolActive = false;
+  S.isCompFinderToolActive = false;
 
   // Remove active-tool class from all buttons
   panToolButton.classList.remove('active-tool');
   infoToolButton.classList.remove('active-tool');
   selectToolButton.classList.remove('active-tool');
+  compFinderToolButton.classList.remove('active-tool');
 
   // Activate the specified tool
   switch (tool) {
@@ -203,17 +219,27 @@ export function activateTool(tool: 'pan' | 'info' | 'select') {
       panToolButton.classList.add('active-tool');
       // Enable drag pan for pan tool
       S.map.dragPan.enable();
+      _minimizeCompFinderMenu();
       break;
     case 'info':
       S.isInfoToolActive = true;
       infoToolButton.classList.add('active-tool');
       // Disable drag pan for info tool
       S.map.dragPan.disable();
+      _minimizeCompFinderMenu();
       break;
     case 'select':
       selectToolButton.classList.add('active-tool');
       // Disable drag pan for select tool
       S.map.dragPan.disable();
+      _minimizeCompFinderMenu();
+      break;
+    case 'comp-finder':
+      S.isCompFinderToolActive = true;
+      compFinderToolButton.classList.add('active-tool');
+      // Disable drag pan for comp finder tool
+      S.map.dragPan.disable();
+      _showCompFinderMenu();
       break;
   }
 
@@ -395,6 +421,18 @@ export function initializeToolbar() {
     } else {
       // Activate info tool
       activateTool('info');
+    }
+  });
+
+  // Handle comp finder button click
+  compFinderToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+
+    if (S.isCompFinderToolActive) {
+      activateTool('select');
+    } else {
+      activateTool('comp-finder');
     }
   });
 

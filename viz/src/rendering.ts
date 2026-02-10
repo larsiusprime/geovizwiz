@@ -96,7 +96,12 @@ let _addPopupEditFunctionality: (parcelId: string) => void = () => {};
 let _updateCursor: () => void = () => {};
 let _isTextInputElement: (el: Element | null) => boolean = () => false;
 let _activateTool: (tool: string) => void = () => {};
-let _hotkeys: { PAN: string; SELECT: string; INFO: string } = { PAN: 'h', SELECT: 'v', INFO: 'i' };
+let _hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string } = {
+  PAN: 'h',
+  SELECT: 'v',
+  INFO: 'i',
+  COMP_FINDER: 'c',
+};
 
 export type RenderingCallbacks = {
   getCurrentLayer: () => LayerState | null;
@@ -113,7 +118,7 @@ export type RenderingCallbacks = {
   updateCursor: () => void;
   isTextInputElement: (el: Element | null) => boolean;
   activateTool: (tool: string) => void;
-  hotkeys: { PAN: string; SELECT: string; INFO: string };
+  hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string };
 };
 
 export function initRenderingCallbacks(cb: RenderingCallbacks) {
@@ -301,6 +306,9 @@ export function addExtrusionLayer(layer: LayerState) {
       } else if (key === _hotkeys.INFO) {
         e.preventDefault();
         _activateTool('info');
+      } else if (key === _hotkeys.COMP_FINDER) {
+        e.preventDefault();
+        _activateTool('comp-finder');
       }
     });
     keyHandlersInstalled = true;

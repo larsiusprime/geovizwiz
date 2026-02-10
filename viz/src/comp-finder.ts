@@ -1,5 +1,6 @@
 import maplibregl from 'maplibre-gl';
 import * as XLSX from 'xlsx';
+import PIN_SVG from './svg/pin.svg?raw';
 
 import { S } from './state';
 import type { DataStore, LayerState } from './types';
@@ -178,6 +179,13 @@ function getCompDataStore(): DataStore | null {
 function ensureMarker(elClass: string): HTMLDivElement {
   const el = document.createElement('div');
   el.className = elClass;
+  el.innerHTML = PIN_SVG;
+
+  const middle = elClass.includes('subject') ? '#facc15' : '#93c5fd';
+  el.style.setProperty('--c-middle', middle);
+  el.style.setProperty('--c-dot', '#000000');
+  el.style.setProperty('--c-outline1', '#000000');
+  el.style.setProperty('--c-outline2', '#ffffff');
   return el;
 }
 
@@ -229,7 +237,7 @@ function updateSubjectMarker() {
     return;
   }
   if (!subjectMarker) {
-    subjectMarker = new maplibregl.Marker({ element: ensureMarker(SUBJECT_MARKER_CLASS) });
+    subjectMarker = new maplibregl.Marker({ element: ensureMarker(SUBJECT_MARKER_CLASS), anchor: 'bottom' });
   }
   subjectMarker.setLngLat(subject.center).addTo(S.map);
 }
@@ -241,7 +249,7 @@ function updateCompMarkers() {
     if (!selectedCompIds.has(comp.id)) continue;
     const center = getFeatureCenter(comp.feature);
     if (!center) continue;
-    const marker = new maplibregl.Marker({ element: ensureMarker(COMP_MARKER_CLASS) })
+    const marker = new maplibregl.Marker({ element: ensureMarker(COMP_MARKER_CLASS), anchor: 'bottom' })
       .setLngLat(center)
       .addTo(S.map);
     compMarkers.set(comp.id, marker);

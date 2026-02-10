@@ -1292,10 +1292,43 @@
       align-items: center;
       gap: 6px;
       flex-wrap: wrap;
+      min-width: 0;
     }
 
     .comp-finder-row label {
       font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .comp-finder-row select,
+    .comp-finder-row input {
+      min-width: 0;
+    }
+
+    .comp-finder-row.comp-finder-criteria-main {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #compFinderFieldSelect {
+      width: min(100%, 280px);
+    }
+
+    #compFinderDataSource {
+      width: 100%;
+      min-width: 0;
+    }
+
+    #compFinderDistance {
+      width: 72px !important;
+      min-width: 0;
+    }
+
+    #compFinderDistanceUnits {
+      width: 62px;
+      min-width: 0;
     }
 
     .comp-finder-table {
@@ -1946,7 +1979,7 @@
     </div>
   </div>
 
-  <div id="compFinderControls" class="viz-window" style="position: absolute; top: 10px; left: 740px; width: min(calc(92vw - 80px), 520px); min-width: 420px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="compFinderControls" class="viz-window" style="position: absolute; top: 10px; left: 740px; width: min(calc(92vw - 80px), 520px); min-width: 360px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Comp Finder</div>
       <div class="window-actions">
@@ -1973,7 +2006,7 @@
           </div>
           <div class="comp-finder-row">
             <label for="compFinderFieldSelect">Fields:</label>
-            <select id="compFinderFieldSelect"></select>
+            <select id="compFinderFieldSelect" multiple size="6"></select>
           </div>
           <table class="comp-finder-table">
             <thead id="compFinderSubjectTableHead"></thead>
@@ -1990,15 +2023,13 @@
           <div class="land-schedule-subtitle">Criteria</div>
         </div>
         <div id="compFinderCriteriaBody" class="comp-finder-section-body">
-          <div class="comp-finder-row">
+          <div class="comp-finder-row comp-finder-criteria-main">
             <label for="compFinderDataSource">Data source for comps:</label>
-            <select id="compFinderDataSource" style="flex: 1;">
+            <select id="compFinderDataSource">
               <option value="" selected>Choose data source</option>
             </select>
-          </div>
-          <div class="comp-finder-row">
             <label for="compFinderDistance">Distance from subject:</label>
-            <input id="compFinderDistance" type="number" inputmode="decimal" style="width: 90px;" />
+            <input id="compFinderDistance" type="number" inputmode="decimal" />
             <select id="compFinderDistanceUnits">
               <option value="ft">ft</option>
               <option value="m">m</option>

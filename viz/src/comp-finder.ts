@@ -235,23 +235,25 @@ function getIntersectionFields(): Array<{ field: string; type: 'numeric' | 'cate
 }
 
 function getDisplayLabelForField(field: string, store: DataStore): string {
-  if (field === store.bldgTypeField) return 'Type';
-  if (field === store.landTypeField) return 'Land';
-  if (field === store.bldgAgeField) return 'Age';
-  if (field === store.bldgQualityField) return 'Qual';
-  if (field === store.bldgConditionField) return 'Cond';
-  if (field === store.bldgSizeField) return 'Bldg';
-  if (field === store.landSizeField) return 'Land';
+  if (field === store.bldgSizeField) return 'Building size';
+  if (field === store.landSizeField) return 'Land size';
+  if (field === store.bldgQualityField) return 'Building quality';
+  if (field === store.bldgConditionField) return 'Building condition';
+  if (field === store.bldgAgeField) return 'Building age';
+  if (field === store.bldgTypeField) return 'Building type';
+  if (field === store.landTypeField) return 'Land type';
   return field;
 }
 
 function ensureDefaultSubjectFields(store: DataStore) {
   const defaults = [
-    store.bldgTypeField,
-    store.landTypeField,
-    store.bldgAgeField,
+    store.bldgSizeField,
+    store.landSizeField,
     store.bldgQualityField,
     store.bldgConditionField,
+    store.bldgAgeField,
+    store.bldgTypeField,
+    store.landTypeField,
   ].filter(Boolean) as string[];
 
   subjectFields = defaults.map((field) => ({
@@ -267,16 +269,11 @@ function renderSubjectFieldsSelect(store: DataStore) {
     ...store.chosenCategoricalFields.map((field) => ({ field, type: 'categorical' as const })),
   ];
   els.subjectFieldSelect.innerHTML = '';
-  const placeholder = document.createElement('option');
-  placeholder.value = '';
-  placeholder.textContent = 'Select field';
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  els.subjectFieldSelect.appendChild(placeholder);
   available.forEach(({ field }) => {
     const option = document.createElement('option');
     option.value = field;
-    option.textContent = field;
+    option.textContent = getDisplayLabelForField(field, store);
+    option.selected = subjectFields.some((entry) => entry.field === field);
     els.subjectFieldSelect.appendChild(option);
   });
 }
@@ -822,13 +819,12 @@ export function initCompFinderElements(elements: Elements) {
   els.subjectFieldSelect.addEventListener('change', () => {
     const store = getDataStoreForSubject();
     if (!store) return;
-    const field = els.subjectFieldSelect.value;
-    if (!field) return;
-    if (subjectFields.some((entry) => entry.field === field)) return;
-    const type = store.chosenNumericFields.includes(field) ? 'numeric' : 'categorical';
-    subjectFields.push({ field, label: getDisplayLabelForField(field, store), type });
+    const selected = Array.from(els.subjectFieldSelect.selectedOptions).map((option) => option.value);
+    subjectFields = selected.map((field) => {
+      const type = store.chosenNumericFields.includes(field) ? 'numeric' : 'categorical';
+      return { field, label: getDisplayLabelForField(field, store), type };
+    });
     renderSubjectTable();
-    els.subjectFieldSelect.selectedIndex = 0;
   });
 
   els.dataSourceSelect.addEventListener('change', () => {

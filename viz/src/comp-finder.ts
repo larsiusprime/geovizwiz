@@ -36,10 +36,13 @@ type Elements = {
   resultsRow: HTMLDivElement;
   resultsSummary: HTMLSpanElement;
   pager: HTMLDivElement;
+  emptyState: HTMLDivElement;
+  criteriaSection: HTMLDivElement;
+  compsSection: HTMLDivElement;
+  criteriaCompsDivider: HTMLDivElement;
   compsTableHead: HTMLTableSectionElement;
   compsTableBody: HTMLTableSectionElement;
   compsTableContainer: HTMLDivElement;
-  compsSelectAll: HTMLInputElement;
   addFieldSelect: HTMLSelectElement;
   addFieldButton: HTMLButtonElement;
   addFieldRow: HTMLDivElement;
@@ -70,7 +73,6 @@ let comps: CompRow[] = [];
 let criteriaDirty = false;
 let compMarkers = new Map<string, maplibregl.Marker>();
 let subjectMarker: maplibregl.Marker | null = null;
-let selectedCompIds = new Set<string>();
 let isToolActive = false;
 let isMenuVisible = false;
 let isFinding = false;
@@ -225,10 +227,9 @@ function clearSubjectMarker() {
 }
 
 function updateActionButtons() {
-  const hasSelection = selectedCompIds.size > 0;
-  els.zoomButton.disabled = !hasSelection;
-  els.exportCsvButton.disabled = !hasSelection;
-  els.exportExcelButton.disabled = !hasSelection;
+  els.zoomButton.disabled = false;
+  els.exportCsvButton.disabled = false;
+  els.exportExcelButton.disabled = false;
 }
 
 function updateSubjectMarker() {
@@ -581,13 +582,6 @@ function renderPager() {
   els.pager.appendChild(next);
 }
 
-function updateSelectAllState() {
-  const allIds = comps.map((row) => row.id);
-  const allSelected = allIds.length > 0 && allIds.every((id) => selectedCompIds.has(id));
-  els.compsSelectAll.checked = allSelected;
-  els.compsSelectAll.indeterminate = !allSelected && selectedCompIds.size > 0;
-}
-
 function getDeltaClass(delta: { sign?: 'positive' | 'negative' | 'neutral' | 'error' }) {
   if (delta.sign === 'positive') return 'comp-finder-delta-positive';
   if (delta.sign === 'negative') return 'comp-finder-delta-negative';
@@ -645,38 +639,6 @@ function renderCompsTable() {
   });
   els.compsTableHead.appendChild(head);
 
-  const selectRow = document.createElement('tr');
-  const selectRemove = document.createElement('td');
-  selectRemove.textContent = '';
-  const selectField = document.createElement('td');
-  selectField.textContent = 'Select';
-  const selectSubject = document.createElement('td');
-  updateSelectAllState();
-  const selectAllWrap = document.createElement('label');
-  selectAllWrap.className = 'comp-finder-select-all-wrap';
-  const selectAllLabel = document.createElement('span');
-  selectAllLabel.className = 'comp-finder-select-all-label';
-  selectAllLabel.textContent = 'all';
-  selectAllWrap.append(els.compsSelectAll, selectAllLabel);
-  selectSubject.appendChild(selectAllWrap);
-  selectRow.append(selectRemove, selectField, selectSubject);
-  visible.forEach((comp) => {
-    const td = document.createElement('td');
-    const check = document.createElement('input');
-    check.type = 'checkbox';
-    check.checked = selectedCompIds.has(comp.id);
-    check.addEventListener('change', () => {
-      if (check.checked) selectedCompIds.add(comp.id);
-      else selectedCompIds.delete(comp.id);
-      updateSelectAllState();
-      updateActionButtons();
-      updateMapArtifacts();
-      renderCompsTable();
-    });
-    td.appendChild(check);
-    selectRow.appendChild(td);
-  });
-  els.compsTableBody.appendChild(selectRow);
 
   const idRow = document.createElement('tr');
   const idRemove = document.createElement('td');
@@ -816,7 +778,6 @@ async function findComps() {
   const subjectParcelId = subject.parcelId;
 
   comps = [];
-  selectedCompIds.clear();
 
   for (const feature of compStore.geojson.features) {
     const compCenter = getFeatureCenter(feature);
@@ -847,27 +808,16 @@ async function findComps() {
   currentPage = 1;
   setCriteriaDirty(false);
   updateRefreshButtonLabel();
-  updateSelectAllState();
   updateActionButtons();
   renderCompsTable();
   updateMapArtifacts();
   setFinding(false);
 }
 
-function handleSelectAllToggle() {
-  const checked = els.compsSelectAll.checked;
-  if (checked) comps.forEach((row) => selectedCompIds.add(row.id));
-  else selectedCompIds.clear();
-  updateSelectAllState();
-  updateActionButtons();
-  updateMapArtifacts();
-  renderCompsTable();
-}
-
 function handleZoomToComps() {
-  if (selectedCompIds.size === 0) return;
-  const selectedFeatures = comps.filter((row) => selectedCompIds.has(row.id)).map((row) => row.feature);
-  const bounds = bbox({ type: 'FeatureCollection', features: selectedFeatures });
+  if (!subject) return;
+  const features = [subject.feature, ...comps.map((row) => row.feature)];
+  const bounds = bbox({ type: 'FeatureCollection', features });
   if (!bounds) return;
   S.map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 60, duration: 600 });
 }
@@ -895,7 +845,6 @@ function buildExportRows() {
   rows.push(subjectRow);
 
   comps.forEach((row) => {
-    if (!selectedCompIds.has(row.id)) return;
     const compRow: Record<string, any> = {
       is_subject: 'FALSE',
       parcel_id: row.parcelId,
@@ -1009,16 +958,22 @@ function ensureDefaultCriteria(store: DataStore) {
   });
 }
 
+function updateEmptyStateUI() {
+  const hasSubject = Boolean(subject);
+  els.emptyState.style.display = hasSubject ? 'none' : 'block';
+  els.criteriaSection.style.display = hasSubject ? 'grid' : 'none';
+  els.criteriaCompsDivider.style.display = hasSubject ? 'block' : 'none';
+  els.compsSection.style.display = hasSubject ? 'grid' : 'none';
+}
+
 function renderCompsUI() {
   updateRefreshButtonLabel();
-  updateSelectAllState();
   updateActionButtons();
   renderCompsTable();
 }
 
 function resetComps() {
   comps = [];
-  selectedCompIds.clear();
   currentPage = 1;
   setCriteriaDirty(false);
   renderCompsUI();
@@ -1043,6 +998,7 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
   };
 
   callbacks.showCompFinderMenu();
+  updateEmptyStateUI();
   refreshDataSources();
 
   if (!els.distanceInput.value) els.distanceInput.value = '1';
@@ -1063,6 +1019,7 @@ export function setCompFinderToolActive(active: boolean) {
 
 export function setCompFinderMenuVisible(visible: boolean) {
   isMenuVisible = visible;
+  updateEmptyStateUI();
   if (!visible) {
     clearSubjectMarker();
     clearCompMarkers();
@@ -1100,8 +1057,6 @@ export function initCompFinderElements(elements: Elements) {
     findComps();
   });
 
-  els.compsSelectAll.addEventListener('change', handleSelectAllToggle);
-
   els.addFieldButton.addEventListener('click', () => {
     const field = els.addFieldSelect.value;
     if (!field) return;
@@ -1117,6 +1072,7 @@ export function initCompFinderElements(elements: Elements) {
   els.exportCsvButton.addEventListener('click', exportCsv);
   els.exportExcelButton.addEventListener('click', exportExcel);
 
+  updateEmptyStateUI();
   renderCompsUI();
   renderAddFieldOptions();
 }

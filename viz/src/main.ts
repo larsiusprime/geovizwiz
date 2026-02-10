@@ -511,10 +511,13 @@ const compFinderSpinner = document.getElementById('compFinderSpinner') as HTMLDi
 const compFinderResultsRow = document.getElementById('compFinderResultsRow') as HTMLDivElement;
 const compFinderResultsSummary = document.getElementById('compFinderResultsSummary') as HTMLSpanElement;
 const compFinderPager = document.getElementById('compFinderPager') as HTMLDivElement;
+const compFinderEmptyState = document.getElementById('compFinderEmptyState') as HTMLDivElement;
+const compFinderCriteriaSection = document.getElementById('compFinderCriteriaSection') as HTMLDivElement;
+const compFinderCompsSection = document.getElementById('compFinderCompsSection') as HTMLDivElement;
+const compFinderCriteriaCompsDivider = document.getElementById('compFinderCriteriaCompsDivider') as HTMLDivElement;
 const compFinderCompsTableHead = document.getElementById('compFinderCompsTableHead') as HTMLTableSectionElement;
 const compFinderCompsTableBody = document.getElementById('compFinderCompsTableBody') as HTMLTableSectionElement;
 const compFinderCompsTableContainer = document.getElementById('compFinderCompsTableContainer') as HTMLDivElement;
-const compFinderCompsSelectAll = document.getElementById('compFinderCompsSelectAll') as HTMLInputElement;
 const compFinderAddFieldSelect = document.getElementById('compFinderAddFieldSelect') as HTMLSelectElement;
 const compFinderAddFieldButton = document.getElementById('compFinderAddFieldButton') as HTMLButtonElement;
 const compFinderAddFieldRow = document.getElementById('compFinderAddFieldRow') as HTMLDivElement;
@@ -1130,10 +1133,13 @@ initCompFinderElements({
   resultsRow: compFinderResultsRow,
   resultsSummary: compFinderResultsSummary,
   pager: compFinderPager,
+  emptyState: compFinderEmptyState,
+  criteriaSection: compFinderCriteriaSection,
+  compsSection: compFinderCompsSection,
+  criteriaCompsDivider: compFinderCriteriaCompsDivider,
   compsTableHead: compFinderCompsTableHead,
   compsTableBody: compFinderCompsTableBody,
   compsTableContainer: compFinderCompsTableContainer,
-  compsSelectAll: compFinderCompsSelectAll,
   addFieldSelect: compFinderAddFieldSelect,
   addFieldButton: compFinderAddFieldButton,
   addFieldRow: compFinderAddFieldRow,

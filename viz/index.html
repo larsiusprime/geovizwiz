@@ -1420,6 +1420,13 @@
       display: flex;
       align-items: center;
       gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .comp-finder-dirty-indicator {
+      color: #92400e;
+      font-size: 11px;
+      display: none;
     }
 
     .comp-finder-spinner {
@@ -2137,7 +2144,7 @@
     </div>
   </div>
 
-  <div id="compFinderControls" class="viz-window" style="position: absolute; top: 10px; left: 740px; width: min(calc(92vw - 80px), 520px); min-width: 360px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="compFinderControls" class="viz-window" style="position: absolute; top: 10px; left: 740px; width: min(calc(92vw - 80px), 520px); min-width: 360px; min-height: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Comp Finder</div>
       <div class="window-actions">
@@ -2198,9 +2205,10 @@
         <div id="compFinderCompsBody" class="comp-finder-section-body">
           <div class="comp-finder-refresh-row">
             <button id="compFinderRefresh" type="button" class="land-schedule-button">Find comps</button>
+            <span id="compFinderDirtyIndicator" class="comp-finder-dirty-indicator">Criteria have changed, comps outdated.</span>
             <div id="compFinderSpinner" class="comp-finder-spinner" aria-label="Finding comps" title="Finding comps"></div>
           </div>
-          <div class="comp-finder-results-row">
+          <div id="compFinderResultsRow" class="comp-finder-results-row">
             <span id="compFinderResultsSummary">Results: 0</span>
             <div id="compFinderPager" class="comp-finder-pager"></div>
           </div>
@@ -2217,13 +2225,12 @@
               <tbody id="compFinderCompsTableBody"></tbody>
             </table>
           </div>
-          <div class="comp-finder-add-field-row">
+          <div id="compFinderAddFieldRow" class="comp-finder-add-field-row">
             <select id="compFinderAddFieldSelect"></select>
             <button id="compFinderAddFieldButton" type="button" class="land-schedule-button">add field</button>
           </div>
           <div class="comp-finder-actions">
             <span class="muted">Selected:</span>
-            <button id="compFinderMark" type="button" class="land-schedule-button" disabled>mark</button>
             <button id="compFinderZoomTo" type="button" class="land-schedule-button" disabled>zoom to</button>
             <button id="compFinderExportCsv" type="button" class="land-schedule-button" disabled><img src="./src/svg/csv.svg" alt="CSV" /></button>
             <button id="compFinderExportExcel" type="button" class="land-schedule-button" disabled><img src="./src/svg/excel.svg" alt="Excel" /></button>

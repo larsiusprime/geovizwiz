@@ -93,6 +93,7 @@ import {
   initCompFinderCallbacks,
   setCompFinderSubject,
   setCompFinderToolActive,
+  setCompFinderMenuVisible,
 } from './comp-finder';
 import {
   initToolbarCallbacks, initializeToolbar,
@@ -505,7 +506,9 @@ const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits
 const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaTableBody') as HTMLTableSectionElement;
 const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
 const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
+const compFinderDirtyIndicator = document.getElementById('compFinderDirtyIndicator') as HTMLSpanElement;
 const compFinderSpinner = document.getElementById('compFinderSpinner') as HTMLDivElement;
+const compFinderResultsRow = document.getElementById('compFinderResultsRow') as HTMLDivElement;
 const compFinderResultsSummary = document.getElementById('compFinderResultsSummary') as HTMLSpanElement;
 const compFinderPager = document.getElementById('compFinderPager') as HTMLDivElement;
 const compFinderCompsTableHead = document.getElementById('compFinderCompsTableHead') as HTMLTableSectionElement;
@@ -514,7 +517,7 @@ const compFinderCompsTableContainer = document.getElementById('compFinderCompsTa
 const compFinderCompsSelectAll = document.getElementById('compFinderCompsSelectAll') as HTMLInputElement;
 const compFinderAddFieldSelect = document.getElementById('compFinderAddFieldSelect') as HTMLSelectElement;
 const compFinderAddFieldButton = document.getElementById('compFinderAddFieldButton') as HTMLButtonElement;
-const compFinderMarkButton = document.getElementById('compFinderMark') as HTMLButtonElement;
+const compFinderAddFieldRow = document.getElementById('compFinderAddFieldRow') as HTMLDivElement;
 const compFinderZoomButton = document.getElementById('compFinderZoomTo') as HTMLButtonElement;
 const compFinderExportCsv = document.getElementById('compFinderExportCsv') as HTMLButtonElement;
 const compFinderExportExcel = document.getElementById('compFinderExportExcel') as HTMLButtonElement;
@@ -787,8 +790,14 @@ const showLandSchedule = landScheduleWin.show;
 const toggleLandSchedule = landScheduleWin.toggle;
 const minimizeTimeAdjustment = timeAdjustmentWin.minimize;
 const toggleTimeAdjustment = timeAdjustmentWin.toggle;
-const minimizeCompFinder = compFinderWin.minimize;
-const showCompFinder = compFinderWin.show;
+const minimizeCompFinder = () => {
+  compFinderWin.minimize();
+  setCompFinderMenuVisible(false);
+};
+const showCompFinder = () => {
+  compFinderWin.show();
+  setCompFinderMenuVisible(true);
+};
 
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
@@ -1116,7 +1125,9 @@ initCompFinderElements({
   criteriaTableBody: compFinderCriteriaTableBody,
   addCriterionButton: compFinderAddCriterion,
   refreshButton: compFinderRefresh,
+  dirtyIndicator: compFinderDirtyIndicator,
   spinner: compFinderSpinner,
+  resultsRow: compFinderResultsRow,
   resultsSummary: compFinderResultsSummary,
   pager: compFinderPager,
   compsTableHead: compFinderCompsTableHead,
@@ -1125,7 +1136,7 @@ initCompFinderElements({
   compsSelectAll: compFinderCompsSelectAll,
   addFieldSelect: compFinderAddFieldSelect,
   addFieldButton: compFinderAddFieldButton,
-  markButton: compFinderMarkButton,
+  addFieldRow: compFinderAddFieldRow,
   zoomButton: compFinderZoomButton,
   exportCsvButton: compFinderExportCsv,
   exportExcelButton: compFinderExportExcel,
@@ -1133,6 +1144,7 @@ initCompFinderElements({
 initCompFinderCallbacks({
   showCompFinderMenu: showCompFinder,
 });
+setCompFinderMenuVisible(!S.isCompFinderMinimized);
 
 // Wire DOM elements and callbacks into the layers module
 initLayerElements({

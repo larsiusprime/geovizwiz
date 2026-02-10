@@ -30,7 +30,9 @@ type Elements = {
   criteriaTableBody: HTMLTableSectionElement;
   addCriterionButton: HTMLButtonElement;
   refreshButton: HTMLButtonElement;
+  dirtyIndicator: HTMLSpanElement;
   spinner: HTMLDivElement;
+  resultsRow: HTMLDivElement;
   resultsSummary: HTMLSpanElement;
   pager: HTMLDivElement;
   compsTableHead: HTMLTableSectionElement;
@@ -39,7 +41,7 @@ type Elements = {
   compsSelectAll: HTMLInputElement;
   addFieldSelect: HTMLSelectElement;
   addFieldButton: HTMLButtonElement;
-  markButton: HTMLButtonElement;
+  addFieldRow: HTMLDivElement;
   zoomButton: HTMLButtonElement;
   exportCsvButton: HTMLButtonElement;
   exportExcelButton: HTMLButtonElement;
@@ -69,6 +71,7 @@ let compMarkers = new Map<string, maplibregl.Marker>();
 let subjectMarker: maplibregl.Marker | null = null;
 let selectedCompIds = new Set<string>();
 let isToolActive = false;
+let isMenuVisible = false;
 let isFinding = false;
 let currentPage = 1;
 let sortField: string | null = null;
@@ -77,6 +80,77 @@ let sortDirection: 'asc' | 'desc' = 'asc';
 const COMP_MARKER_CLASS = 'comp-finder-marker';
 const SUBJECT_MARKER_CLASS = 'comp-finder-marker subject';
 const COMPS_PER_PAGE = 3;
+const COMP_DISTANCE_SOURCE_ID = 'comp-finder-distance-source';
+const COMP_DISTANCE_FILL_LAYER_ID = 'comp-finder-distance-fill';
+const COMP_DISTANCE_OUTLINE_BLACK_ID = 'comp-finder-distance-outline-black';
+const COMP_DISTANCE_OUTLINE_WHITE_ID = 'comp-finder-distance-outline-white';
+
+
+
+function destinationPoint(center: [number, number], bearingDeg: number, distanceMeters: number): [number, number] {
+  const R = 6371008.8;
+  const brng = (bearingDeg * Math.PI) / 180;
+  const lat1 = (center[1] * Math.PI) / 180;
+  const lon1 = (center[0] * Math.PI) / 180;
+  const dByR = distanceMeters / R;
+  const sinLat1 = Math.sin(lat1);
+  const cosLat1 = Math.cos(lat1);
+  const sinD = Math.sin(dByR);
+  const cosD = Math.cos(dByR);
+  const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * Math.cos(brng));
+  const lon2 = lon1 + Math.atan2(Math.sin(brng) * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
+  return [((lon2 * 180) / Math.PI + 540) % 360 - 180, (lat2 * 180) / Math.PI];
+}
+
+function makeDistanceCircleFeature(center: [number, number], radiusMeters: number): GeoJSON.Feature {
+  const coordinates: [number, number][] = [];
+  const steps = 96;
+  for (let i = 0; i <= steps; i += 1) {
+    coordinates.push(destinationPoint(center, (i / steps) * 360, radiusMeters));
+  }
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: { type: 'Polygon', coordinates: [coordinates] },
+  };
+}
+
+function clearDistanceOverlay() {
+  if (S.map.getLayer(COMP_DISTANCE_OUTLINE_WHITE_ID)) S.map.removeLayer(COMP_DISTANCE_OUTLINE_WHITE_ID);
+  if (S.map.getLayer(COMP_DISTANCE_OUTLINE_BLACK_ID)) S.map.removeLayer(COMP_DISTANCE_OUTLINE_BLACK_ID);
+  if (S.map.getLayer(COMP_DISTANCE_FILL_LAYER_ID)) S.map.removeLayer(COMP_DISTANCE_FILL_LAYER_ID);
+  if (S.map.getSource(COMP_DISTANCE_SOURCE_ID)) S.map.removeSource(COMP_DISTANCE_SOURCE_ID);
+}
+
+function updateDistanceOverlay() {
+  if (!isMenuVisible || !subject) {
+    clearDistanceOverlay();
+    return;
+  }
+  const radiusMeters = getDistanceLimitMeters();
+  if (!radiusMeters) {
+    clearDistanceOverlay();
+    return;
+  }
+  const data: GeoJSON.FeatureCollection = {
+    type: 'FeatureCollection',
+    features: [makeDistanceCircleFeature(subject.center, radiusMeters)],
+  };
+  const existing = S.map.getSource(COMP_DISTANCE_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+  if (existing) existing.setData(data);
+  else {
+    S.map.addSource(COMP_DISTANCE_SOURCE_ID, { type: 'geojson', data });
+    S.map.addLayer({ id: COMP_DISTANCE_FILL_LAYER_ID, type: 'fill', source: COMP_DISTANCE_SOURCE_ID, paint: { 'fill-color': '#fef3c7', 'fill-opacity': 0.35 } });
+    S.map.addLayer({ id: COMP_DISTANCE_OUTLINE_BLACK_ID, type: 'line', source: COMP_DISTANCE_SOURCE_ID, paint: { 'line-color': '#111827', 'line-width': 2, 'line-dasharray': [2, 2] } });
+    S.map.addLayer({ id: COMP_DISTANCE_OUTLINE_WHITE_ID, type: 'line', source: COMP_DISTANCE_SOURCE_ID, paint: { 'line-color': '#ffffff', 'line-width': 1, 'line-dasharray': [2, 2] } });
+  }
+}
+
+function updateMapArtifacts() {
+  updateSubjectMarker();
+  updateCompMarkers();
+  updateDistanceOverlay();
+}
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -116,6 +190,7 @@ function setFinding(next: boolean) {
 function setCriteriaDirty(dirty: boolean) {
   criteriaDirty = dirty;
   els.compsTableContainer.classList.toggle('is-dirty', dirty);
+  els.dirtyIndicator.style.display = dirty && comps.length > 0 ? 'inline' : 'none';
   updateRefreshButtonLabel();
 }
 
@@ -143,14 +218,13 @@ function clearSubjectMarker() {
 
 function updateActionButtons() {
   const hasSelection = selectedCompIds.size > 0;
-  els.markButton.disabled = !hasSelection;
   els.zoomButton.disabled = !hasSelection;
   els.exportCsvButton.disabled = !hasSelection;
   els.exportExcelButton.disabled = !hasSelection;
 }
 
 function updateSubjectMarker() {
-  if (!subject || !isToolActive) {
+  if (!subject || !isMenuVisible) {
     clearSubjectMarker();
     return;
   }
@@ -162,7 +236,7 @@ function updateSubjectMarker() {
 
 function updateCompMarkers() {
   clearCompMarkers();
-  if (!isToolActive) return;
+  if (!isMenuVisible) return;
   for (const comp of comps) {
     if (!selectedCompIds.has(comp.id)) continue;
     const center = getFeatureCenter(comp.feature);
@@ -200,8 +274,6 @@ function getDistanceLimitMeters(): number | null {
   if (!distanceValue || distanceValue <= 0) return null;
   const unit = els.distanceUnitsSelect.value;
   const unitToMeters: Record<string, number> = {
-    ft: 0.3048,
-    m: 1,
     mi: 1609.344,
     km: 1000,
   };
@@ -542,6 +614,15 @@ function renderCompsTable() {
   els.compsTableHead.innerHTML = '';
   els.compsTableBody.innerHTML = '';
 
+  const hasComps = comps.length > 0;
+  els.resultsRow.style.display = hasComps ? 'flex' : 'none';
+  els.compsTableContainer.style.display = hasComps ? 'block' : 'none';
+  els.addFieldRow.style.display = hasComps ? 'flex' : 'none';
+  if (!hasComps) {
+    els.dirtyIndicator.style.display = 'none';
+    return;
+  }
+
   const head = document.createElement('tr');
   const removeTh = document.createElement('th');
   removeTh.textContent = '';
@@ -582,7 +663,7 @@ function renderCompsTable() {
       else selectedCompIds.delete(comp.id);
       updateSelectAllState();
       updateActionButtons();
-      updateCompMarkers();
+      updateMapArtifacts();
       renderCompsTable();
     });
     td.appendChild(check);
@@ -762,7 +843,7 @@ async function findComps() {
   updateSelectAllState();
   updateActionButtons();
   renderCompsTable();
-  updateCompMarkers();
+  updateMapArtifacts();
   setFinding(false);
 }
 
@@ -772,12 +853,8 @@ function handleSelectAllToggle() {
   else selectedCompIds.clear();
   updateSelectAllState();
   updateActionButtons();
-  updateCompMarkers();
+  updateMapArtifacts();
   renderCompsTable();
-}
-
-function handleMarkComps() {
-  updateCompMarkers();
 }
 
 function handleZoomToComps() {
@@ -970,18 +1047,22 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
   syncCriteriaFields();
   renderCriteriaTable();
   resetComps();
-  updateSubjectMarker();
+  updateMapArtifacts();
 }
 
 export function setCompFinderToolActive(active: boolean) {
   isToolActive = active;
-  if (!active) {
+}
+
+export function setCompFinderMenuVisible(visible: boolean) {
+  isMenuVisible = visible;
+  if (!visible) {
     clearSubjectMarker();
     clearCompMarkers();
+    clearDistanceOverlay();
     return;
   }
-  updateSubjectMarker();
-  updateCompMarkers();
+  updateMapArtifacts();
 }
 
 export function initCompFinderElements(elements: Elements) {
@@ -993,8 +1074,14 @@ export function initCompFinderElements(elements: Elements) {
     resetComps();
   });
 
-  els.distanceInput.addEventListener('input', () => setCriteriaDirty(true));
-  els.distanceUnitsSelect.addEventListener('change', () => setCriteriaDirty(true));
+  els.distanceInput.addEventListener('input', () => {
+    setCriteriaDirty(true);
+    updateDistanceOverlay();
+  });
+  els.distanceUnitsSelect.addEventListener('change', () => {
+    setCriteriaDirty(true);
+    updateDistanceOverlay();
+  });
 
   els.addCriterionButton.addEventListener('click', () => {
     criteria.push({ id: uid('criterion'), field: null, fieldType: null, value: null, usePercent: false });
@@ -1019,7 +1106,6 @@ export function initCompFinderElements(elements: Elements) {
     renderCompsTable();
   });
 
-  els.markButton.addEventListener('click', handleMarkComps);
   els.zoomButton.addEventListener('click', handleZoomToComps);
   els.exportCsvButton.addEventListener('click', exportCsv);
   els.exportExcelButton.addEventListener('click', exportExcel);

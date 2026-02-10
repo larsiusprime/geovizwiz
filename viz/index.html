@@ -1437,6 +1437,12 @@
       display: none;
     }
 
+    .comp-finder-no-comps-indicator {
+      color: #b91c1c;
+      font-size: 11px;
+      display: none;
+    }
+
     .comp-finder-spinner {
       width: 14px;
       height: 14px;
@@ -2215,6 +2221,7 @@
           <div class="comp-finder-refresh-row">
             <button id="compFinderRefresh" type="button" class="land-schedule-button">Find comps</button>
             <span id="compFinderDirtyIndicator" class="comp-finder-dirty-indicator">Criteria have changed, comps outdated.</span>
+            <span id="compFinderNoCompsIndicator" class="comp-finder-no-comps-indicator">No comps found.</span>
             <div id="compFinderSpinner" class="comp-finder-spinner" aria-label="Finding comps" title="Finding comps"></div>
           </div>
           <div id="compFinderResultsRow" class="comp-finder-results-row">

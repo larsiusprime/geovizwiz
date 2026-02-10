@@ -507,6 +507,7 @@ const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaT
 const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
 const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
 const compFinderDirtyIndicator = document.getElementById('compFinderDirtyIndicator') as HTMLSpanElement;
+const compFinderNoCompsIndicator = document.getElementById('compFinderNoCompsIndicator') as HTMLSpanElement;
 const compFinderSpinner = document.getElementById('compFinderSpinner') as HTMLDivElement;
 const compFinderResultsRow = document.getElementById('compFinderResultsRow') as HTMLDivElement;
 const compFinderResultsSummary = document.getElementById('compFinderResultsSummary') as HTMLSpanElement;
@@ -1129,6 +1130,7 @@ initCompFinderElements({
   addCriterionButton: compFinderAddCriterion,
   refreshButton: compFinderRefresh,
   dirtyIndicator: compFinderDirtyIndicator,
+  noCompsIndicator: compFinderNoCompsIndicator,
   spinner: compFinderSpinner,
   resultsRow: compFinderResultsRow,
   resultsSummary: compFinderResultsSummary,

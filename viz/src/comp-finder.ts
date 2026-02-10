@@ -32,6 +32,7 @@ type Elements = {
   addCriterionButton: HTMLButtonElement;
   refreshButton: HTMLButtonElement;
   dirtyIndicator: HTMLSpanElement;
+  noCompsIndicator: HTMLSpanElement;
   spinner: HTMLDivElement;
   resultsRow: HTMLDivElement;
   resultsSummary: HTMLSpanElement;
@@ -79,6 +80,7 @@ let isFinding = false;
 let currentPage = 1;
 let sortField: string | null = null;
 let sortDirection: 'asc' | 'desc' = 'asc';
+let hasAttemptedFind = false;
 
 const COMP_MARKER_CLASS = 'comp-finder-marker';
 const SUBJECT_MARKER_CLASS = 'comp-finder-marker subject';
@@ -202,6 +204,13 @@ function setCriteriaDirty(dirty: boolean) {
   els.compsTableContainer.classList.toggle('is-dirty', dirty);
   els.dirtyIndicator.style.display = dirty && comps.length > 0 ? 'inline' : 'none';
   updateRefreshButtonLabel();
+  updateNoCompsIndicator();
+}
+
+
+function updateNoCompsIndicator() {
+  const show = hasAttemptedFind && comps.length === 0 && Boolean(subject);
+  els.noCompsIndicator.style.display = show ? 'inline' : 'none';
 }
 
 function updateRefreshButtonLabel() {
@@ -243,6 +252,14 @@ function updateSubjectMarker() {
   subjectMarker.setLngLat(subject.center).addTo(S.map);
 }
 
+function getFirstLayerIdForDataStore(dataStoreId: string): string | null {
+  for (const layerId of S.layerOrder) {
+    const layer = getLayerById(layerId);
+    if (layer?.dataStoreId === dataStoreId) return layerId;
+  }
+  return null;
+}
+
 function updateCompMarkers() {
   clearCompMarkers();
   if (!isMenuVisible) return;
@@ -252,6 +269,11 @@ function updateCompMarkers() {
     const marker = new maplibregl.Marker({ element: ensureMarker(COMP_MARKER_CLASS), anchor: 'bottom' })
       .setLngLat(center)
       .addTo(S.map);
+    marker.getElement().addEventListener('click', (event) => {
+      event.stopPropagation();
+      const targetLayerId = getFirstLayerIdForDataStore(els.dataSourceSelect.value || subject?.dataStoreId || '');
+      if (targetLayerId) setCompFinderSubject(comp.feature, targetLayerId);
+    });
     compMarkers.set(comp.id, marker);
   }
 }
@@ -624,6 +646,8 @@ function renderCompsTable() {
     return;
   }
 
+  updateNoCompsIndicator();
+
   const head = document.createElement('tr');
   const removeTh = document.createElement('th');
   removeTh.textContent = '';
@@ -761,7 +785,8 @@ function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'categorica
   if (value === null || value === undefined || subjectValue === null || subjectValue === undefined) {
     return { text: 'ERROR', error: 'Missing categorical value', sign: 'error' as const };
   }
-  return { text: String(value) === String(subjectValue) ? '=' : '≠', sign: 'neutral' as const };
+  if (String(value) === String(subjectValue)) return { text: '=', sign: 'neutral' as const };
+  return { text: String(value), sign: 'negative' as const };
 }
 
 async function findComps() {
@@ -806,9 +831,11 @@ async function findComps() {
   }
 
   currentPage = 1;
+  hasAttemptedFind = false;
   setCriteriaDirty(false);
   updateRefreshButtonLabel();
   updateActionButtons();
+  updateNoCompsIndicator();
   renderCompsTable();
   updateMapArtifacts();
   setFinding(false);
@@ -964,6 +991,7 @@ function updateEmptyStateUI() {
   els.criteriaSection.style.display = hasSubject ? 'grid' : 'none';
   els.criteriaCompsDivider.style.display = hasSubject ? 'block' : 'none';
   els.compsSection.style.display = hasSubject ? 'grid' : 'none';
+  updateNoCompsIndicator();
 }
 
 function renderCompsUI() {
@@ -975,6 +1003,7 @@ function renderCompsUI() {
 function resetComps() {
   comps = [];
   currentPage = 1;
+  hasAttemptedFind = true;
   setCriteriaDirty(false);
   renderCompsUI();
   clearCompMarkers();

@@ -1312,10 +1312,6 @@
       gap: 6px;
     }
 
-    #compFinderFieldSelect {
-      width: min(100%, 280px);
-    }
-
     #compFinderDataSource {
       width: 100%;
       min-width: 0;
@@ -1329,6 +1325,32 @@
     #compFinderDistanceUnits {
       width: 62px;
       min-width: 0;
+    }
+
+    .comp-finder-criteria-field-select {
+      width: 100%;
+      min-width: 0;
+      max-width: 130px;
+    }
+
+    .comp-finder-criteria-categorical {
+      width: 100%;
+      min-width: 0;
+      max-width: 130px;
+    }
+
+    .comp-finder-delete-btn {
+      border: none;
+      background: transparent;
+      color: #dc2626;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .comp-finder-delete-btn:hover {
+      color: #b91c1c;
     }
 
     .comp-finder-table {
@@ -2004,14 +2026,6 @@
             <div><strong>Parcel ID:</strong> <span id="compFinderSubjectParcelId">—</span></div>
             <div><strong>Address:</strong> <span id="compFinderSubjectAddress">—</span></div>
           </div>
-          <div class="comp-finder-row">
-            <label for="compFinderFieldSelect">Fields:</label>
-            <select id="compFinderFieldSelect" multiple size="6"></select>
-          </div>
-          <table class="comp-finder-table">
-            <thead id="compFinderSubjectTableHead"></thead>
-            <tbody id="compFinderSubjectTableBody"></tbody>
-          </table>
         </div>
       </div>
 
@@ -2041,7 +2055,8 @@
             <thead>
               <tr>
                 <th>Field</th>
-                <th>Value</th>
+                <th>Subject</th>
+                <th>Tolerance</th>
                 <th class="center">%</th>
                 <th></th>
               </tr>

@@ -907,76 +907,70 @@ The comp finder is a tool/menu combination. There is a TOOL button on the toolba
 
 Clicking the comp finder button makes it the currently selected tool (alongside inspect, select, and pan). Clicking a parcel while the comp finder is the current tool gives that parcel comp-finder focus and brings up the comp-finder menu. It looks like this:
 
-+------------------------------------------------------+
-| Comp-Finder                                          |
-+------------------------------------------------------+
-|                                                      |
-| ▼ Subject:                                           |<--subject
-| Parcel ID: 123456                                    |
-| Address: 123 Apple St                                |
-| Fields: [ select ▼ ]                                 |<--field selector
-| +------+------+------+-----+------+------+           |
-| | type | bldg | land | age | qual | cond |           |
-| +------+------+------+-----+------+------+           |
-| | abc  | 2000 |10000 | 20  |  3   |  3   |           |
-| +------+------+------+-----+------+------+           |
-|                                                      |
-| -----------------------------------------------------|
-| ▼ Criteria:                                          |<--criteria
-|                                                      |
-|    Data source for comps: [ universe.parquet ▼]      |<-datasource picker
-|    Distance from subject: [ number ] [ units ▼]      |<--distance
-|                                                      |
-|   +--------------+---------+-----+-----+             |
-|   | Field        |  Value  |  %  |     |             |<--table
-|   +—-------------|---------|-----|-----|             |
-|   | [bldg_area ▼]|+/-:[200]| [  ]| [x] |             |<--numeric
-|   | [land_area ▼]|+/-: [10]| [✔] | [x] |             |<--numeric
-|   | [age       ▼]|+/-:  [5]| [  ]| [x] |             |<--numeric
-|   | [type      ▼]|[a/b/c ▼]| N/A | [x] |             |<--categorical 
-|                        [ add criterion ]             |<--add criter.
-|                                                      |
-| ---------------------------------------------------- |
-| ▼ Comps:                                             |<--matches
-|                                                      |
-| [Refresh comps]                                      |
-| +--+--+---------+------+------+-----+------+------+  |
-| |  |id| address | bldg | land | age | qual | cond |  |
-| +--+--+---------+------+------+-----+------+------+  |
-| |[]|12|124 apple| +100 | +100 | +1  |  =   | +1   |  |
-| |[]|13|125 apple| -100 | -100 | -3  |  =   |  =   |  |
-| |[]|14|126 apple| - 50 | - 60 | -1  |  +1  |  =   |  |
-| +--+--+---------+------+------+-----+------+------+  |
-| Selected:                                            |
-| [mark][zoom to][📄][📊]                              |
-+------------------------------------------------------+
++--------------------------------------------------------+
+| Comp-Finder                                            |
++--------------------------------------------------------+
+|                                                        |
+| ▼ Subject:                                             |<--subject
+| Parcel ID: 123456                                      |
+| Address: 123 Apple St                                  |
+|                                                        |
+| -------------------------------------------------------|
+| ▼ Comp Criteria:                                       |
+|                                                        |
+|    Data source: [ universe.parquet ▼]                  |
+|    Distance:    [ number ] [ units ▼]                  |
+|                                                        |
+|   +--------------+---------+------------+-----+-----+  |
+|   | Field        | Subject | Tolerance  |  %  |     |  |
+|   +—-------------+---------+------------|-----|-----|  |
+|   | [bldg_area ▼]|    2000 |  +/-:[200] | [  ]| [x] |  |
+|   | [land_area ▼]|   20000 |  +/-: [10] | [✔]| [x] |  |
+|   | [age       ▼]|      40 |  +/-:  [5] | [  ]| [x] |  |
+|   | [type      ▼]|       a |  [a/b/c ▼] | N/A | [x] |  |
+|                                     [ add criterion ]  |
+|                                                        |
+| ------------------------------------------------------ |
+| ▼ Comps:                                               |<--matches
+|                                                        |
+| [Refresh comps]                                        |
+| +--+--+---------+------+------+-----+------+------+    |
+| |  |id| address | bldg | land | age | qual | cond |    |
+| +--+--+---------+------+------+-----+------+------+    |
+| |[]|12|124 apple| +100 | +100 | +1  |  =   | +1   |    |
+| |[]|13|125 apple| -100 | -100 | -3  |  =   |  =   |    |
+| |[]|14|126 apple| - 50 | - 60 | -1  |  +1  |  =   |    |
+| +--+--+---------+------+------+-----+------+------+    |
+| Selected:                                              |
+| [mark][zoom to][📄][📊]                                |
++--------------------------------------------------------+
 
 The user selects the COMP-FINDER selection tool and then clicks a parcel on the map, which drops the COMP-FINDER pin on that parcel and sets the current comp finder subject to that parcel. Selecting any other tool will hide the COMP-FINDER pin.
 
 The SUBJECT section will list certain facts about the parcel, if those fields have been defined:
 - The parcel ID
 - The situs address
-- User selected fields in a table below
-  - By default, it will populate with: Building type, land type, building age, building quality, building condition
 
-The CRITERIA section will allow the user to define how a “comp” (comparable property/sale) is defined/evaluated
+The CRITERIA section will allow the user to define how a “comp” (comparable property/sale) is defined/evaluated.
 
 First, the user must pick the data source they are comparing against. By default this is the same layer as the subject itself was sampled from, but the user can pick any data source available from a dropdown.
 
 Second, the user must define the maximum distance from the subject within which to search for comps. No parcels beyond this distance will be considered.
 
-Third, the user can edit the criteria field table. This is a field with four columns: “Field”, “Value”, “%”, and a blank one that holds delete row [x] buttons.
+Third, the user can edit the criteria field table. This is a field with five columns: “Field”, “Subject”, “Tolerance”, “%”, and a blank one that holds delete row [x] buttons.
 
-In any given row, the user can pick a field. If it is a numeric field, then a checkbox will appear in the “%” column, otherwise only the text N/A will be displayed there in gray. Likewise, if the field is numeric, the “Value” field will have a numeric input field, which will display the text “+/-:” before it. Otherwise it will have a multi-selector dropdown that lets the user pick one or more categorical values from the chosen field, with no text before it. The last column will always hold a [x] button with a red ❌, clicking this will delete the row. Below the table is an “[add criterion]” button, aligned to the right of the table, that will add a new row when pressed.
+“Subject” will show the value of that field for the selected subject property.
+
+In any given row, the user can pick a field. If it is a numeric field, then a checkbox will appear in the “%” column, otherwise only the text N/A will be displayed there in gray. Likewise, if the field is numeric, the “Tolerance” field will have a numeric input field, which will display the text “+/-:” before it. Otherwise it will have a multi-selector dropdown that lets the user pick one or more categorical values from the chosen field, with no text before it. The last column will always hold a [x] button with a red ❌, clicking this will delete the row. Below the table is an “[add criterion]” button, aligned to the right of the table, that will add a new row when pressed.
 
 NOTE: the user may *only* select fields that appear in BOTH the subject’s data source AND the comp criteria data source.
 
 These inputs define the criteria by which a comp is selected. A comp is defined as passing ALL of the defined tests:
-From the specified data source
-Within specified distance of the subject parcel
-For each field criterion:
-- If numeric: comp’s value is within: (subject-range, subject+range), inclusive on both ends
-- If categorical: comp’s value is any of the specified values
+- From the specified data source
+- Within specified distance of the subject parcel
+- For each field criterion:
+  - If numeric: comp’s value is within: (subject-range, subject+range), inclusive on both ends
+  - If categorical: comp’s value is any of the specified values
 
 If no comps have been found yet, the button will say [“Find comps”]. If comps already exist, it will say [“Refresh comps”] Whenever the user changes any of the criteria, if the criteria is “dirty,” that is, different from the criteria used to find the currently displayed comps, the table in the “COMPS” subsection will appear gray to indicate they are out of date.
 

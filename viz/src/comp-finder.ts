@@ -14,12 +14,6 @@ type Criterion = {
   usePercent: boolean;
 };
 
-type SubjectField = {
-  field: string;
-  label: string;
-  type: 'numeric' | 'categorical';
-};
-
 type CompRow = {
   id: string;
   feature: GeoJSON.Feature;
@@ -32,9 +26,6 @@ type Elements = {
   panel: HTMLDivElement;
   subjectParcelId: HTMLSpanElement;
   subjectAddress: HTMLSpanElement;
-  subjectFieldSelect: HTMLSelectElement;
-  subjectTableHead: HTMLTableSectionElement;
-  subjectTableBody: HTMLTableSectionElement;
   dataSourceSelect: HTMLSelectElement;
   distanceInput: HTMLInputElement;
   distanceUnitsSelect: HTMLSelectElement;
@@ -67,7 +58,6 @@ let subject: {
   center: [number, number];
 } | null = null;
 
-let subjectFields: SubjectField[] = [];
 let criteria: Criterion[] = [];
 let comps: CompRow[] = [];
 let criteriaDirty = false;
@@ -234,77 +224,22 @@ function getIntersectionFields(): Array<{ field: string; type: 'numeric' | 'cate
   ];
 }
 
-function getDisplayLabelForField(field: string, store: DataStore): string {
-  if (field === store.bldgSizeField) return 'Building size';
-  if (field === store.landSizeField) return 'Land size';
-  if (field === store.bldgQualityField) return 'Building quality';
-  if (field === store.bldgConditionField) return 'Building condition';
-  if (field === store.bldgAgeField) return 'Building age';
-  if (field === store.bldgTypeField) return 'Building type';
-  if (field === store.landTypeField) return 'Land type';
-  return field;
+function formatSubjectValue(field: string | null, type: 'numeric' | 'categorical' | null): string {
+  if (!subject || !field || !type) return '—';
+  const value = getFieldValue(subject.feature, field);
+  if (value === null || value === undefined || value === '') return '—';
+  return type === 'numeric' ? fmt(value) : String(value);
 }
 
-function ensureDefaultSubjectFields(store: DataStore) {
-  const defaults = [
-    store.bldgSizeField,
-    store.landSizeField,
-    store.bldgQualityField,
-    store.bldgConditionField,
-    store.bldgAgeField,
-    store.bldgTypeField,
-    store.landTypeField,
-  ].filter(Boolean) as string[];
-
-  subjectFields = defaults.map((field) => ({
-    field,
-    label: getDisplayLabelForField(field, store),
-    type: store.chosenNumericFields.includes(field) ? 'numeric' : 'categorical',
-  }));
-}
-
-function renderSubjectFieldsSelect(store: DataStore) {
-  const available = [
-    ...store.chosenNumericFields.map((field) => ({ field, type: 'numeric' as const })),
-    ...store.chosenCategoricalFields.map((field) => ({ field, type: 'categorical' as const })),
-  ];
-  els.subjectFieldSelect.innerHTML = '';
-  available.forEach(({ field }) => {
-    const option = document.createElement('option');
-    option.value = field;
-    option.textContent = getDisplayLabelForField(field, store);
-    option.selected = subjectFields.some((entry) => entry.field === field);
-    els.subjectFieldSelect.appendChild(option);
+function getComparisonFields(): Array<{ field: string; type: 'numeric' | 'categorical' }> {
+  const fields: Array<{ field: string; type: 'numeric' | 'categorical' }> = [];
+  const seen = new Set<string>();
+  criteria.forEach((row) => {
+    if (!row.field || !row.fieldType || seen.has(row.field)) return;
+    seen.add(row.field);
+    fields.push({ field: row.field, type: row.fieldType });
   });
-}
-
-function renderSubjectTable() {
-  const store = getDataStoreForSubject();
-  if (!store || !subject) return;
-  els.subjectTableHead.innerHTML = '';
-  els.subjectTableBody.innerHTML = '';
-  if (!subjectFields.length) return;
-
-  const headRow = document.createElement('tr');
-  subjectFields.forEach((entry) => {
-    const th = document.createElement('th');
-    th.textContent = entry.label;
-    headRow.appendChild(th);
-  });
-  els.subjectTableHead.appendChild(headRow);
-
-  const bodyRow = document.createElement('tr');
-  subjectFields.forEach((entry) => {
-    const td = document.createElement('td');
-    const value = getFieldValue(subject.feature, entry.field);
-    if (entry.type === 'numeric') {
-      td.textContent = value === null || value === undefined ? '—' : fmt(value);
-    } else {
-      td.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
-    }
-    bodyRow.appendChild(td);
-  });
-  els.subjectTableBody.appendChild(bodyRow);
+  return fields;
 }
 
 function renderCriteriaTable() {
@@ -319,6 +254,7 @@ function renderCriteriaTable() {
     const tr = document.createElement('tr');
     const fieldCell = document.createElement('td');
     const fieldSelect = document.createElement('select');
+    fieldSelect.className = 'comp-finder-criteria-field-select';
     const placeholder = document.createElement('option');
     placeholder.value = '';
     placeholder.textContent = 'Select field';
@@ -347,7 +283,11 @@ function renderCriteriaTable() {
     fieldCell.appendChild(fieldSelect);
     tr.appendChild(fieldCell);
 
-    const valueCell = document.createElement('td');
+    const subjectCell = document.createElement('td');
+    subjectCell.textContent = formatSubjectValue(row.field, row.fieldType);
+    tr.appendChild(subjectCell);
+
+    const toleranceCell = document.createElement('td');
     const percentCell = document.createElement('td');
     percentCell.className = 'center';
 
@@ -367,7 +307,7 @@ function renderCriteriaTable() {
         setCriteriaDirty(true);
       });
       wrapper.append(prefix, input);
-      valueCell.appendChild(wrapper);
+      toleranceCell.appendChild(wrapper);
 
       const checkbox = document.createElement('input');
       checkbox.type = 'checkbox';
@@ -384,8 +324,8 @@ function renderCriteriaTable() {
       prefix.className = 'muted';
       prefix.textContent = '=';
       const select = document.createElement('select');
+      select.className = 'comp-finder-criteria-categorical';
       select.multiple = true;
-      select.style.minWidth = '140px';
       const values = row.field ? getCategoricalValuesForField(row.field) : [];
       values.forEach((value) => {
         const option = document.createElement('option');
@@ -399,23 +339,24 @@ function renderCriteriaTable() {
         setCriteriaDirty(true);
       });
       wrapper.append(prefix, select);
-      valueCell.appendChild(wrapper);
+      toleranceCell.appendChild(wrapper);
 
       percentCell.textContent = 'N/A';
       percentCell.classList.add('muted');
     } else {
-      valueCell.textContent = '—';
+      toleranceCell.textContent = '—';
       percentCell.textContent = '—';
       percentCell.classList.add('muted');
     }
 
-    tr.appendChild(valueCell);
+    tr.appendChild(toleranceCell);
     tr.appendChild(percentCell);
 
     const deleteCell = document.createElement('td');
     deleteCell.className = 'center';
     const deleteButton = document.createElement('button');
     deleteButton.type = 'button';
+    deleteButton.className = 'comp-finder-delete-btn';
     deleteButton.textContent = '❌';
     deleteButton.addEventListener('click', () => {
       criteria = criteria.filter((item) => item.id !== row.id);
@@ -430,6 +371,7 @@ function renderCriteriaTable() {
 }
 
 function renderCompsTable() {
+  const comparisonFields = getComparisonFields();
   els.compsTableHead.innerHTML = '';
   els.compsTableBody.innerHTML = '';
 
@@ -447,9 +389,9 @@ function renderCompsTable() {
   addressTh.textContent = 'Address';
   headRow.appendChild(addressTh);
 
-  subjectFields.forEach((entry) => {
+  comparisonFields.forEach((entry) => {
     const th = document.createElement('th');
-    th.textContent = entry.label;
+    th.textContent = entry.field;
     headRow.appendChild(th);
   });
 
@@ -568,6 +510,7 @@ function findComps() {
   comps = [];
   selectedCompIds.clear();
 
+  const comparisonFields = getComparisonFields();
   for (const feature of compStore.geojson.features) {
     const compCenter = getFeatureCenter(feature);
     if (!compCenter) continue;
@@ -579,7 +522,7 @@ function findComps() {
     }
     if (!passesCriteria(feature)) continue;
 
-    const deltas = subjectFields.map((entry) => {
+    const deltas = comparisonFields.map((entry) => {
       const compVal = getFieldValue(feature, entry.field);
       const subjVal = getFieldValue(subject.feature, entry.field);
       return buildDelta(compVal, subjVal, entry.type);
@@ -629,13 +572,14 @@ function handleZoomToComps() {
 
 function buildExportRows() {
   if (!subject) return [];
+  const comparisonFields = getComparisonFields();
   const rows: Record<string, any>[] = [];
   const subjectRow: Record<string, any> = {
     is_subject: 'TRUE',
     parcel_id: subject.parcelId || '',
     address: subject.address || '',
   };
-  subjectFields.forEach((entry) => {
+  comparisonFields.forEach((entry) => {
     subjectRow[entry.field] = getFieldValue(subject.feature, entry.field);
     const delta = buildDelta(
       getFieldValue(subject.feature, entry.field),
@@ -653,7 +597,7 @@ function buildExportRows() {
       parcel_id: row.parcelId,
       address: row.address,
     };
-    subjectFields.forEach((entry, idx) => {
+    comparisonFields.forEach((entry, idx) => {
       compRow[entry.field] = getFieldValue(row.feature, entry.field);
       compRow[`delta_${entry.field}`] = row.deltas[idx]?.text ?? '';
     });
@@ -718,14 +662,6 @@ function updateSubjectInfo() {
   if (!subject) return;
   els.subjectParcelId.textContent = subject.parcelId || '—';
   els.subjectAddress.textContent = subject.address || '—';
-}
-
-function updateSubjectFields() {
-  const store = getDataStoreForSubject();
-  if (!store) return;
-  ensureDefaultSubjectFields(store);
-  renderSubjectFieldsSelect(store);
-  renderSubjectTable();
 }
 
 function syncCriteriaFields() {
@@ -795,7 +731,6 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
   callbacks.showCompFinderMenu();
   refreshDataSources();
   updateSubjectInfo();
-  updateSubjectFields();
   ensureDefaultCriteria(store);
   syncCriteriaFields();
   renderCriteriaTable();
@@ -816,17 +751,6 @@ export function setCompFinderToolActive(active: boolean) {
 
 export function initCompFinderElements(elements: Elements) {
   els = elements;
-  els.subjectFieldSelect.addEventListener('change', () => {
-    const store = getDataStoreForSubject();
-    if (!store) return;
-    const selected = Array.from(els.subjectFieldSelect.selectedOptions).map((option) => option.value);
-    subjectFields = selected.map((field) => {
-      const type = store.chosenNumericFields.includes(field) ? 'numeric' : 'categorical';
-      return { field, label: getDisplayLabelForField(field, store), type };
-    });
-    renderSubjectTable();
-  });
-
   els.dataSourceSelect.addEventListener('change', () => {
     syncCriteriaFields();
     renderCriteriaTable();

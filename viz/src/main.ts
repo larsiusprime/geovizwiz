@@ -503,9 +503,6 @@ const compFinderContent = document.getElementById('compFinderContent') as HTMLDi
 const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
 const compFinderSubjectParcelId = document.getElementById('compFinderSubjectParcelId') as HTMLSpanElement;
 const compFinderSubjectAddress = document.getElementById('compFinderSubjectAddress') as HTMLSpanElement;
-const compFinderFieldSelect = document.getElementById('compFinderFieldSelect') as HTMLSelectElement;
-const compFinderSubjectTableHead = document.getElementById('compFinderSubjectTableHead') as HTMLTableSectionElement;
-const compFinderSubjectTableBody = document.getElementById('compFinderSubjectTableBody') as HTMLTableSectionElement;
 const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
 const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
 const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits') as HTMLSelectElement;
@@ -1127,9 +1124,6 @@ initCompFinderElements({
   panel: compFinderControlsEl,
   subjectParcelId: compFinderSubjectParcelId,
   subjectAddress: compFinderSubjectAddress,
-  subjectFieldSelect: compFinderFieldSelect,
-  subjectTableHead: compFinderSubjectTableHead,
-  subjectTableBody: compFinderSubjectTableBody,
   dataSourceSelect: compFinderDataSourceSelect,
   distanceInput: compFinderDistanceInput,
   distanceUnitsSelect: compFinderDistanceUnits,

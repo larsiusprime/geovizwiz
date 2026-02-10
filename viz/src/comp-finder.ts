@@ -246,7 +246,6 @@ function updateCompMarkers() {
   clearCompMarkers();
   if (!isMenuVisible) return;
   for (const comp of comps) {
-    if (!selectedCompIds.has(comp.id)) continue;
     const center = getFeatureCenter(comp.feature);
     if (!center) continue;
     const marker = new maplibregl.Marker({ element: ensureMarker(COMP_MARKER_CLASS), anchor: 'bottom' })

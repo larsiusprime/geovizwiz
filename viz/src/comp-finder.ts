@@ -647,6 +647,7 @@ function renderCompsTable() {
   }
 
   updateNoCompsIndicator();
+  els.compsTableContainer.scrollTop = 0;
 
   const head = document.createElement('tr');
   const removeTh = document.createElement('th');
@@ -872,7 +873,6 @@ function handleZoomToComps() {
 function buildExportRows() {
   if (!subject) return [];
   const comparisonFields = getComparisonFields();
-  const criteriaFields = comparisonFields.filter((f) => f.source === 'criteria');
   const rows: Record<string, any>[] = [];
 
   const subjectRow: Record<string, any> = {
@@ -880,14 +880,11 @@ function buildExportRows() {
     parcel_id: subject.parcelId || '',
     address: subject.address || '',
   };
+
   comparisonFields.forEach((entry) => {
-    subjectRow[entry.field] = getFieldValue(subject.feature, entry.field);
-    const delta = buildDelta(
-      getFieldValue(subject.feature, entry.field),
-      getFieldValue(subject.feature, entry.field),
-      entry.type,
-    );
-    subjectRow[`delta_${entry.field}`] = delta.text;
+    const subjectValue = getFieldValue(subject!.feature, entry.field);
+    subjectRow[entry.field] = subjectValue;
+    subjectRow[`delta_${entry.field}`] = entry.type === 'numeric' ? 0 : '=';
   });
   rows.push(subjectRow);
 
@@ -897,23 +894,24 @@ function buildExportRows() {
       parcel_id: row.parcelId,
       address: row.address,
     };
+
     comparisonFields.forEach((entry) => {
-      compRow[entry.field] = getFieldValue(row.feature, entry.field);
-    });
-    criteriaFields.forEach((entry, idx) => {
-      compRow[`delta_${entry.field}`] = row.deltas[idx]?.text ?? '';
-    });
-    extraFields.forEach((entry) => {
-      if (!compRow.hasOwnProperty(`delta_${entry.field}`)) {
-        compRow[`delta_${entry.field}`] = buildDelta(
-          getFieldValue(row.feature, entry.field),
-          getFieldValue(subject.feature, entry.field),
-          entry.type,
-        ).text;
+      const compValue = getFieldValue(row.feature, entry.field);
+      const subjectValue = getFieldValue(subject!.feature, entry.field);
+      compRow[entry.field] = compValue;
+
+      if (entry.type === 'numeric') {
+        const compNum = numOrNull(compValue);
+        const subjNum = numOrNull(subjectValue);
+        compRow[`delta_${entry.field}`] = (compNum === null || subjNum === null) ? '' : (compNum - subjNum);
+      } else {
+        compRow[`delta_${entry.field}`] = String(compValue) === String(subjectValue) ? '=' : String(compValue ?? '');
       }
     });
+
     rows.push(compRow);
   });
+
   return rows;
 }
 

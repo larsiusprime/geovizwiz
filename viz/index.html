@@ -1264,9 +1264,37 @@
       max-width: 100%;
     }
 
+    #compFinderContent {
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      align-content: start;
+      min-height: 0;
+      height: 100%;
+    }
+
     .comp-finder-section {
       display: grid;
       gap: 8px;
+      align-content: start;
+      align-self: start;
+      min-height: 0;
+    }
+
+    .comp-finder-section.comp-finder-section--comps {
+      grid-template-rows: auto minmax(0, 1fr);
+      align-self: stretch;
+    }
+
+    #compFinderCompsBody {
+      min-height: 0;
+      grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+    }
+
+    #compFinderCompsTableContainer {
+      min-height: 0;
+      height: 100%;
+      max-height: none !important;
+      overflow: auto !important;
     }
 
     .comp-finder-section-header {
@@ -2123,7 +2151,7 @@
         </button>
       </div>
     </div>
-    <div id="compFinderContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
+    <div id="compFinderContent" data-window-content style="padding: 12px; gap: 12px;">
       <div class="comp-finder-section">
         <div class="comp-finder-section-header">
           <button id="compFinderSubjectToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Subject">▼</button>
@@ -2179,7 +2207,7 @@
 
       <div class="divider"></div>
 
-      <div class="comp-finder-section">
+      <div class="comp-finder-section comp-finder-section--comps">
         <div class="comp-finder-section-header">
           <button id="compFinderCompsToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Comps">▼</button>
           <div class="land-schedule-subtitle">Comps</div>
@@ -2194,7 +2222,7 @@
             <div id="compFinderPager" class="comp-finder-pager"></div>
           </div>
           <input id="compFinderCompsSelectAll" type="checkbox" class="comp-finder-select-all" />
-          <div id="compFinderCompsTableContainer" class="comp-finder-comps" style="max-height: 220px; overflow: auto;">
+          <div id="compFinderCompsTableContainer" class="comp-finder-comps">
             <table class="comp-finder-table">
               <thead id="compFinderCompsTableHead">
                 <tr>

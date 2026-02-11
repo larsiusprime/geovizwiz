@@ -40,6 +40,8 @@ const PINNED_GAP_FALLBACK = 8;
 const PINNED_GUTTER = 8;
 const MIN_WINDOW_WIDTH = 240;
 const MIN_WINDOW_HEIGHT = 160;
+const WINDOW_STACK_BASE = 20;
+const WINDOW_MARGIN = 10;
 
 let pinnedContainer: HTMLDivElement | null = null;
 let appContainer: HTMLElement | null = null;
@@ -59,6 +61,7 @@ let resizeColumn: HTMLDivElement | null = null;
 let columnResizeStartX = 0;
 let columnResizeStartWidth = 0;
 const columnWidthOverrides = new Map<number, number>();
+let windowZCounter = WINDOW_STACK_BASE;
 
 /** Must be called once from main.ts to wire in the callbacks. */
 export function initWindowCallbacks(callbacks: {
@@ -132,70 +135,6 @@ export function enableWindowResizing(windowEl: HTMLElement) {
 export function createWindowManager(config: WindowConfig): WindowManager {
   const display = config.contentDisplay ?? 'grid';
 
-  function avoidWindowOverlap(target: HTMLElement) {
-    if (isPinned(target)) return;
-    const rect = target.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
-    const padding = 12;
-    const windows = Array.from(document.querySelectorAll<HTMLElement>('.viz-window'))
-      .filter(el => el !== target)
-      .filter(el => window.getComputedStyle(el).display !== 'none');
-    const targetArea = rect.width * rect.height;
-    if (!windows.length || targetArea === 0) return;
-
-    const overlaps = windows.map(win => {
-      const r = win.getBoundingClientRect();
-      const overlapX = Math.max(0, Math.min(rect.right, r.right) - Math.max(rect.left, r.left));
-      const overlapY = Math.max(0, Math.min(rect.bottom, r.bottom) - Math.max(rect.top, r.top));
-      return overlapX * overlapY;
-    });
-    const maxOverlap = Math.max(...overlaps, 0);
-    if (maxOverlap / targetArea < 0.35) return;
-
-    const candidates: Array<{ left: number; top: number }> = [
-      { left: padding, top: padding },
-      { left: viewportWidth - rect.width - padding, top: padding },
-      { left: padding, top: viewportHeight - rect.height - padding },
-      { left: viewportWidth - rect.width - padding, top: viewportHeight - rect.height - padding },
-    ];
-
-    windows.forEach(win => {
-      const r = win.getBoundingClientRect();
-      candidates.push({ left: r.right + padding, top: r.top });
-      candidates.push({ left: r.left, top: r.bottom + padding });
-    });
-
-    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
-    let best = { left: rect.left, top: rect.top, overlap: maxOverlap };
-
-    candidates.forEach(candidate => {
-      const left = clamp(candidate.left, padding, viewportWidth - rect.width - padding);
-      const top = clamp(candidate.top, padding, viewportHeight - rect.height - padding);
-      const candidateRect = {
-        left,
-        top,
-        right: left + rect.width,
-        bottom: top + rect.height,
-      };
-      let overlap = 0;
-      windows.forEach(win => {
-        const r = win.getBoundingClientRect();
-        const overlapX = Math.max(0, Math.min(candidateRect.right, r.right) - Math.max(candidateRect.left, r.left));
-        const overlapY = Math.max(0, Math.min(candidateRect.bottom, r.bottom) - Math.max(candidateRect.top, r.top));
-        overlap += overlapX * overlapY;
-      });
-      if (overlap < best.overlap) {
-        best = { left, top, overlap };
-      }
-    });
-
-    if (best.left !== rect.left || best.top !== rect.top) {
-      target.style.left = `${best.left}px`;
-      target.style.top = `${best.top}px`;
-    }
-  }
-
   function minimize() {
     config.setMinimized(true);
     config.contentEl.style.display = 'none';
@@ -217,7 +156,10 @@ export function createWindowManager(config: WindowConfig): WindowManager {
       config.positionFn?.();
     }
     config.onShow?.();
-    avoidWindowOverlap(config.controlsEl);
+    if (!isPinned(config.controlsEl)) {
+      placeFloatingWindow(config.controlsEl);
+    }
+    bringWindowToFront(config.controlsEl);
     ensureWindowMinHeight(config.controlsEl);
     if (isPinned(config.controlsEl)) {
       updatePinnedLayout();
@@ -261,15 +203,176 @@ export function refreshWindowMinHeight(element: HTMLElement) {
   ensureWindowMinHeight(element);
 }
 
+function getMapRect() {
+  const mapEl = document.getElementById('map');
+  return mapEl?.getBoundingClientRect() ?? {
+    left: getDockRightEdge(),
+    top: 0,
+    right: window.innerWidth,
+    bottom: window.innerHeight,
+    width: window.innerWidth - getDockRightEdge(),
+    height: window.innerHeight,
+    x: getDockRightEdge(),
+    y: 0,
+    toJSON: () => ({}),
+  };
+}
+
+function getWindowClampBounds(target: HTMLElement) {
+  const mapRect = getMapRect();
+  const targetRect = target.getBoundingClientRect();
+  return {
+    minLeft: mapRect.left,
+    maxLeft: Math.max(mapRect.left, mapRect.right - targetRect.width),
+    minTop: mapRect.top,
+  };
+}
+
+function clampWindowWithinBounds(target: HTMLElement) {
+  if (isPinned(target)) return;
+  const { minLeft, maxLeft, minTop } = getWindowClampBounds(target);
+  const rect = target.getBoundingClientRect();
+  const nextLeft = Math.max(minLeft, Math.min(rect.left, maxLeft));
+  const nextTop = Math.max(minTop, rect.top);
+  target.style.left = `${nextLeft}px`;
+  target.style.top = `${nextTop}px`;
+  target.style.transform = 'none';
+}
+
+function getVisibleFloatingWindows(exclude?: HTMLElement) {
+  return Array.from(document.querySelectorAll<HTMLElement>('.viz-window'))
+    .filter(el => el !== exclude)
+    .filter(el => !isPinned(el))
+    .filter(el => window.getComputedStyle(el).display !== 'none');
+}
+
+function getAnchorPosition(target: HTMLElement) {
+  const mapRect = getMapRect();
+  const targetRect = target.getBoundingClientRect();
+  const preferRight = target.id === 'floatingLegend';
+  const left = preferRight
+    ? Math.max(mapRect.left, mapRect.right - targetRect.width - WINDOW_MARGIN)
+    : mapRect.left + WINDOW_MARGIN;
+  const top = mapRect.top + WINDOW_MARGIN;
+  return { left, top };
+}
+
+function getHeaderHeight(windowEl: HTMLElement) {
+  const header = windowEl.querySelector('.window-header') as HTMLElement | null;
+  const height = header?.getBoundingClientRect().height ?? 0;
+  return Math.max(24, Math.round(height));
+}
+
+function rectsOverlap(a: DOMRect, b: DOMRect) {
+  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function candidateOverlaps(candidate: { left: number; top: number }, target: HTMLElement, windows: HTMLElement[]) {
+  const rect = target.getBoundingClientRect();
+  const candidateRect = {
+    left: candidate.left,
+    top: candidate.top,
+    right: candidate.left + rect.width,
+    bottom: candidate.top + rect.height,
+  };
+  return windows.some((win) => {
+    const r = win.getBoundingClientRect();
+    return candidateRect.left < r.right
+      && candidateRect.right > r.left
+      && candidateRect.top < r.bottom
+      && candidateRect.bottom > r.top;
+  });
+}
+
+function findUnoccupiedPosition(target: HTMLElement, anchor: { left: number; top: number }) {
+  const windows = getVisibleFloatingWindows(target);
+  if (windows.length === 0) {
+    return anchor;
+  }
+
+  const { minLeft, maxLeft, minTop } = getWindowClampBounds(target);
+  const mapRect = getMapRect();
+  const targetRect = target.getBoundingClientRect();
+  const stepX = 28;
+  const stepY = Math.max(24, getHeaderHeight(target));
+  const maxTop = Math.max(minTop, mapRect.bottom - targetRect.height);
+  const preferRight = target.id === 'floatingLegend';
+  const clampedAnchorLeft = Math.max(minLeft, Math.min(anchor.left, maxLeft));
+
+  const xs: number[] = [];
+  if (preferRight) {
+    for (let left = clampedAnchorLeft; left >= minLeft; left -= stepX) xs.push(left);
+  } else {
+    for (let left = clampedAnchorLeft; left <= maxLeft; left += stepX) xs.push(left);
+  }
+  if (!xs.includes(clampedAnchorLeft)) {
+    xs.unshift(clampedAnchorLeft);
+  }
+
+  for (let top = minTop; top <= maxTop; top += stepY) {
+    for (const left of xs) {
+      const candidate = { left, top };
+      if (!candidateOverlaps(candidate, target, windows)) {
+        return candidate;
+      }
+    }
+  }
+
+  return null;
+}
+
+function findOffsetOverlapPosition(target: HTMLElement, anchor: { left: number; top: number }) {
+  const windows = getVisibleFloatingWindows(target);
+  const { minLeft, maxLeft, minTop } = getWindowClampBounds(target);
+  let nextLeft = Math.max(minLeft, Math.min(anchor.left, maxLeft));
+  let nextTop = Math.max(minTop, anchor.top);
+
+  let safety = 0;
+  while (safety < 24) {
+    safety += 1;
+    const targetRect = target.getBoundingClientRect();
+    const candidateRect = new DOMRect(nextLeft, nextTop, targetRect.width, targetRect.height);
+    const covered = windows.find(win => rectsOverlap(candidateRect, win.getBoundingClientRect()));
+    if (!covered) {
+      break;
+    }
+    nextTop += getHeaderHeight(covered);
+  }
+
+  return {
+    left: Math.max(minLeft, Math.min(nextLeft, maxLeft)),
+    top: Math.max(minTop, nextTop),
+  };
+}
+
+function placeFloatingWindow(target: HTMLElement) {
+  if (isPinned(target)) return;
+  if (target.dataset.userPositioned === 'true') {
+    clampWindowWithinBounds(target);
+    return;
+  }
+
+  const anchor = getAnchorPosition(target);
+  const candidate = findUnoccupiedPosition(target, anchor) ?? findOffsetOverlapPosition(target, anchor);
+  target.style.left = `${candidate.left}px`;
+  target.style.top = `${candidate.top}px`;
+  target.style.transform = 'none';
+  clampWindowWithinBounds(target);
+}
+
+function bringWindowToFront(target: HTMLElement) {
+  if (isPinned(target)) return;
+  windowZCounter += 1;
+  target.style.zIndex = `${windowZCounter}`;
+}
+
 export function positionSettingsPanel() {
-  if (!els.controlsEl || !els.settingsControlsEl) return;
+  if (!els.settingsControlsEl) return;
   if (isPinned(els.settingsControlsEl)) return;
   if (els.settingsControlsEl.dataset.userPositioned === 'true') return;
-  const rect = els.controlsEl.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.settingsControlsEl.style.left = `${rect.right + gap}px`;
-  els.settingsControlsEl.style.top = `${rect.top}px`;
+  const anchor = getAnchorPosition(els.settingsControlsEl);
+  els.settingsControlsEl.style.left = `${anchor.left}px`;
+  els.settingsControlsEl.style.top = `${anchor.top}px`;
   els.settingsControlsEl.style.transform = 'none';
 }
 
@@ -277,13 +380,9 @@ export function positionStatisticsPanel() {
   if (!els.statisticsControlsEl) return;
   if (isPinned(els.statisticsControlsEl)) return;
   if (els.statisticsControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!S.isSettingsMenuMinimized && els.settingsControlsEl) ? els.settingsControlsEl : els.controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.statisticsControlsEl.style.left = `${rect.right + gap}px`;
-  els.statisticsControlsEl.style.top = `${rect.top}px`;
+  const anchor = getAnchorPosition(els.statisticsControlsEl);
+  els.statisticsControlsEl.style.left = `${anchor.left}px`;
+  els.statisticsControlsEl.style.top = `${anchor.top}px`;
   els.statisticsControlsEl.style.transform = 'none';
 }
 
@@ -291,17 +390,9 @@ export function positionScatterplotPanel() {
   if (!els.scatterplotControlsEl) return;
   if (isPinned(els.scatterplotControlsEl)) return;
   if (els.scatterplotControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!S.isStatisticsMinimized && els.statisticsControlsEl)
-    ? els.statisticsControlsEl
-    : (!S.isSettingsMenuMinimized && els.settingsControlsEl)
-      ? els.settingsControlsEl
-      : els.controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.scatterplotControlsEl.style.left = `${rect.right + gap}px`;
-  els.scatterplotControlsEl.style.top = `${rect.top}px`;
+  const anchor = getAnchorPosition(els.scatterplotControlsEl);
+  els.scatterplotControlsEl.style.left = `${anchor.left}px`;
+  els.scatterplotControlsEl.style.top = `${anchor.top}px`;
   els.scatterplotControlsEl.style.transform = 'none';
 }
 
@@ -309,19 +400,9 @@ export function positionFiltersPanel() {
   if (!els.filtersControlsEl) return;
   if (isPinned(els.filtersControlsEl)) return;
   if (els.filtersControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!S.isScatterplotMinimized && els.scatterplotControlsEl)
-    ? els.scatterplotControlsEl
-    : (!S.isStatisticsMinimized && els.statisticsControlsEl)
-      ? els.statisticsControlsEl
-      : (!S.isSettingsMenuMinimized && els.settingsControlsEl)
-        ? els.settingsControlsEl
-        : els.controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.filtersControlsEl.style.left = `${rect.right + gap}px`;
-  els.filtersControlsEl.style.top = `${rect.top}px`;
+  const anchor = getAnchorPosition(els.filtersControlsEl);
+  els.filtersControlsEl.style.left = `${anchor.left}px`;
+  els.filtersControlsEl.style.top = `${anchor.top}px`;
   els.filtersControlsEl.style.transform = 'none';
   updateFiltersPanelLayout();
 }
@@ -346,21 +427,9 @@ export function positionLandSchedulePanel() {
   if (!els.landScheduleControlsEl) return;
   if (isPinned(els.landScheduleControlsEl)) return;
   if (els.landScheduleControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!S.isFiltersMinimized && els.filtersControlsEl)
-    ? els.filtersControlsEl
-    : (!S.isScatterplotMinimized && els.scatterplotControlsEl)
-      ? els.scatterplotControlsEl
-      : (!S.isStatisticsMinimized && els.statisticsControlsEl)
-        ? els.statisticsControlsEl
-        : (!S.isSettingsMenuMinimized && els.settingsControlsEl)
-          ? els.settingsControlsEl
-          : els.controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.landScheduleControlsEl.style.left = `${rect.right + gap}px`;
-  els.landScheduleControlsEl.style.top = `${rect.top}px`;
+  const anchor = getAnchorPosition(els.landScheduleControlsEl);
+  els.landScheduleControlsEl.style.left = `${anchor.left}px`;
+  els.landScheduleControlsEl.style.top = `${anchor.top}px`;
   els.landScheduleControlsEl.style.transform = 'none';
 }
 
@@ -369,23 +438,9 @@ export function positionTimeAdjustmentPanel() {
   if (!els.timeAdjustmentControlsEl) return;
   if (isPinned(els.timeAdjustmentControlsEl)) return;
   if (els.timeAdjustmentControlsEl.dataset.userPositioned === 'true') return;
-  const anchor = (!S.isLandScheduleMinimized && els.landScheduleControlsEl)
-    ? els.landScheduleControlsEl
-    : (!S.isFiltersMinimized && els.filtersControlsEl)
-      ? els.filtersControlsEl
-      : (!S.isScatterplotMinimized && els.scatterplotControlsEl)
-        ? els.scatterplotControlsEl
-        : (!S.isStatisticsMinimized && els.statisticsControlsEl)
-          ? els.statisticsControlsEl
-          : (!S.isSettingsMenuMinimized && els.settingsControlsEl)
-            ? els.settingsControlsEl
-            : els.controlsEl;
-  if (!anchor) return;
-  const rect = anchor.getBoundingClientRect();
-  if (rect.width === 0 && rect.height === 0) return;
-  const gap = 10;
-  els.timeAdjustmentControlsEl.style.left = `${rect.right + gap}px`;
-  els.timeAdjustmentControlsEl.style.top = `${rect.top}px`;
+  const anchor = getAnchorPosition(els.timeAdjustmentControlsEl);
+  els.timeAdjustmentControlsEl.style.left = `${anchor.left}px`;
+  els.timeAdjustmentControlsEl.style.top = `${anchor.top}px`;
   els.timeAdjustmentControlsEl.style.transform = 'none';
 }
 
@@ -396,6 +451,13 @@ export function positionTimeAdjustmentPanel() {
 export function makeDraggable(element: HTMLElement) {
   const header = element.querySelector('.window-header') as HTMLElement;
   if (!header) return;
+
+  element.addEventListener('mousedown', () => {
+    bringWindowToFront(element);
+  });
+  element.addEventListener('focusin', () => {
+    bringWindowToFront(element);
+  });
 
   header.addEventListener('mousedown', (e) => {
     const target = e.target as HTMLElement;
@@ -410,6 +472,7 @@ export function makeDraggable(element: HTMLElement) {
     const rect = element.getBoundingClientRect();
     S.dragOffset.x = e.clientX - rect.left;
     S.dragOffset.y = e.clientY - rect.top;
+    bringWindowToFront(element);
 
     // Prevent text selection during drag
     e.preventDefault();
@@ -457,6 +520,8 @@ export function handleMouseMove(e: MouseEvent) {
     }
     if (isPinned(resizeTarget)) {
       updatePinnedLayout();
+    } else {
+      clampWindowWithinBounds(resizeTarget);
     }
     ensureWindowMinHeight(resizeTarget);
     return;
@@ -467,14 +532,14 @@ export function handleMouseMove(e: MouseEvent) {
   const x = e.clientX - S.dragOffset.x;
   const y = e.clientY - S.dragOffset.y;
 
-  // Keep window within viewport bounds
+  // Keep window within map panel bounds (top + sides). Bottom may overflow.
   const rect = S.dragTarget.getBoundingClientRect();
-  const maxX = window.innerWidth - rect.width;
-  const maxY = window.innerHeight - rect.height;
-
-  const minX = getDockRightEdge();
+  const mapRect = getMapRect();
+  const minX = mapRect.left;
+  const maxX = Math.max(minX, mapRect.right - rect.width);
+  const minY = mapRect.top;
   const clampedX = Math.max(minX, Math.min(x, maxX));
-  const clampedY = Math.max(0, Math.min(y, maxY));
+  const clampedY = Math.max(minY, y);
 
   S.dragTarget.style.left = `${clampedX}px`;
   S.dragTarget.style.top = `${clampedY}px`;
@@ -873,16 +938,11 @@ function getDockRightEdge() {
 }
 
 function ensureFloatingWindowsClearDock() {
-  const dockRight = getDockRightEdge();
   dockableWindows.forEach(entry => {
     const element = entry.element;
     if (isPinned(element)) return;
     if (window.getComputedStyle(element).display === 'none') return;
-    const rect = element.getBoundingClientRect();
-    if (rect.left < dockRight) {
-      element.style.left = `${dockRight}px`;
-      element.style.transform = 'none';
-    }
+    clampWindowWithinBounds(element);
   });
 }
 

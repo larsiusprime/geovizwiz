@@ -548,9 +548,24 @@ function getWindowRequiredMinWidth(element: HTMLElement) {
   const styles = window.getComputedStyle(element);
   const cssMinWidth = parseFloat(styles.minWidth || '0');
   const headerEl = element.querySelector('.window-header') as HTMLElement | null;
+
+  // Measure header children's natural widths instead of headerEl.scrollWidth,
+  // which stretches with the container and causes a one-way min-width ratchet.
+  let headerContentWidth = 0;
+  if (headerEl) {
+    const headerStyles = window.getComputedStyle(headerEl);
+    const padLeft = parseFloat(headerStyles.paddingLeft || '0');
+    const padRight = parseFloat(headerStyles.paddingRight || '0');
+    let childrenWidth = 0;
+    for (const child of Array.from(headerEl.children) as HTMLElement[]) {
+      childrenWidth += child.scrollWidth;
+    }
+    headerContentWidth = padLeft + childrenWidth + padRight;
+  }
+
   const minRequired = [
     Number.isFinite(cssMinWidth) ? cssMinWidth : 0,
-    headerEl?.scrollWidth ?? 0,
+    headerContentWidth,
   ];
   return Math.max(MIN_WINDOW_WIDTH, ...minRequired);
 }

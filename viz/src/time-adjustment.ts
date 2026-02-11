@@ -1004,12 +1004,18 @@ function generateExportData(entry: TimeAdjustmentEntry): ExportData | null {
   const earliestFactor = sortedTrend[0]?.factor ?? 1;
   const latestFactor = sortedTrend[sortedTrend.length - 1]?.factor ?? 1;
 
-  const mapRow = (period: string, factor: number): ExportRow => ({
-    period,
-    startIndexed: earliestFactor === 0 ? 1 : factor / earliestFactor,
-    endIndexed: latestFactor === 0 ? 1 : factor / latestFactor,
-    correctionFactor: factor,
-  });
+  const mapRow = (period: string, factor: number): ExportRow => {
+    const startIndexed = earliestFactor === 0 ? 1 : factor / earliestFactor;
+    const endIndexed = latestFactor === 0 ? 1 : factor / latestFactor;
+    const correctionFactor = endIndexed === 0 ? 1 : 1 / endIndexed;
+
+    return {
+      period,
+      startIndexed,
+      endIndexed,
+      correctionFactor,
+    };
+  };
 
   const mainRows = sortedTrend.map((item) => mapRow(item.key, item.factor));
 

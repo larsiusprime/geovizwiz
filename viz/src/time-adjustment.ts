@@ -160,10 +160,27 @@ function clamp(value: number, min: number, max: number): number {
 
 function formatYAxisValue(value: number): string {
   const abs = Math.abs(value);
-  if (abs >= 1000) return value.toFixed(0);
+  const compact = (divisor: number, suffix: string) => `${(value / divisor).toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1')}${suffix}`;
+  if (abs >= 1_000_000_000) return compact(1_000_000_000, 'B');
+  if (abs >= 1_000_000) return compact(1_000_000, 'M');
+  if (abs >= 1_000) return compact(1_000, 'K');
   if (abs >= 100) return value.toFixed(1).replace(/\.0$/, '');
   if (abs >= 10) return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
   return value.toFixed(3).replace(/\.000$/, '').replace(/(\.\d\d)0$/, '$1');
+}
+
+function parseYAxisValue(value: string): number | null {
+  const trimmed = value.trim().replace(/,/g, '');
+  if (!trimmed) return null;
+  const match = trimmed.match(/^(-?\d*\.?\d+)\s*([kmb])?$/i);
+  if (!match) return null;
+  const base = Number(match[1]);
+  if (!Number.isFinite(base)) return null;
+  const suffix = (match[2] ?? '').toUpperCase();
+  if (suffix === 'K') return base * 1_000;
+  if (suffix === 'M') return base * 1_000_000;
+  if (suffix === 'B') return base * 1_000_000_000;
+  return base;
 }
 
 function syncYAxisControls() {
@@ -1298,7 +1315,7 @@ export function initTimeAdjustmentElements(elements: Elements) {
   });
 
   const onYAxisInput = (value: string) => {
-    const parsed = Number(value);
+    const parsed = parseYAxisValue(value);
     if (!Number.isFinite(parsed)) return;
     applyDisplayedYMax(parsed);
   };
@@ -1306,7 +1323,7 @@ export function initTimeAdjustmentElements(elements: Elements) {
   els.yMaxSlider.addEventListener('input', () => onYAxisInput(els.yMaxSlider.value));
   els.yMaxInput.addEventListener('input', () => onYAxisInput(els.yMaxInput.value));
   els.yMaxInput.addEventListener('change', () => {
-    const parsed = Number(els.yMaxInput.value);
+    const parsed = parseYAxisValue(els.yMaxInput.value);
     const fallback = displayedYMax ?? naturalYMax;
     applyDisplayedYMax(Number.isFinite(parsed) ? parsed : fallback, false);
     syncYAxisControls();

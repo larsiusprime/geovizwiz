@@ -1055,6 +1055,7 @@
 
     .time-adjustment-y-max-input {
       width: 100%;
+      min-width: 40px;
       height: 26px;
       text-align: center;
       border: 1px solid #d1d5db;
@@ -2494,7 +2495,7 @@
         <div id="timeAdjustmentChartMessage" class="muted"></div>
         <div id="timeAdjustmentChartShell" class="time-adjustment-chart-shell">
           <div id="timeAdjustmentYAxisControl" class="time-adjustment-y-axis-control">
-            <input id="timeAdjustmentYMaxInput" class="time-adjustment-y-max-input" type="number" step="any" aria-label="Y-axis max" />
+            <input id="timeAdjustmentYMaxInput" class="time-adjustment-y-max-input" type="text" inputmode="decimal" aria-label="Y-axis max" />
             <input id="timeAdjustmentYMaxSlider" class="time-adjustment-y-max-slider" type="range" min="0" max="100" step="any" aria-label="Y-axis max slider" />
           </div>
           <div id="timeAdjustmentChart" class="time-adjustment-chart"></div>

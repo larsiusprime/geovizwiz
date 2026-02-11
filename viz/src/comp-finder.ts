@@ -453,10 +453,20 @@ function renderCriteriaTable() {
       const input = document.createElement('input');
       input.type = 'number';
       input.inputMode = 'decimal';
+      input.min = '0';
       input.value = row.value !== null && row.value !== undefined ? String(row.value) : '10';
       input.style.width = '90px';
       input.addEventListener('input', () => {
-        row.value = numOrNull(input.value);
+        const numericValue = numOrNull(input.value);
+        if (numericValue === null) {
+          row.value = null;
+        } else {
+          const sanitizedValue = Math.max(0, numericValue);
+          row.value = sanitizedValue;
+          if (sanitizedValue !== numericValue) {
+            input.value = String(sanitizedValue);
+          }
+        }
         setCriteriaDirty(true);
       });
       wrapper.append(prefix, input);
@@ -757,11 +767,12 @@ function passesCriteria(feature: GeoJSON.Feature): boolean {
     if (!row.field || !row.fieldType) continue;
     if (row.fieldType === 'numeric') {
       const range = numOrNull(row.value);
-      if (!range || range <= 0) continue;
+      if (range === null) continue;
       const subjectValue = numOrNull(getFieldValue(subject.feature, row.field));
       const compValue = numOrNull(getFieldValue(feature, row.field));
       if (subjectValue === null || compValue === null) return false;
-      const allowedRange = row.usePercent ? Math.abs(subjectValue) * (range / 100) : range;
+      const nonNegativeRange = Math.max(0, range);
+      const allowedRange = row.usePercent ? Math.abs(subjectValue) * (nonNegativeRange / 100) : nonNegativeRange;
       if (!Number.isFinite(allowedRange)) return false;
       if (compValue < subjectValue - allowedRange || compValue > subjectValue + allowedRange) return false;
     } else {

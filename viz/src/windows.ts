@@ -86,10 +86,9 @@ export function registerDockableWindow(windowEl: HTMLElement, pinButton: HTMLBut
     event.stopPropagation();
     togglePinnedState(windowEl);
   });
-  const minWidth = Math.max(MIN_WINDOW_WIDTH, windowEl.scrollWidth);
-  if (!windowEl.dataset.minWidth) {
-    windowEl.dataset.minWidth = `${minWidth}`;
-  }
+  const minWidth = getWindowRequiredMinWidth(windowEl);
+  const storedMin = Number(windowEl.dataset.minWidth ?? MIN_WINDOW_WIDTH);
+  windowEl.dataset.minWidth = `${Math.max(storedMin, minWidth)}`;
   updatePinButtonState(windowEl);
 }
 
@@ -535,7 +534,24 @@ function ensureWindowMinHeight(element: HTMLElement) {
 
 function getMinWindowWidth(element: HTMLElement) {
   const storedMin = Number(element.dataset.minWidth ?? MIN_WINDOW_WIDTH);
-  return Math.max(MIN_WINDOW_WIDTH, storedMin);
+  const requiredMin = getWindowRequiredMinWidth(element);
+  const nextMin = Math.max(MIN_WINDOW_WIDTH, storedMin, requiredMin);
+  element.dataset.minWidth = `${nextMin}`;
+  return nextMin;
+}
+
+function getWindowRequiredMinWidth(element: HTMLElement) {
+  const styles = window.getComputedStyle(element);
+  const cssMinWidth = parseFloat(styles.minWidth || '0');
+  const headerEl = element.querySelector('.window-header') as HTMLElement | null;
+  const contentEl = element.querySelector('[data-window-content]') as HTMLElement | null;
+  const measuredWidths = [
+    Number.isFinite(cssMinWidth) ? cssMinWidth : 0,
+    element.scrollWidth,
+    headerEl?.scrollWidth ?? 0,
+    contentEl?.scrollWidth ?? 0,
+  ];
+  return Math.max(MIN_WINDOW_WIDTH, ...measuredWidths);
 }
 
 function getColumnMinWidth(column: HTMLDivElement) {

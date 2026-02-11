@@ -976,6 +976,17 @@ function syncCriteriaFields() {
   extraFields = extraFields.filter((row) => available.has(row.field));
 }
 
+function syncCategoricalCriteriaToSubject() {
+  if (!subject) return;
+  criteria.forEach((row) => {
+    if (row.fieldType !== 'categorical' || !row.field) return;
+    const subjectValue = getFieldValue(subject.feature, row.field);
+    row.value = (subjectValue === null || subjectValue === undefined || subjectValue === '')
+      ? []
+      : [String(subjectValue)];
+  });
+}
+
 function ensureDefaultCriteria(store: DataStore) {
   if (criteria.length > 0 || !subject) return;
   const defaults = [
@@ -1055,6 +1066,7 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
 
   ensureDefaultCriteria(store);
   syncCriteriaFields();
+  syncCategoricalCriteriaToSubject();
   renderCriteriaTable();
   resetComps();
   updateMapArtifacts();

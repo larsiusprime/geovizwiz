@@ -68,7 +68,8 @@ let chartGroupValue: string = ''; // empty string means "(All)"
 let hasAutoTriggeredTrend = false; // Track if we've auto-clicked "Plot trend" on first load
 let naturalYMin = 0;
 let naturalYMax = 100;
-let displayedYMax = 100;
+let displayedYMax: number | null = null;
+let hasCustomYMax = false;
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -169,10 +170,11 @@ function syncYAxisControls() {
   if (!els) return;
   els.yMaxSlider.min = String(naturalYMin);
   els.yMaxSlider.max = String(naturalYMax);
-  els.yMaxSlider.value = String(displayedYMax);
+  const safeYMax = displayedYMax ?? naturalYMax;
+  els.yMaxSlider.value = String(safeYMax);
   els.yMaxInput.min = String(naturalYMin);
   els.yMaxInput.max = String(naturalYMax);
-  els.yMaxInput.value = formatYAxisValue(displayedYMax);
+  els.yMaxInput.value = formatYAxisValue(safeYMax);
   const disabled = naturalYMax <= naturalYMin;
   els.yAxisControl.style.display = disabled ? 'none' : 'flex';
   els.yMaxSlider.disabled = disabled;
@@ -182,6 +184,7 @@ function syncYAxisControls() {
 function applyDisplayedYMax(raw: number, rerender = true) {
   const next = clamp(raw, naturalYMin, naturalYMax);
   displayedYMax = Number.isFinite(next) ? next : naturalYMax;
+  hasCustomYMax = true;
   syncYAxisControls();
   if (rerender) renderChart();
 }
@@ -890,13 +893,14 @@ function renderChart() {
   }
 
   const allYValues = [...yInlier, ...yOutlier, ...trendItems.map((t) => t.rawValue)].filter((value) => Number.isFinite(value));
-  const dataMin = allYValues.length ? Math.min(...allYValues) : 0;
   const dataMax = allYValues.length ? Math.max(...allYValues) : 100;
   const bufferedMax = dataMax > 0 ? dataMax * 1.1 : dataMax + Math.max(10, Math.abs(dataMax) * 0.1);
-  naturalYMin = Math.min(0, dataMin);
-  naturalYMax = Math.max(naturalYMin + 1, bufferedMax);
-  if (!Number.isFinite(displayedYMax) || displayedYMax > naturalYMax || displayedYMax < naturalYMin) {
+  naturalYMin = 0;
+  naturalYMax = Math.max(naturalYMin + 1, bufferedMax, dataMax, 1);
+  if (!hasCustomYMax || displayedYMax == null) {
     displayedYMax = naturalYMax;
+  } else {
+    displayedYMax = clamp(displayedYMax, naturalYMin, naturalYMax);
   }
   syncYAxisControls();
   const yRange: [number, number] = [naturalYMin, displayedYMax];
@@ -1303,7 +1307,8 @@ export function initTimeAdjustmentElements(elements: Elements) {
   els.yMaxInput.addEventListener('input', () => onYAxisInput(els.yMaxInput.value));
   els.yMaxInput.addEventListener('change', () => {
     const parsed = Number(els.yMaxInput.value);
-    applyDisplayedYMax(Number.isFinite(parsed) ? parsed : displayedYMax, false);
+    const fallback = displayedYMax ?? naturalYMax;
+    applyDisplayedYMax(Number.isFinite(parsed) ? parsed : fallback, false);
     syncYAxisControls();
   });
 

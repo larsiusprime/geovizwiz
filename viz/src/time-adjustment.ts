@@ -28,6 +28,9 @@ type Elements = {
   methodSelect: HTMLSelectElement;
   chartModeSelect: HTMLSelectElement;
   chart: HTMLDivElement;
+  yAxisControl: HTMLDivElement;
+  yMaxInput: HTMLInputElement;
+  yMaxSlider: HTMLInputElement;
   spinner: HTMLDivElement;
   chartMessage: HTMLDivElement;
   exportCsvButton: HTMLButtonElement;
@@ -63,6 +66,9 @@ let pendingTrendTimer: number | null = null;
 let chartMode: 'improved' | 'vacant' = 'improved';
 let chartGroupValue: string = ''; // empty string means "(All)"
 let hasAutoTriggeredTrend = false; // Track if we've auto-clicked "Plot trend" on first load
+let naturalYMin = 0;
+let naturalYMax = 100;
+let displayedYMax = 100;
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
@@ -145,6 +151,39 @@ function safeNum(value: unknown): number | null {
     if (Number.isFinite(n)) return n;
   }
   return null;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function formatYAxisValue(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1000) return value.toFixed(0);
+  if (abs >= 100) return value.toFixed(1).replace(/\.0$/, '');
+  if (abs >= 10) return value.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+  return value.toFixed(3).replace(/\.000$/, '').replace(/(\.\d\d)0$/, '$1');
+}
+
+function syncYAxisControls() {
+  if (!els) return;
+  els.yMaxSlider.min = String(naturalYMin);
+  els.yMaxSlider.max = String(naturalYMax);
+  els.yMaxSlider.value = String(displayedYMax);
+  els.yMaxInput.min = String(naturalYMin);
+  els.yMaxInput.max = String(naturalYMax);
+  els.yMaxInput.value = formatYAxisValue(displayedYMax);
+  const disabled = naturalYMax <= naturalYMin;
+  els.yAxisControl.style.display = disabled ? 'none' : 'flex';
+  els.yMaxSlider.disabled = disabled;
+  els.yMaxInput.disabled = disabled;
+}
+
+function applyDisplayedYMax(raw: number, rerender = true) {
+  const next = clamp(raw, naturalYMin, naturalYMax);
+  displayedYMax = Number.isFinite(next) ? next : naturalYMax;
+  syncYAxisControls();
+  if (rerender) renderChart();
 }
 
 function isTruthy(value: unknown): boolean {
@@ -850,10 +889,17 @@ function renderChart() {
     });
   }
 
-  // Calculate Y-axis range from inliers and trend values (start at 0, extend to max + 10% buffer)
-  const trendMaxY = trendItems.length > 0 ? Math.max(...trendItems.map((t) => t.rawValue)) : 0;
-  const yMax = Math.max(yInlier.length > 0 ? Math.max(...yInlier) : 0, trendMaxY) * 1.1 || 100;
-  const yRange: [number, number] = [0, yMax];
+  const allYValues = [...yInlier, ...yOutlier, ...trendItems.map((t) => t.rawValue)].filter((value) => Number.isFinite(value));
+  const dataMin = allYValues.length ? Math.min(...allYValues) : 0;
+  const dataMax = allYValues.length ? Math.max(...allYValues) : 100;
+  const bufferedMax = dataMax > 0 ? dataMax * 1.1 : dataMax + Math.max(10, Math.abs(dataMax) * 0.1);
+  naturalYMin = Math.min(0, dataMin);
+  naturalYMax = Math.max(naturalYMin + 1, bufferedMax);
+  if (!Number.isFinite(displayedYMax) || displayedYMax > naturalYMax || displayedYMax < naturalYMin) {
+    displayedYMax = naturalYMax;
+  }
+  syncYAxisControls();
+  const yRange: [number, number] = [naturalYMin, displayedYMax];
 
   // Y-axis label depends on mode
   const sizeUnit = chartMode === 'vacant' ? 'land sqft' : 'bldg sqft';
@@ -866,7 +912,7 @@ function renderChart() {
 
   const layout: Record<string, any> = {
     autosize: true,
-    margin: { l: 60, r: 30, t: 14, b: 40 },
+    margin: { l: 96, r: 30, t: 14, b: 40 },
     xaxis: {
       title: 'Time period',
       automargin: true,
@@ -1245,6 +1291,20 @@ export function initTimeAdjustmentElements(elements: Elements) {
   els.chartGroupSelect.addEventListener('change', () => {
     chartGroupValue = els.chartGroupSelect.value;
     scheduleTrendRender();
+  });
+
+  const onYAxisInput = (value: string) => {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return;
+    applyDisplayedYMax(parsed);
+  };
+
+  els.yMaxSlider.addEventListener('input', () => onYAxisInput(els.yMaxSlider.value));
+  els.yMaxInput.addEventListener('input', () => onYAxisInput(els.yMaxInput.value));
+  els.yMaxInput.addEventListener('change', () => {
+    const parsed = Number(els.yMaxInput.value);
+    applyDisplayedYMax(Number.isFinite(parsed) ? parsed : displayedYMax, false);
+    syncYAxisControls();
   });
 
   els.exportCsvButton.addEventListener('click', () => {

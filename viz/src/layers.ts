@@ -584,11 +584,17 @@ export function setLayerVisibility(layer: LayerState, visible: boolean) {
   if (S.map.getLayer(layer.errorLayerId)) {
     S.map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
   }
+  const selectedOutlineId = `${layer.layerId}-selected-outline`;
+  if (S.map.getLayer(selectedOutlineId)) {
+    S.map.setLayoutProperty(selectedOutlineId, 'visibility', visibility);
+  }
 }
 
 export function removeLayer(layerId: string) {
   const layer = S.layers.get(layerId);
   if (!layer) return;
+  const selectedOutlineId = `${layer.layerId}-selected-outline`;
+  if (S.map.getLayer(selectedOutlineId)) S.map.removeLayer(selectedOutlineId);
   if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
   if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
   if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);

@@ -89,6 +89,13 @@ import {
   setSizeState, fillFieldSelect, fillUnitSelect,
 } from './modals';
 import {
+  initCompFinderElements,
+  initCompFinderCallbacks,
+  setCompFinderSubject,
+  setCompFinderToolActive,
+  setCompFinderMenuVisible,
+} from './comp-finder';
+import {
   initToolbarCallbacks, initializeToolbar,
   updateToolbarButtonStates, updateCursor,
   activateTool, HOTKEYS,
@@ -427,6 +434,10 @@ const timeAdjustmentTrendToggle = document.getElementById('timeAdjustmentTrendTo
 const timeAdjustmentTrendBody = document.getElementById('timeAdjustmentTrendBody') as HTMLDivElement;
 const timeAdjustmentFiltersToggle = document.getElementById('timeAdjustmentFiltersToggle') as HTMLButtonElement;
 const timeAdjustmentFiltersBody = document.getElementById('timeAdjustmentFiltersBody') as HTMLDivElement;
+const compFinderCriteriaToggle = document.getElementById('compFinderCriteriaToggle') as HTMLButtonElement;
+const compFinderCriteriaBody = document.getElementById('compFinderCriteriaBody') as HTMLDivElement;
+const compFinderCompsToggle = document.getElementById('compFinderCompsToggle') as HTMLButtonElement;
+const compFinderCompsBody = document.getElementById('compFinderCompsBody') as HTMLDivElement;
 
 const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
 const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
@@ -478,12 +489,42 @@ const btnMinimizeScatterplot = document.getElementById('btnMinimizeScatterplot')
 const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
 const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
 const btnMinimizeTimeAdjustment = document.getElementById('btnMinimizeTimeAdjustment') as HTMLButtonElement;
+const btnMinimizeCompFinder = document.getElementById('btnMinimizeCompFinder') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
 const btnMinimizeLegend = document.getElementById('btnMinimizeLegend') as HTMLButtonElement;
 const legendTitle = document.getElementById('legendTitle') as HTMLDivElement;
 const legendContent = document.getElementById('legendContent') as HTMLDivElement;
+
+const compFinderControlsEl = document.getElementById('compFinderControls') as HTMLDivElement;
+const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
+const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
+const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
+const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
+const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits') as HTMLSelectElement;
+const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaTableBody') as HTMLTableSectionElement;
+const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
+const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
+const compFinderDirtyIndicator = document.getElementById('compFinderDirtyIndicator') as HTMLSpanElement;
+const compFinderNoCompsIndicator = document.getElementById('compFinderNoCompsIndicator') as HTMLSpanElement;
+const compFinderSpinner = document.getElementById('compFinderSpinner') as HTMLDivElement;
+const compFinderResultsRow = document.getElementById('compFinderResultsRow') as HTMLDivElement;
+const compFinderResultsSummary = document.getElementById('compFinderResultsSummary') as HTMLSpanElement;
+const compFinderPager = document.getElementById('compFinderPager') as HTMLDivElement;
+const compFinderEmptyState = document.getElementById('compFinderEmptyState') as HTMLDivElement;
+const compFinderCriteriaSection = document.getElementById('compFinderCriteriaSection') as HTMLDivElement;
+const compFinderCompsSection = document.getElementById('compFinderCompsSection') as HTMLDivElement;
+const compFinderCriteriaCompsDivider = document.getElementById('compFinderCriteriaCompsDivider') as HTMLDivElement;
+const compFinderCompsTableHead = document.getElementById('compFinderCompsTableHead') as HTMLTableSectionElement;
+const compFinderCompsTableBody = document.getElementById('compFinderCompsTableBody') as HTMLTableSectionElement;
+const compFinderCompsTableContainer = document.getElementById('compFinderCompsTableContainer') as HTMLDivElement;
+const compFinderAddFieldSelect = document.getElementById('compFinderAddFieldSelect') as HTMLSelectElement;
+const compFinderAddFieldButton = document.getElementById('compFinderAddFieldButton') as HTMLButtonElement;
+const compFinderAddFieldRow = document.getElementById('compFinderAddFieldRow') as HTMLDivElement;
+const compFinderZoomButton = document.getElementById('compFinderZoomTo') as HTMLButtonElement;
+const compFinderExportCsv = document.getElementById('compFinderExportCsv') as HTMLButtonElement;
+const compFinderExportExcel = document.getElementById('compFinderExportExcel') as HTMLButtonElement;
 
 // Modal overlays (managed by modals.ts via initModalElements)
 const numericModalOverlay = document.getElementById('numericModalOverlay')!;
@@ -602,6 +643,33 @@ timeAdjustmentFiltersToggle.addEventListener('click', () => {
   setTimeAdjustmentFiltersCollapsed(!S.isTimeAdjustmentFiltersCollapsed);
 });
 
+const setCompFinderCriteriaCollapsed = (collapsed: boolean) => {
+  S.isCompFinderCriteriaCollapsed = collapsed;
+  compFinderCriteriaBody.style.display = collapsed ? 'none' : 'grid';
+  compFinderCriteriaToggle.classList.toggle('is-collapsed', collapsed);
+  compFinderCriteriaToggle.title = collapsed ? 'Expand Criteria' : 'Collapse Criteria';
+  refreshWindowMinHeight(compFinderControlsEl);
+};
+
+const setCompFinderCompsCollapsed = (collapsed: boolean) => {
+  S.isCompFinderCompsCollapsed = collapsed;
+  compFinderCompsBody.style.display = collapsed ? 'none' : 'grid';
+  compFinderCompsToggle.classList.toggle('is-collapsed', collapsed);
+  compFinderCompsToggle.title = collapsed ? 'Expand Comps' : 'Collapse Comps';
+  refreshWindowMinHeight(compFinderControlsEl);
+};
+
+setCompFinderCriteriaCollapsed(S.isCompFinderCriteriaCollapsed);
+setCompFinderCompsCollapsed(S.isCompFinderCompsCollapsed);
+
+compFinderCriteriaToggle.addEventListener('click', () => {
+  setCompFinderCriteriaCollapsed(!S.isCompFinderCriteriaCollapsed);
+});
+
+compFinderCompsToggle.addEventListener('click', () => {
+  setCompFinderCompsCollapsed(!S.isCompFinderCompsCollapsed);
+});
+
 // Color ramp choices
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
@@ -700,6 +768,13 @@ const timeAdjustmentWin = createWindowManager({
   onShow: () => { refreshTimeAdjustmentPanel(); },
 });
 
+const compFinderWin = createWindowManager({
+  getMinimized: () => S.isCompFinderMinimized,
+  setMinimized: (v) => { S.isCompFinderMinimized = v; },
+  contentEl: compFinderContent,
+  controlsEl: compFinderControlsEl,
+});
+
 // Convenience aliases matching the old function names
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
@@ -719,6 +794,14 @@ const showLandSchedule = landScheduleWin.show;
 const toggleLandSchedule = landScheduleWin.toggle;
 const minimizeTimeAdjustment = timeAdjustmentWin.minimize;
 const toggleTimeAdjustment = timeAdjustmentWin.toggle;
+const minimizeCompFinder = () => {
+  compFinderWin.minimize();
+  setCompFinderMenuVisible(false);
+};
+const showCompFinder = () => {
+  compFinderWin.show();
+  setCompFinderMenuVisible(true);
+};
 
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
@@ -746,6 +829,7 @@ initWindowDocking({
   btnPinFilters,
   btnPinStatistics,
   btnPinScatterplot,
+  btnPinCompFinder,
   btnPinLandSchedule,
   btnPinTimeAdjustment,
   btnPinLegend,
@@ -755,6 +839,7 @@ registerDockableWindow(settingsControlsEl, btnPinSettings);
 registerDockableWindow(filtersControlsEl, btnPinFilters);
 registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
+registerDockableWindow(compFinderControlsEl, btnPinCompFinder);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
 registerDockableWindow(timeAdjustmentControlsEl, btnPinTimeAdjustment);
 registerDockableWindow(floatingLegend, btnPinLegend);
@@ -763,6 +848,7 @@ enableWindowResizing(settingsControlsEl);
 enableWindowResizing(filtersControlsEl);
 enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
+enableWindowResizing(compFinderControlsEl);
 enableWindowResizing(landScheduleControlsEl);
 enableWindowResizing(timeAdjustmentControlsEl);
 enableWindowResizing(floatingLegend);
@@ -825,7 +911,8 @@ initRenderingCallbacks({
   addPopupEditFunctionality,
   updateCursor,
   isTextInputElement,
-  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select'),
+  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder'),
+  setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => setCompFinderSubject(feature, layerId),
   hotkeys: HOTKEYS,
 });
 
@@ -1033,6 +1120,39 @@ initTimeAdjustmentElements({
   sizeHeader: document.getElementById('timeAdjustmentSizeHeader') as HTMLTableCellElement,
   ratioHeader: document.getElementById('timeAdjustmentRatioHeader') as HTMLTableCellElement,
 });
+
+initCompFinderElements({
+  panel: compFinderControlsEl,
+  dataSourceSelect: compFinderDataSourceSelect,
+  distanceInput: compFinderDistanceInput,
+  distanceUnitsSelect: compFinderDistanceUnits,
+  criteriaTableBody: compFinderCriteriaTableBody,
+  addCriterionButton: compFinderAddCriterion,
+  refreshButton: compFinderRefresh,
+  dirtyIndicator: compFinderDirtyIndicator,
+  noCompsIndicator: compFinderNoCompsIndicator,
+  spinner: compFinderSpinner,
+  resultsRow: compFinderResultsRow,
+  resultsSummary: compFinderResultsSummary,
+  pager: compFinderPager,
+  emptyState: compFinderEmptyState,
+  criteriaSection: compFinderCriteriaSection,
+  compsSection: compFinderCompsSection,
+  criteriaCompsDivider: compFinderCriteriaCompsDivider,
+  compsTableHead: compFinderCompsTableHead,
+  compsTableBody: compFinderCompsTableBody,
+  compsTableContainer: compFinderCompsTableContainer,
+  addFieldSelect: compFinderAddFieldSelect,
+  addFieldButton: compFinderAddFieldButton,
+  addFieldRow: compFinderAddFieldRow,
+  zoomButton: compFinderZoomButton,
+  exportCsvButton: compFinderExportCsv,
+  exportExcelButton: compFinderExportExcel,
+});
+initCompFinderCallbacks({
+  showCompFinderMenu: showCompFinder,
+});
+setCompFinderMenuVisible(!S.isCompFinderMinimized);
 
 // Wire DOM elements and callbacks into the layers module
 initLayerElements({
@@ -2094,6 +2214,7 @@ btnMinimizeScatterplot.addEventListener('click', minimizeScatterplot);
 btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
+btnMinimizeCompFinder.addEventListener('click', minimizeCompFinder);
 
 landScheduleFieldSelect.addEventListener('change', () => {
   S.currentLandScheduleField = landScheduleFieldSelect.value || null;
@@ -2348,6 +2469,7 @@ makeDraggable(floatingLegend);
 makeDraggable(statisticsControlsEl);
 makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
+makeDraggable(compFinderControlsEl);
 makeDraggable(landScheduleControlsEl);
 makeDraggable(timeAdjustmentControlsEl);
 positionSettingsPanel();
@@ -2517,6 +2639,8 @@ initToolbarCallbacks({
   minimizeLegend,
   toggleLandSchedule,
   toggleTimeAdjustment,
+  showCompFinderMenu: showCompFinder,
+  setCompFinderToolActive: setCompFinderToolActive,
 });
 
 // Initialize toolbar when DOM is ready

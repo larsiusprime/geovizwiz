@@ -108,6 +108,10 @@ export const S = {
   isTimeAdjustmentMinimized: true,
   isTimeAdjustmentTrendCollapsed: false,
   isTimeAdjustmentFiltersCollapsed: true,
+  isCompFinderMinimized: true,
+  isCompFinderSubjectCollapsed: false,
+  isCompFinderCriteriaCollapsed: false,
+  isCompFinderCompsCollapsed: false,
   hiddenLegendItems: new Set<string>(),
 
   // --- Statistics ---
@@ -192,6 +196,7 @@ export const S = {
   // --- Tool state ---
   isInfoToolActive: false,
   isPanToolActive: false,
+  isCompFinderToolActive: false,
   isPanning: false,
   currentSelectionMode: 'select-one' as string,
 

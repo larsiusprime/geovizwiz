@@ -96,7 +96,13 @@ let _addPopupEditFunctionality: (parcelId: string) => void = () => {};
 let _updateCursor: () => void = () => {};
 let _isTextInputElement: (el: Element | null) => boolean = () => false;
 let _activateTool: (tool: string) => void = () => {};
-let _hotkeys: { PAN: string; SELECT: string; INFO: string } = { PAN: 'h', SELECT: 'v', INFO: 'i' };
+let _setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void = () => {};
+let _hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string } = {
+  PAN: 'h',
+  SELECT: 'v',
+  INFO: 'i',
+  COMP_FINDER: 'c',
+};
 
 export type RenderingCallbacks = {
   getCurrentLayer: () => LayerState | null;
@@ -113,7 +119,8 @@ export type RenderingCallbacks = {
   updateCursor: () => void;
   isTextInputElement: (el: Element | null) => boolean;
   activateTool: (tool: string) => void;
-  hotkeys: { PAN: string; SELECT: string; INFO: string };
+  setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void;
+  hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string };
 };
 
 export function initRenderingCallbacks(cb: RenderingCallbacks) {
@@ -131,6 +138,7 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   _updateCursor = cb.updateCursor;
   _isTextInputElement = cb.isTextInputElement;
   _activateTool = cb.activateTool;
+  _setCompFinderSubject = cb.setCompFinderSubject;
   _hotkeys = cb.hotkeys;
 }
 
@@ -211,6 +219,10 @@ export function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
 
 let keyHandlersInstalled = false;
 
+export function getSelectedOutlineLayerId(layerId: string) {
+  return `${layerId}-selected-outline`;
+}
+
 export function addExtrusionLayer(layer: LayerState) {
   if (S.map.getLayer(layer.layerId)) return;
   S.map.addLayer({
@@ -222,6 +234,22 @@ export function addExtrusionLayer(layer: LayerState) {
       'fill-extrusion-vertical-gradient': true
     }
   });
+
+  const selectedOutlineId = getSelectedOutlineLayerId(layer.layerId);
+  if (!S.map.getLayer(selectedOutlineId)) {
+    S.map.addLayer({
+      id: selectedOutlineId,
+      type: 'line',
+      source: layer.sourceId,
+      filter: ['==', ['feature-state', 'selected'], true],
+      paint: {
+        'line-color': '#FFFF00',
+        'line-width': 3,
+        'line-opacity': 1,
+      },
+    });
+  }
+
   _setLayerVisibility(layer, layer.visible);
 
   // NEW: parcel selection and inspection
@@ -237,6 +265,11 @@ export function addExtrusionLayer(layer: LayerState) {
       const props = (f.properties || {}) as Record<string, any>;
       const parcelId = getParcelId(f);
       _showPopup(props, e.lngLat, parcelId);
+      return;
+    }
+
+    if (S.isCompFinderToolActive) {
+      _setCompFinderSubject(f, layer.id);
       return;
     }
 
@@ -301,6 +334,9 @@ export function addExtrusionLayer(layer: LayerState) {
       } else if (key === _hotkeys.INFO) {
         e.preventDefault();
         _activateTool('info');
+      } else if (key === _hotkeys.COMP_FINDER) {
+        e.preventDefault();
+        _activateTool('comp-finder');
       }
     });
     keyHandlersInstalled = true;

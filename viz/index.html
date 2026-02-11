@@ -427,7 +427,7 @@
     }
     .stats-range .range-values {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       gap: 12px;
       align-items: center;
     }
@@ -852,7 +852,7 @@
     .filter-widget-header {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
     }
 
     .filter-widget-row {
@@ -1158,7 +1158,7 @@
 
     .land-table-actions {
       display: flex;
-      justify-content: space-between;
+      justify-content: flex-end;
       align-items: center;
       gap: 8px;
     }
@@ -1263,6 +1263,305 @@
       width: 100% !important;
       max-width: 100%;
     }
+
+    #compFinderContent {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      align-content: start;
+      min-height: 0;
+      height: 100%;
+    }
+
+    .comp-finder-section {
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      align-self: start;
+      min-height: 0;
+    }
+
+    .comp-finder-section.comp-finder-section--comps {
+      grid-template-rows: auto minmax(0, 1fr);
+      align-self: stretch;
+    }
+
+    #compFinderCompsBody {
+      min-height: 0;
+      grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+      align-content: start;
+    }
+
+    #compFinderCompsTableContainer {
+      min-height: 0;
+      height: 100%;
+      max-height: none !important;
+      overflow: auto !important;
+    }
+
+    .comp-finder-section-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .comp-finder-section-body {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+    }
+
+    .comp-finder-meta {
+      display: grid;
+      gap: 4px;
+      font-size: 12px;
+    }
+
+    .comp-finder-empty-state {
+      display: none;
+      font-size: 12px;
+      color: #4b5563;
+      font-weight: 600;
+      padding: 6px 2px;
+    }
+
+    .comp-finder-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+
+    .comp-finder-row label {
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .comp-finder-row select,
+    .comp-finder-row input {
+      min-width: 0;
+    }
+
+    .comp-finder-row.comp-finder-criteria-main {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      align-items: center;
+      gap: 6px;
+    }
+
+    #compFinderDataSource {
+      width: 100%;
+      min-width: 0;
+    }
+
+    #compFinderDistance {
+      width: 72px !important;
+      min-width: 0;
+    }
+
+    #compFinderDistanceUnits {
+      width: 62px;
+      min-width: 0;
+    }
+
+    .comp-finder-criteria-field-select {
+      width: 100%;
+      min-width: 0;
+      max-width: 130px;
+    }
+
+    .comp-finder-criteria-categorical {
+      width: 100%;
+      min-width: 0;
+      max-width: 130px;
+    }
+
+    .comp-finder-delete-btn {
+      border: none;
+      background: transparent;
+      color: #dc2626;
+      padding: 0;
+      font-size: 13px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .comp-finder-delete-btn:hover {
+      color: #b91c1c;
+    }
+
+    .comp-finder-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .comp-finder-table th,
+    .comp-finder-table td {
+      border: 1px solid #e5e7eb;
+      padding: 4px 6px;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    .comp-finder-table th {
+      background: #f7f7f7;
+      font-weight: 600;
+    }
+
+    .comp-finder-table td.center {
+      text-align: center;
+    }
+
+    .comp-finder-table td.muted {
+      color: #9ca3af;
+      text-align: center;
+    }
+
+    .comp-finder-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .comp-finder-refresh-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .comp-finder-dirty-indicator {
+      color: #92400e;
+      font-size: 11px;
+      display: none;
+    }
+
+    .comp-finder-no-comps-indicator {
+      color: #b91c1c;
+      font-size: 11px;
+      display: none;
+    }
+
+    .comp-finder-spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid #bfdbfe;
+      border-top-color: #2563eb;
+      border-radius: 50%;
+      animation: comp-finder-spin 0.8s linear infinite;
+      display: none;
+    }
+
+    @keyframes comp-finder-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .comp-finder-results-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+      font-size: 12px;
+    }
+
+    .comp-finder-pager {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+
+    .comp-finder-page-btn {
+      border: 1px solid #d1d5db;
+      background: #fff;
+      border-radius: 4px;
+      font-size: 11px;
+      padding: 1px 6px;
+      cursor: pointer;
+    }
+
+    .comp-finder-page-btn.is-active {
+      background: #1d4ed8;
+      color: #fff;
+      border-color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    .comp-finder-page-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .comp-finder-extra-row {
+      background: #fafafa;
+    }
+
+    .comp-finder-criteria-row {
+      background: #eff6ff;
+    }
+
+
+    .comp-finder-select-all-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      white-space: nowrap;
+    }
+
+    .comp-finder-select-all-label {
+      font-size: 11px;
+      color: #4b5563;
+    }
+
+    .comp-finder-sort-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .comp-finder-delta-positive {
+      color: #1d4ed8;
+      font-weight: 600;
+    }
+
+    .comp-finder-delta-negative {
+      color: #dc2626;
+      font-weight: 600;
+    }
+
+    .comp-finder-add-field-row {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .comp-finder-add-field-row select {
+      max-width: 170px;
+      min-width: 0;
+    }
+
+    .comp-finder-comps.is-dirty {
+      opacity: 0.55;
+    }
+
+    .comp-finder-marker {
+      width: 26px;
+      height: 26px;
+      pointer-events: none;
+      filter: drop-shadow(0 1px 2px rgba(0,0,0,0.35));
+    }
+
+    .comp-finder-marker .pin-icon {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
   </style>
 </head>
   <body>
@@ -1291,6 +1590,11 @@
         <button id="infoToolButton" class="toolbar-button" title="Inspect tool (I)">
           <img src="./src/svg/info.svg" alt="Info" />
           <span class="hotkey">I</span>
+        </button>
+
+        <button id="compFinderToolButton" class="toolbar-button" title="Comp Finder tool (C)">
+          <img src="./src/svg/search_map.svg" alt="Comp Finder" />
+          <span class="hotkey">C</span>
         </button>
 
         <button id="layersToolButton" class="toolbar-button" title="Show/hide layer settings">
@@ -1854,6 +2158,107 @@
     </div>
   </div>
 
+  <div id="compFinderControls" class="viz-window" style="position: absolute; top: 10px; left: 740px; width: min(calc(92vw - 80px), 520px); min-width: 360px; min-height: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Comp Finder</div>
+      <div class="window-actions">
+        <button id="btnPinCompFinder" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeCompFinder" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Minimize">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M7 10l5 5 5-5z"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+    <div id="compFinderContent" data-window-content style="padding: 12px; gap: 12px;">
+      <div id="compFinderEmptyState" class="comp-finder-empty-state">Select a parcel on the map to find comps</div>
+
+      <div id="compFinderCriteriaSection" class="comp-finder-section">
+        <div class="comp-finder-section-header">
+          <button id="compFinderCriteriaToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Criteria">▼</button>
+          <div class="land-schedule-subtitle">Criteria</div>
+        </div>
+        <div id="compFinderCriteriaBody" class="comp-finder-section-body">
+          <div class="comp-finder-row comp-finder-criteria-main">
+            <label for="compFinderDataSource">Data source:</label>
+            <select id="compFinderDataSource">
+              <option value="" selected>Choose data source</option>
+            </select>
+            <label for="compFinderDistance">Within:</label>
+            <input id="compFinderDistance" type="number" inputmode="decimal" step="0.25" />
+            <select id="compFinderDistanceUnits">
+              <option value="mi">mi</option>
+              <option value="km">km</option>
+            </select>
+          </div>
+          <table class="comp-finder-table">
+            <thead>
+              <tr>
+                <th>Field</th>
+                <th>Subject</th>
+                <th>Tolerance</th>
+                <th class="center">%</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="compFinderCriteriaTableBody"></tbody>
+          </table>
+          <div style="display: flex; justify-content: flex-end;">
+            <button id="compFinderAddCriterion" type="button" class="land-schedule-button">add criterion</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="compFinderCriteriaCompsDivider" class="divider"></div>
+
+      <div id="compFinderCompsSection" class="comp-finder-section comp-finder-section--comps">
+        <div class="comp-finder-section-header">
+          <button id="compFinderCompsToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Comps">▼</button>
+          <div class="land-schedule-subtitle">Comps</div>
+        </div>
+        <div id="compFinderCompsBody" class="comp-finder-section-body">
+          <div class="comp-finder-refresh-row">
+            <button id="compFinderRefresh" type="button" class="land-schedule-button">Find comps</button>
+            <span id="compFinderDirtyIndicator" class="comp-finder-dirty-indicator">Criteria have changed, comps outdated.</span>
+            <span id="compFinderNoCompsIndicator" class="comp-finder-no-comps-indicator">No comps found.</span>
+            <div id="compFinderSpinner" class="comp-finder-spinner" aria-label="Finding comps" title="Finding comps"></div>
+          </div>
+          <div id="compFinderResultsRow" class="comp-finder-results-row">
+            <span id="compFinderResultsSummary">Results: 0</span>
+            <div id="compFinderPager" class="comp-finder-pager"></div>
+          </div>
+          <div id="compFinderCompsTableContainer" class="comp-finder-comps">
+            <table class="comp-finder-table">
+              <thead id="compFinderCompsTableHead">
+                <tr>
+                  <th></th>
+                  <th>Field</th>
+                  <th>Subject</th>
+                </tr>
+              </thead>
+              <tbody id="compFinderCompsTableBody"></tbody>
+            </table>
+          </div>
+          <div id="compFinderAddFieldRow" class="comp-finder-add-field-row">
+            <select id="compFinderAddFieldSelect"></select>
+            <button id="compFinderAddFieldButton" type="button" class="land-schedule-button">add field</button>
+          </div>
+          <div class="comp-finder-actions">
+            <button id="compFinderZoomTo" type="button" class="land-schedule-button">zoom to</button>
+            <button id="compFinderExportCsv" type="button" class="land-schedule-button"><img src="./src/svg/csv.svg" alt="CSV" /></button>
+            <button id="compFinderExportExcel" type="button" class="land-schedule-button"><img src="./src/svg/excel.svg" alt="Excel" /></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
+  </div>
+
   <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 400px); min-width: 400px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
@@ -2235,7 +2640,7 @@
     <div class="window-header" style="
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      justify-content: flex-end;
       padding: 8px 12px;
       border-bottom: 1px solid #eee;
       background: rgba(248, 248, 248, 0.8);

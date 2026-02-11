@@ -910,10 +910,12 @@ function renderChart() {
   }
 
   const allYValues = [...yInlier, ...yOutlier, ...trendItems.map((t) => t.rawValue)].filter((value) => Number.isFinite(value));
+  const nonZeroPositiveValues = allYValues.filter((value) => value > 0);
   const dataMax = allYValues.length ? Math.max(...allYValues) : 100;
   const bufferedMax = dataMax > 0 ? dataMax * 1.1 : dataMax + Math.max(10, Math.abs(dataMax) * 0.1);
-  naturalYMin = 0;
-  naturalYMax = Math.max(naturalYMin + 1, bufferedMax, dataMax, 1);
+  const lowestNonZero = nonZeroPositiveValues.length ? Math.min(...nonZeroPositiveValues) : 1;
+  naturalYMin = Math.max(0.001, lowestNonZero);
+  naturalYMax = Math.max(naturalYMin + 1, bufferedMax, dataMax, naturalYMin + 0.001);
   if (!hasCustomYMax || displayedYMax == null) {
     displayedYMax = naturalYMax;
   } else {
@@ -942,7 +944,7 @@ function renderChart() {
       categoryarray: sortedCategories,
     },
     yaxis: { title: yAxisLabel, range: yRange, rangemode: 'tozero', fixedrange: true },
-    showlegend: true,
+    showlegend: false,
     legend: { x: 0, y: 1, xanchor: 'left', yanchor: 'top', orientation: 'h' },
     paper_bgcolor: 'rgba(0,0,0,0)',
     plot_bgcolor: 'rgba(0,0,0,0)',

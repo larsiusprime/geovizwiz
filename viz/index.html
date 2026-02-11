@@ -1022,6 +1022,20 @@
       display: block;
     }
 
+    .time-adjustment-mode-row {
+      display:flex;
+      gap:6px;
+      align-items:center;
+      margin:4px 0;
+    }
+
+    .time-adjustment-spinner-inline {
+      margin-left: auto;
+      min-width: 76px;
+      text-align: right;
+      white-space: nowrap;
+    }
+
     .time-adjustment-chart-shell {
       position: relative;
       height: 240px;
@@ -2486,12 +2500,12 @@
           <select id="timeAdjustmentMethod"><option value="median" selected>median</option><option value="mean">mean</option><option value="regression">regression</option></select>
         </div>
         <!-- Chart mode selector -->
-        <div style="display:flex; gap:6px; align-items:center; margin:4px 0;">
+        <div class="time-adjustment-mode-row">
           <label class="time-adjustment-label-text">Mode</label>
           <select id="timeAdjustmentChartMode" style="min-width:80px;"><option value="improved" selected>improved</option><option value="vacant">vacant</option></select>
+          <div id="timeAdjustmentSpinner" class="muted time-adjustment-spinner-inline" style="display:none;">Calculating…</div>
         </div>
         <!-- Chart -->
-        <div id="timeAdjustmentSpinner" class="muted" style="display:none;">Calculating…</div>
         <div id="timeAdjustmentChartMessage" class="muted"></div>
         <div id="timeAdjustmentChartShell" class="time-adjustment-chart-shell">
           <div id="timeAdjustmentYAxisControl" class="time-adjustment-y-axis-control">

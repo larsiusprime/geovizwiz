@@ -163,6 +163,32 @@
     #controls button:hover,
     #settingsControls button:hover { background: #f0f0f0; }
 
+    #settingsControls {
+      min-width: 400px;
+    }
+
+    .settings-fields-groups {
+      display: grid;
+      gap: 8px;
+      font-size: 12px;
+      min-width: 0;
+    }
+
+    .settings-fields-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
+      gap: 4px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .settings-fields-row select {
+      width: 100%;
+      max-width: 140px;
+      min-width: 0;
+      font-size: 11px;
+    }
+
     .eye-button {
       border: none;
       background: none;
@@ -1927,33 +1953,33 @@
       </fieldset>
       <fieldset id="settingsFieldsSection" style="display:none;">
         <label>Fields</label>
-        <div style="display:grid; gap:8px; font-size:12px;">
+        <div class="settings-fields-groups">
           <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Building/Improvement</div>
-          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+          <div class="settings-fields-row">
             <span>Size:</span>
-            <select id="settingsBldgSizeField" style="font-size:11px;"></select>
+            <select id="settingsBldgSizeField"></select>
             <span>Unit:</span>
-            <select id="settingsBldgSizeUnit" style="font-size:11px;"></select>
+            <select id="settingsBldgSizeUnit"></select>
           </div>
           <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Land</div>
-          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+          <div class="settings-fields-row">
             <span>Size:</span>
-            <select id="settingsLandSizeField" style="font-size:11px;"></select>
+            <select id="settingsLandSizeField"></select>
             <span>Unit:</span>
-            <select id="settingsLandSizeUnit" style="font-size:11px;"></select>
+            <select id="settingsLandSizeUnit"></select>
           </div>
           <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Sale Data</div>
-          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+          <div class="settings-fields-row">
             <span>Price:</span>
-            <select id="settingsSalePriceField" style="font-size:11px;"></select>
+            <select id="settingsSalePriceField"></select>
             <span>Date:</span>
-            <select id="settingsSaleDateField" style="font-size:11px;"></select>
+            <select id="settingsSaleDateField"></select>
           </div>
-          <div style="display:grid; grid-template-columns: auto 1fr auto 1fr; gap:4px; align-items:center;">
+          <div class="settings-fields-row">
             <span>Valid:</span>
-            <select id="settingsValidSaleField" style="font-size:11px;"></select>
+            <select id="settingsValidSaleField"></select>
             <span>Vacant:</span>
-            <select id="settingsVacantSaleField" style="font-size:11px;"></select>
+            <select id="settingsVacantSaleField"></select>
           </div>
         </div>
       </fieldset>

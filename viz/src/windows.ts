@@ -117,11 +117,9 @@ export function enableWindowResizing(windowEl: HTMLElement) {
 
   if (contentEl) {
     const observer = new ResizeObserver(() => {
-      const currentMinWidth = Number(windowEl.dataset.minWidth ?? MIN_WINDOW_WIDTH);
-      if (contentEl.scrollWidth > contentEl.clientWidth) {
-        const nextMinWidth = Math.max(currentMinWidth, contentEl.scrollWidth);
-        windowEl.dataset.minWidth = `${nextMinWidth}`;
-      }
+      // Keep height/layout in sync, but do not ratchet min-width from observed
+      // scroll width; that prevents floating windows from being shrunk later.
+      windowEl.dataset.minWidth = `${getWindowRequiredMinWidth(windowEl)}`;
       ensureWindowMinHeight(windowEl);
       if (isPinned(windowEl)) {
         updatePinnedLayout();

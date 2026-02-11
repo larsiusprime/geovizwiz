@@ -900,6 +900,7 @@ The inspect panel shows all the characteristic values that are associated with t
 
 New stuff:
 The inspect menu has a 📌icon in the upper right hand corner, which can be clicked to dock the inspect menu. When it is docked like this, it is permanently open whether there is currently a selected parcel that has inspect focus or not. If no parcel has inspect focus, it is empty. Otherwise it has the same content as when it is floating.
+
 ### Comp Finder
 
 
@@ -944,6 +945,7 @@ Clicking the comp finder button makes it the currently selected tool (alongside 
 | Selected:                                              |
 | [mark][zoom to][📄][📊]                                |
 +--------------------------------------------------------+
+
 
 The user selects the COMP-FINDER selection tool and then clicks a parcel on the map, which drops the COMP-FINDER pin on that parcel and sets the current comp finder subject to that parcel. Selecting any other tool will hide the COMP-FINDER pin.
 
@@ -990,7 +992,7 @@ Here’s the relevant section of the table:
 | [mark][zoom to][📄][📊]                              |
 +------------------------------------------------------+
 
-First, it scrolls vertically if there’s too many options. Each field show’s the field’s difference from the subject field in terms of +/-/=: if the field is greater than the subject it shows a + delta, if it’s smaller it’s a minus delta. If it’s exactly equal, or it’s a categorical match, it says =. If there’s an error or problem of any kind it says ERROR, and hovering the error will give the error message, if any.
+First, it scrolls vertically if there’s too many options. Each field shows the field’s difference from the subject field in terms of +/-/=: if the field is greater than the subject it shows a + delta, if it’s smaller it’s a minus delta. If it’s exactly equal, or it’s a categorical match, it says =. If there’s an error or problem of any kind it says ERROR, and hovering the error will give the error message, if any.
 
 Second, the checkboxes on the left column govern the buttons on the bottom. The buttons are greyed out if nothing’s checked. Clicking the check in the header checks/unchecks everything.
 
@@ -998,15 +1000,16 @@ If at least one thing is checked, the buttons are active. [mark] will display a 
 
 The data they export looks like this:
 - Columns:
-is_subject (TRUE or FALSE, first row should be the subject and TRUE all after should be FALSE)
-parcel id
-address
-[user’s chosen fields]: 
-these show the actual value for this parcel
-Then, delta_ versions of all the fields: 
-these show the relative value compared to the subject
-the subject should have deltas of zero / equality indicators for each value relative to itself, the comps should show the numeric difference and a equality/inequality indicator for categoricals
-Only selected rows should be exported
+  - is_subject (TRUE or FALSE, first row should be the subject and TRUE all after should be FALSE)
+  - parcel id
+  - address
+  - [user’s chosen fields]: 
+    - these show the actual value for this parcel
+  - Then, delta_ versions of all the fields: 
+    - these show the relative value compared to the subject
+    - the subject should have deltas of zero / equality indicators for each value relative to itself, the comps should show the numeric difference and a equality/inequality indicator for categoricals
+  - Only selected rows should be exported
+
 
 
 ### Settings

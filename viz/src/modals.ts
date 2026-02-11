@@ -537,10 +537,12 @@ export function autoPickBldgBathsField(numericFields: string[]): string | null {
 
 export function autoPickBldgTypeField(allFields: string[]): string | null {
   return guessFieldByKeywordGroups(allFields, [
+    ["property", "use"],
+    ["property", "type"],
+    ["prop", "use"],
+    ["prop", "type"],
     ["bldg", "type"],
     ["building", "type"],
-    ["prop", "type"],
-    ["property", "type"],
     ["use", "code"],
     ["state", "class"],
     ["state", "code"]

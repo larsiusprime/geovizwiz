@@ -910,11 +910,14 @@ function renderChart() {
   }
 
   const allYValues = [...yInlier, ...yOutlier, ...trendItems.map((t) => t.rawValue)].filter((value) => Number.isFinite(value));
-  const nonZeroPositiveValues = allYValues.filter((value) => value > 0);
+  const nonZeroValues = allYValues.filter((value) => value !== 0);
+  const dataMin = allYValues.length ? Math.min(...allYValues) : 0;
   const dataMax = allYValues.length ? Math.max(...allYValues) : 100;
   const bufferedMax = dataMax > 0 ? dataMax * 1.1 : dataMax + Math.max(10, Math.abs(dataMax) * 0.1);
-  const lowestNonZero = nonZeroPositiveValues.length ? Math.min(...nonZeroPositiveValues) : 1;
-  naturalYMin = Math.max(0.001, lowestNonZero);
+  const lowestNonZero = nonZeroValues.length ? Math.min(...nonZeroValues) : 1;
+
+  // Slider lower bound should be the lowest non-zero data point.
+  naturalYMin = lowestNonZero;
   naturalYMax = Math.max(naturalYMin + 1, bufferedMax, dataMax, naturalYMin + 0.001);
   if (!hasCustomYMax || displayedYMax == null) {
     displayedYMax = naturalYMax;
@@ -922,7 +925,10 @@ function renderChart() {
     displayedYMax = clamp(displayedYMax, naturalYMin, naturalYMax);
   }
   syncYAxisControls();
-  const yRange: [number, number] = [naturalYMin, displayedYMax];
+
+  // Graph lower bound should be 0 for non-negative data, but allow negatives when present.
+  const graphYMin = dataMin < 0 ? dataMin : 0;
+  const yRange: [number, number] = [graphYMin, displayedYMax];
 
   // Y-axis label depends on mode
   const sizeUnit = chartMode === 'vacant' ? 'land sqft' : 'bldg sqft';

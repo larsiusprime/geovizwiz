@@ -98,12 +98,11 @@ export function enableWindowResizing(windowEl: HTMLElement) {
   const contentEl = windowEl.querySelector('[data-window-content]') as HTMLElement | null;
 
   const startResize = (mode: ResizeMode) => (event: MouseEvent) => {
-    if (mode === 'x' && isPinned(windowEl)) return;
     event.preventDefault();
     event.stopPropagation();
     isResizing = true;
     resizeTarget = windowEl;
-    resizeMode = (isPinned(windowEl) && mode === 'both') ? 'y' : mode;
+    resizeMode = mode;
     resizeStartX = event.clientX;
     resizeStartY = event.clientY;
     const rect = windowEl.getBoundingClientRect();
@@ -426,7 +425,7 @@ export function handleMouseMove(e: MouseEvent) {
 
   if (isColumnResizing && resizeColumn) {
     const dx = e.clientX - columnResizeStartX;
-    const minColumnWidth = getColumnMinWidth(resizeColumn);
+    const minColumnWidth = getColumnMinWidth(resizeColumn) + PINNED_GUTTER;
     const nextWidth = Math.max(minColumnWidth, columnResizeStartWidth + dx);
     columnWidthOverrides.set(getColumnIndex(resizeColumn), nextWidth);
     updatePinnedLayout();
@@ -436,15 +435,22 @@ export function handleMouseMove(e: MouseEvent) {
   if (isResizing && resizeTarget) {
     const dx = e.clientX - resizeStartX;
     const dy = e.clientY - resizeStartY;
+    const pinnedColumn = isPinned(resizeTarget)
+      ? (resizeTarget.parentElement?.classList.contains('pinned-column') ? resizeTarget.parentElement as HTMLDivElement : null)
+      : null;
+
     if (resizeMode !== 'y') {
-      const nextWidth = Math.max(getMinWindowWidth(resizeTarget), resizeStartWidth + dx);
-      resizeTarget.style.width = `${nextWidth}px`;
+      if (pinnedColumn) {
+        const minColumnWidth = getColumnMinWidth(pinnedColumn) + PINNED_GUTTER;
+        const nextWidth = Math.max(minColumnWidth, resizeStartWidth + dx + PINNED_GUTTER);
+        columnWidthOverrides.set(getColumnIndex(pinnedColumn), nextWidth);
+      } else {
+        const nextWidth = Math.max(getMinWindowWidth(resizeTarget), resizeStartWidth + dx);
+        resizeTarget.style.width = `${nextWidth}px`;
+      }
     }
-    if (resizeMode === 'both') {
-      const nextHeight = Math.max(resizeMinHeight, resizeStartHeight + dy);
-      resizeTarget.style.height = `${nextHeight}px`;
-    }
-    if (resizeMode === 'y') {
+
+    if (resizeMode === 'both' || resizeMode === 'y') {
       const nextHeight = Math.max(resizeMinHeight, resizeStartHeight + dy);
       resizeTarget.style.height = `${nextHeight}px`;
     }
@@ -535,7 +541,7 @@ function ensureWindowMinHeight(element: HTMLElement) {
 function getMinWindowWidth(element: HTMLElement) {
   const storedMin = Number(element.dataset.minWidth ?? MIN_WINDOW_WIDTH);
   const requiredMin = getWindowRequiredMinWidth(element);
-  const nextMin = Math.max(MIN_WINDOW_WIDTH, storedMin, requiredMin);
+  const nextMin = Math.max(MIN_WINDOW_WIDTH, requiredMin, Number.isFinite(storedMin) ? storedMin : 0);
   element.dataset.minWidth = `${nextMin}`;
   return nextMin;
 }
@@ -544,14 +550,11 @@ function getWindowRequiredMinWidth(element: HTMLElement) {
   const styles = window.getComputedStyle(element);
   const cssMinWidth = parseFloat(styles.minWidth || '0');
   const headerEl = element.querySelector('.window-header') as HTMLElement | null;
-  const contentEl = element.querySelector('[data-window-content]') as HTMLElement | null;
-  const measuredWidths = [
+  const minRequired = [
     Number.isFinite(cssMinWidth) ? cssMinWidth : 0,
-    element.scrollWidth,
     headerEl?.scrollWidth ?? 0,
-    contentEl?.scrollWidth ?? 0,
   ];
-  return Math.max(MIN_WINDOW_WIDTH, ...measuredWidths);
+  return Math.max(MIN_WINDOW_WIDTH, ...minRequired);
 }
 
 function getColumnMinWidth(column: HTMLDivElement) {
@@ -625,6 +628,11 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   }
   element.dataset.pinnedColumn = `${getColumnIndex(targetColumn)}`;
   insertWindowInColumn(targetColumn, element);
+  const columnIndex = getColumnIndex(targetColumn);
+  const currentColumnWidth = element.getBoundingClientRect().width + PINNED_GUTTER;
+  const minColumnWidth = getColumnMinWidth(targetColumn) + PINNED_GUTTER;
+  const existingOverride = columnWidthOverrides.get(columnIndex) ?? 0;
+  columnWidthOverrides.set(columnIndex, Math.max(existingOverride, minColumnWidth, currentColumnWidth));
   updatePinButtonState(element);
   updatePinnedLayout();
 }

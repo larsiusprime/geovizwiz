@@ -710,12 +710,27 @@ export function setSizeState(
     activeLayer.landSizeField = S.landSizeField;
     activeLayer.landSizeUnitLabel = S.landSizeUnitLabel;
   }
-  const activeStore = activeLayer ? S.dataStores.get(activeLayer.dataStoreId) : null;
+  const activeStore = activeLayer
+    ? S.dataStores.get(activeLayer.dataStoreId)
+    : (S.currentDataStoreId ? S.dataStores.get(S.currentDataStoreId) ?? null : null);
+  if (!activeStore) {
+    console.warn('[Classification] No explicit data-source context while setting classified fields.');
+  }
   if (activeStore) {
     activeStore.bldgSizeField = S.bldgSizeField;
     activeStore.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
     activeStore.landSizeField = S.landSizeField;
     activeStore.landSizeUnitLabel = S.landSizeUnitLabel;
+  }
+
+  if (activeStore) {
+    for (const layer of S.layers.values()) {
+      if (layer.dataStoreId !== activeStore.id) continue;
+      layer.bldgSizeField = S.bldgSizeField;
+      layer.bldgSizeUnitLabel = S.bldgSizeUnitLabel;
+      layer.landSizeField = S.landSizeField;
+      layer.landSizeUnitLabel = S.landSizeUnitLabel;
+    }
   }
 
   // Handle sale data fields
@@ -1084,7 +1099,18 @@ function getLockedFieldsFromClassification(): { lockedNumeric: Set<string>; lock
 /*  Modal 1: Key field classification (was Modal 3)                    */
 /* ------------------------------------------------------------------ */
 
-export function openSizeModal() {
+export type OpenSizeModalOptions = {
+  dataStoreId?: string;
+  mode?: 'ingest' | 'reclassify';
+  onSave?: () => void;
+  onCancel?: () => void;
+};
+
+export function openSizeModal(options: OpenSizeModalOptions = {}) {
+  const mode = options.mode ?? 'ingest';
+  const targetStoreId = options.dataStoreId ?? S.currentDataStoreId;
+  const targetStore = targetStoreId ? S.dataStores.get(targetStoreId) ?? null : null;
+
   // Now first step: use ALL schema fields (not just chosen ones)
   const numericFields = S.lastNumericFieldsFromSchema;
   const categoricalFields = S.lastCategoricalFieldsFromSchema;
@@ -1093,52 +1119,47 @@ export function openSizeModal() {
   // --- Populate dropdowns with type-restricted field pools ---
 
   // Top level
-  fillFieldSelect(parcelIdFieldSel, allFields);            // any
-  fillFieldSelect(addressFieldSel, categoricalFields);     // categorical
+  fillFieldSelect(parcelIdFieldSel, allFields);
+  fillFieldSelect(addressFieldSel, categoricalFields);
 
   // Building/Improvement
-  fillFieldSelect(bldgFieldSel, numericFields);            // numeric
-  fillUnitSelect(bldgUnitSel);                             // hardcoded units
-  fillFieldSelect(bldgQualityFieldSel, numericFields);     // numeric
-  fillFieldSelect(bldgConditionFieldSel, numericFields);   // numeric
-  fillFieldSelect(bldgAgeFieldSel, numericFields);         // numeric
-  fillFieldSelect(bldgEffAgeFieldSel, numericFields);      // numeric
-  fillFieldSelect(bldgBedsFieldSel, numericFields);        // numeric
-  fillFieldSelect(bldgBathsFieldSel, numericFields);       // numeric
-  fillFieldSelect(bldgTypeFieldSel, categoricalFields);    // categorical
+  fillFieldSelect(bldgFieldSel, numericFields);
+  fillUnitSelect(bldgUnitSel);
+  fillFieldSelect(bldgQualityFieldSel, numericFields);
+  fillFieldSelect(bldgConditionFieldSel, numericFields);
+  fillFieldSelect(bldgAgeFieldSel, numericFields);
+  fillFieldSelect(bldgEffAgeFieldSel, numericFields);
+  fillFieldSelect(bldgBedsFieldSel, numericFields);
+  fillFieldSelect(bldgBathsFieldSel, numericFields);
+  fillFieldSelect(bldgTypeFieldSel, categoricalFields);
 
   // Land
-  fillFieldSelect(landFieldSel, numericFields);            // numeric
-  fillUnitSelect(landUnitSel);                             // hardcoded units
-  fillFieldSelect(landTypeFieldSel, categoricalFields);    // categorical
-  fillFieldSelect(landZoningFieldSel, categoricalFields);  // categorical
+  fillFieldSelect(landFieldSel, numericFields);
+  fillUnitSelect(landUnitSel);
+  fillFieldSelect(landTypeFieldSel, categoricalFields);
+  fillFieldSelect(landZoningFieldSel, categoricalFields);
 
   // Assessed Values
-  fillFieldSelect(fullMarketValueFieldSel, numericFields);     // numeric
-  fillFieldSelect(assessedValueFieldSel, numericFields);       // numeric
-  fillFieldSelect(landValueFieldSel, numericFields);           // numeric
-  fillFieldSelect(improvementValueFieldSel, numericFields);    // numeric
+  fillFieldSelect(fullMarketValueFieldSel, numericFields);
+  fillFieldSelect(assessedValueFieldSel, numericFields);
+  fillFieldSelect(landValueFieldSel, numericFields);
+  fillFieldSelect(improvementValueFieldSel, numericFields);
 
   // Sale
-  fillFieldSelect(saleIdFieldSel, categoricalFields);      // categorical
-  fillFieldSelect(salePriceFieldSel, numericFields);       // numeric
-  fillFieldSelect(saleDateFieldSel, allFields);            // any
-  fillFieldSelect(validSaleFieldSel, allFields);           // any (boolean)
-  fillFieldSelect(vacantSaleFieldSel, allFields);          // any (boolean)
+  fillFieldSelect(saleIdFieldSel, categoricalFields);
+  fillFieldSelect(salePriceFieldSel, numericFields);
+  fillFieldSelect(saleDateFieldSel, allFields);
+  fillFieldSelect(validSaleFieldSel, allFields);
+  fillFieldSelect(vacantSaleFieldSel, allFields);
 
   // --- AUTO-PICK using heuristics ---
-
-  // Top level
   const parcelIdGuess = autoPickParcelIdField(allFields);
   if (parcelIdGuess) parcelIdFieldSel.value = parcelIdGuess;
-
   const addressGuess = autoPickAddressField(categoricalFields);
   if (addressGuess) addressFieldSel.value = addressGuess;
 
-  // Building size + unit
   const bGuess = autoPickOne('building', numericFields);
   const lGuess = autoPickOne('land', numericFields);
-
   if (bGuess.field) {
     bldgFieldSel.value = bGuess.field;
     const u = bGuess.unitKey || guessAreaUnitFromFieldName(bGuess.field);
@@ -1150,65 +1171,79 @@ export function openSizeModal() {
     if (u) landUnitSel.value = u;
   }
 
-  // Building extra fields
   const bldgQualityGuess = autoPickBldgQualityField(numericFields);
   if (bldgQualityGuess) bldgQualityFieldSel.value = bldgQualityGuess;
-
   const bldgConditionGuess = autoPickBldgConditionField(numericFields);
   if (bldgConditionGuess) bldgConditionFieldSel.value = bldgConditionGuess;
-
   const bldgAgeGuess = autoPickBldgAgeField(numericFields);
   if (bldgAgeGuess) bldgAgeFieldSel.value = bldgAgeGuess;
-
   const bldgEffAgeGuess = autoPickBldgEffAgeField(numericFields);
   if (bldgEffAgeGuess) bldgEffAgeFieldSel.value = bldgEffAgeGuess;
-
   const bldgBedsGuess = autoPickBldgBedsField(numericFields);
   if (bldgBedsGuess) bldgBedsFieldSel.value = bldgBedsGuess;
-
   const bldgBathsGuess = autoPickBldgBathsField(numericFields);
   if (bldgBathsGuess) bldgBathsFieldSel.value = bldgBathsGuess;
-
   const bldgTypeGuess = autoPickBldgTypeField(categoricalFields);
   if (bldgTypeGuess) bldgTypeFieldSel.value = bldgTypeGuess;
 
-  // Land extra fields
   const landTypeGuess = autoPickLandTypeField(categoricalFields);
   if (landTypeGuess) landTypeFieldSel.value = landTypeGuess;
-
   const landZoningGuess = autoPickLandZoningField(categoricalFields);
   if (landZoningGuess) landZoningFieldSel.value = landZoningGuess;
 
-  // Assessed value fields
   const fullMarketValueGuess = autoPickFullMarketValueField(numericFields);
   if (fullMarketValueGuess) fullMarketValueFieldSel.value = fullMarketValueGuess;
-
   const assessedValueGuess = autoPickAssessedValueField(numericFields);
   if (assessedValueGuess) assessedValueFieldSel.value = assessedValueGuess;
-
   const landValueGuess = autoPickLandValueField(numericFields);
   if (landValueGuess) landValueFieldSel.value = landValueGuess;
-
   const improvementValueGuess = autoPickImprovementValueField(numericFields);
   if (improvementValueGuess) improvementValueFieldSel.value = improvementValueGuess;
 
-  // Sale fields
   const saleIdGuess = autoPickSaleIdField(categoricalFields);
   if (saleIdGuess) saleIdFieldSel.value = saleIdGuess;
-
   const salePriceGuess = autoPickSalePriceField(numericFields);
   if (salePriceGuess) salePriceFieldSel.value = salePriceGuess;
-
   const saleDateGuess = autoPickSaleDateField(allFields);
   if (saleDateGuess) saleDateFieldSel.value = saleDateGuess;
-
   const validSaleGuess = autoPickValidSaleField(allFields);
   if (validSaleGuess) validSaleFieldSel.value = validSaleGuess;
-
   const vacantSaleGuess = autoPickVacantSaleField(allFields);
   if (vacantSaleGuess) vacantSaleFieldSel.value = vacantSaleGuess;
 
-  // --- onchange handlers for unit auto-guess ---
+  if (targetStore) {
+    parcelIdFieldSel.value = targetStore.parcelIdField || parcelIdFieldSel.value;
+    addressFieldSel.value = targetStore.addressField || addressFieldSel.value;
+    bldgFieldSel.value = targetStore.bldgSizeField || bldgFieldSel.value;
+    bldgQualityFieldSel.value = targetStore.bldgQualityField || bldgQualityFieldSel.value;
+    bldgConditionFieldSel.value = targetStore.bldgConditionField || bldgConditionFieldSel.value;
+    bldgAgeFieldSel.value = targetStore.bldgAgeField || bldgAgeFieldSel.value;
+    bldgEffAgeFieldSel.value = targetStore.bldgEffAgeField || bldgEffAgeFieldSel.value;
+    bldgBedsFieldSel.value = targetStore.bldgBedsField || bldgBedsFieldSel.value;
+    bldgBathsFieldSel.value = targetStore.bldgBathsField || bldgBathsFieldSel.value;
+    bldgTypeFieldSel.value = targetStore.bldgTypeField || bldgTypeFieldSel.value;
+    landFieldSel.value = targetStore.landSizeField || landFieldSel.value;
+    landTypeFieldSel.value = targetStore.landTypeField || landTypeFieldSel.value;
+    landZoningFieldSel.value = targetStore.landZoningField || landZoningFieldSel.value;
+    saleIdFieldSel.value = targetStore.saleIdField || saleIdFieldSel.value;
+    salePriceFieldSel.value = targetStore.salePriceField || salePriceFieldSel.value;
+    saleDateFieldSel.value = targetStore.saleDateField || saleDateFieldSel.value;
+    validSaleFieldSel.value = targetStore.validSaleField || validSaleFieldSel.value;
+    vacantSaleFieldSel.value = targetStore.vacantSaleField || vacantSaleFieldSel.value;
+    fullMarketValueFieldSel.value = targetStore.fullMarketValueField || fullMarketValueFieldSel.value;
+    assessedValueFieldSel.value = targetStore.assessedValueField || assessedValueFieldSel.value;
+    landValueFieldSel.value = targetStore.landValueField || landValueFieldSel.value;
+    improvementValueFieldSel.value = targetStore.improvementValueField || improvementValueFieldSel.value;
+    if (targetStore.bldgSizeUnitLabel) {
+      const unit = AREA_UNIT_CHOICES.find(choice => choice.label === targetStore.bldgSizeUnitLabel);
+      if (unit) bldgUnitSel.value = unit.key;
+    }
+    if (targetStore.landSizeUnitLabel) {
+      const unit = AREA_UNIT_CHOICES.find(choice => choice.label === targetStore.landSizeUnitLabel);
+      if (unit) landUnitSel.value = unit.key;
+    }
+  }
+
   bldgFieldSel.onchange = () => {
     const g = guessAreaUnitFromFieldName(bldgFieldSel.value);
     if (g) bldgUnitSel.value = g;
@@ -1218,16 +1253,20 @@ export function openSizeModal() {
     if (g) landUnitSel.value = g;
   };
 
-  // --- Button handlers ---
-  // Classification is now the FIRST step - no "Back" from here, just Cancel
+  btnSizeBack.textContent = 'Cancel';
+  btnSizeSkip.style.display = mode === 'ingest' ? '' : 'none';
+  btnSizeOk.textContent = mode === 'ingest' ? 'Continue' : 'Save';
+
   btnSizeBack.onclick = () => {
     sizeOverlay.classList.remove('show');
-    _clearData();
+    if (mode === 'ingest') {
+      _clearData();
+    }
+    options.onCancel?.();
   };
-  btnSizeBack.textContent = 'Cancel';
 
   btnSizeSkip.onclick = () => {
-    // Skip classification - go straight to numeric field chooser with no locked fields
+    if (mode !== 'ingest') return;
     sizeOverlay.classList.remove('show');
     openNumericFieldChooserModal({
       rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'),
@@ -1237,44 +1276,54 @@ export function openSizeModal() {
   };
 
   btnSizeOk.onclick = () => {
-    // Save classification state
-    setSizeState(
-      bldgFieldSel.value || null,
-      valueToUnitLabel(bldgUnitSel.value || ''),
-      landFieldSel.value || null,
-      valueToUnitLabel(landUnitSel.value || ''),
-      {
-        price: salePriceFieldSel.value || null,
-        date: saleDateFieldSel.value || null,
-        valid: validSaleFieldSel.value || null,
-        vacant: vacantSaleFieldSel.value || null,
-      },
-      {
-        parcelId: parcelIdFieldSel.value || null,
-        address: addressFieldSel.value || null,
-        bldgQuality: bldgQualityFieldSel.value || null,
-        bldgCondition: bldgConditionFieldSel.value || null,
-        bldgAge: bldgAgeFieldSel.value || null,
-        bldgEffAge: bldgEffAgeFieldSel.value || null,
-        bldgBeds: bldgBedsFieldSel.value || null,
-        bldgBaths: bldgBathsFieldSel.value || null,
-        bldgType: bldgTypeFieldSel.value || null,
-        landType: landTypeFieldSel.value || null,
-        landZoning: landZoningFieldSel.value || null,
-        saleId: saleIdFieldSel.value || null,
-        fullMarketValue: fullMarketValueFieldSel.value || null,
-        assessedValue: assessedValueFieldSel.value || null,
-        landValue: landValueFieldSel.value || null,
-        improvementValue: improvementValueFieldSel.value || null,
-      }
-    );
+    const nextBldgField = bldgFieldSel.value || null;
+    const nextBldgUnit = valueToUnitLabel(bldgUnitSel.value || '');
+    const nextLandField = landFieldSel.value || null;
+    const nextLandUnit = valueToUnitLabel(landUnitSel.value || '');
+    const saleData = {
+      price: salePriceFieldSel.value || null,
+      date: saleDateFieldSel.value || null,
+      valid: validSaleFieldSel.value || null,
+      vacant: vacantSaleFieldSel.value || null,
+    };
+    const extraFields = {
+      parcelId: parcelIdFieldSel.value || null,
+      address: addressFieldSel.value || null,
+      bldgQuality: bldgQualityFieldSel.value || null,
+      bldgCondition: bldgConditionFieldSel.value || null,
+      bldgAge: bldgAgeFieldSel.value || null,
+      bldgEffAge: bldgEffAgeFieldSel.value || null,
+      bldgBeds: bldgBedsFieldSel.value || null,
+      bldgBaths: bldgBathsFieldSel.value || null,
+      bldgType: bldgTypeFieldSel.value || null,
+      landType: landTypeFieldSel.value || null,
+      landZoning: landZoningFieldSel.value || null,
+      saleId: saleIdFieldSel.value || null,
+      fullMarketValue: fullMarketValueFieldSel.value || null,
+      assessedValue: assessedValueFieldSel.value || null,
+      landValue: landValueFieldSel.value || null,
+      improvementValue: improvementValueFieldSel.value || null,
+    };
+
+    if (targetStore) {
+      const previousStoreId = S.currentDataStoreId;
+      S.currentDataStoreId = targetStore.id;
+      setSizeState(nextBldgField, nextBldgUnit, nextLandField, nextLandUnit, saleData, extraFields);
+      S.currentDataStoreId = previousStoreId;
+    } else {
+      setSizeState(nextBldgField, nextBldgUnit, nextLandField, nextLandUnit, saleData, extraFields);
+    }
+
     sizeOverlay.classList.remove('show');
-    // Advance to numeric field chooser (step 2)
-    openNumericFieldChooserModal({
-      rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'),
-      geometryCol: geomColEl.textContent || 'geometry',
-      numericFields: S.lastNumericFieldsFromSchema
-    });
+    options.onSave?.();
+
+    if (mode === 'ingest') {
+      openNumericFieldChooserModal({
+        rowCount: Number(rowCountEl.textContent?.replace(/,/g, '') || '0'),
+        geometryCol: geomColEl.textContent || 'geometry',
+        numericFields: S.lastNumericFieldsFromSchema
+      });
+    }
   };
 
   sizeOverlay.classList.add('show');

@@ -86,7 +86,7 @@ import {
   initModalElements, initModalCallbacks,
   openNumericFieldChooserModal, openCategoricalFieldChooserModal,
   openSizeModal, openAddLayerModal, closeAddLayerModal,
-  setSizeState, fillFieldSelect, fillUnitSelect,
+  setSizeState,
 } from './modals';
 import {
   initCompFinderElements,
@@ -541,16 +541,14 @@ const dataStoreList = document.getElementById('dataStoreList') as HTMLDivElement
 const btnBrowseDataSource = document.getElementById('btnBrowseDataSource') as HTMLButtonElement;
 const btnCancelAddLayer = document.getElementById('btnCancelAddLayer') as HTMLButtonElement;
 
-// Settings menu Fields section elements
-const settingsFieldsSection = document.getElementById('settingsFieldsSection') as HTMLElement;
-const settingsBldgSizeField = document.getElementById('settingsBldgSizeField') as HTMLSelectElement;
-const settingsBldgSizeUnit = document.getElementById('settingsBldgSizeUnit') as HTMLSelectElement;
-const settingsLandSizeField = document.getElementById('settingsLandSizeField') as HTMLSelectElement;
-const settingsLandSizeUnit = document.getElementById('settingsLandSizeUnit') as HTMLSelectElement;
-const settingsSalePriceField = document.getElementById('settingsSalePriceField') as HTMLSelectElement;
-const settingsSaleDateField = document.getElementById('settingsSaleDateField') as HTMLSelectElement;
-const settingsValidSaleField = document.getElementById('settingsValidSaleField') as HTMLSelectElement;
-const settingsVacantSaleField = document.getElementById('settingsVacantSaleField') as HTMLSelectElement;
+// Settings menu Data Sources section elements
+const settingsDataSourcesToggle = document.getElementById('settingsDataSourcesToggle') as HTMLDivElement;
+const settingsDataSourcesChevron = document.getElementById('settingsDataSourcesChevron') as HTMLSpanElement;
+const settingsDataSourcesList = document.getElementById('settingsDataSourcesList') as HTMLDivElement;
+const confirmDeleteDataSourceOverlay = document.getElementById('confirmDeleteDataSourceOverlay') as HTMLDivElement;
+const confirmDeleteDataSourceText = document.getElementById('confirmDeleteDataSourceText') as HTMLDivElement;
+const btnCancelDeleteDataSource = document.getElementById('btnCancelDeleteDataSource') as HTMLButtonElement;
+const btnConfirmDeleteDataSource = document.getElementById('btnConfirmDeleteDataSource') as HTMLButtonElement;
 
 // Color scaling radios
 const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
@@ -1317,80 +1315,202 @@ function hideLoading() { loadingOverlay.classList.remove('show'); }
   clearData();
 };
 
-/* ---------------- Settings menu Fields section ---------------- */
-function refreshSettingsFieldsSection() {
-  if (!S.currentGeoJSON?.features?.length) {
-    settingsFieldsSection.style.display = 'none';
-    return;
-  }
-  settingsFieldsSection.style.display = 'block';
+/* ---------------- Settings menu Data Sources section ---------------- */
+let pendingDeleteDataSourceId: string | null = null;
 
-  const numericFields = S.chosenNumericFields;
-  const allFields = [...S.chosenNumericFields, ...S.chosenCategoricalFields];
-
-  // Populate field selects
-  fillFieldSelect(settingsBldgSizeField, numericFields);
-  fillFieldSelect(settingsLandSizeField, numericFields);
-  fillFieldSelect(settingsSalePriceField, numericFields);
-  fillFieldSelect(settingsSaleDateField, allFields);
-  fillFieldSelect(settingsValidSaleField, allFields);
-  fillFieldSelect(settingsVacantSaleField, allFields);
-
-  // Populate unit selects
-  fillUnitSelect(settingsBldgSizeUnit, S.bldgSizeUnitLabel || undefined);
-  fillUnitSelect(settingsLandSizeUnit, S.landSizeUnitLabel || undefined);
-
-  // Set current values from state
-  if (S.bldgSizeField) settingsBldgSizeField.value = S.bldgSizeField;
-  if (S.landSizeField) settingsLandSizeField.value = S.landSizeField;
-  if (S.timeAdjustmentSettings.salePriceField) settingsSalePriceField.value = S.timeAdjustmentSettings.salePriceField;
-  if (S.timeAdjustmentSettings.saleDateField) settingsSaleDateField.value = S.timeAdjustmentSettings.saleDateField;
-  if (S.timeAdjustmentSettings.validSaleField) settingsValidSaleField.value = S.timeAdjustmentSettings.validSaleField;
-  if (S.timeAdjustmentSettings.vacantSaleField) settingsVacantSaleField.value = S.timeAdjustmentSettings.vacantSaleField;
+function setSettingsDataSourcesCollapsed(collapsed: boolean) {
+  S.isSettingsDataSourcesCollapsed = collapsed;
+  settingsDataSourcesList.style.display = collapsed ? 'none' : 'grid';
+  settingsDataSourcesToggle.classList.toggle('is-collapsed', collapsed);
+  settingsDataSourcesChevron.textContent = '▼';
+  refreshWindowMinHeight(settingsControlsEl);
 }
 
-// Settings menu Fields section event listeners
-settingsBldgSizeField.addEventListener('change', () => {
-  S.bldgSizeField = settingsBldgSizeField.value || null;
-  S.timeAdjustmentSettings.improvedSizeField = settingsBldgSizeField.value || '';
-  const activeLayer = getCurrentLayer();
-  if (activeLayer) activeLayer.bldgSizeField = S.bldgSizeField;
+function closeDependentPanelsForDataSourceChange() {
+  minimizeLegend();
+  minimizeFilters();
+  minimizeStatistics();
+  minimizeScatterplot();
+  minimizeLandSchedule();
+  minimizeTimeAdjustment();
+  minimizeCompFinder();
+}
+
+function applyStoreClassificationToActiveState(storeId: string | null) {
+  const store = storeId ? S.dataStores.get(storeId) ?? null : null;
+  if (!store) return;
+  S.currentDataStoreId = store.id;
+  S.bldgSizeField = store.bldgSizeField;
+  S.bldgSizeUnitLabel = store.bldgSizeUnitLabel;
+  S.landSizeField = store.landSizeField;
+  S.landSizeUnitLabel = store.landSizeUnitLabel;
+  S.timeAdjustmentSettings.dataSourceId = store.id;
+  S.timeAdjustmentSettings.salePriceField = store.salePriceField || '';
+  S.timeAdjustmentSettings.saleDateField = store.saleDateField || '';
+  S.timeAdjustmentSettings.validSaleField = store.validSaleField || '';
+  S.timeAdjustmentSettings.vacantSaleField = store.vacantSaleField || '';
+  S.timeAdjustmentSettings.improvedSizeField = store.bldgSizeField || '';
+  S.timeAdjustmentSettings.landSizeField = store.landSizeField || '';
+  S.parcelIdField = store.parcelIdField;
+  S.addressField = store.addressField;
+  S.bldgQualityField = store.bldgQualityField;
+  S.bldgConditionField = store.bldgConditionField;
+  S.bldgAgeField = store.bldgAgeField;
+  S.bldgEffAgeField = store.bldgEffAgeField;
+  S.bldgBedsField = store.bldgBedsField;
+  S.bldgBathsField = store.bldgBathsField;
+  S.bldgTypeField = store.bldgTypeField;
+  S.landTypeField = store.landTypeField;
+  S.landZoningField = store.landZoningField;
+  S.saleIdField = store.saleIdField;
+  S.fullMarketValueField = store.fullMarketValueField;
+  S.assessedValueField = store.assessedValueField;
+  S.landValueField = store.landValueField;
+  S.improvementValueField = store.improvementValueField;
+}
+
+function getPrimaryOrActiveDataStoreId() {
+  if (S.currentDataStoreId && S.dataStores.has(S.currentDataStoreId)) {
+    return S.currentDataStoreId;
+  }
+  if (S.currentLayerId) {
+    const layer = getCurrentLayer();
+    if (layer && S.dataStores.has(layer.dataStoreId)) return layer.dataStoreId;
+  }
+  const fallback = S.dataStoreOrder.find(id => S.dataStores.has(id)) ?? null;
+  console.warn('[DataSource] Ambiguous current source context; falling back to primary/active source.', {
+    currentDataStoreId: S.currentDataStoreId,
+    currentLayerId: S.currentLayerId,
+    fallback,
+  });
+  return fallback;
+}
+
+function removeDataSourceAndDerivedArtifacts(storeId: string) {
+  const store = S.dataStores.get(storeId);
+  if (!store) return;
+
+  const affectedLayerIds = S.layerOrder.filter(layerId => S.layers.get(layerId)?.dataStoreId === storeId);
+  affectedLayerIds.forEach(layerId => removeLayer(layerId));
+
+  S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter(entry => entry.dataSourceId !== storeId);
+  if (S.timeAdjustmentSettings.dataSourceId === storeId) {
+    S.timeAdjustmentSettings.dataSourceId = '';
+    S.timeAdjustmentSettings.salePriceField = '';
+    S.timeAdjustmentSettings.saleDateField = '';
+    S.timeAdjustmentSettings.validSaleField = '';
+    S.timeAdjustmentSettings.vacantSaleField = '';
+    S.timeAdjustmentSettings.improvedSizeField = '';
+    S.timeAdjustmentSettings.landSizeField = '';
+  }
+
+  S.dataStores.delete(storeId);
+  const storeIndex = S.dataStoreOrder.indexOf(storeId);
+  if (storeIndex >= 0) {
+    S.dataStoreOrder.splice(storeIndex, 1);
+  }
+
+  const nextStoreId = getPrimaryOrActiveDataStoreId();
+  if (nextStoreId) {
+    applyStoreClassificationToActiveState(nextStoreId);
+  } else {
+    S.currentDataStoreId = null;
+  }
+
+  closeDependentPanelsForDataSourceChange();
+  renderDataStoreList();
+  renderLayerList();
+  renderSettingsDataSourcesSection();
   refreshTimeAdjustmentPanel();
+}
+
+function openDeleteDataSourceConfirm(storeId: string) {
+  const store = S.dataStores.get(storeId);
+  if (!store) return;
+  pendingDeleteDataSourceId = storeId;
+  confirmDeleteDataSourceText.textContent = `Delete data source "${store.file?.name ?? store.name}" and all derived artifacts? This action cannot be undone.`;
+  confirmDeleteDataSourceOverlay.classList.add('show');
+}
+
+function renderSettingsDataSourcesSection() {
+  settingsDataSourcesList.replaceChildren();
+
+  if (S.dataStoreOrder.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'muted';
+    empty.textContent = 'No data sources loaded yet.';
+    settingsDataSourcesList.appendChild(empty);
+    return;
+  }
+
+  S.dataStoreOrder.forEach(storeId => {
+    const store = S.dataStores.get(storeId);
+    if (!store) return;
+
+    const row = document.createElement('div');
+    row.className = 'settings-data-source-row';
+
+    const sourceName = document.createElement('div');
+    sourceName.className = 'settings-data-source-name';
+    sourceName.title = store.file?.name ?? store.name;
+    sourceName.textContent = store.file?.name ?? store.name;
+
+    const classifyBtn = document.createElement('button');
+    classifyBtn.type = 'button';
+    classifyBtn.textContent = 'classify…';
+    const hasSchema = (store.numericFieldsFromSchema.length + store.categoricalFieldsFromSchema.length) > 0;
+    classifyBtn.disabled = !hasSchema;
+    classifyBtn.title = hasSchema ? 'Reclassify key fields' : 'Load this source file first to classify fields';
+    classifyBtn.addEventListener('click', () => {
+      if (!hasSchema) return;
+      S.currentDataStoreId = store.id;
+      S.lastNumericFieldsFromSchema = [...store.numericFieldsFromSchema];
+      S.lastCategoricalFieldsFromSchema = [...store.categoricalFieldsFromSchema];
+      openSizeModal({
+        dataStoreId: store.id,
+        mode: 'reclassify',
+        onSave: () => {
+          applyStoreClassificationToActiveState(store.id);
+          persistCurrentLayerState();
+          refreshTimeAdjustmentPanel();
+          renderSettingsDataSourcesSection();
+        },
+      });
+    });
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'settings-data-source-delete';
+    deleteBtn.title = 'Delete data source';
+    deleteBtn.textContent = '❌';
+    deleteBtn.addEventListener('click', () => openDeleteDataSourceConfirm(store.id));
+
+    row.append(sourceName, classifyBtn, deleteBtn);
+    settingsDataSourcesList.appendChild(row);
+  });
+}
+
+settingsDataSourcesToggle.addEventListener('click', () => {
+  setSettingsDataSourcesCollapsed(!S.isSettingsDataSourcesCollapsed);
 });
-settingsBldgSizeUnit.addEventListener('change', () => {
-  const unitLabel = settingsBldgSizeUnit.options[settingsBldgSizeUnit.selectedIndex]?.text || null;
-  S.bldgSizeUnitLabel = unitLabel;
-  const activeLayer = getCurrentLayer();
-  if (activeLayer) activeLayer.bldgSizeUnitLabel = unitLabel;
+
+btnCancelDeleteDataSource.addEventListener('click', () => {
+  pendingDeleteDataSourceId = null;
+  confirmDeleteDataSourceOverlay.classList.remove('show');
 });
-settingsLandSizeField.addEventListener('change', () => {
-  S.landSizeField = settingsLandSizeField.value || null;
-  S.timeAdjustmentSettings.landSizeField = settingsLandSizeField.value || '';
-  const activeLayer = getCurrentLayer();
-  if (activeLayer) activeLayer.landSizeField = S.landSizeField;
-  refreshTimeAdjustmentPanel();
+
+btnConfirmDeleteDataSource.addEventListener('click', () => {
+  const storeId = pendingDeleteDataSourceId;
+  pendingDeleteDataSourceId = null;
+  confirmDeleteDataSourceOverlay.classList.remove('show');
+  if (!storeId) return;
+  removeDataSourceAndDerivedArtifacts(storeId);
 });
-settingsLandSizeUnit.addEventListener('change', () => {
-  const unitLabel = settingsLandSizeUnit.options[settingsLandSizeUnit.selectedIndex]?.text || null;
-  S.landSizeUnitLabel = unitLabel;
-  const activeLayer = getCurrentLayer();
-  if (activeLayer) activeLayer.landSizeUnitLabel = unitLabel;
-});
-settingsSalePriceField.addEventListener('change', () => {
-  S.timeAdjustmentSettings.salePriceField = settingsSalePriceField.value || '';
-  refreshTimeAdjustmentPanel();
-});
-settingsSaleDateField.addEventListener('change', () => {
-  S.timeAdjustmentSettings.saleDateField = settingsSaleDateField.value || '';
-  refreshTimeAdjustmentPanel();
-});
-settingsValidSaleField.addEventListener('change', () => {
-  S.timeAdjustmentSettings.validSaleField = settingsValidSaleField.value || '';
-  refreshTimeAdjustmentPanel();
-});
-settingsVacantSaleField.addEventListener('change', () => {
-  S.timeAdjustmentSettings.vacantSaleField = settingsVacantSaleField.value || '';
-  refreshTimeAdjustmentPanel();
+
+setSettingsDataSourcesCollapsed(S.isSettingsDataSourcesCollapsed);
+renderSettingsDataSourcesSection();
+window.addEventListener('data-sources-changed', () => {
+  renderSettingsDataSourcesSection();
 });
 
 /* ---------------- Load selected columns (+ geometry) ---------------- */
@@ -1482,7 +1602,7 @@ async function loadSelectedColumns() {
     refreshScatterPanel();
     refreshLandSchedulePanel();
     refreshTimeAdjustmentPanel();
-    refreshSettingsFieldsSection();
+    renderSettingsDataSourcesSection();
 
     fitToData(S.currentGeoJSON);
     persistCurrentLayerState();
@@ -2094,6 +2214,10 @@ fileInput.addEventListener('change', async () => {
       dataStore.landSizeUnitLabel = matchingPlaceholder.landSizeUnitLabel;
       dataStore.bldgSizeField = matchingPlaceholder.bldgSizeField;
       dataStore.bldgSizeUnitLabel = matchingPlaceholder.bldgSizeUnitLabel;
+      dataStore.salePriceField = matchingPlaceholder.salePriceField;
+      dataStore.saleDateField = matchingPlaceholder.saleDateField;
+      dataStore.validSaleField = matchingPlaceholder.validSaleField;
+      dataStore.vacantSaleField = matchingPlaceholder.vacantSaleField;
 
       // Handle "all fields" mode
       if ((matchingPlaceholder as any)._allNumericFields) {
@@ -2110,6 +2234,10 @@ fileInput.addEventListener('change', async () => {
       S.landSizeUnitLabel = dataStore.landSizeUnitLabel;
       S.bldgSizeField = dataStore.bldgSizeField;
       S.bldgSizeUnitLabel = dataStore.bldgSizeUnitLabel;
+      S.timeAdjustmentSettings.salePriceField = dataStore.salePriceField || '';
+      S.timeAdjustmentSettings.saleDateField = dataStore.saleDateField || '';
+      S.timeAdjustmentSettings.validSaleField = dataStore.validSaleField || '';
+      S.timeAdjustmentSettings.vacantSaleField = dataStore.vacantSaleField || '';
 
       // Remove the placeholder and replace with real dataStore
       S.dataStores.delete(matchingPlaceholder.id);

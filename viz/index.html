@@ -167,26 +167,66 @@
       min-width: 400px;
     }
 
-    .settings-fields-groups {
+    .settings-data-sources-header {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 18px;
+      font-weight: 500;
+      color: #111827;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .settings-data-sources-header .toggle {
+      font-size: 14px;
+      width: 16px;
+      text-align: center;
+      transition: transform 0.15s ease;
+    }
+
+    .settings-data-sources-header.is-collapsed .toggle {
+      transform: rotate(-90deg);
+    }
+
+    .settings-data-sources-list {
       display: grid;
       gap: 8px;
-      font-size: 12px;
-      min-width: 0;
+      margin-top: 8px;
     }
 
-    .settings-fields-row {
+    .settings-data-source-row {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr);
-      gap: 4px;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
       align-items: center;
-      min-width: 0;
     }
 
-    .settings-fields-row select {
-      width: 100%;
-      max-width: 140px;
+    .settings-data-source-name {
+      font-size: 12px;
+      color: #111827;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      padding: 6px 10px;
       min-width: 0;
-      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .settings-data-source-delete {
+      border: none !important;
+      background: none !important;
+      color: #b91c1c;
+      padding: 0 2px !important;
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .settings-data-source-delete:hover {
+      color: #7f1d1d;
+      background: none !important;
     }
 
     .eye-button {
@@ -1951,37 +1991,12 @@
           <button id="btnImportProject" type="button">Import project…</button>
         </div>
       </fieldset>
-      <fieldset id="settingsFieldsSection" style="display:none;">
-        <label>Fields</label>
-        <div class="settings-fields-groups">
-          <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Building/Improvement</div>
-          <div class="settings-fields-row">
-            <span>Size:</span>
-            <select id="settingsBldgSizeField"></select>
-            <span>Unit:</span>
-            <select id="settingsBldgSizeUnit"></select>
-          </div>
-          <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Land</div>
-          <div class="settings-fields-row">
-            <span>Size:</span>
-            <select id="settingsLandSizeField"></select>
-            <span>Unit:</span>
-            <select id="settingsLandSizeUnit"></select>
-          </div>
-          <div class="section-subtitle" style="font-size:11px; margin-top:4px;">Sale Data</div>
-          <div class="settings-fields-row">
-            <span>Price:</span>
-            <select id="settingsSalePriceField"></select>
-            <span>Date:</span>
-            <select id="settingsSaleDateField"></select>
-          </div>
-          <div class="settings-fields-row">
-            <span>Valid:</span>
-            <select id="settingsValidSaleField"></select>
-            <span>Vacant:</span>
-            <select id="settingsVacantSaleField"></select>
-          </div>
+      <fieldset>
+        <div id="settingsDataSourcesToggle" class="settings-data-sources-header">
+          <span id="settingsDataSourcesChevron" class="toggle">▼</span>
+          <span>Data Sources</span>
         </div>
+        <div id="settingsDataSourcesList" class="settings-data-sources-list"></div>
       </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
@@ -2708,6 +2723,17 @@
 
       <input id="file" type="file" accept=".parquet,.parq" style="display:none" />
       <input id="projectFile" type="file" accept=".geovizwiz.json,.json" style="display:none" />
+    </div>
+  </div>
+
+  <div id="confirmDeleteDataSourceOverlay" class="overlay">
+    <div class="modal" style="max-width: 420px;">
+      <h3>Delete data source?</h3>
+      <div id="confirmDeleteDataSourceText" class="muted">This action cannot be undone.</div>
+      <div class="footer">
+        <button id="btnCancelDeleteDataSource" type="button">Cancel</button>
+        <button id="btnConfirmDeleteDataSource" type="button">Delete</button>
+      </div>
     </div>
   </div>
 

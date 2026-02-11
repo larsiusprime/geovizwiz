@@ -234,6 +234,10 @@ export type SerializedDataSource = {
   landSizeUnitLabel: string | null;
   bldgSizeField: string | null;
   bldgSizeUnitLabel: string | null;
+  salePriceField?: string | null;
+  saleDateField?: string | null;
+  validSaleField?: string | null;
+  vacantSaleField?: string | null;
   parcelIdField?: string | null;
   addressField?: string | null;
   bldgQualityField?: string | null;

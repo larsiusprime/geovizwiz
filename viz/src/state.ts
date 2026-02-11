@@ -95,6 +95,7 @@ export const S = {
   // --- Window state ---
   isLayersMinimized: false,
   isSettingsMenuMinimized: false,
+  isSettingsDataSourcesCollapsed: false,
   isPaintCollapsed: false,
   isLegendVisible: true,
   isLegendMinimized: false,

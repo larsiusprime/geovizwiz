@@ -31,6 +31,10 @@ function serializeDataSource(store: DataStore): SerializedDataSource {
     landSizeUnitLabel: store.landSizeUnitLabel,
     bldgSizeField: store.bldgSizeField,
     bldgSizeUnitLabel: store.bldgSizeUnitLabel,
+    salePriceField: store.salePriceField,
+    saleDateField: store.saleDateField,
+    validSaleField: store.validSaleField,
+    vacantSaleField: store.vacantSaleField,
     parcelIdField: store.parcelIdField,
     addressField: store.addressField,
     bldgQualityField: store.bldgQualityField,
@@ -334,6 +338,10 @@ export async function loadProjectFile(file: File) {
         existingStore.landSizeUnitLabel = dsData.landSizeUnitLabel;
         existingStore.bldgSizeField = dsData.bldgSizeField;
         existingStore.bldgSizeUnitLabel = dsData.bldgSizeUnitLabel;
+        existingStore.salePriceField = dsData.salePriceField ?? null;
+        existingStore.saleDateField = dsData.saleDateField ?? null;
+        existingStore.validSaleField = dsData.validSaleField ?? null;
+        existingStore.vacantSaleField = dsData.vacantSaleField ?? null;
         existingStore.parcelIdField = dsData.parcelIdField ?? null;
         existingStore.addressField = dsData.addressField ?? null;
         existingStore.bldgQualityField = dsData.bldgQualityField ?? null;
@@ -381,10 +389,10 @@ export async function loadProjectFile(file: File) {
           landSizeUnitLabel: dsData.landSizeUnitLabel,
           bldgSizeField: dsData.bldgSizeField,
           bldgSizeUnitLabel: dsData.bldgSizeUnitLabel,
-          salePriceField: null,
-          saleDateField: null,
-          validSaleField: null,
-          vacantSaleField: null,
+          salePriceField: dsData.salePriceField ?? null,
+          saleDateField: dsData.saleDateField ?? null,
+          validSaleField: dsData.validSaleField ?? null,
+          vacantSaleField: dsData.vacantSaleField ?? null,
           parcelIdField: dsData.parcelIdField ?? null,
           addressField: dsData.addressField ?? null,
           bldgQualityField: dsData.bldgQualityField ?? null,
@@ -481,6 +489,7 @@ export async function loadProjectFile(file: File) {
     // Update UI
     renderDataStoreList();
     renderLayerList();
+    window.dispatchEvent(new CustomEvent('data-sources-changed'));
     revealUI();
 
     // Notify user about status

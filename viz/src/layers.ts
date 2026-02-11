@@ -434,6 +434,29 @@ export function applyLayerState(layer: LayerState) {
     S.lastAsyncBuffer = store.asyncBuffer;
     S.lastNumericFieldsFromSchema = [...store.numericFieldsFromSchema];
     S.lastCategoricalFieldsFromSchema = [...store.categoricalFieldsFromSchema];
+    S.timeAdjustmentSettings.dataSourceId = store.id;
+    S.timeAdjustmentSettings.salePriceField = store.salePriceField || '';
+    S.timeAdjustmentSettings.saleDateField = store.saleDateField || '';
+    S.timeAdjustmentSettings.validSaleField = store.validSaleField || '';
+    S.timeAdjustmentSettings.vacantSaleField = store.vacantSaleField || '';
+    S.timeAdjustmentSettings.improvedSizeField = store.bldgSizeField || '';
+    S.timeAdjustmentSettings.landSizeField = store.landSizeField || '';
+    S.parcelIdField = store.parcelIdField;
+    S.addressField = store.addressField;
+    S.bldgQualityField = store.bldgQualityField;
+    S.bldgConditionField = store.bldgConditionField;
+    S.bldgAgeField = store.bldgAgeField;
+    S.bldgEffAgeField = store.bldgEffAgeField;
+    S.bldgBedsField = store.bldgBedsField;
+    S.bldgBathsField = store.bldgBathsField;
+    S.bldgTypeField = store.bldgTypeField;
+    S.landTypeField = store.landTypeField;
+    S.landZoningField = store.landZoningField;
+    S.saleIdField = store.saleIdField;
+    S.fullMarketValueField = store.fullMarketValueField;
+    S.assessedValueField = store.assessedValueField;
+    S.landValueField = store.landValueField;
+    S.improvementValueField = store.improvementValueField;
   }
 
   _setSizeState(S.bldgSizeField, S.bldgSizeUnitLabel, S.landSizeField, S.landSizeUnitLabel);

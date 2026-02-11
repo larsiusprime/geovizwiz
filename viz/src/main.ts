@@ -1088,6 +1088,7 @@ initLandScheduleCallbacks({
 initTimeAdjustmentElements({
   panel: timeAdjustmentControlsEl,
   showFiltersPanel: showFilters,
+  dataSourceSelect: document.getElementById('timeAdjustmentDataSource') as HTMLSelectElement,
   // Date range inputs
   startInput: document.getElementById('timeAdjustmentStart') as HTMLInputElement,
   valuationInput: document.getElementById('timeAdjustmentValuation') as HTMLInputElement,

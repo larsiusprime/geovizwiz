@@ -14,6 +14,7 @@ const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 type Elements = {
   panel: HTMLDivElement;
   showFiltersPanel: () => void;
+  dataSourceSelect: HTMLSelectElement;
   // Date range inputs
   startInput: HTMLInputElement;
   valuationInput: HTMLInputElement;
@@ -65,6 +66,38 @@ let hasAutoTriggeredTrend = false; // Track if we've auto-clicked "Plot trend" o
 
 function uid(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
+}
+
+
+function getEligibleTimeAdjustmentStores() {
+  const stores = Array.from(S.dataStores.values()).filter((store) => (
+    Boolean(store.geojson?.features?.length)
+    && Boolean(store.salePriceField)
+    && Boolean(store.saleDateField)
+  ));
+  return stores;
+}
+
+function getSelectedTimeAdjustmentStore() {
+  const stores = getEligibleTimeAdjustmentStores();
+  if (!stores.length) return null;
+
+  const selectedId = S.timeAdjustmentSettings.dataSourceId;
+  const selected = selectedId ? stores.find((store) => store.id === selectedId) ?? null : null;
+  const resolved = selected ?? stores[0];
+
+  if (S.timeAdjustmentSettings.dataSourceId !== resolved.id) {
+    S.timeAdjustmentSettings.dataSourceId = resolved.id;
+  }
+
+  if (resolved.salePriceField) S.timeAdjustmentSettings.salePriceField = resolved.salePriceField;
+  if (resolved.saleDateField) S.timeAdjustmentSettings.saleDateField = resolved.saleDateField;
+
+  return resolved;
+}
+
+function currentGeoJSONForTimeAdjustment(): GeoJSON.FeatureCollection | null {
+  return getSelectedTimeAdjustmentStore()?.geojson ?? null;
 }
 
 function ensureDefaultEntry() {
@@ -160,12 +193,13 @@ function toDateInput(date: Date): string {
 }
 
 function findDateRange(dateField: string): { min: Date | null; max: Date | null } {
-  if (!S.currentGeoJSON?.features?.length) return { min: null, max: null };
+  const geojson = currentGeoJSONForTimeAdjustment();
+  if (!geojson?.features?.length) return { min: null, max: null };
 
   let min: Date | null = null;
   let max: Date | null = null;
 
-  for (const feature of S.currentGeoJSON.features) {
+  for (const feature of geojson.features) {
     const props = (feature as GeoJSON.Feature).properties ?? {};
     const date = parseDate(props[dateField]);
     if (!date) continue;
@@ -179,7 +213,8 @@ function findDateRange(dateField: string): { min: Date | null; max: Date | null 
 function prefillEntryDates(entry: TimeAdjustmentEntry) {
   if (entry.startDate && entry.valuationDate) return; // Already has dates
 
-  const dateField = entry.dateField || 'sale_date';
+  const selectedStore = getSelectedTimeAdjustmentStore();
+  const dateField = selectedStore?.saleDateField || entry.dateField || 'sale_date';
   const { min, max } = findDateRange(dateField);
 
   if (min && max && !entry.startDate) {
@@ -272,20 +307,22 @@ function interpolateFactor(date: Date, sortedTrend: TrendItemWithMidpoint[]): nu
 }
 
 function getAllFields(): string[] {
-  const first = S.currentGeoJSON?.features?.[0]?.properties;
+  const first = currentGeoJSONForTimeAdjustment()?.features?.[0]?.properties;
   return first ? Object.keys(first) : [];
 }
 
 function numericFields(): string[] {
   const fields = getAllFields();
-  if (!S.currentGeoJSON?.features?.length) return [];
-  return fields.filter((field) => S.currentGeoJSON!.features.some((feature: GeoJSON.Feature) => safeNum(feature.properties?.[field]) !== null));
+  const geojson = currentGeoJSONForTimeAdjustment();
+  if (!geojson?.features?.length) return [];
+  return fields.filter((field) => geojson.features.some((feature: GeoJSON.Feature) => safeNum(feature.properties?.[field]) !== null));
 }
 
 function categoricalFields(): string[] {
   const fields = getAllFields();
-  if (!S.currentGeoJSON?.features?.length) return [];
-  return fields.filter((field) => S.currentGeoJSON!.features.some((feature: GeoJSON.Feature) => typeof feature.properties?.[field] === 'string'));
+  const geojson = currentGeoJSONForTimeAdjustment();
+  if (!geojson?.features?.length) return [];
+  return fields.filter((field) => geojson.features.some((feature: GeoJSON.Feature) => typeof feature.properties?.[field] === 'string'));
 }
 
 function ensureDefaults(entry: TimeAdjustmentEntry) {
@@ -347,9 +384,10 @@ function matchesFilters(props: Record<string, any>, filters: FilterRule[], inver
 }
 
 function getUniqueGroupValues(groupByField: string | null): string[] {
-  if (!groupByField || !S.currentGeoJSON?.features?.length) return [];
+  const geojson = currentGeoJSONForTimeAdjustment();
+  if (!groupByField || !geojson?.features?.length) return [];
   const values = new Set<string>();
-  for (const feature of S.currentGeoJSON.features) {
+  for (const feature of geojson.features) {
     const props = (feature as GeoJSON.Feature).properties ?? {};
     const val = props[groupByField];
     if (val != null && val !== '') {
@@ -428,7 +466,7 @@ function guessFieldByKeywords(fields: string[], keywords: string[]): string | nu
 }
 
 function prefillFromMetadata() {
-  const store = S.currentDataStoreId ? S.dataStores.get(S.currentDataStoreId) : null;
+  const store = getSelectedTimeAdjustmentStore();
   const numeric = numericFields();
 
   // Prefill improved size field from metadata
@@ -450,7 +488,41 @@ function prefillFromMetadata() {
   }
 }
 
+
+function refreshDataSourceSelect() {
+  const stores = getEligibleTimeAdjustmentStores();
+  const previous = S.timeAdjustmentSettings.dataSourceId;
+  els.dataSourceSelect.replaceChildren();
+
+  if (!stores.length) {
+    const empty = document.createElement('option');
+    empty.value = '';
+    empty.textContent = 'No eligible source';
+    els.dataSourceSelect.append(empty);
+    els.dataSourceSelect.disabled = true;
+    S.timeAdjustmentSettings.dataSourceId = '';
+    return;
+  }
+
+  stores.forEach((store) => {
+    const option = document.createElement('option');
+    option.value = store.id;
+    option.textContent = store.name;
+    els.dataSourceSelect.append(option);
+  });
+
+  els.dataSourceSelect.disabled = false;
+
+  const preferred = previous && stores.some((store) => store.id === previous)
+    ? previous
+    : stores[0].id;
+  els.dataSourceSelect.value = preferred;
+  S.timeAdjustmentSettings.dataSourceId = preferred;
+  getSelectedTimeAdjustmentStore();
+}
+
 function refreshFieldOptions() {
+  refreshDataSourceSelect();
   const categorical = categoricalFields();
 
   // Prefill from metadata if fields are empty
@@ -537,21 +609,24 @@ function computeSales(entry: TimeAdjustmentEntry, chartFilters?: ChartFilters): 
   const start = parseDate(entry.startDate);
   const valuation = parseDate(entry.valuationDate);
 
-  if (!start || !valuation || !S.currentGeoJSON) {
+  const geojson = currentGeoJSONForTimeAdjustment();
+  const store = getSelectedTimeAdjustmentStore();
+
+  if (!start || !valuation || !geojson || !store) {
     return { points: [], grouped: [] };
   }
 
-  const dateField = entry.dateField || 'sale_date';
-  const priceField = S.timeAdjustmentSettings.salePriceField;
-  const improvedSizeField = S.timeAdjustmentSettings.improvedSizeField;
-  const landSizeField = S.timeAdjustmentSettings.landSizeField;
+  const dateField = store.saleDateField || entry.dateField || 'sale_date';
+  const priceField = store.salePriceField || S.timeAdjustmentSettings.salePriceField;
+  const improvedSizeField = store.bldgSizeField || S.timeAdjustmentSettings.improvedSizeField;
+  const landSizeField = store.landSizeField || S.timeAdjustmentSettings.landSizeField;
 
   // Use chart-specific filters if provided, otherwise use entry defaults
   const effectiveMode = chartFilters?.mode ?? entry.displayMode;
   const groupField = chartFilters?.groupField ?? entry.groupByField;
   const groupValue = chartFilters?.groupValue ?? '';
 
-  const points: SalePoint[] = S.currentGeoJSON.features.flatMap((feature: GeoJSON.Feature) => {
+  const points: SalePoint[] = geojson.features.flatMap((feature: GeoJSON.Feature) => {
     const props = (feature.properties ?? {}) as Record<string, any>;
     const date = parseDate(props[dateField]);
     if (!date || date < start || date > valuation) return [];
@@ -678,14 +753,15 @@ function computeTrend(entry: TimeAdjustmentEntry, grouped: GroupedPoints): Trend
 
 function getConfigWarnings(entry: TimeAdjustmentEntry): string[] {
   const warnings: string[] = [];
-  if (!S.timeAdjustmentSettings.salePriceField) {
-    warnings.push('No sale price field selected');
+  const store = getSelectedTimeAdjustmentStore();
+  if (!store?.salePriceField || !store.saleDateField) {
+    warnings.push('Select a data source with sale price/date fields');
   }
   if (!entry.startDate || !entry.valuationDate) {
     warnings.push('Start and valuation dates required');
   }
-  if (!S.currentGeoJSON || !S.currentGeoJSON.features.length) {
-    warnings.push('No data loaded');
+  if (!currentGeoJSONForTimeAdjustment()?.features?.length) {
+    warnings.push('No eligible data source loaded');
   }
   return warnings;
 }
@@ -896,10 +972,17 @@ function buildExportFilename(entry: TimeAdjustmentEntry, suffix?: string): strin
   return filename;
 }
 
+type ExportRow = {
+  period: string;
+  startIndexed: number;
+  endIndexed: number;
+  correctionFactor: number;
+};
+
 type ExportData = {
   header: string;
-  mainRows: Array<{ period: string; factor: number }>;
-  dailyRows: Array<{ date: string; factor: number }>;
+  mainRows: ExportRow[];
+  dailyRows: ExportRow[];
 };
 
 function generateExportData(entry: TimeAdjustmentEntry): ExportData | null {
@@ -916,17 +999,28 @@ function generateExportData(entry: TimeAdjustmentEntry): ExportData | null {
   if (!trend.length) return null;
 
   const header = entry.granularity === 'year' ? 'Year' : entry.granularity === 'quarter' ? 'Quarter' : 'Month';
-  const mainRows = trend.map((item) => ({ period: item.key, factor: item.factor }));
+
+  const sortedTrend = [...trend].sort((a, b) => a.key.localeCompare(b.key));
+  const earliestFactor = sortedTrend[0]?.factor ?? 1;
+  const latestFactor = sortedTrend[sortedTrend.length - 1]?.factor ?? 1;
+
+  const mapRow = (period: string, factor: number): ExportRow => ({
+    period,
+    startIndexed: earliestFactor === 0 ? 1 : factor / earliestFactor,
+    endIndexed: latestFactor === 0 ? 1 : factor / latestFactor,
+    correctionFactor: factor,
+  });
+
+  const mainRows = sortedTrend.map((item) => mapRow(item.key, item.factor));
 
   // Build daily data with interpolation
-  const dailyRows: Array<{ date: string; factor: number }> = [];
+  const dailyRows: ExportRow[] = [];
   const start = parseDate(entry.startDate);
   const end = parseDate(entry.valuationDate);
 
   if (start && end) {
     const granularity = entry.granularity === 'peak' ? 'month' : entry.granularity;
-    const sortedWithMidpoints: TrendItemWithMidpoint[] = [...trend]
-      .sort((a, b) => a.key.localeCompare(b.key))
+    const sortedWithMidpoints: TrendItemWithMidpoint[] = sortedTrend
       .map((item) => ({
         key: item.key,
         factor: item.factor,
@@ -937,7 +1031,7 @@ function generateExportData(entry: TimeAdjustmentEntry): ExportData | null {
     for (let t = start.getTime(); t <= end.getTime(); t += step) {
       const d = new Date(t);
       const factor = interpolateFactor(d, sortedWithMidpoints);
-      dailyRows.push({ date: toDateInput(d), factor });
+      dailyRows.push(mapRow(toDateInput(d), factor));
     }
   }
 
@@ -954,8 +1048,8 @@ async function exportCsvZip(entry: TimeAdjustmentEntry) {
   const baseFilename = buildExportFilename(entry);
 
   // Build CSV strings
-  const mainCsv = `${data.header},Factor\n${data.mainRows.map((r) => `${r.period},${r.factor.toFixed(6)}`).join('\n')}`;
-  const dailyCsv = `Day,Factor\n${data.dailyRows.map((r) => `${r.date},${r.factor.toFixed(6)}`).join('\n')}`;
+  const mainCsv = `${data.header},start_indexed,end_indexed,correction_factor\n${data.mainRows.map((r) => `${r.period},${r.startIndexed.toFixed(6)},${r.endIndexed.toFixed(6)},${r.correctionFactor.toFixed(6)}`).join('\n')}`;
+  const dailyCsv = `Day,start_indexed,end_indexed,correction_factor\n${data.dailyRows.map((r) => `${r.period},${r.startIndexed.toFixed(6)},${r.endIndexed.toFixed(6)},${r.correctionFactor.toFixed(6)}`).join('\n')}`;
 
   // Create zip
   const zip = new JSZip();
@@ -983,12 +1077,12 @@ function exportExcel(entry: TimeAdjustmentEntry) {
   const wb = XLSX.utils.book_new();
 
   // Period sheet
-  const mainData = [[data.header, 'Factor'], ...data.mainRows.map((r) => [r.period, r.factor])];
+  const mainData = [[data.header, 'start_indexed', 'end_indexed', 'correction_factor'], ...data.mainRows.map((r) => [r.period, r.startIndexed, r.endIndexed, r.correctionFactor])];
   const mainSheet = XLSX.utils.aoa_to_sheet(mainData);
   XLSX.utils.book_append_sheet(wb, mainSheet, 'Period');
 
   // Daily sheet
-  const dailyData = [['Day', 'Factor'], ...data.dailyRows.map((r) => [r.date, r.factor])];
+  const dailyData = [['Day', 'start_indexed', 'end_indexed', 'correction_factor'], ...data.dailyRows.map((r) => [r.period, r.startIndexed, r.endIndexed, r.correctionFactor])];
   const dailySheet = XLSX.utils.aoa_to_sheet(dailyData);
   XLSX.utils.book_append_sheet(wb, dailySheet, 'Daily');
 
@@ -1020,6 +1114,7 @@ function render() {
   els.ratioHeader.textContent = `Price/${sizeLabel}`;
 
   // Populate chart-specific dropdowns
+  els.dataSourceSelect.value = S.timeAdjustmentSettings.dataSourceId;
   els.chartModeSelect.value = chartMode;
   populateChartGroupSelect(entry?.groupByField ?? null);
 
@@ -1100,6 +1195,13 @@ export function initTimeAdjustmentElements(elements: Elements) {
     setter(entry);
     scheduleTrendRender();
   };
+
+
+  els.dataSourceSelect.addEventListener('change', () => {
+    S.timeAdjustmentSettings.dataSourceId = els.dataSourceSelect.value;
+    getSelectedTimeAdjustmentStore();
+    render();
+  });
 
   els.groupBySelect.addEventListener('change', () => bindEntrySetting((entry) => {
     entry.groupByField = els.groupBySelect.value || null;

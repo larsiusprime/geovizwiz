@@ -119,6 +119,7 @@ export type TimeAdjustmentEntry = {
 };
 
 export type TimeAdjustmentSettings = {
+  dataSourceId: string;
   salePriceField: string;
   saleDateField: string;
   validSaleField: string;

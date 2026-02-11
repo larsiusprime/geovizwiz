@@ -154,6 +154,7 @@ export const S = {
   timeAdjustmentEntries: [] as TimeAdjustmentEntry[],
   currentTimeAdjustmentEntryId: null as string | null,
   timeAdjustmentSettings: {
+    dataSourceId: '',
     salePriceField: '',
     saleDateField: '',
     validSaleField: '',

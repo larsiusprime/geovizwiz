@@ -879,7 +879,7 @@ function renderChart() {
     type: 'scatter',
     mode: 'markers',
     name: 'Sales',
-    marker: { size: 4, opacity: 0.5, color: '#1f2937' }
+    marker: { size: 4, opacity: 0.1, color: '#1f2937' }
   }];
   if (xOutlier.length) {
     traces.push({

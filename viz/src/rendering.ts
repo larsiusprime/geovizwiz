@@ -221,10 +221,16 @@ let keyHandlersInstalled = false;
 
 export function addExtrusionLayer(layer: LayerState) {
   if (S.map.getLayer(layer.layerId)) return;
+
+  const grayWithSelectionExpression: Expression = ['case',
+    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
+    '#888'
+  ] as any;
+
   S.map.addLayer({
     id: layer.layerId, type: 'fill-extrusion', source: layer.sourceId,
     paint: {
-      'fill-extrusion-color': '#888',
+      'fill-extrusion-color': grayWithSelectionExpression,
       'fill-extrusion-height': 0,
       'fill-extrusion-opacity': parseFloat(_opacityInput.value),
       'fill-extrusion-vertical-gradient': true
@@ -650,8 +656,13 @@ export function applyGrayRendering() {
   const ids = _getCurrentLayerIds();
   if (!ids) return;
 
+  const grayWithSelectionExpression: Expression = ['case',
+    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
+    '#888'
+  ] as any;
+
   // Apply gray color and no extrusion when no field is selected
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionExpression);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
 

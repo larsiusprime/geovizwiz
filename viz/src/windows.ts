@@ -41,6 +41,8 @@ const PINNED_GUTTER = 8;
 const MIN_WINDOW_WIDTH = 240;
 const MIN_WINDOW_HEIGHT = 160;
 const WINDOW_STACK_BASE = 20;
+const MODAL_STACK_BASE = 3000;
+const WINDOW_STACK_MAX = MODAL_STACK_BASE - 1;
 const WINDOW_MARGIN = 10;
 
 let pinnedContainer: HTMLDivElement | null = null;
@@ -360,9 +362,31 @@ function placeFloatingWindow(target: HTMLElement) {
   clampWindowWithinBounds(target);
 }
 
+function normalizeFloatingWindowStack() {
+  const floating = dockableWindows
+    .map(entry => entry.element)
+    .filter(element => !isPinned(element));
+
+  floating.sort((a, b) => {
+    const zA = Number(a.style.zIndex || WINDOW_STACK_BASE);
+    const zB = Number(b.style.zIndex || WINDOW_STACK_BASE);
+    return zA - zB;
+  });
+
+  let z = WINDOW_STACK_BASE;
+  for (const element of floating) {
+    element.style.zIndex = `${z}`;
+    z += 1;
+  }
+  windowZCounter = Math.max(WINDOW_STACK_BASE, z - 1);
+}
+
 function bringWindowToFront(target: HTMLElement) {
   if (isPinned(target)) return;
-  windowZCounter += 1;
+  if (windowZCounter >= WINDOW_STACK_MAX) {
+    normalizeFloatingWindowStack();
+  }
+  windowZCounter = Math.min(WINDOW_STACK_MAX, windowZCounter + 1);
   target.style.zIndex = `${windowZCounter}`;
 }
 

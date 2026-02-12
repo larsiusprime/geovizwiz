@@ -577,7 +577,7 @@ const setLandScheduleTablesCollapsed = (collapsed: boolean) => {
   S.isLandScheduleTablesCollapsed = collapsed;
   landScheduleTablesContent.style.display = collapsed ? 'none' : 'grid';
   landScheduleTablesToggle.classList.toggle('is-collapsed', collapsed);
-  landScheduleTablesToggle.title = collapsed ? 'Expand Size tables' : 'Collapse Size tables';
+  landScheduleTablesToggle.title = collapsed ? 'Expand Land tables' : 'Collapse Land tables';
   refreshWindowMinHeight(landScheduleControlsEl);
 };
 

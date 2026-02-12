@@ -738,7 +738,7 @@ The “apply” button causes the linked land value surface to be recalculated, 
 When empty the land size tables section looks like this: just has a single button to add a new table
 
 |-------------------------------------|
-| Size tables                         |
+| Land tables                         |
 |                                     |
 | [ add table ]                       |
 |-------------------------------------|
@@ -773,7 +773,7 @@ Clicking the delete table [ x ] (with “are you sure?” prompt) will delete th
 Once there is at least one table, there is a dropdown menu in the land table section:
 
 |-------------------------------------|
-| Size tables                         |
+| Land tables                         |
 |                                     |
 | Current table: [ ▼ something ]     |
 | [ add table ]                       |

@@ -469,7 +469,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
         activeTable.filterInvert = filterInvert;
         updateLandScheduleFilterButtonState(activeTable);
       },
-      label: `Land schedule / ${activeTable.name || 'Untitled table'}`,
+      label: `Adjustment schedule / ${activeTable.name || 'Untitled table'}`,
       key: landScheduleContextKey,
     });
     showFiltersPanel?.();
@@ -633,7 +633,7 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
           adjustment.filterInvert = filterInvert;
           updateAdjustmentFilterButtonState(conditionsBtn, adjustment);
         },
-        label: `Land schedule adjustment / ${adjustment.name || 'Untitled adjustment'}`,
+        label: `Adjustment schedule adjustment / ${adjustment.name || 'Untitled adjustment'}`,
         key: adjustmentContextKey,
       });
       showFiltersPanel?.();

@@ -1189,6 +1189,8 @@
       height: 22px;
       border-radius: 5px;
       cursor: pointer;
+      margin-left: auto;
+      margin-top: -12px;
     }
 
     .land-table-delete-bar {
@@ -1339,6 +1341,7 @@
       border-radius: 5px;
       cursor: pointer;
       margin-left: auto;
+      margin-top: -12px;
     }
 
     .land-adjustment-row {
@@ -1852,7 +1855,7 @@
 
         <button id="layersToolButton" class="toolbar-button" title="Show/hide layer settings">
           <img src="./src/svg/layers.svg" alt="Layers" />
-          <span class="hotkey">A</span>
+          <span class="hotkey">L</span>
         </button>
 
         <button id="legendToolButton" class="toolbar-button" title="Show/hide legend">
@@ -1860,9 +1863,9 @@
           <span class="hotkey">E</span>
         </button>
 
-        <button id="landScheduleToolButton" class="toolbar-button" title="Land Schedule">
-          <img src="./src/svg/land.svg" alt="Land Schedule" />
-          <span class="hotkey">L</span>
+        <button id="landScheduleToolButton" class="toolbar-button" title="Adjustment Schedule">
+          <img src="./src/svg/adjustment.svg" alt="Adjustment Schedule" />
+          <span class="hotkey">A</span>
         </button>
 
         <button id="timeAdjustmentToolButton" class="toolbar-button" title="Time Adjustment">
@@ -2499,7 +2502,7 @@
 
   <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 520px); min-width: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
-      <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
+      <div style="font-weight: 600; font-size: 13px;">Adjustment Schedule</div>
       <div class="window-actions">
         <button id="btnPinLandSchedule" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
@@ -2515,8 +2518,8 @@
 
       <div id="landScheduleTablesSection" class="land-schedule-section">
         <div class="land-schedule-section-header">
-          <button id="landScheduleTablesToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Size tables">▼</button>
-          <div class="land-schedule-subtitle">Size tables</div>
+          <button id="landScheduleTablesToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Land tables">▼</button>
+          <div class="land-schedule-subtitle">Land tables</div>
         </div>
         <div id="landScheduleTablesContent" style="display: grid; gap: 10px;">
           <div id="landScheduleTableSelectRow" class="land-schedule-row" style="display: none;">

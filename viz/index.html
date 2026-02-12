@@ -1352,6 +1352,12 @@
       font-weight: 600;
     }
 
+    .land-adjustment-per-label {
+      min-width: 28px;
+      color: #374151;
+      font-weight: 600;
+    }
+
     .land-adjustment-row select,
     .land-adjustment-row input {
       min-width: 0;
@@ -1376,11 +1382,13 @@
       display: flex;
       align-items: center;
       gap: 6px;
-      flex: 1;
+      flex: 0 0 100px;
+      max-width: 100px;
     }
 
     .land-adjustment-value input {
-      min-width: 90px;
+      min-width: 0;
+      width: 100%;
     }
 
     .land-adjustment-value.is-multiply input {

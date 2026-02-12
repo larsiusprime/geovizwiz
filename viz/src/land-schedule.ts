@@ -33,10 +33,10 @@ const ADJUSTMENT_OPERATION_OPTIONS: Array<{ value: LandScheduleAdjustmentOperati
 ];
 
 const ADJUSTMENT_UNIT_OPTIONS: Array<{ value: LandScheduleAdjustmentSizeUnit; label: string }> = [
-  { value: 'per-improved-area', label: 'per improved area' },
-  { value: 'per-land-area', label: 'per land area' },
-  { value: 'per-frontage', label: 'per frontage' },
-  { value: 'per-pick-field', label: 'per (pick field)' },
+  { value: 'per-improved-area', label: 'improved area' },
+  { value: 'per-land-area', label: 'land area' },
+  { value: 'per-frontage', label: 'frontage' },
+  { value: 'per-pick-field', label: '(pick field)' },
   { value: 'flat', label: 'flat amount' },
 ];
 
@@ -714,9 +714,13 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     });
     unitSelect.value = adjustment.sizeUnit;
 
+    const perLabel = document.createElement('span');
+    perLabel.className = 'land-adjustment-per-label';
+    perLabel.textContent = 'per:';
+
     const unitDetailSelect = document.createElement('select');
     unitDetailSelect.className = 'land-adjustment-select-detail';
-    operationRow.append(unitSelect, unitDetailSelect);
+    operationRow.append(perLabel, unitSelect, unitDetailSelect);
 
     const syncValueUI = () => {
       const isMultiply = adjustment.operation === 'multiply';

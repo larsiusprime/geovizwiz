@@ -257,6 +257,15 @@ export function fitBoundsInVisibleMapArea(
   }
 
   const padding = getVisibleMapPadding({ inset: options.inset ?? 24 });
+  const transform = (S.map as any).transform;
+  debugLog('fitBounds map transform snapshot', {
+    width: transform?.width,
+    height: transform?.height,
+    center: transform?.center,
+    zoom: transform?.zoom,
+    pitch: transform?.pitch,
+    bearing: transform?.bearing,
+  });
 
   let normalizedBounds: maplibregl.LngLatBounds;
   try {
@@ -300,9 +309,59 @@ export function fitBoundsInVisibleMapArea(
       padding,
       duration: options.duration ?? 700,
       maxZoom: options.maxZoom,
+      currentPitch: S.map.getPitch(),
+      currentBearing: S.map.getBearing(),
       error,
     });
-    return false;
+
+    // Fallback path: compute camera with pitch=0 to avoid known fitBounds failures
+    // in highly pitched views + asymmetric padding, then ease to that camera.
+    try {
+      const fallbackCamera = S.map.cameraForBounds(normalizedBounds, {
+        padding,
+        maxZoom: options.maxZoom,
+        bearing: S.map.getBearing(),
+        pitch: 0,
+      });
+
+      const fallbackCenter = fallbackCamera?.center;
+      const fallbackZoom = fallbackCamera?.zoom;
+      const isFallbackValid = Boolean(fallbackCenter)
+        && Number.isFinite(fallbackCenter.lng)
+        && Number.isFinite(fallbackCenter.lat)
+        && Number.isFinite(fallbackZoom);
+
+      if (!isFallbackValid) {
+        console.error('[map-viewport] fallback camera invalid', { fallbackCamera, padding, sw, ne });
+        return false;
+      }
+
+      console.warn('[map-viewport] fitBounds fallback engaged (pitch flattened to 0)', {
+        sw,
+        ne,
+        padding,
+        fallbackCenter,
+        fallbackZoom,
+      });
+
+      S.map.easeTo({
+        center: fallbackCenter,
+        zoom: fallbackZoom,
+        bearing: S.map.getBearing(),
+        pitch: 0,
+        duration: options.duration ?? 700,
+        essential: options.essential ?? true,
+      });
+      return true;
+    } catch (fallbackError) {
+      console.error('[map-viewport] fitBounds fallback also failed', {
+        sw,
+        ne,
+        padding,
+        fallbackError,
+      });
+      return false;
+    }
   }
   return true;
 }

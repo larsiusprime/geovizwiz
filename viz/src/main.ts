@@ -501,8 +501,12 @@ const compFinderControlsEl = document.getElementById('compFinderControls') as HT
 const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
 const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
 const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
+const compFinderUseDistance = document.getElementById('compFinderUseDistance') as HTMLInputElement;
 const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
 const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits') as HTMLSelectElement;
+const compFinderUseSelection = document.getElementById('compFinderUseSelection') as HTMLInputElement;
+const compFinderCriteriaThresholdError = document.getElementById('compFinderCriteriaThresholdError') as HTMLDivElement;
+const compFinderCriteriaWidgets = document.getElementById('compFinderCriteriaWidgets') as HTMLDivElement;
 const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaTableBody') as HTMLTableSectionElement;
 const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
 const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
@@ -1126,8 +1130,12 @@ initTimeAdjustmentElements({
 initCompFinderElements({
   panel: compFinderControlsEl,
   dataSourceSelect: compFinderDataSourceSelect,
+  distanceEnabledInput: compFinderUseDistance,
   distanceInput: compFinderDistanceInput,
   distanceUnitsSelect: compFinderDistanceUnits,
+  selectionEnabledInput: compFinderUseSelection,
+  thresholdError: compFinderCriteriaThresholdError,
+  criteriaWidgets: compFinderCriteriaWidgets,
   criteriaTableBody: compFinderCriteriaTableBody,
   addCriterionButton: compFinderAddCriterion,
   refreshButton: compFinderRefresh,

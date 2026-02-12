@@ -26,8 +26,12 @@ type CompRow = {
 type Elements = {
   panel: HTMLDivElement;
   dataSourceSelect: HTMLSelectElement;
+  distanceEnabledInput: HTMLInputElement;
   distanceInput: HTMLInputElement;
   distanceUnitsSelect: HTMLSelectElement;
+  selectionEnabledInput: HTMLInputElement;
+  thresholdError: HTMLDivElement;
+  criteriaWidgets: HTMLDivElement;
   criteriaTableBody: HTMLTableSectionElement;
   addCriterionButton: HTMLButtonElement;
   refreshButton: HTMLButtonElement;
@@ -132,7 +136,7 @@ function updateDistanceOverlay() {
     clearDistanceOverlay();
     return;
   }
-  const radiusMeters = getDistanceLimitMeters();
+  const radiusMeters = els.distanceEnabledInput.checked ? getDistanceLimitMeters() : null;
   if (!radiusMeters) {
     clearDistanceOverlay();
     return;
@@ -174,10 +178,16 @@ function getDataStoreForSubject(): DataStore | null {
   return getDataStoreById(subject.dataStoreId);
 }
 
+function getCompLayer(): LayerState | null {
+  const layerId = els.dataSourceSelect.value || subject?.layerId;
+  if (!layerId) return null;
+  return getLayerById(layerId);
+}
+
 function getCompDataStore(): DataStore | null {
-  const id = els.dataSourceSelect.value || subject?.dataStoreId;
-  if (!id) return null;
-  return getDataStoreById(id);
+  const layer = getCompLayer();
+  if (!layer) return null;
+  return getDataStoreById(layer.dataStoreId);
 }
 
 function ensureMarker(elClass: string): HTMLDivElement {
@@ -252,14 +262,6 @@ function updateSubjectMarker() {
   subjectMarker.setLngLat(subject.center).addTo(S.map);
 }
 
-function getFirstLayerIdForDataStore(dataStoreId: string): string | null {
-  for (const layerId of S.layerOrder) {
-    const layer = getLayerById(layerId);
-    if (layer?.dataStoreId === dataStoreId) return layerId;
-  }
-  return null;
-}
-
 function updateCompMarkers() {
   clearCompMarkers();
   if (!isMenuVisible) return;
@@ -271,7 +273,7 @@ function updateCompMarkers() {
       .addTo(S.map);
     marker.getElement().addEventListener('click', (event) => {
       event.stopPropagation();
-      const targetLayerId = getFirstLayerIdForDataStore(els.dataSourceSelect.value || subject?.dataStoreId || '');
+      const targetLayerId = els.dataSourceSelect.value || subject?.layerId;
       if (targetLayerId) setCompFinderSubject(comp.feature, targetLayerId);
     });
     compMarkers.set(comp.id, marker);
@@ -301,7 +303,7 @@ function distanceMeters(a: [number, number], b: [number, number]): number {
 
 function getDistanceLimitMeters(): number | null {
   const distanceValue = numOrNull(els.distanceInput.value);
-  if (!distanceValue || distanceValue <= 0) return null;
+  if (distanceValue === null || distanceValue < 0) return null;
   const unit = els.distanceUnitsSelect.value;
   const unitToMeters: Record<string, number> = {
     mi: 1609.344,
@@ -822,15 +824,29 @@ function expandPanelForCompsIfNeeded() {
 
 async function findComps() {
   if (!subject) return;
+  if (!hasAnyThresholdEnabled()) {
+    comps = [];
+    currentPage = 1;
+    hasAttemptedFind = true;
+    setCriteriaDirty(false);
+    renderCompsUI();
+    updateMapArtifacts();
+    return;
+  }
+
+  const compLayer = getCompLayer();
   const compStore = getCompDataStore();
-  if (!compStore?.geojson) return;
+  if (!compLayer || !compStore?.geojson) return;
 
   setFinding(true);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
   const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
   const subjectCenter = subject.center;
-  const distanceLimit = getDistanceLimitMeters();
+  const useDistance = els.distanceEnabledInput.checked;
+  const useSelection = els.selectionEnabledInput.checked;
+  const distanceLimit = useDistance ? getDistanceLimitMeters() : null;
+  const selectedParcels = compLayer.selectedParcels;
   const subjectParcelId = subject.parcelId;
 
   comps = [];
@@ -839,11 +855,18 @@ async function findComps() {
     const compCenter = getFeatureCenter(feature);
     if (!compCenter) continue;
     const parcelId = String(getFieldValue(feature, compStore.parcelIdField) ?? '');
+    const featureId = feature.id === undefined || feature.id === null ? null : String(feature.id);
     if (parcelId && subjectParcelId && parcelId === subjectParcelId) continue;
-    if (distanceLimit) {
+
+    if (useDistance && distanceLimit !== null) {
       const dist = distanceMeters(subjectCenter, compCenter);
       if (dist > distanceLimit) continue;
     }
+
+    if (useSelection) {
+      if (!featureId || !selectedParcels.has(featureId)) continue;
+    }
+
     if (!passesCriteria(feature)) continue;
 
     const deltas = criteriaFields.map((entry) => {
@@ -959,19 +982,23 @@ function refreshDataSources() {
   els.dataSourceSelect.innerHTML = '';
   const placeholder = document.createElement('option');
   placeholder.value = '';
-  placeholder.textContent = 'Choose data source';
+  placeholder.textContent = 'Choose layer';
   placeholder.disabled = true;
   placeholder.selected = true;
   els.dataSourceSelect.appendChild(placeholder);
-  S.dataStoreOrder.forEach((id) => {
-    const store = getDataStoreById(id);
-    if (!store) return;
+  S.layerOrder.forEach((layerId) => {
+    const layer = getLayerById(layerId);
+    if (!layer) return;
     const option = document.createElement('option');
-    option.value = id;
-    option.textContent = store.name;
+    option.value = layer.id;
+    option.textContent = layer.name;
     els.dataSourceSelect.appendChild(option);
   });
-  if (subject?.dataStoreId) els.dataSourceSelect.value = subject.dataStoreId;
+  if (subject?.layerId && S.layers.has(subject.layerId)) {
+    els.dataSourceSelect.value = subject.layerId;
+  } else if (S.layerOrder.length > 0) {
+    els.dataSourceSelect.value = S.layerOrder[0];
+  }
 }
 
 function syncCriteriaFields() {
@@ -1025,12 +1052,28 @@ function ensureDefaultCriteria(store: DataStore) {
   });
 }
 
+function hasAnyThresholdEnabled() {
+  return els.distanceEnabledInput.checked || els.selectionEnabledInput.checked;
+}
+
+function updateThresholdUI() {
+  const hasSubject = Boolean(subject);
+  const hasThreshold = hasAnyThresholdEnabled();
+  const showError = hasSubject && !hasThreshold;
+
+  els.distanceInput.disabled = !els.distanceEnabledInput.checked;
+  els.distanceUnitsSelect.disabled = !els.distanceEnabledInput.checked;
+  els.thresholdError.style.display = showError ? 'block' : 'none';
+  els.criteriaWidgets.style.display = showError ? 'none' : 'block';
+  els.criteriaCompsDivider.style.display = hasSubject && !showError ? 'block' : 'none';
+  els.compsSection.style.display = hasSubject && !showError ? 'grid' : 'none';
+}
+
 function updateEmptyStateUI() {
   const hasSubject = Boolean(subject);
   els.emptyState.style.display = hasSubject ? 'none' : 'block';
   els.criteriaSection.style.display = hasSubject ? 'grid' : 'none';
-  els.criteriaCompsDivider.style.display = hasSubject ? 'block' : 'none';
-  els.compsSection.style.display = hasSubject ? 'grid' : 'none';
+  updateThresholdUI();
   updateNoCompsIndicator();
 }
 
@@ -1072,6 +1115,8 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
 
   if (!els.distanceInput.value) els.distanceInput.value = '1';
   if (!els.distanceUnitsSelect.value) els.distanceUnitsSelect.value = 'mi';
+  els.distanceEnabledInput.checked = true;
+  els.selectionEnabledInput.checked = false;
   els.distanceInput.value = '1';
   els.distanceUnitsSelect.value = 'mi';
 
@@ -1108,6 +1153,15 @@ export function initCompFinderElements(elements: Elements) {
     resetComps();
   });
 
+  els.distanceEnabledInput.addEventListener('change', () => {
+    setCriteriaDirty(true);
+    updateEmptyStateUI();
+    updateDistanceOverlay();
+  });
+  els.selectionEnabledInput.addEventListener('change', () => {
+    setCriteriaDirty(true);
+    updateEmptyStateUI();
+  });
   els.distanceInput.addEventListener('input', () => {
     setCriteriaDirty(true);
     updateDistanceOverlay();

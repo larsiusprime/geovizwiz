@@ -1480,9 +1480,28 @@
 
     .comp-finder-row.comp-finder-criteria-main {
       display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+      grid-template-columns: auto minmax(0, 1fr);
       align-items: center;
       gap: 6px;
+    }
+
+    .comp-finder-row.comp-finder-threshold-row {
+      display: grid;
+      grid-template-columns: auto auto auto auto;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+
+    .comp-finder-row.comp-finder-threshold-row label {
+      font-weight: 400;
+    }
+
+    #compFinderCriteriaThresholdError {
+      margin-top: 8px;
+      color: #b91c1c;
+      font-size: 12px;
+      font-weight: 600;
     }
 
     #compFinderDataSource {
@@ -2293,31 +2312,41 @@
         </div>
         <div id="compFinderCriteriaBody" class="comp-finder-section-body">
           <div class="comp-finder-row comp-finder-criteria-main">
-            <label for="compFinderDataSource">Data source:</label>
+            <label for="compFinderDataSource">Layer:</label>
             <select id="compFinderDataSource">
-              <option value="" selected>Choose data source</option>
+              <option value="" selected>Choose layer</option>
             </select>
-            <label for="compFinderDistance">Within:</label>
+          </div>
+          <div class="comp-finder-row comp-finder-threshold-row">
+            <input id="compFinderUseDistance" type="checkbox" checked />
+            <label for="compFinderUseDistance">Within:</label>
             <input id="compFinderDistance" type="number" inputmode="decimal" step="0.25" />
             <select id="compFinderDistanceUnits">
               <option value="mi">mi</option>
               <option value="km">km</option>
             </select>
           </div>
-          <table class="comp-finder-table">
-            <thead>
-              <tr>
-                <th>Field</th>
-                <th>Subject</th>
-                <th>Tolerance</th>
-                <th class="center">%</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody id="compFinderCriteriaTableBody"></tbody>
-          </table>
-          <div style="display: flex; justify-content: flex-end;">
-            <button id="compFinderAddCriterion" type="button" class="land-schedule-button">add criterion</button>
+          <div class="comp-finder-row comp-finder-threshold-row">
+            <input id="compFinderUseSelection" type="checkbox" />
+            <label for="compFinderUseSelection">Within selection</label>
+          </div>
+          <div id="compFinderCriteriaThresholdError" style="display:none;">Please check either the distance threshold, the selection threshold, or both.</div>
+          <div id="compFinderCriteriaWidgets">
+            <table class="comp-finder-table">
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Subject</th>
+                  <th>Tolerance</th>
+                  <th class="center">%</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="compFinderCriteriaTableBody"></tbody>
+            </table>
+            <div style="display: flex; justify-content: flex-end;">
+              <button id="compFinderAddCriterion" type="button" class="land-schedule-button">add criterion</button>
+            </div>
           </div>
         </div>
       </div>

@@ -1,10 +1,9 @@
 /**
  * Land-schedule panel logic extracted from main.ts.
  *
- * Manages field/value selectors and per-value land schedule tables.
+ * Manages land schedule tables and adjustments.
  */
-import { S, LAND_SCHEDULE_DEFAULT_KEY, LAND_SCHEDULE_DEFAULT_LABEL } from './state';
-import { getCategoricalValues } from './filters';
+import { S } from './state';
 import { setFiltersContext, cloneFilters, invalidateFiltersContextIf } from './filters';
 import type {
   FilterRule,
@@ -53,13 +52,11 @@ const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 /*  DOM element references (set once via initLandScheduleElements)     */
 /* ------------------------------------------------------------------ */
 
-let landScheduleFieldSelect: HTMLSelectElement;
-let landScheduleValueSelect: HTMLSelectElement;
-let landScheduleValueRow: HTMLDivElement;
 let landScheduleTableSelect: HTMLSelectElement;
 let landScheduleTableSelectRow: HTMLDivElement;
 let landScheduleAddTableButton: HTMLButtonElement;
 let landScheduleTableContainer: HTMLDivElement;
+let landScheduleCurveSection: HTMLDivElement;
 let landScheduleCurveChart: HTMLDivElement;
 let landScheduleTablesSection: HTMLDivElement;
 let landScheduleAdjustmentsSection: HTMLDivElement;
@@ -70,26 +67,22 @@ let landScheduleFilterButton: HTMLButtonElement | null = null;
 let showFiltersPanel: (() => void) | null = null;
 
 export function initLandScheduleElements(els: {
-  landScheduleFieldSelect: HTMLSelectElement;
-  landScheduleValueSelect: HTMLSelectElement;
-  landScheduleValueRow: HTMLDivElement;
   landScheduleTableSelect: HTMLSelectElement;
   landScheduleTableSelectRow: HTMLDivElement;
   landScheduleAddTableButton: HTMLButtonElement;
   landScheduleTableContainer: HTMLDivElement;
+  landScheduleCurveSection: HTMLDivElement;
   landScheduleCurveChart: HTMLDivElement;
   landScheduleTablesSection: HTMLDivElement;
   landScheduleAdjustmentsSection: HTMLDivElement;
   landScheduleAdjustmentsContainer: HTMLDivElement;
   landScheduleAddAdjustmentButton: HTMLButtonElement;
 }) {
-  landScheduleFieldSelect = els.landScheduleFieldSelect;
-  landScheduleValueSelect = els.landScheduleValueSelect;
-  landScheduleValueRow = els.landScheduleValueRow;
   landScheduleTableSelect = els.landScheduleTableSelect;
   landScheduleTableSelectRow = els.landScheduleTableSelectRow;
   landScheduleAddTableButton = els.landScheduleAddTableButton;
   landScheduleTableContainer = els.landScheduleTableContainer;
+  landScheduleCurveSection = els.landScheduleCurveSection;
   landScheduleCurveChart = els.landScheduleCurveChart;
   landScheduleTablesSection = els.landScheduleTablesSection;
   landScheduleAdjustmentsSection = els.landScheduleAdjustmentsSection;
@@ -105,34 +98,15 @@ export function initLandScheduleCallbacks(cbs: { showFiltersPanel?: () => void }
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
-function getLandScheduleEntry(field: string, valueKey: string): LandScheduleEntry {
-  let fieldMap = S.landScheduleStore.get(field);
-  if (!fieldMap) {
-    fieldMap = new Map();
-    S.landScheduleStore.set(field, fieldMap);
-  }
-  let entry = fieldMap.get(valueKey);
-  if (!entry) {
-    entry = {
+function getCurrentEntry(): LandScheduleEntry {
+  if (!S.landScheduleStore) {
+    S.landScheduleStore = {
       tables: [],
       activeTableId: null,
       adjustments: [],
     };
-    fieldMap.set(valueKey, entry);
   }
-  return entry;
-}
-
-function getCurrentEntry(): LandScheduleEntry | null {
-  if (!S.currentLandScheduleField || !S.currentLandScheduleValue) return null;
-  return getLandScheduleEntry(S.currentLandScheduleField, S.currentLandScheduleValue);
-}
-
-function getAvailableLandScheduleFields(): string[] {
-  if (!S.currentGeoJSON) return [];
-  return S.chosenCategoricalFields.filter(k =>
-    S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
+  return S.landScheduleStore;
 }
 
 function parseOptionalNumber(value: string): number | null {
@@ -484,7 +458,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   filterButton.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions...`;
   landScheduleFilterButton = filterButton;
   updateLandScheduleFilterButtonState(activeTable);
-  const landScheduleContextKey = `${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:${activeTable.id}`;
+  const landScheduleContextKey = `table:${activeTable.id}`;
   filterButton.addEventListener('click', () => {
     setFiltersContext({
       type: 'landSchedule',
@@ -495,7 +469,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
         activeTable.filterInvert = filterInvert;
         updateLandScheduleFilterButtonState(activeTable);
       },
-      label: `Land schedule: ${S.currentLandScheduleField ?? '—'} = ${S.currentLandScheduleValue ?? '—'} / ${activeTable.name || 'Untitled table'}`,
+      label: `Land schedule / ${activeTable.name || 'Untitled table'}`,
       key: landScheduleContextKey,
     });
     showFiltersPanel?.();
@@ -648,7 +622,7 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     conditionsBtn.title = 'Conditions';
     conditionsBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions`;
     updateAdjustmentFilterButtonState(conditionsBtn, adjustment);
-    const adjustmentContextKey = `adj:${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:${adjustment.id}`;
+    const adjustmentContextKey = `adj:${adjustment.id}`;
     conditionsBtn.addEventListener('click', () => {
       setFiltersContext({
         type: 'landSchedule',
@@ -659,7 +633,7 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
           adjustment.filterInvert = filterInvert;
           updateAdjustmentFilterButtonState(conditionsBtn, adjustment);
         },
-        label: `Land schedule adjustment: ${S.currentLandScheduleField ?? '—'} = ${S.currentLandScheduleValue ?? '—'} / ${adjustment.name || 'Untitled adjustment'}`,
+        label: `Land schedule adjustment / ${adjustment.name || 'Untitled adjustment'}`,
         key: adjustmentContextKey,
       });
       showFiltersPanel?.();
@@ -779,34 +753,6 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 /*  Exported functions                                                */
 /* ------------------------------------------------------------------ */
 
-export function updateLandScheduleValueOptions() {
-  landScheduleValueSelect.replaceChildren();
-
-  if (!S.currentLandScheduleField) {
-    landScheduleValueRow.style.display = 'none';
-    landScheduleValueSelect.disabled = true;
-    S.currentLandScheduleValue = null;
-    renderLandScheduleTables();
-    return;
-  }
-
-  landScheduleValueSelect.appendChild(new Option(LAND_SCHEDULE_DEFAULT_LABEL, LAND_SCHEDULE_DEFAULT_KEY));
-  const values = getCategoricalValues(S.currentLandScheduleField);
-  values.forEach(value => landScheduleValueSelect.appendChild(new Option(value, value)));
-
-  landScheduleValueRow.style.display = 'flex';
-  landScheduleValueSelect.disabled = false;
-
-  if (S.currentLandScheduleValue && (S.currentLandScheduleValue === LAND_SCHEDULE_DEFAULT_KEY || values.includes(S.currentLandScheduleValue))) {
-    landScheduleValueSelect.value = S.currentLandScheduleValue;
-  } else {
-    landScheduleValueSelect.value = LAND_SCHEDULE_DEFAULT_KEY;
-    S.currentLandScheduleValue = LAND_SCHEDULE_DEFAULT_KEY;
-  }
-
-  renderLandScheduleTables();
-}
-
 export function renderLandScheduleTables() {
   const entry = getCurrentEntry();
   landScheduleTableContainer.replaceChildren();
@@ -816,24 +762,13 @@ export function renderLandScheduleTables() {
   invalidateFiltersContextIf(context => {
     if (context.type !== 'landSchedule') return false;
     if (!entry) return true;
-    const baseKey = `${S.currentLandScheduleField ?? ''}:${S.currentLandScheduleValue ?? ''}:`;
     if (context.key?.startsWith('adj:')) {
-      return !context.key.startsWith(`adj:${baseKey}`);
+      return !entry.adjustments.some(adjustment => `adj:${adjustment.id}` === context.key);
     }
     const activeId = entry.activeTableId ?? '';
-    const expectedKey = `${baseKey}${activeId}`;
+    const expectedKey = `table:${activeId}`;
     return context.key !== expectedKey;
   });
-
-  if (!entry) {
-    landScheduleTablesSection.style.display = 'none';
-    landScheduleTableSelectRow.style.display = 'none';
-    landScheduleAddTableButton.disabled = true;
-    landScheduleAdjustmentsSection.style.display = 'none';
-    landScheduleAddAdjustmentButton.disabled = true;
-    updateLandScheduleCurve(null);
-    return;
-  }
 
   landScheduleTablesSection.style.display = 'grid';
   landScheduleAddTableButton.disabled = false;
@@ -843,9 +778,11 @@ export function renderLandScheduleTables() {
   if (entry.tables.length === 0) {
     landScheduleTableSelectRow.style.display = 'none';
     landScheduleTableContainer.appendChild(landScheduleAddTableButton);
+    landScheduleCurveSection.style.display = 'none';
     updateLandScheduleCurve(null);
   } else {
     landScheduleTableSelectRow.style.display = 'flex';
+    landScheduleCurveSection.style.display = '';
     renderTableSelectOptions(entry);
     renderActiveTable(entry);
   }
@@ -855,7 +792,6 @@ export function renderLandScheduleTables() {
 
 export function addLandScheduleTable() {
   const entry = getCurrentEntry();
-  if (!entry) return;
   const nextIndex = entry.tables.length + 1;
   const newTable: LandScheduleTable = {
     id: `table-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -873,7 +809,6 @@ export function addLandScheduleTable() {
 
 export function addLandScheduleAdjustment() {
   const entry = getCurrentEntry();
-  if (!entry) return;
   const nextIndex = entry.adjustments.length + 1;
   const newAdjustment: LandScheduleAdjustment = {
     id: `adj-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
@@ -891,38 +826,10 @@ export function addLandScheduleAdjustment() {
 
 export function setActiveLandScheduleTable(tableId: string | null) {
   const entry = getCurrentEntry();
-  if (!entry) return;
   entry.activeTableId = tableId;
   renderLandScheduleTables();
 }
 
 export function refreshLandSchedulePanel() {
-  landScheduleFieldSelect.replaceChildren();
-  const availableFields = getAvailableLandScheduleFields();
-
-  if (!availableFields.length) {
-    landScheduleFieldSelect.appendChild(new Option('No categorical fields', ''));
-    landScheduleFieldSelect.value = '';
-    landScheduleFieldSelect.disabled = true;
-    S.currentLandScheduleField = null;
-    S.currentLandScheduleValue = null;
-    updateLandScheduleValueOptions();
-    return;
-  }
-
-  landScheduleFieldSelect.disabled = false;
-  const placeholder = new Option('Choose a field', '');
-  placeholder.disabled = true;
-  landScheduleFieldSelect.appendChild(placeholder);
-  availableFields.forEach(field => landScheduleFieldSelect.appendChild(new Option(field, field)));
-
-  if (S.currentLandScheduleField && availableFields.includes(S.currentLandScheduleField)) {
-    landScheduleFieldSelect.value = S.currentLandScheduleField;
-  } else {
-    landScheduleFieldSelect.value = '';
-    S.currentLandScheduleField = null;
-    S.currentLandScheduleValue = null;
-  }
-
-  updateLandScheduleValueOptions();
+  renderLandScheduleTables();
 }

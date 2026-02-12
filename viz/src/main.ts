@@ -59,7 +59,7 @@ import {
   createWindowManager, initWindowCallbacks, initPositionElements,
   positionSettingsPanel, positionStatisticsPanel,
   positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel, positionTimeAdjustmentPanel,
-  updateFiltersPanelLayout, refreshWindowMinHeight,
+  updateFiltersPanelLayout, refreshWindowMinHeight, refreshWindowMinWidth,
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
   type WindowManager
@@ -125,9 +125,7 @@ import {
   initLandScheduleCallbacks,
   initLandScheduleElements,
   refreshLandSchedulePanel,
-  renderLandScheduleTables,
   setActiveLandScheduleTable,
-  updateLandScheduleValueOptions,
 } from './land-schedule';
 
 import {
@@ -412,9 +410,6 @@ const landScheduleControlsEl = document.getElementById('landScheduleControls') a
 const timeAdjustmentControlsEl = document.getElementById('timeAdjustmentControls') as HTMLDivElement;
 const timeAdjustmentContent = document.getElementById('timeAdjustmentContent') as HTMLDivElement;
 const landScheduleContent = document.getElementById('landScheduleContent') as HTMLDivElement;
-const landScheduleFieldSelect = document.getElementById('landScheduleFieldSelect') as HTMLSelectElement;
-const landScheduleValueRow = document.getElementById('landScheduleValueRow') as HTMLDivElement;
-const landScheduleValueSelect = document.getElementById('landScheduleValueSelect') as HTMLSelectElement;
 const landScheduleTableSelect = document.getElementById('landScheduleTableSelect') as HTMLSelectElement;
 const landScheduleTableSelectRow = document.getElementById('landScheduleTableSelectRow') as HTMLDivElement;
 const landScheduleAddTableButton = document.getElementById('landScheduleAddTable') as HTMLButtonElement;
@@ -422,6 +417,7 @@ const landScheduleTableContainer = document.getElementById('landScheduleTableCon
 const landScheduleTablesSection = document.getElementById('landScheduleTablesSection') as HTMLDivElement;
 const landScheduleTablesToggle = document.getElementById('landScheduleTablesToggle') as HTMLButtonElement;
 const landScheduleTablesContent = document.getElementById('landScheduleTablesContent') as HTMLDivElement;
+const landScheduleCurveSection = document.getElementById('landScheduleCurveSection') as HTMLDivElement;
 const landScheduleCurveToggle = document.getElementById('landScheduleCurveToggle') as HTMLButtonElement;
 const landScheduleCurveContent = document.getElementById('landScheduleCurveContent') as HTMLDivElement;
 const landScheduleCurveChart = document.getElementById('landScheduleCurveChart') as HTMLDivElement;
@@ -598,6 +594,7 @@ const setLandScheduleAdjustmentsCollapsed = (collapsed: boolean) => {
   landScheduleAdjustmentsContent.style.display = collapsed ? 'none' : 'grid';
   landScheduleAdjustmentsToggle.classList.toggle('is-collapsed', collapsed);
   landScheduleAdjustmentsToggle.title = collapsed ? 'Expand Adjustments' : 'Collapse Adjustments';
+  refreshWindowMinWidth(landScheduleControlsEl);
   refreshWindowMinHeight(landScheduleControlsEl);
 };
 
@@ -1070,13 +1067,11 @@ initScatterplotCallbacks({
 
 // Wire DOM elements into the land-schedule module
 initLandScheduleElements({
-  landScheduleFieldSelect,
-  landScheduleValueSelect,
-  landScheduleValueRow,
   landScheduleTableSelect,
   landScheduleTableSelectRow,
   landScheduleAddTableButton,
   landScheduleTableContainer,
+  landScheduleCurveSection,
   landScheduleCurveChart,
   landScheduleTablesSection,
   landScheduleAdjustmentsSection,
@@ -2356,27 +2351,19 @@ btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
 btnMinimizeCompFinder.addEventListener('click', minimizeCompFinder);
 
-landScheduleFieldSelect.addEventListener('change', () => {
-  S.currentLandScheduleField = landScheduleFieldSelect.value || null;
-  S.currentLandScheduleValue = null;
-  updateLandScheduleValueOptions();
-});
-
-landScheduleValueSelect.addEventListener('change', () => {
-  S.currentLandScheduleValue = landScheduleValueSelect.value || null;
-  renderLandScheduleTables();
-});
-
 landScheduleAddTableButton.addEventListener('click', () => {
   addLandScheduleTable();
+  refreshWindowMinWidth(landScheduleControlsEl);
 });
 
 landScheduleAddAdjustmentButton.addEventListener('click', () => {
   addLandScheduleAdjustment();
+  refreshWindowMinWidth(landScheduleControlsEl);
 });
 
 landScheduleTableSelect.addEventListener('change', () => {
   setActiveLandScheduleTable(landScheduleTableSelect.value || null);
+  refreshWindowMinWidth(landScheduleControlsEl);
 });
 
 filtersSaveToggle.addEventListener('click', () => {

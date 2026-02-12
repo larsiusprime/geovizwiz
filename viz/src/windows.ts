@@ -205,6 +205,12 @@ export function refreshWindowMinHeight(element: HTMLElement) {
   ensureWindowMinHeight(element);
 }
 
+export function refreshWindowMinWidth(element: HTMLElement) {
+  const minWidth = getMinWindowWidth(element);
+  const contentWidth = element.scrollWidth;
+  element.style.width = `${Math.max(minWidth, contentWidth, element.offsetWidth)}px`;
+}
+
 function getMapRect() {
   const mapEl = document.getElementById('map');
   return mapEl?.getBoundingClientRect() ?? {

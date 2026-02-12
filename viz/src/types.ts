@@ -88,8 +88,6 @@ export type LandScheduleEntry = {
   adjustments: LandScheduleAdjustment[];
 };
 
-export type LandScheduleStore = Map<string, Map<string, LandScheduleEntry>>;
-
 export type TimeAdjustmentGranularity = 'year' | 'peak' | 'quarter' | 'month';
 export type TimeAdjustmentMethod = 'median' | 'mean' | 'regression';
 export type TimeAdjustmentDisplayMode = 'improved' | 'vacant';
@@ -292,7 +290,14 @@ export type ProjectFileV1 = {
   dataSources: SerializedDataSource[];
   layers: SerializedLayer[];
   savedFilters: SavedFilterEntry[];
+  landSchedule?: SerializedLandSchedule;
   landSchedules?: SerializedLandScheduleEntry[];
+};
+
+export type SerializedLandSchedule = {
+  tables: SerializedLandScheduleTable[];
+  activeTableId: string | null;
+  adjustments: SerializedLandScheduleAdjustment[];
 };
 
 export type SerializedLandScheduleTable = {

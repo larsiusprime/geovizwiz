@@ -2497,7 +2497,7 @@
     </div>
   </div>
 
-  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 400px); min-width: 400px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+  <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 520px); min-width: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Land Schedule</div>
       <div class="window-actions">
@@ -2512,22 +2512,6 @@
       </div>
     </div>
     <div id="landScheduleContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
-      <div class="land-schedule-section">
-        <div class="land-schedule-subtitle">Land schedule field:</div>
-        <div class="land-schedule-row">
-          <select id="landScheduleFieldSelect">
-            <option value="" selected disabled>Choose a field</option>
-          </select>
-        </div>
-        <div class="land-schedule-subtitle">Value:</div>
-        <div id="landScheduleValueRow" class="land-schedule-row">
-          <select id="landScheduleValueSelect">
-            <option value="" selected disabled>Choose a value</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="divider"></div>
 
       <div id="landScheduleTablesSection" class="land-schedule-section">
         <div class="land-schedule-section-header">
@@ -2541,7 +2525,7 @@
           </div>
           <button id="landScheduleAddTable" type="button" class="land-schedule-button">new table</button>
           <div id="landScheduleTableContainer" style="display: grid; gap: 10px;"></div>
-          <div class="land-schedule-curve">
+          <div id="landScheduleCurveSection" class="land-schedule-curve">
             <div class="land-schedule-section-header">
               <button id="landScheduleCurveToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Curve">▼</button>
               <div class="land-schedule-subtitle">Curve</div>

@@ -9,7 +9,7 @@ import type {
   LayerState, DataStore, FilterRule, SavedFilterEntry,
   ParcelPatchMap, ColorMode, CategoricalColorMode, QualityMode,
   UpdateMode, SubjectMode, FilterMode, FilterActionMode,
-  LandScheduleStore, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator,
+  LandScheduleEntry, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator,
   TimeAdjustmentEntry, TimeAdjustmentSettings
 } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
@@ -146,9 +146,11 @@ export const S = {
   scatterHoveredParcelId: null as string | null,
 
   // --- Land schedule ---
-  landScheduleStore: new Map() as LandScheduleStore,
-  currentLandScheduleField: null as string | null,
-  currentLandScheduleValue: null as string | null,
+  landScheduleStore: {
+    tables: [],
+    activeTableId: null,
+    adjustments: [],
+  } as LandScheduleEntry,
   isUpdatingLandScheduleUI: false,
 
   // --- Time adjustment ---
@@ -211,8 +213,6 @@ export const S = {
 };
 
 // --- Constants (not mutable but shared) ---
-export const LAND_SCHEDULE_DEFAULT_KEY = '__default__';
-export const LAND_SCHEDULE_DEFAULT_LABEL = 'Default Schedule';
 
 export const NUMERIC_FILTER_OPERATORS: Array<{ value: NumericFilterOperator; label: string }> = [
   { value: 'lt', label: '<' },

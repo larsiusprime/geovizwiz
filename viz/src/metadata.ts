@@ -8,6 +8,7 @@ import type {
   ProjectFileV1,
   SerializedDataSource,
   SerializedLayer,
+  SerializedLandSchedule,
   SerializedLandScheduleEntry,
   SerializedLandScheduleAdjustment,
   SerializedLandScheduleTable
@@ -97,39 +98,31 @@ function serializeSavedFilters(): SavedFilterEntry[] {
   return result;
 }
 
-function serializeLandSchedules(): SerializedLandScheduleEntry[] {
-  const result: SerializedLandScheduleEntry[] = [];
-  S.landScheduleStore.forEach((valueMap, field) => {
-    valueMap.forEach((entry, valueKey) => {
-      const tables: SerializedLandScheduleTable[] = entry.tables.map(table => ({
-        id: table.id,
-        name: table.name,
-        unit: table.unit,
-        valueMode: table.valueMode,
-        rows: table.rows.map(row => ({ ...row })),
-        filters: cloneFilters(table.filters ?? []),
-        filterInvert: table.filterInvert ?? false,
-      }));
-      const adjustments: SerializedLandScheduleAdjustment[] = (entry.adjustments ?? []).map(adjustment => ({
-        id: adjustment.id,
-        name: adjustment.name,
-        operation: adjustment.operation,
-        sizeUnit: adjustment.sizeUnit,
-        sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
-        value: adjustment.value,
-        filters: cloneFilters(adjustment.filters ?? []),
-        filterInvert: adjustment.filterInvert ?? false,
-      }));
-      result.push({
-        field,
-        valueKey,
-        tables,
-        activeTableId: entry.activeTableId,
-        adjustments,
-      });
-    });
-  });
-  return result;
+function serializeLandSchedules(): SerializedLandSchedule {
+  const tables: SerializedLandScheduleTable[] = (S.landScheduleStore.tables ?? []).map(table => ({
+    id: table.id,
+    name: table.name,
+    unit: table.unit,
+    valueMode: table.valueMode,
+    rows: table.rows.map(row => ({ ...row })),
+    filters: cloneFilters(table.filters ?? []),
+    filterInvert: table.filterInvert ?? false,
+  }));
+  const adjustments: SerializedLandScheduleAdjustment[] = (S.landScheduleStore.adjustments ?? []).map(adjustment => ({
+    id: adjustment.id,
+    name: adjustment.name,
+    operation: adjustment.operation,
+    sizeUnit: adjustment.sizeUnit,
+    sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
+    value: adjustment.value,
+    filters: cloneFilters(adjustment.filters ?? []),
+    filterInvert: adjustment.filterInvert ?? false,
+  }));
+  return {
+    tables,
+    activeTableId: S.landScheduleStore.activeTableId,
+    adjustments,
+  };
 }
 
 export function exportProject() {
@@ -157,7 +150,7 @@ export function exportProject() {
     dataSources,
     layers: serializedLayers,
     savedFilters: serializeSavedFilters(),
-    landSchedules: serializeLandSchedules()
+    landSchedule: serializeLandSchedules()
   };
 
   const json = JSON.stringify(projectFile, null, 2);
@@ -179,6 +172,7 @@ function validateProjectFile(data: any): data is ProjectFileV1 {
   if (!Array.isArray(data.dataSources)) return false;
   if (!Array.isArray(data.layers)) return false;
   if (!Array.isArray(data.savedFilters)) return false;
+  if (data.landSchedule && typeof data.landSchedule !== 'object') return false;
   if (data.landSchedules && !Array.isArray(data.landSchedules)) return false;
   return true;
 }
@@ -266,7 +260,11 @@ export async function loadProjectFile(file: File) {
     S.layers.clear();
     S.layerOrder.length = 0;
     S.savedFiltersStore.clear();
-    S.landScheduleStore.clear();
+    S.landScheduleStore = {
+      tables: [],
+      activeTableId: null,
+      adjustments: [],
+    };
     S.currentLayerId = null;
     S.currentDataStoreId = null;
 
@@ -290,40 +288,66 @@ export async function loadProjectFile(file: File) {
       });
     });
 
-    if (projectData.landSchedules) {
-      projectData.landSchedules.forEach((entry: SerializedLandScheduleEntry) => {
-        let valueMap = S.landScheduleStore.get(entry.field);
-        if (!valueMap) {
-          valueMap = new Map();
-          S.landScheduleStore.set(entry.field, valueMap);
-        }
-        valueMap.set(entry.valueKey, {
-          tables: entry.tables.map(table => ({
-            id: table.id,
-            name: table.name,
-            unit: table.unit,
-            valueMode: table.valueMode ?? 'per-unit',
-            rows: table.rows.map(row => ({ ...row })),
-            filters: table.filters.map(f => ({ ...f })),
-            filterInvert: table.filterInvert ?? false,
-          })),
-          activeTableId: entry.activeTableId,
-          adjustments: (entry.adjustments ?? []).map(adjustment => ({
-            id: adjustment.id,
-            name: adjustment.name,
-            operation: adjustment.operation ?? 'add',
-            sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
-              ? 'per-land-area'
-              : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
-                ? 'per-frontage'
-                : adjustment.sizeUnit) ?? 'flat',
-            sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
-            value: adjustment.value ?? null,
-            filters: adjustment.filters.map(f => ({ ...f })),
-            filterInvert: adjustment.filterInvert ?? false,
-          })),
-        });
+    if (projectData.landSchedule) {
+      S.landScheduleStore = {
+        tables: (projectData.landSchedule.tables ?? []).map(table => ({
+          id: table.id,
+          name: table.name,
+          unit: table.unit,
+          valueMode: table.valueMode ?? 'per-unit',
+          rows: table.rows.map(row => ({ ...row })),
+          filters: (table.filters ?? []).map(f => ({ ...f })),
+          filterInvert: table.filterInvert ?? false,
+        })),
+        activeTableId: projectData.landSchedule.activeTableId ?? null,
+        adjustments: (projectData.landSchedule.adjustments ?? []).map(adjustment => ({
+          id: adjustment.id,
+          name: adjustment.name,
+          operation: adjustment.operation ?? 'add',
+          sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
+            ? 'per-land-area'
+            : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
+              ? 'per-frontage'
+              : adjustment.sizeUnit) ?? 'flat',
+          sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
+          value: adjustment.value ?? null,
+          filters: (adjustment.filters ?? []).map(f => ({ ...f })),
+          filterInvert: adjustment.filterInvert ?? false,
+        })),
+      };
+    } else if (projectData.landSchedules && projectData.landSchedules.length > 0) {
+      const merged = projectData.landSchedules.reduce((acc: SerializedLandSchedule, entry: SerializedLandScheduleEntry) => {
+        acc.tables.push(...entry.tables.map(table => ({
+          id: table.id,
+          name: table.name,
+          unit: table.unit,
+          valueMode: table.valueMode ?? 'per-unit',
+          rows: table.rows.map(row => ({ ...row })),
+          filters: (table.filters ?? []).map(f => ({ ...f })),
+          filterInvert: table.filterInvert ?? false,
+        })));
+        acc.adjustments.push(...(entry.adjustments ?? []).map(adjustment => ({
+          id: adjustment.id,
+          name: adjustment.name,
+          operation: adjustment.operation ?? 'add',
+          sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
+            ? 'per-land-area'
+            : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
+              ? 'per-frontage'
+              : adjustment.sizeUnit) ?? 'flat',
+          sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
+          value: adjustment.value ?? null,
+          filters: (adjustment.filters ?? []).map(f => ({ ...f })),
+          filterInvert: adjustment.filterInvert ?? false,
+        })));
+        acc.activeTableId = acc.activeTableId ?? entry.activeTableId ?? null;
+        return acc;
+      }, {
+        tables: [],
+        activeTableId: null,
+        adjustments: [],
       });
+      S.landScheduleStore = merged;
     }
 
     // Create or reuse data stores

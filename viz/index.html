@@ -546,7 +546,7 @@
       width: 64px;
       background: rgba(255, 255, 255, 0.95);
       border-right: 1px solid #ddd;
-      z-index: 25;
+      z-index: 2990;
       backdrop-filter: blur(4px);
       display: flex;
       flex-direction: column;
@@ -679,7 +679,7 @@
       gap: 2px;
       padding: 6px;
       min-width: 160px;
-      z-index: 30;
+      z-index: 2991;
     }
 
     .toolbar-submenu.show {
@@ -1487,14 +1487,24 @@
 
     .comp-finder-row.comp-finder-threshold-row {
       display: grid;
-      grid-template-columns: auto auto auto auto;
+      grid-template-columns: 16px auto max-content max-content;
       align-items: center;
       gap: 6px;
       margin-top: 4px;
+      justify-content: start;
     }
 
     .comp-finder-row.comp-finder-threshold-row label {
       font-weight: 400;
+    }
+
+    .comp-finder-row.comp-finder-threshold-row input[type="checkbox"] {
+      margin: 0;
+      justify-self: center;
+    }
+
+    .comp-finder-row.comp-finder-threshold-row label[for="compFinderUseSelection"] {
+      grid-column: 2 / 5;
     }
 
     #compFinderCriteriaThresholdError {
@@ -1512,11 +1522,13 @@
     #compFinderDistance {
       width: 72px !important;
       min-width: 0;
+      justify-self: start;
     }
 
     #compFinderDistanceUnits {
       width: 62px;
       min-width: 0;
+      justify-self: start;
     }
 
     .comp-finder-criteria-field-select {

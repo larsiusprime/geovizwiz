@@ -43,8 +43,8 @@ const ADJUSTMENT_UNIT_OPTIONS: Array<{ value: LandScheduleAdjustmentSizeUnit; la
 const IMPROVED_AREA_UNITS = ['sqft', 'sqm'] as const;
 const LAND_AREA_UNITS = ['sqft', 'sqm', 'acre', 'hectare'] as const;
 const FRONTAGE_UNITS = [
-  { value: 'front-foot', label: 'front foot' },
-  { value: 'front-meter', label: 'front meter' },
+  { value: 'front-foot', label: 'foot' },
+  { value: 'front-meter', label: 'meter' },
 ] as const;
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
@@ -463,13 +463,8 @@ function renderActiveTable(entry: LandScheduleEntry) {
   card.className = 'land-table-card';
   card.dataset.tableId = activeTable.id;
 
-  const deleteRow = document.createElement('div');
-  deleteRow.className = 'land-table-delete-bar';
-
   const header = document.createElement('div');
   header.className = 'land-table-header';
-  const nameLabel = document.createElement('label');
-  nameLabel.textContent = 'Name:';
   const nameInput = document.createElement('input');
   nameInput.type = 'text';
   nameInput.value = activeTable.name;
@@ -480,7 +475,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
       option.textContent = activeTable.name || 'Untitled table';
     }
   });
-  nameLabel.appendChild(nameInput);
+  
 
   const filterButton = document.createElement('button');
   filterButton.type = 'button';
@@ -521,8 +516,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
     renderLandScheduleTables();
   });
 
-  deleteRow.append(deleteBtn);
-  header.append(nameLabel, filterButton);
+  header.append(nameInput, filterButton, deleteBtn);
 
   const controls = document.createElement('div');
   controls.className = 'land-table-controls';
@@ -617,7 +611,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   });
   actions.append(landScheduleAddTableButton, addRowBtn);
 
-  card.append(deleteRow, header, controls, tableEl, actions);
+  card.append(header, controls, tableEl, actions);
   landScheduleTableContainer.appendChild(card);
 
   syncDerivedRowMins(activeTable, tbody);
@@ -641,16 +635,13 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 
     const header = document.createElement('div');
     header.className = 'land-adjustment-header';
-    const nameLabel = document.createElement('label');
-    nameLabel.textContent = 'Name:';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
     nameInput.value = adjustment.name;
     nameInput.addEventListener('input', () => {
       adjustment.name = nameInput.value;
     });
-    nameLabel.appendChild(nameInput);
-
+    
     const conditionsBtn = document.createElement('button');
     conditionsBtn.type = 'button';
     conditionsBtn.className = 'land-table-filter';
@@ -684,7 +675,7 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
       renderLandScheduleAdjustments(entry);
     });
 
-    header.append(nameLabel, conditionsBtn, deleteBtn);
+    header.append(nameInput, conditionsBtn, deleteBtn);
 
     const operationRow = document.createElement('div');
     operationRow.className = 'land-adjustment-row';
@@ -716,12 +707,17 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 
     const perLabel = document.createElement('span');
     perLabel.className = 'land-adjustment-per-label';
-    perLabel.textContent = 'per:';
-
+    perLabel.textContent = 'per: ';
+    
     const unitDetailSelect = document.createElement('select');
     unitDetailSelect.className = 'land-adjustment-select-detail';
-    operationRow.append(perLabel, unitSelect, unitDetailSelect);
-
+    perLabel.append(unitSelect);
+    const unitSpacer = document.createElement('span');
+    unitSpacer.textContent = '  ';
+    perLabel.append(unitSpacer);
+    perLabel.append(unitDetailSelect);
+    operationRow.append(perLabel);
+    
     const syncValueUI = () => {
       const isMultiply = adjustment.operation === 'multiply';
       valueWrap.classList.toggle('is-multiply', isMultiply);

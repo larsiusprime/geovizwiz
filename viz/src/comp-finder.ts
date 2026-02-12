@@ -289,6 +289,14 @@ function getFeatureCenter(feature: GeoJSON.Feature): [number, number] | null {
   return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
 }
 
+function isValidLngLat(coord: [number, number] | null | undefined): coord is [number, number] {
+  return Boolean(coord)
+    && Number.isFinite(coord[0])
+    && Number.isFinite(coord[1])
+    && Math.abs(coord[0]) <= 180
+    && Math.abs(coord[1]) <= 90;
+}
+
 function distanceMeters(a: [number, number], b: [number, number]): number {
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const R = 6371000;
@@ -644,15 +652,17 @@ function bounceCompMarker(comp: CompRow) {
   const marker = compMarkers.get(comp.id);
   if (!marker) return;
   const markerEl = marker.getElement();
-  markerEl.classList.remove('is-bouncing');
+  const pinEl = markerEl.querySelector('.pin-icon') as HTMLElement | null;
+  if (!pinEl) return;
+  pinEl.classList.remove('is-bouncing');
   // Force reflow so repeated clicks restart the animation.
-  void markerEl.offsetWidth;
-  markerEl.classList.add('is-bouncing');
+  void pinEl.offsetWidth;
+  pinEl.classList.add('is-bouncing');
 }
 
 function centerOnComp(comp: CompRow) {
   const center = getFeatureCenter(comp.feature);
-  if (!center) return;
+  if (!isValidLngLat(center)) return;
   bounceCompMarker(comp);
   centerOnLngLatInVisibleMapArea(center, { inset: 12, duration: 500 });
 }
@@ -933,10 +943,11 @@ async function findComps() {
 
 function handleZoomToComps() {
   if (!subject) return;
-  const centers: [number, number][] = [subject.center];
+  const centers: [number, number][] = [];
+  if (isValidLngLat(subject.center)) centers.push(subject.center);
   comps.forEach((row) => {
     const center = getFeatureCenter(row.feature);
-    if (center) centers.push(center);
+    if (isValidLngLat(center)) centers.push(center);
   });
   if (centers.length === 0) return;
 

@@ -8,6 +8,7 @@
 import maplibregl from 'maplibre-gl';
 import { S } from './state';
 import { generatePseudoRandomColor } from './rendering';
+import { fitBoundsInVisibleMapArea } from './map-viewport';
 import { numOrNull } from './utils.number';
 import {
   buildLayerVisibilityExpression,
@@ -473,7 +474,7 @@ export function zoomToScatterSelection() {
     (acc, coord) => acc.extend(coord),
     new maplibregl.LngLatBounds(coords[0], coords[0])
   );
-  S.map.fitBounds(bounds, { padding: 60, maxZoom: 17 });
+  fitBoundsInVisibleMapArea(bounds, { inset: 24, maxZoom: 17 });
 }
 
 export function initScatterplotMapLayers() {

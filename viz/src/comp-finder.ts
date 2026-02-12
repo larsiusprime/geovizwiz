@@ -6,6 +6,7 @@ import { S } from './state';
 import type { DataStore, LayerState } from './types';
 import { bbox } from './utils.geo';
 import { fmt, numOrNull } from './utils.number';
+import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map-viewport';
 
 type Criterion = {
   id: string;
@@ -639,6 +640,23 @@ function renderSortableRowLabel(label: string, fieldKey: string): HTMLElement {
   return button;
 }
 
+function centerOnComp(comp: CompRow) {
+  const center = getFeatureCenter(comp.feature);
+  if (!center) return;
+  centerOnLngLatInVisibleMapArea(center, { inset: 12, duration: 500 });
+}
+
+function buildCompColumnButton(label: string, comp: CompRow, titlePrefix = 'Center map on') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'comp-finder-comp-column-button';
+  button.textContent = label;
+  button.title = `${titlePrefix} ${comp.parcelId || 'comp parcel'}`;
+  button.setAttribute('aria-label', `${titlePrefix} ${comp.parcelId || 'comp parcel'}`);
+  button.addEventListener('click', () => centerOnComp(comp));
+  return button;
+}
+
 function renderCompsTable() {
   const comparisonFields = getComparisonFields();
   const visible = getVisibleComps();
@@ -671,7 +689,9 @@ function renderCompsTable() {
   head.append(removeTh, fieldTh, subjectTh);
   visible.forEach((_, idx) => {
     const th = document.createElement('th');
-    th.textContent = `Comp ${((currentPage - 1) * COMPS_PER_PAGE) + idx + 1}`;
+    const comp = visible[idx];
+    const label = `Comp ${((currentPage - 1) * COMPS_PER_PAGE) + idx + 1}`;
+    th.appendChild(buildCompColumnButton(label, comp, 'Center map on'));
     head.appendChild(th);
   });
   els.compsTableHead.appendChild(head);
@@ -687,7 +707,7 @@ function renderCompsTable() {
   idRow.append(idRemove, idField, idSubject);
   visible.forEach((comp) => {
     const td = document.createElement('td');
-    td.textContent = comp.parcelId || '—';
+    td.appendChild(buildCompColumnButton(comp.parcelId || '—', comp));
     idRow.appendChild(td);
   });
   els.compsTableBody.appendChild(idRow);
@@ -702,7 +722,7 @@ function renderCompsTable() {
   addrRow.append(addrRemove, addrField, addrSubject);
   visible.forEach((comp) => {
     const td = document.createElement('td');
-    td.textContent = comp.address || '—';
+    td.appendChild(buildCompColumnButton(comp.address || '—', comp));
     addrRow.appendChild(td);
   });
   els.compsTableBody.appendChild(addrRow);
@@ -744,18 +764,20 @@ function renderCompsTable() {
 
     visible.forEach((comp) => {
       const td = document.createElement('td');
+      let text = '—';
       if (entry.source === 'criteria') {
         const allFields = getComparisonFields().filter((f) => f.source === 'criteria');
         const deltaIndex = allFields.findIndex((f) => f.field === entry.field);
         const delta = comp.deltas[deltaIndex];
-        td.textContent = delta?.text ?? '—';
+        text = delta?.text ?? '—';
         if (delta?.error) td.title = delta.error;
         const cls = getDeltaClass(delta || {});
         if (cls) td.classList.add(cls);
       } else {
         const val = getFieldValue(comp.feature, entry.field);
-        td.textContent = val === null || val === undefined || val === '' ? '—' : (entry.type === 'numeric' ? fmt(val) : String(val));
+        text = val === null || val === undefined || val === '' ? '—' : (entry.type === 'numeric' ? fmt(val) : String(val));
       }
+      td.appendChild(buildCompColumnButton(text, comp));
       row.appendChild(td);
     });
 
@@ -901,7 +923,7 @@ function handleZoomToComps() {
   const features = [subject.feature, ...comps.map((row) => row.feature)];
   const bounds = bbox({ type: 'FeatureCollection', features });
   if (!bounds) return;
-  S.map.fitBounds([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { padding: 60, duration: 600 });
+  fitBoundsInVisibleMapArea([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { inset: 24, duration: 600 });
 }
 
 function buildExportRows() {

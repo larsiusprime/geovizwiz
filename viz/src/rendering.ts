@@ -24,6 +24,7 @@ import {
   getParcelId,
   addParcelToSelection, removeParcelFromSelection, clearAllSelections,
 } from './selection';
+import { fitBoundsInVisibleMapArea } from './map-viewport';
 
 /* ------------------------------------------------------------------ */
 /*  DOM element refs injected from main.ts via initRenderingElements  */
@@ -712,7 +713,7 @@ export function applyExtrusion() {
 
 export function fitToData(fc: GeoJSON.FeatureCollection) {
   const b = bbox(fc); if (!b) return;
-  S.map.fitBounds([[b[0], b[1]], [b[2], b[3]]], { padding: 40, duration: 800 });
+  fitBoundsInVisibleMapArea([[b[0], b[1]], [b[2], b[3]]], { inset: 16, duration: 800 });
 }
 
 const FAST_PR = window.devicePixelRatio;                  // normal speed

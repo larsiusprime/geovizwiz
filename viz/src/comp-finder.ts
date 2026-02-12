@@ -640,17 +640,30 @@ function renderSortableRowLabel(label: string, fieldKey: string): HTMLElement {
   return button;
 }
 
+function bounceCompMarker(comp: CompRow) {
+  const marker = compMarkers.get(comp.id);
+  if (!marker) return;
+  const markerEl = marker.getElement();
+  markerEl.classList.remove('is-bouncing');
+  // Force reflow so repeated clicks restart the animation.
+  void markerEl.offsetWidth;
+  markerEl.classList.add('is-bouncing');
+}
+
 function centerOnComp(comp: CompRow) {
   const center = getFeatureCenter(comp.feature);
   if (!center) return;
+  bounceCompMarker(comp);
   centerOnLngLatInVisibleMapArea(center, { inset: 12, duration: 500 });
 }
 
-function buildCompColumnButton(label: string, comp: CompRow, titlePrefix = 'Center map on') {
+function buildCompColumnButton(label: string, comp: CompRow, options?: { isHeader?: boolean; titlePrefix?: string }) {
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'comp-finder-comp-column-button';
+  if (options?.isHeader) button.classList.add('is-header');
   button.textContent = label;
+  const titlePrefix = options?.titlePrefix ?? 'Center map on';
   button.title = `${titlePrefix} ${comp.parcelId || 'comp parcel'}`;
   button.setAttribute('aria-label', `${titlePrefix} ${comp.parcelId || 'comp parcel'}`);
   button.addEventListener('click', () => centerOnComp(comp));
@@ -691,7 +704,7 @@ function renderCompsTable() {
     const th = document.createElement('th');
     const comp = visible[idx];
     const label = `Comp ${((currentPage - 1) * COMPS_PER_PAGE) + idx + 1}`;
-    th.appendChild(buildCompColumnButton(label, comp, 'Center map on'));
+    th.appendChild(buildCompColumnButton(label, comp, { isHeader: true, titlePrefix: 'Center map on' }));
     head.appendChild(th);
   });
   els.compsTableHead.appendChild(head);
@@ -920,10 +933,24 @@ async function findComps() {
 
 function handleZoomToComps() {
   if (!subject) return;
-  const features = [subject.feature, ...comps.map((row) => row.feature)];
-  const bounds = bbox({ type: 'FeatureCollection', features });
-  if (!bounds) return;
-  fitBoundsInVisibleMapArea([[bounds[0], bounds[1]], [bounds[2], bounds[3]]], { inset: 24, duration: 600 });
+  const centers: [number, number][] = [subject.center];
+  comps.forEach((row) => {
+    const center = getFeatureCenter(row.feature);
+    if (center) centers.push(center);
+  });
+  if (centers.length === 0) return;
+
+  const bounds = centers.reduce(
+    (acc, coord) => acc.extend(coord),
+    new maplibregl.LngLatBounds(centers[0], centers[0]),
+  );
+
+  if (centers.length === 1) {
+    centerOnLngLatInVisibleMapArea(centers[0], { inset: 16, duration: 600 });
+    return;
+  }
+
+  fitBoundsInVisibleMapArea(bounds, { inset: 24, duration: 600 });
 }
 
 function buildExportRows() {

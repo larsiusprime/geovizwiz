@@ -762,12 +762,16 @@ function setPinnedCollapsedState(element: HTMLElement, collapsed: boolean) {
       contentEl.dataset.expandedDisplay = contentEl.style.display || 'grid';
       contentEl.style.display = 'none';
     }
-    element.style.height = `${getHeaderHeight(element)}px`;
+    element.dataset.expandedMinHeight = element.style.minHeight || '';
+    const headerHeight = getHeaderHeight(element);
+    element.style.minHeight = `${headerHeight}px`;
+    element.style.height = `${headerHeight}px`;
   } else {
     if (contentEl) {
       const expandedDisplay = contentEl.dataset.expandedDisplay || 'grid';
       contentEl.style.display = expandedDisplay;
     }
+    element.style.minHeight = element.dataset.expandedMinHeight ?? '';
     element.style.height = '';
     ensureWindowMinHeight(element);
   }

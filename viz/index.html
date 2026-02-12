@@ -193,6 +193,24 @@
     #controls button:hover,
     #settingsControls button:hover { background: #f0f0f0; }
 
+    #controls .window-header .window-pin,
+    #controls .window-header .window-pin-collapse,
+    #settingsControls .window-header .window-pin,
+    #settingsControls .window-header .window-pin-collapse {
+      border: none;
+      background: none;
+      padding: 2px;
+      border-radius: 3px;
+    }
+
+    #controls .window-header .window-pin:hover,
+    #controls .window-header .window-pin-collapse:hover,
+    #settingsControls .window-header .window-pin:hover,
+    #settingsControls .window-header .window-pin-collapse:hover {
+      background: none;
+      border: none;
+    }
+
     #settingsControls {
       min-width: 400px;
     }
@@ -2902,14 +2920,14 @@
     <div class="window-header" style="
       display: flex;
       align-items: center;
-      justify-content: flex-end;
+      justify-content: flex-start;
       padding: 8px 12px;
       border-bottom: 1px solid #eee;
       background: rgba(248, 248, 248, 0.8);
       border-radius: 8px 8px 0 0;
       cursor: move;
     ">
-      <div style="font-weight: 600; font-size: 13px;" id="legendTitle">Legend</div>
+      <div style="font-weight: 600; font-size: 13px; flex: 1; text-align: center;" id="legendTitle">Legend</div>
       <div class="window-actions">
         <button id="btnPinLegend" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />

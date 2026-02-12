@@ -194,7 +194,7 @@ function getCompDataStore(): DataStore | null {
 function ensureMarker(elClass: string): HTMLDivElement {
   const el = document.createElement('div');
   el.className = elClass;
-  el.innerHTML = PIN_SVG;
+  el.innerHTML = `<div class="comp-finder-pin-bounce-wrap">${PIN_SVG}</div>`;
 
   const middle = elClass.includes('subject') ? '#facc15' : '#93c5fd';
   el.style.setProperty('--c-middle', middle);
@@ -652,12 +652,12 @@ function bounceCompMarker(comp: CompRow) {
   const marker = compMarkers.get(comp.id);
   if (!marker) return;
   const markerEl = marker.getElement();
-  const pinEl = markerEl.querySelector('.pin-icon') as HTMLElement | null;
-  if (!pinEl) return;
-  pinEl.classList.remove('is-bouncing');
+  const bounceEl = markerEl.querySelector('.comp-finder-pin-bounce-wrap') as HTMLElement | null;
+  if (!bounceEl) return;
+  bounceEl.classList.remove('is-bouncing');
   // Force reflow so repeated clicks restart the animation.
-  void pinEl.offsetWidth;
-  pinEl.classList.add('is-bouncing');
+  void bounceEl.offsetWidth;
+  bounceEl.classList.add('is-bouncing');
 }
 
 function centerOnComp(comp: CompRow) {

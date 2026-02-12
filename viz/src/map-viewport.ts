@@ -160,12 +160,30 @@ function getPaddingForRect(targetRect: ScreenRect, options: PaddingOptions = {})
   const rawBottom = mapRect.bottom - targetRect.bottom;
   const rawLeft = targetRect.left - mapRect.left;
 
-  return {
-    top: Math.max(0, Math.round(rawTop + inset)),
-    right: Math.max(0, Math.round(rawRight + inset)),
-    bottom: Math.max(0, Math.round(rawBottom + inset)),
-    left: Math.max(0, Math.round(rawLeft + inset)),
-  };
+  const mapWidth = Math.max(1, mapRect.right - mapRect.left);
+  const mapHeight = Math.max(1, mapRect.bottom - mapRect.top);
+
+  let top = Math.max(0, Math.round(rawTop + inset));
+  let right = Math.max(0, Math.round(rawRight + inset));
+  let bottom = Math.max(0, Math.round(rawBottom + inset));
+  let left = Math.max(0, Math.round(rawLeft + inset));
+
+  const maxHoriz = Math.max(0, Math.floor(mapWidth) - 2);
+  const maxVert = Math.max(0, Math.floor(mapHeight) - 2);
+
+  if (left + right > maxHoriz) {
+    const scale = maxHoriz <= 0 ? 0 : maxHoriz / (left + right);
+    left = Math.floor(left * scale);
+    right = Math.floor(right * scale);
+  }
+
+  if (top + bottom > maxVert) {
+    const scale = maxVert <= 0 ? 0 : maxVert / (top + bottom);
+    top = Math.floor(top * scale);
+    bottom = Math.floor(bottom * scale);
+  }
+
+  return { top, right, bottom, left };
 }
 
 function getVisibleMapPadding(options: PaddingOptions = {}) {

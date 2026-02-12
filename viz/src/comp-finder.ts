@@ -668,6 +668,45 @@ function bounceCompMarker(comp: CompRow) {
   bounceEl.classList.add('is-bouncing');
 }
 
+function bounceSubjectMarker() {
+  if (!subjectMarker) return;
+  const markerEl = subjectMarker.getElement();
+  const bounceEl = markerEl.querySelector('.comp-finder-pin-bounce-wrap') as HTMLElement | null;
+  if (!bounceEl) return;
+  bounceEl.classList.remove('is-bouncing');
+  void bounceEl.offsetWidth;
+  bounceEl.classList.add('is-bouncing');
+}
+
+function centerOnSubject() {
+  if (!subject || !isValidLngLat(subject.center)) {
+    console.warn('[comp-finder] centerOnSubject skipped invalid center', { subjectCenter: subject?.center, subjectParcelId: subject?.parcelId });
+    return;
+  }
+
+  const duration = 500;
+  const didStart = centerOnLngLatInVisibleMapArea(subject.center, { inset: 12, duration });
+  compDebug('centerOnSubject invoked', {
+    subjectCenter: subject.center,
+    didStart,
+    currentZoom: S.map?.getZoom?.(),
+  });
+  if (!didStart) return;
+
+  let bounced = false;
+  const onCenterComplete = () => {
+    if (bounced) return;
+    bounced = true;
+    window.clearTimeout(fallbackTimer);
+    S.map.off('moveend', onCenterComplete);
+    compDebug('centerOnSubject bounce trigger', { subjectCenter: subject.center, subjectParcelId: subject.parcelId });
+    bounceSubjectMarker();
+  };
+
+  S.map.on('moveend', onCenterComplete);
+  const fallbackTimer = window.setTimeout(onCenterComplete, duration + 220);
+}
+
 function centerOnComp(comp: CompRow) {
   const center = getFeatureCenter(comp.feature);
   if (!isValidLngLat(center)) {
@@ -712,6 +751,17 @@ function buildCompColumnButton(label: string, comp: CompRow, options?: { isHeade
   return button;
 }
 
+function buildSubjectColumnButton(label = 'Subject') {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'comp-finder-comp-column-button is-header';
+  button.textContent = label;
+  button.title = `Center map on ${subject?.parcelId || 'subject parcel'}`;
+  button.setAttribute('aria-label', `Center map on ${subject?.parcelId || 'subject parcel'}`);
+  button.addEventListener('click', () => centerOnSubject());
+  return button;
+}
+
 function renderCompsTable() {
   const comparisonFields = getComparisonFields();
   const visible = getVisibleComps();
@@ -740,7 +790,7 @@ function renderCompsTable() {
   const fieldTh = document.createElement('th');
   fieldTh.textContent = 'Field';
   const subjectTh = document.createElement('th');
-  subjectTh.textContent = 'Subject';
+  subjectTh.appendChild(buildSubjectColumnButton('Subject'));
   head.append(removeTh, fieldTh, subjectTh);
   visible.forEach((_, idx) => {
     const th = document.createElement('th');

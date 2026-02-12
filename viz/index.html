@@ -1352,14 +1352,24 @@
       font-weight: 600;
     }
 
-    .land-adjustment-row select {
-      min-width: 140px;
-    }
-
     .land-adjustment-row select,
     .land-adjustment-row input {
-      flex: 1;
       min-width: 0;
+    }
+
+    .land-adjustment-row > select:first-child {
+      flex: 0 0 100px;
+      max-width: 100px;
+    }
+
+    .land-adjustment-select-unit {
+      flex: 0 0 120px;
+      max-width: 120px;
+    }
+
+    .land-adjustment-select-detail {
+      flex: 0 0 92px;
+      max-width: 92px;
     }
 
     .land-adjustment-value {

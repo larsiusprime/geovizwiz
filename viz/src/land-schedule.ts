@@ -33,10 +33,19 @@ const ADJUSTMENT_OPERATION_OPTIONS: Array<{ value: LandScheduleAdjustmentOperati
 ];
 
 const ADJUSTMENT_UNIT_OPTIONS: Array<{ value: LandScheduleAdjustmentSizeUnit; label: string }> = [
-  { value: 'area', label: 'Per area (sqft/acre or sqm/hectare)' },
-  { value: 'frontage', label: 'Frontage (feet or meters)' },
-  { value: 'flat', label: 'Flat amount (no unit)' },
+  { value: 'per-improved-area', label: 'per improved area' },
+  { value: 'per-land-area', label: 'per land area' },
+  { value: 'per-frontage', label: 'per frontage' },
+  { value: 'per-pick-field', label: 'per (pick field)' },
+  { value: 'flat', label: 'flat amount' },
 ];
+
+const IMPROVED_AREA_UNITS = ['sqft', 'sqm'] as const;
+const LAND_AREA_UNITS = ['sqft', 'sqm', 'acre', 'hectare'] as const;
+const FRONTAGE_UNITS = [
+  { value: 'front-foot', label: 'front foot' },
+  { value: 'front-meter', label: 'front meter' },
+] as const;
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
@@ -131,6 +140,52 @@ function parseOptionalNumber(value: string): number | null {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getDefaultAreaUnitForLabel(label: string | null, fallback: string) {
+  const normalized = (label ?? '').toLowerCase();
+  if (normalized.includes('meter')) return 'sqm';
+  if (normalized.includes('hectare')) return 'hectare';
+  if (normalized.includes('acre')) return 'acre';
+  return fallback;
+}
+
+function getUnitDetailOptions(sizeUnit: LandScheduleAdjustmentSizeUnit): Array<{ value: string; label: string }> {
+  if (sizeUnit === 'per-improved-area') {
+    return IMPROVED_AREA_UNITS.map(unit => ({ value: unit, label: unit }));
+  }
+  if (sizeUnit === 'per-land-area') {
+    return LAND_AREA_UNITS.map(unit => ({ value: unit, label: unit }));
+  }
+  if (sizeUnit === 'per-frontage') {
+    return FRONTAGE_UNITS.map(unit => ({ value: unit.value, label: unit.label }));
+  }
+  if (sizeUnit === 'per-pick-field') {
+    return S.chosenNumericFields.map(field => ({ value: field, label: field }));
+  }
+  return [];
+}
+
+function getDefaultUnitDetail(sizeUnit: LandScheduleAdjustmentSizeUnit) {
+  if (sizeUnit === 'per-improved-area') {
+    return getDefaultAreaUnitForLabel(S.bldgSizeUnitLabel, 'sqft');
+  }
+  if (sizeUnit === 'per-land-area') {
+    return getDefaultAreaUnitForLabel(S.landSizeUnitLabel, 'sqft');
+  }
+  if (sizeUnit === 'per-frontage') {
+    return 'front-foot';
+  }
+  if (sizeUnit === 'per-pick-field') {
+    return S.chosenNumericFields[0] ?? null;
+  }
+  return null;
+}
+
+function normalizeLegacyAdjustmentSizeUnit(sizeUnit: LandScheduleAdjustmentSizeUnit | 'area' | 'frontage' | 'flat'): LandScheduleAdjustmentSizeUnit {
+  if (sizeUnit === 'area') return 'per-land-area';
+  if (sizeUnit === 'frontage') return 'per-frontage';
+  return sizeUnit;
 }
 
 function setLandScheduleInputValue(input: HTMLInputElement, value: number | null) {
@@ -575,6 +630,11 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
   entry.adjustments = entry.adjustments ?? [];
 
   entry.adjustments.forEach(adjustment => {
+    adjustment.sizeUnit = normalizeLegacyAdjustmentSizeUnit(adjustment.sizeUnit as LandScheduleAdjustmentSizeUnit | 'area' | 'frontage' | 'flat');
+    if (adjustment.sizeUnitDetail === undefined) {
+      adjustment.sizeUnitDetail = getDefaultUnitDetail(adjustment.sizeUnit);
+    }
+
     const card = document.createElement('div');
     card.className = 'land-adjustment-card';
     card.dataset.adjustmentId = adjustment.id;
@@ -647,14 +707,16 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
     valueWrap.append(valueInput, valueSuffix);
     operationRow.append(valueWrap);
 
-    const unitRow = document.createElement('div');
-    unitRow.className = 'land-adjustment-row';
     const unitSelect = document.createElement('select');
+    unitSelect.className = 'land-adjustment-select-unit';
     ADJUSTMENT_UNIT_OPTIONS.forEach(option => {
       unitSelect.appendChild(new Option(option.label, option.value));
     });
     unitSelect.value = adjustment.sizeUnit;
-    unitRow.append(unitSelect);
+
+    const unitDetailSelect = document.createElement('select');
+    unitDetailSelect.className = 'land-adjustment-select-detail';
+    operationRow.append(unitSelect, unitDetailSelect);
 
     const syncValueUI = () => {
       const isMultiply = adjustment.operation === 'multiply';
@@ -673,15 +735,40 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 
     unitSelect.addEventListener('change', () => {
       adjustment.sizeUnit = unitSelect.value as LandScheduleAdjustmentSizeUnit;
+      adjustment.sizeUnitDetail = getDefaultUnitDetail(adjustment.sizeUnit);
+      syncUnitDetailUI();
     });
 
     valueInput.addEventListener('input', () => {
       adjustment.value = parseOptionalNumber(valueInput.value);
     });
 
-    syncValueUI();
+    const syncUnitDetailUI = () => {
+      unitDetailSelect.replaceChildren();
+      const options = getUnitDetailOptions(adjustment.sizeUnit);
+      const showDetail = options.length > 0;
+      unitDetailSelect.style.display = showDetail ? '' : 'none';
+      if (!showDetail) {
+        adjustment.sizeUnitDetail = null;
+        return;
+      }
+      options.forEach(option => {
+        unitDetailSelect.appendChild(new Option(option.label, option.value));
+      });
+      const hasCurrent = adjustment.sizeUnitDetail && options.some(option => option.value === adjustment.sizeUnitDetail);
+      const nextValue = hasCurrent ? adjustment.sizeUnitDetail : options[0]?.value ?? null;
+      adjustment.sizeUnitDetail = nextValue;
+      unitDetailSelect.value = nextValue ?? '';
+    };
 
-    card.append(header, operationRow, unitRow);
+    unitDetailSelect.addEventListener('change', () => {
+      adjustment.sizeUnitDetail = unitDetailSelect.value || null;
+    });
+
+    syncValueUI();
+    syncUnitDetailUI();
+
+    card.append(header, operationRow);
     landScheduleAdjustmentsContainer.appendChild(card);
   });
 }
@@ -791,6 +878,7 @@ export function addLandScheduleAdjustment() {
     name: `Adjustment ${nextIndex}`,
     operation: 'add',
     sizeUnit: 'flat',
+    sizeUnitDetail: null,
     value: null,
     filters: [],
     filterInvert: false,

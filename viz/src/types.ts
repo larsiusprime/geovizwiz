@@ -59,13 +59,14 @@ export type LandScheduleRow = {
 
 export type LandScheduleAdjustmentOperation = 'multiply' | 'add';
 
-export type LandScheduleAdjustmentSizeUnit = 'area' | 'frontage' | 'flat';
+export type LandScheduleAdjustmentSizeUnit = 'per-improved-area' | 'per-land-area' | 'per-frontage' | 'per-pick-field' | 'flat';
 
 export type LandScheduleAdjustment = {
   id: string;
   name: string;
   operation: LandScheduleAdjustmentOperation;
   sizeUnit: LandScheduleAdjustmentSizeUnit;
+  sizeUnitDetail: string | null;
   value: number | null;
   filters: FilterRule[];
   filterInvert: boolean;
@@ -309,6 +310,7 @@ export type SerializedLandScheduleAdjustment = {
   name: string;
   operation: LandScheduleAdjustmentOperation;
   sizeUnit: LandScheduleAdjustmentSizeUnit;
+  sizeUnitDetail?: string | null;
   value: number | null;
   filters: FilterRule[];
   filterInvert: boolean;

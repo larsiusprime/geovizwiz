@@ -115,6 +115,7 @@ function serializeLandSchedules(): SerializedLandScheduleEntry[] {
         name: adjustment.name,
         operation: adjustment.operation,
         sizeUnit: adjustment.sizeUnit,
+        sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
         value: adjustment.value,
         filters: cloneFilters(adjustment.filters ?? []),
         filterInvert: adjustment.filterInvert ?? false,
@@ -311,7 +312,12 @@ export async function loadProjectFile(file: File) {
             id: adjustment.id,
             name: adjustment.name,
             operation: adjustment.operation ?? 'add',
-            sizeUnit: adjustment.sizeUnit ?? 'flat',
+            sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
+              ? 'per-land-area'
+              : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
+                ? 'per-frontage'
+                : adjustment.sizeUnit) ?? 'flat',
+            sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
             value: adjustment.value ?? null,
             filters: adjustment.filters.map(f => ({ ...f })),
             filterInvert: adjustment.filterInvert ?? false,

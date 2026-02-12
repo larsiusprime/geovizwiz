@@ -19,6 +19,14 @@ type FitOptions = PaddingOptions & {
   essential?: boolean;
 };
 
+const MAP_VIEWPORT_DEBUG = true;
+
+function debugLog(message: string, payload?: Record<string, unknown>) {
+  if (!MAP_VIEWPORT_DEBUG) return;
+  if (payload) console.debug(`[map-viewport] ${message}`, payload);
+  else console.debug(`[map-viewport] ${message}`);
+}
+
 function isRectValid(rect: ScreenRect) {
   return Number.isFinite(rect.left)
     && Number.isFinite(rect.top)
@@ -152,6 +160,7 @@ export function getLargestUnobscuredMapRect(): ScreenRect | null {
 function getPaddingForRect(targetRect: ScreenRect, options: PaddingOptions = {}) {
   const mapRect = getMapRect();
   if (!mapRect) {
+    debugLog('getPaddingForRect fallback: no map rect');
     return { top: 0, right: 0, bottom: 0, left: 0 };
   }
   const inset = Math.max(0, options.inset ?? 0);
@@ -175,33 +184,59 @@ function getPaddingForRect(targetRect: ScreenRect, options: PaddingOptions = {})
     const scale = maxHoriz <= 0 ? 0 : maxHoriz / (left + right);
     left = Math.floor(left * scale);
     right = Math.floor(right * scale);
+    debugLog('horizontal padding clamped', { left, right, maxHoriz, mapWidth });
   }
 
   if (top + bottom > maxVert) {
     const scale = maxVert <= 0 ? 0 : maxVert / (top + bottom);
     top = Math.floor(top * scale);
     bottom = Math.floor(bottom * scale);
+    debugLog('vertical padding clamped', { top, bottom, maxVert, mapHeight });
   }
 
-  return { top, right, bottom, left };
+  const padding = { top, right, bottom, left };
+  debugLog('computed padding for target rect', { mapRect, targetRect, inset, padding });
+  return padding;
 }
 
 function getVisibleMapPadding(options: PaddingOptions = {}) {
   const rect = getLargestUnobscuredMapRect();
-  if (!rect) return { top: 0, right: 0, bottom: 0, left: 0 };
-  return getPaddingForRect(rect, options);
+  if (!rect) {
+    debugLog('visible map padding fallback: no unobscured rect');
+    return { top: 0, right: 0, bottom: 0, left: 0 };
+  }
+  const padding = getPaddingForRect(rect, options);
+  debugLog('visible map padding resolved', { rect, padding });
+  return padding;
 }
 
 export function centerOnLngLatInVisibleMapArea(
   lngLat: maplibregl.LngLatLike,
   options: CenterOptions = {},
 ) {
-  if (!S.map) return false;
-  if (isModalLayerOpen()) return false;
+  if (!S.map) {
+    debugLog('center aborted: map is not initialized');
+    return false;
+  }
+  if (isModalLayerOpen()) {
+    debugLog('center aborted: modal layer open');
+    return false;
+  }
+
+  const padding = getVisibleMapPadding({ inset: options.inset ?? 8 });
+  debugLog('center request', {
+    lngLat,
+    duration: options.duration ?? 500,
+    inset: options.inset ?? 8,
+    padding,
+    zoom: S.map.getZoom(),
+    bearing: S.map.getBearing(),
+    pitch: S.map.getPitch(),
+  });
 
   S.map.easeTo({
     center: lngLat,
-    padding: getVisibleMapPadding({ inset: options.inset ?? 8 }),
+    padding,
     duration: options.duration ?? 500,
     essential: options.essential ?? true,
   });
@@ -212,14 +247,62 @@ export function fitBoundsInVisibleMapArea(
   bounds: maplibregl.LngLatBoundsLike,
   options: FitOptions = {},
 ) {
-  if (!S.map) return false;
-  if (isModalLayerOpen()) return false;
+  if (!S.map) {
+    debugLog('fitBounds aborted: map is not initialized');
+    return false;
+  }
+  if (isModalLayerOpen()) {
+    debugLog('fitBounds aborted: modal layer open');
+    return false;
+  }
 
-  S.map.fitBounds(bounds, {
-    padding: getVisibleMapPadding({ inset: options.inset ?? 24 }),
+  const padding = getVisibleMapPadding({ inset: options.inset ?? 24 });
+
+  let normalizedBounds: maplibregl.LngLatBounds;
+  try {
+    normalizedBounds = maplibregl.LngLatBounds.convert(bounds);
+  } catch (error) {
+    console.error('[map-viewport] fitBounds rejected invalid input bounds', { bounds, error });
+    return false;
+  }
+
+  const sw = normalizedBounds.getSouthWest();
+  const ne = normalizedBounds.getNorthEast();
+  const boundsAreFinite = [sw.lng, sw.lat, ne.lng, ne.lat].every(Number.isFinite);
+  if (!boundsAreFinite) {
+    console.error('[map-viewport] fitBounds aborted: non-finite normalized bounds', { sw, ne, bounds });
+    return false;
+  }
+
+  debugLog('fitBounds request', {
+    sw,
+    ne,
+    padding,
+    inset: options.inset ?? 24,
     duration: options.duration ?? 700,
     maxZoom: options.maxZoom,
-    essential: options.essential ?? true,
+    zoom: S.map.getZoom(),
+    bearing: S.map.getBearing(),
+    pitch: S.map.getPitch(),
   });
+
+  try {
+    S.map.fitBounds(normalizedBounds, {
+      padding,
+      duration: options.duration ?? 700,
+      maxZoom: options.maxZoom,
+      essential: options.essential ?? true,
+    });
+  } catch (error) {
+    console.error('[map-viewport] fitBounds threw unexpectedly', {
+      sw,
+      ne,
+      padding,
+      duration: options.duration ?? 700,
+      maxZoom: options.maxZoom,
+      error,
+    });
+    return false;
+  }
   return true;
 }

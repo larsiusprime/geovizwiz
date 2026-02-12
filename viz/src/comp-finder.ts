@@ -95,6 +95,14 @@ const COMP_DISTANCE_FILL_LAYER_ID = 'comp-finder-distance-fill';
 const COMP_DISTANCE_OUTLINE_BLACK_ID = 'comp-finder-distance-outline-black';
 const COMP_DISTANCE_OUTLINE_WHITE_ID = 'comp-finder-distance-outline-white';
 
+const COMP_FINDER_DEBUG = true;
+
+function compDebug(message: string, payload?: Record<string, unknown>) {
+  if (!COMP_FINDER_DEBUG) return;
+  if (payload) console.debug(`[comp-finder] ${message}`, payload);
+  else console.debug(`[comp-finder] ${message}`);
+}
+
 
 
 function destinationPoint(center: [number, number], bearingDeg: number, distanceMeters: number): [number, number] {
@@ -662,9 +670,33 @@ function bounceCompMarker(comp: CompRow) {
 
 function centerOnComp(comp: CompRow) {
   const center = getFeatureCenter(comp.feature);
-  if (!isValidLngLat(center)) return;
-  bounceCompMarker(comp);
-  centerOnLngLatInVisibleMapArea(center, { inset: 12, duration: 500 });
+  if (!isValidLngLat(center)) {
+    console.warn('[comp-finder] centerOnComp skipped invalid center', { compId: comp.id, center });
+    return;
+  }
+
+  const duration = 500;
+  const didStart = centerOnLngLatInVisibleMapArea(center, { inset: 12, duration });
+  compDebug('centerOnComp invoked', {
+    compId: comp.id,
+    center,
+    didStart,
+    currentZoom: S.map?.getZoom?.(),
+  });
+  if (!didStart) return;
+
+  let bounced = false;
+  const onCenterComplete = () => {
+    if (bounced) return;
+    bounced = true;
+    window.clearTimeout(fallbackTimer);
+    S.map.off('moveend', onCenterComplete);
+    compDebug('centerOnComp bounce trigger', { compId: comp.id, center });
+    bounceCompMarker(comp);
+  };
+
+  S.map.on('moveend', onCenterComplete);
+  const fallbackTimer = window.setTimeout(onCenterComplete, duration + 220);
 }
 
 function buildCompColumnButton(label: string, comp: CompRow, options?: { isHeader?: boolean; titlePrefix?: string }) {
@@ -943,25 +975,55 @@ async function findComps() {
 
 function handleZoomToComps() {
   if (!subject) return;
+  compDebug('zoomTo click start', {
+    subjectCenter: subject.center,
+    compsTotal: comps.length,
+  });
   const centers: [number, number][] = [];
   if (isValidLngLat(subject.center)) centers.push(subject.center);
+  else console.warn('[comp-finder] zoomTo invalid subject center', { subjectCenter: subject.center, subjectParcelId: subject.parcelId });
+
+  const inspectedCompCenters: Array<{ compId: string; center: [number, number] | null; valid: boolean }> = [];
   comps.forEach((row) => {
     const center = getFeatureCenter(row.feature);
-    if (isValidLngLat(center)) centers.push(center);
+    const valid = isValidLngLat(center);
+    inspectedCompCenters.push({ compId: row.id, center, valid });
+    if (valid) centers.push(center);
   });
-  if (centers.length === 0) return;
+  compDebug('zoomTo center inspection', {
+    inspectedCompCenters,
+    acceptedCenterCount: centers.length,
+  });
+
+  if (centers.length === 0) {
+    console.warn('[comp-finder] zoomTo aborted: no valid centers available', {
+      subjectCenter: subject.center,
+      inspectedCompCenters,
+    });
+    return;
+  }
 
   const bounds = centers.reduce(
     (acc, coord) => acc.extend(coord),
     new maplibregl.LngLatBounds(centers[0], centers[0]),
   );
+  const sw = bounds.getSouthWest();
+  const ne = bounds.getNorthEast();
+  compDebug('zoomTo computed bounds', {
+    centers,
+    sw,
+    ne,
+    isSinglePoint: centers.length === 1,
+  });
 
   if (centers.length === 1) {
-    centerOnLngLatInVisibleMapArea(centers[0], { inset: 16, duration: 600 });
+    const centered = centerOnLngLatInVisibleMapArea(centers[0], { inset: 16, duration: 600 });
+    compDebug('zoomTo single-point center result', { centered, center: centers[0] });
     return;
   }
 
-  fitBoundsInVisibleMapArea(bounds, { inset: 24, duration: 600 });
+  const fitted = fitBoundsInVisibleMapArea(bounds, { inset: 24, duration: 600 });
+  compDebug('zoomTo fit result', { fitted, sw, ne });
 }
 
 function buildExportRows() {

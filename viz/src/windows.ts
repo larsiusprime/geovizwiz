@@ -32,6 +32,7 @@ let _updateLegendPosition: () => void = () => {};
 type DockableWindow = {
   element: HTMLElement;
   pinButton: HTMLButtonElement;
+  collapseButton: HTMLButtonElement | null;
 };
 
 type ResizeMode = 'both' | 'x' | 'y';
@@ -85,16 +86,42 @@ export function initWindowDocking(config: {
 }
 
 export function registerDockableWindow(windowEl: HTMLElement, pinButton: HTMLButtonElement) {
-  dockableWindows.push({ element: windowEl, pinButton });
+  const collapseButton = ensurePinnedCollapseButton(windowEl);
+  dockableWindows.push({ element: windowEl, pinButton, collapseButton });
   pinButton.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
     togglePinnedState(windowEl);
   });
+  collapseButton?.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    togglePinnedCollapsed(windowEl);
+  });
   const minWidth = getWindowRequiredMinWidth(windowEl);
   const storedMin = Number(windowEl.dataset.minWidth ?? MIN_WINDOW_WIDTH);
   windowEl.dataset.minWidth = `${Math.max(storedMin, minWidth)}`;
   updatePinButtonState(windowEl);
+}
+
+function ensurePinnedCollapseButton(windowEl: HTMLElement) {
+  const header = windowEl.querySelector('.window-header') as HTMLElement | null;
+  if (!header) return null;
+  const existing = header.querySelector('.window-pin-collapse') as HTMLButtonElement | null;
+  if (existing) return existing;
+  const button = document.createElement('button');
+  button.className = 'window-pin-collapse';
+  button.type = 'button';
+  button.textContent = '▼';
+  button.title = 'Collapse pinned menu';
+  button.setAttribute('aria-expanded', 'true');
+  const firstChild = header.firstElementChild;
+  if (firstChild) {
+    header.insertBefore(button, firstChild);
+  } else {
+    header.appendChild(button);
+  }
+  return button;
 }
 
 export function enableWindowResizing(windowEl: HTMLElement) {
@@ -615,6 +642,9 @@ export function handleMouseUp() {
 }
 
 function getMinWindowHeight(element: HTMLElement) {
+  if (isPinnedCollapsed(element)) {
+    return getHeaderHeight(element);
+  }
   return Math.max(MIN_WINDOW_HEIGHT, element.scrollHeight);
 }
 
@@ -707,6 +737,48 @@ function updatePinButtonState(element: HTMLElement) {
   img.alt = pinned ? 'Unpin menu' : 'Pin menu';
   entry.pinButton.setAttribute('aria-pressed', String(pinned));
   entry.pinButton.title = pinned ? 'Unpin' : 'Pin';
+  updateCollapseButtonState(element, entry.collapseButton);
+}
+
+function updateCollapseButtonState(element: HTMLElement, collapseButton: HTMLButtonElement | null) {
+  if (!collapseButton) return;
+  const collapsed = isPinnedCollapsed(element);
+  collapseButton.textContent = '▼';
+  collapseButton.title = collapsed ? 'Expand pinned menu' : 'Collapse pinned menu';
+  collapseButton.setAttribute('aria-expanded', String(!collapsed));
+  collapseButton.style.transform = collapsed ? 'rotate(-90deg)' : 'none';
+}
+
+function isPinnedCollapsed(element: HTMLElement) {
+  return element.dataset.pinnedCollapsed === 'true';
+}
+
+function setPinnedCollapsedState(element: HTMLElement, collapsed: boolean) {
+  element.dataset.pinnedCollapsed = collapsed ? 'true' : 'false';
+  element.classList.toggle('is-pinned-collapsed', collapsed);
+  const contentEl = element.querySelector('[data-window-content]') as HTMLElement | null;
+  if (collapsed) {
+    if (contentEl) {
+      contentEl.dataset.expandedDisplay = contentEl.style.display || 'grid';
+      contentEl.style.display = 'none';
+    }
+    element.style.height = `${getHeaderHeight(element)}px`;
+  } else {
+    if (contentEl) {
+      const expandedDisplay = contentEl.dataset.expandedDisplay || 'grid';
+      contentEl.style.display = expandedDisplay;
+    }
+    element.style.height = '';
+    ensureWindowMinHeight(element);
+  }
+  const entry = dockableWindows.find(win => win.element === element);
+  updateCollapseButtonState(element, entry?.collapseButton ?? null);
+}
+
+function togglePinnedCollapsed(element: HTMLElement) {
+  if (!isPinned(element)) return;
+  setPinnedCollapsedState(element, !isPinnedCollapsed(element));
+  updatePinnedLayout();
 }
 
 function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
@@ -768,6 +840,9 @@ function unpinWindow(element: HTMLElement) {
 function setPinnedState(element: HTMLElement, pinned: boolean) {
   element.dataset.pinned = pinned ? 'true' : 'false';
   element.classList.toggle('is-pinned', pinned);
+  if (!pinned) {
+    setPinnedCollapsedState(element, false);
+  }
 }
 
 function updatePinnedLayout() {

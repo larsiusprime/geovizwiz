@@ -707,15 +707,16 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
 
     const perLabel = document.createElement('span');
     perLabel.className = 'land-adjustment-per-label';
-    perLabel.textContent = 'per: ';
+    const perText = document.createElement('span');
+    perText.className = 'land-adjustment-per-text';
+    perText.textContent = 'per:';
     
     const unitDetailSelect = document.createElement('select');
     unitDetailSelect.className = 'land-adjustment-select-detail';
-    perLabel.append(unitSelect);
-    const unitSpacer = document.createElement('span');
-    unitSpacer.textContent = '  ';
-    perLabel.append(unitSpacer);
-    perLabel.append(unitDetailSelect);
+    const unitPair = document.createElement('span');
+    unitPair.className = 'land-adjustment-unit-pair';
+    unitPair.append(unitSelect, unitDetailSelect);
+    perLabel.append(perText, unitPair);
     operationRow.append(perLabel);
     
     const syncValueUI = () => {
@@ -747,7 +748,8 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
       unitDetailSelect.replaceChildren();
       const options = getUnitDetailOptions(adjustment.sizeUnit);
       const showDetail = options.length > 0;
-      unitDetailSelect.style.display = showDetail ? '' : 'none';
+      unitDetailSelect.classList.toggle('is-hidden', !showDetail);
+      unitDetailSelect.disabled = !showDetail;
       if (!showDetail) {
         adjustment.sizeUnitDetail = null;
         return;

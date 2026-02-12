@@ -1354,9 +1354,22 @@
     }
 
     .land-adjustment-per-label {
-      min-width: 28px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       color: #374151;
       font-weight: 600;
+      flex: 0 0 auto;
+    }
+
+    .land-adjustment-per-text {
+      white-space: nowrap;
+    }
+
+    .land-adjustment-unit-pair {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
     .land-adjustment-row select,
@@ -1370,13 +1383,22 @@
     }
 
     .land-adjustment-select-unit {
-      flex: 0 0 120px;
+      flex: 0 0 auto;
+      width: 120px;
+      min-width: 120px;
       max-width: 120px;
     }
 
     .land-adjustment-select-detail {
-      flex: 0 0 120px;
+      flex: 0 0 auto;
+      width: 120px;
+      min-width: 120px;
       max-width: 120px;
+    }
+
+    .land-adjustment-select-detail.is-hidden {
+      visibility: hidden;
+      pointer-events: none;
     }
 
     .land-adjustment-value {

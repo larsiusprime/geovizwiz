@@ -27,6 +27,85 @@ function debugLog(message: string, payload?: Record<string, unknown>) {
   else console.debug(`[map-viewport] ${message}`);
 }
 
+function clampLat(lat: number) {
+  return Math.max(-85.05112878, Math.min(85.05112878, lat));
+}
+
+function lngLatToMercatorUnit(lng: number, lat: number) {
+  const x = (lng + 180) / 360;
+  const clampedLat = clampLat(lat);
+  const rad = (clampedLat * Math.PI) / 180;
+  const y = (1 - Math.log(Math.tan(rad) + (1 / Math.cos(rad))) / Math.PI) / 2;
+  return { x, y };
+}
+
+function mercatorUnitToLngLat(x: number, y: number) {
+  const lng = ((x % 1) + 1) % 1 * 360 - 180;
+  const n = Math.PI - 2 * Math.PI * y;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return { lng, lat };
+}
+
+function easeToBoundsApproximation(
+  normalizedBounds: maplibregl.LngLatBounds,
+  padding: { top: number; right: number; bottom: number; left: number },
+  options: FitOptions,
+) {
+  const width = S.map.getContainer().clientWidth;
+  const height = S.map.getContainer().clientHeight;
+  const innerWidth = width - padding.left - padding.right;
+  const innerHeight = height - padding.top - padding.bottom;
+
+  if (!(innerWidth > 2 && innerHeight > 2)) {
+    console.error('[map-viewport] approximation aborted: non-positive inner viewport', { width, height, padding, innerWidth, innerHeight });
+    return false;
+  }
+
+  const sw = normalizedBounds.getSouthWest();
+  const ne = normalizedBounds.getNorthEast();
+
+  let spanLng = ne.lng - sw.lng;
+  if (spanLng < 0) spanLng += 360;
+  const mSw = lngLatToMercatorUnit(sw.lng, sw.lat);
+  const mNe = lngLatToMercatorUnit(sw.lng + spanLng, ne.lat);
+  const spanX = Math.max(1e-12, mNe.x - mSw.x);
+  const spanY = Math.max(1e-12, Math.abs(mNe.y - mSw.y));
+
+  const tileSize = 512;
+  const zoomX = Math.log2(innerWidth / (tileSize * spanX));
+  const zoomY = Math.log2(innerHeight / (tileSize * spanY));
+  const zoomRaw = Math.min(zoomX, zoomY);
+
+  const maxZoom = Number.isFinite(options.maxZoom as number) ? Number(options.maxZoom) : S.map.getMaxZoom();
+  const minZoom = S.map.getMinZoom();
+  const zoom = Math.max(minZoom, Math.min(maxZoom, Number.isFinite(zoomRaw) ? zoomRaw : S.map.getZoom()));
+
+  const centerMercatorX = mSw.x + spanX / 2;
+  const centerMercatorY = Math.min(1, Math.max(0, Math.min(mSw.y, mNe.y) + spanY / 2));
+  const center = mercatorUnitToLngLat(centerMercatorX, centerMercatorY);
+
+  debugLog('fitBounds approximation camera', {
+    sw,
+    ne,
+    padding,
+    innerWidth,
+    innerHeight,
+    spanX,
+    spanY,
+    zoom,
+    center,
+  });
+
+  S.map.easeTo({
+    center,
+    zoom,
+    padding,
+    duration: options.duration ?? 700,
+    essential: options.essential ?? true,
+  });
+  return true;
+}
+
 function isRectValid(rect: ScreenRect) {
   return Number.isFinite(rect.left)
     && Number.isFinite(rect.top)
@@ -360,7 +439,21 @@ export function fitBoundsInVisibleMapArea(
         padding,
         fallbackError,
       });
-      return false;
+      // Final fallback: approximation path that does not invoke fitBounds/cameraForBounds.
+      try {
+        const approximated = easeToBoundsApproximation(normalizedBounds, padding, options);
+        if (!approximated) return false;
+        console.warn('[map-viewport] fitBounds approximation fallback engaged');
+        return true;
+      } catch (approximationError) {
+        console.error('[map-viewport] approximation fallback also failed', {
+          sw,
+          ne,
+          padding,
+          approximationError,
+        });
+        return false;
+      }
     }
   }
   return true;

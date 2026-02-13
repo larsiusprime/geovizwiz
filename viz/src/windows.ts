@@ -557,7 +557,7 @@ export function handleMouseMove(e: MouseEvent) {
     const dx = e.clientX - resizeStartX;
     const dy = e.clientY - resizeStartY;
     const pinnedColumn = isPinned(resizeTarget)
-      ? (resizeTarget.parentElement?.classList.contains('pinned-column') ? resizeTarget.parentElement as HTMLDivElement : null)
+      ? ((resizeTarget.closest('.pinned-column') as HTMLDivElement | null) ?? null)
       : null;
 
     if (resizeMode !== 'y') {
@@ -825,7 +825,7 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
 function unpinWindow(element: HTMLElement) {
   if (!appContainer) return;
   if (!isPinned(element)) return;
-  const column = element.parentElement;
+  const column = element.closest('.pinned-column') as HTMLDivElement | null;
   setPinnedState(element, false);
   element.dataset.pinnedColumn = '';
   element.dataset.pinnedOrder = '';

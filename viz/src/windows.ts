@@ -67,6 +67,39 @@ let columnResizeStartWidth = 0;
 const columnWidthOverrides = new Map<number, number>();
 let windowZCounter = WINDOW_STACK_BASE;
 
+function isDockDebugEnabled() {
+  try {
+    return window.localStorage.getItem('vizDebugDock') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function logDockLayout(context: string) {
+  if (!pinnedContainer || !isDockDebugEnabled()) return;
+  const columns = Array.from(pinnedContainer.querySelectorAll('.pinned-column')) as HTMLDivElement[];
+  const rows = columns.map((column) => {
+    const windowContainer = getColumnWindowContainer(column);
+    const columnRect = column.getBoundingClientRect();
+    const containerRect = windowContainer.getBoundingClientRect();
+    return {
+      context,
+      columnIndex: getColumnIndex(column),
+      columnStyleWidth: column.style.width || '(auto)',
+      columnRectWidth: Math.round(columnRect.width),
+      windowContainerWidth: Math.round(containerRect.width),
+      measuredGutter: Math.round(columnRect.width - containerRect.width),
+      cssGutter: window.getComputedStyle(column).getPropertyValue('--pinned-gutter').trim(),
+      windows: getColumnWindows(column).map((win) => ({
+        id: win.id,
+        styleWidth: win.style.width || '(auto)',
+        rectWidth: Math.round(win.getBoundingClientRect().width),
+      })),
+    };
+  });
+  console.debug('[dock-layout]', rows);
+}
+
 /** Must be called once from main.ts to wire in the callbacks. */
 export function initWindowCallbacks(callbacks: {
   updateToolbarButtonStates: () => void;
@@ -467,6 +500,7 @@ export function positionFiltersPanel() {
   updateFiltersPanelLayout();
 }
 
+
 export function updateFiltersPanelLayout() {
   if (!els.filtersControlsEl || !els.filtersContent || !els.filtersListEl) return;
   if (els.filtersControlsEl.style.display === 'none') return;
@@ -550,6 +584,7 @@ export function handleMouseMove(e: MouseEvent) {
     const nextWidth = Math.max(minColumnWidth, columnResizeStartWidth + dx);
     columnWidthOverrides.set(getColumnIndex(resizeColumn), nextWidth);
     updatePinnedLayout();
+    logDockLayout('column-resize');
     return;
   }
 
@@ -580,6 +615,7 @@ export function handleMouseMove(e: MouseEvent) {
     }
     if (isPinned(resizeTarget)) {
       updatePinnedLayout();
+      logDockLayout('window-resize');
     } else {
       clampWindowWithinBounds(resizeTarget);
     }
@@ -820,6 +856,7 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   columnWidthOverrides.set(columnIndex, Math.max(existingOverride, minColumnWidth, currentColumnWidth));
   updatePinButtonState(element);
   updatePinnedLayout();
+  logDockLayout('pin-window');
 }
 
 function unpinWindow(element: HTMLElement) {
@@ -840,7 +877,9 @@ function unpinWindow(element: HTMLElement) {
   }
   updatePinButtonState(element);
   updatePinnedLayout();
+  logDockLayout('unpin-window');
 }
+
 
 function setPinnedState(element: HTMLElement, pinned: boolean) {
   element.dataset.pinned = pinned ? 'true' : 'false';
@@ -884,6 +923,7 @@ function updatePinnedLayout() {
     ensureFloatingWindowsClearDock();
     _updateLegendPosition();
     updateFiltersPanelLayout();
+    logDockLayout('layout-empty');
     return;
   }
   const columnIndices = new Set(visibleColumns.map(entry => getColumnIndex(entry.column)));
@@ -902,6 +942,7 @@ function updatePinnedLayout() {
   ensureFloatingWindowsClearDock();
   _updateLegendPosition();
   updateFiltersPanelLayout();
+  logDockLayout('layout');
 }
 
 function createPinnedColumn() {

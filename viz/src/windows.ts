@@ -69,7 +69,8 @@ let windowZCounter = WINDOW_STACK_BASE;
 
 function isDockDebugEnabled() {
   try {
-    return window.localStorage.getItem('vizDebugDock') === '1';
+    return window.localStorage.getItem('vizDebugDock') === '1'
+      || (window as Window & { __vizDebugDock?: boolean }).__vizDebugDock === true;
   } catch {
     return false;
   }
@@ -117,6 +118,19 @@ export function initWindowDocking(config: {
 }) {
   pinnedContainer = config.pinnedContainer;
   appContainer = config.appContainer;
+  try {
+    const localStorageFlag = window.localStorage.getItem('vizDebugDock');
+    const runtimeFlag = (window as Window & { __vizDebugDock?: boolean }).__vizDebugDock === true;
+    const enabled = isDockDebugEnabled();
+    console.info('[dock-layout] debug', {
+      enabled,
+      localStorageVizDebugDock: localStorageFlag,
+      runtimeVizDebugDock: runtimeFlag,
+      enableHint: "Set localStorage.vizDebugDock='1' (or window.__vizDebugDock=true) and reload.",
+    });
+  } catch {
+    // no-op for environments where console/localStorage access is restricted
+  }
   updatePinnedLayout();
   window.addEventListener('resize', () => updatePinnedLayout());
 }
@@ -907,7 +921,9 @@ function updatePinnedLayout() {
       column.remove();
       return;
     }
-    column.style.display = 'flex';
+    // Keep grid layout so the right gutter remains a fixed-width resize strip.
+    // Setting this to flex causes the resize-handle area to grow with column width.
+    column.style.display = 'grid';
     const minColumnWidth = getColumnMinWidth(column) + PINNED_GUTTER;
     const overrideWidth = columnWidthOverrides.get(getColumnIndex(column));
     const columnWidth = Math.max(minColumnWidth, overrideWidth ?? minColumnWidth);

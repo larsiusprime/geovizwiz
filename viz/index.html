@@ -2540,6 +2540,25 @@
     </div>
   </div>
 
+  <div id="inspectControls" class="viz-window" style="position: absolute; top: 10px; left: 640px; width: min(calc(92vw - 80px), 460px); min-width: 340px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Inspect</div>
+      <div class="window-actions">
+        <button id="btnPinInspect" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeInspect" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+          ❌
+        </button>
+      </div>
+    </div>
+    <div id="inspectContent" data-window-content style="padding: 12px; display: block;"></div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
+  </div>
+
   <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 520px); min-width: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
       <div style="font-weight: 600; font-size: 13px;">Adjustment Schedule</div>

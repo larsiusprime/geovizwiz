@@ -28,6 +28,7 @@ export type WindowManager = {
 
 let _updateToolbarButtonStates: () => void = () => {};
 let _updateLegendPosition: () => void = () => {};
+let _onPinnedStateChanged: (element: HTMLElement, pinned: boolean) => void = () => {};
 
 type DockableWindow = {
   element: HTMLElement;
@@ -70,9 +71,11 @@ let windowZCounter = WINDOW_STACK_BASE;
 export function initWindowCallbacks(callbacks: {
   updateToolbarButtonStates: () => void;
   updateLegendPosition: () => void;
+  onPinnedStateChanged?: (element: HTMLElement, pinned: boolean) => void;
 }) {
   _updateToolbarButtonStates = callbacks.updateToolbarButtonStates;
   _updateLegendPosition = callbacks.updateLegendPosition;
+  _onPinnedStateChanged = callbacks.onPinnedStateChanged ?? (() => {});
 }
 
 export function initWindowDocking(config: {
@@ -847,6 +850,7 @@ function setPinnedState(element: HTMLElement, pinned: boolean) {
   if (!pinned) {
     setPinnedCollapsedState(element, false);
   }
+  _onPinnedStateChanged(element, pinned);
 }
 
 function updatePinnedLayout() {

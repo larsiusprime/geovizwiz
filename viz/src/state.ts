@@ -110,6 +110,7 @@ export const S = {
   isTimeAdjustmentTrendCollapsed: false,
   isTimeAdjustmentFiltersCollapsed: true,
   isCompFinderMinimized: true,
+  isInspectMinimized: true,
   isCompFinderSubjectCollapsed: false,
   isCompFinderCriteriaCollapsed: false,
   isCompFinderCompsCollapsed: false,

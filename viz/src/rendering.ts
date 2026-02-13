@@ -94,6 +94,7 @@ let _showPopup: (props: Record<string, any>, lngLat: maplibregl.LngLatLike, parc
 let _buildPopupHTML: (props: Record<string, any>, parcelId: string) => string = () => '';
 let _addPopupSearchFunctionality: () => void = () => {};
 let _addPopupEditFunctionality: (parcelId: string) => void = () => {};
+let _refreshInspectView: () => void = () => {};
 let _updateCursor: () => void = () => {};
 let _isTextInputElement: (el: Element | null) => boolean = () => false;
 let _activateTool: (tool: string) => void = () => {};
@@ -117,6 +118,7 @@ export type RenderingCallbacks = {
   buildPopupHTML: (props: Record<string, any>, parcelId: string) => string;
   addPopupSearchFunctionality: () => void;
   addPopupEditFunctionality: (parcelId: string) => void;
+  refreshInspectView?: () => void;
   updateCursor: () => void;
   isTextInputElement: (el: Element | null) => boolean;
   activateTool: (tool: string) => void;
@@ -136,6 +138,7 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   _buildPopupHTML = cb.buildPopupHTML;
   _addPopupSearchFunctionality = cb.addPopupSearchFunctionality;
   _addPopupEditFunctionality = cb.addPopupEditFunctionality;
+  _refreshInspectView = cb.refreshInspectView ?? (() => {});
   _updateCursor = cb.updateCursor;
   _isTextInputElement = cb.isTextInputElement;
   _activateTool = cb.activateTool;
@@ -661,11 +664,7 @@ export function applyGrayRendering() {
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
 
-  if (S.activePopup && S.lastPicked) {
-    S.activePopup.setHTML(_buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId)).setLngLat(S.lastPicked.lngLat);
-    _addPopupSearchFunctionality();
-    _addPopupEditFunctionality(S.lastPicked.parcelId);
-  }
+  if (S.lastPicked) _refreshInspectView();
 }
 
 export function applyExtrusion() {
@@ -704,11 +703,7 @@ export function applyExtrusion() {
   // refresh which features are flagged as erroneous for current mode
   updateErrorLayer();
 
-  if (S.activePopup && S.lastPicked) {
-    S.activePopup.setHTML(_buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId)).setLngLat(S.lastPicked.lngLat);
-    _addPopupSearchFunctionality();
-    _addPopupEditFunctionality(S.lastPicked.parcelId);
-  }
+  if (S.lastPicked) _refreshInspectView();
 }
 
 export function fitToData(fc: GeoJSON.FeatureCollection) {

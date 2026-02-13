@@ -486,6 +486,7 @@ const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTML
 const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
 const btnMinimizeTimeAdjustment = document.getElementById('btnMinimizeTimeAdjustment') as HTMLButtonElement;
 const btnMinimizeCompFinder = document.getElementById('btnMinimizeCompFinder') as HTMLButtonElement;
+const btnMinimizeInspect = document.getElementById('btnMinimizeInspect') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
@@ -496,6 +497,9 @@ const legendContent = document.getElementById('legendContent') as HTMLDivElement
 const compFinderControlsEl = document.getElementById('compFinderControls') as HTMLDivElement;
 const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
 const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
+const inspectControlsEl = document.getElementById('inspectControls') as HTMLDivElement;
+const inspectContent = document.getElementById('inspectContent') as HTMLDivElement;
+const btnPinInspect = document.getElementById('btnPinInspect') as HTMLButtonElement;
 const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
 const compFinderUseDistance = document.getElementById('compFinderUseDistance') as HTMLInputElement;
 const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
@@ -774,6 +778,14 @@ const compFinderWin = createWindowManager({
   controlsEl: compFinderControlsEl,
 });
 
+const inspectWin = createWindowManager({
+  getMinimized: () => S.isInspectMinimized,
+  setMinimized: (v) => { S.isInspectMinimized = v; },
+  contentEl: inspectContent,
+  controlsEl: inspectControlsEl,
+  contentDisplay: 'block',
+});
+
 // Convenience aliases matching the old function names
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
@@ -801,11 +813,34 @@ const showCompFinder = () => {
   compFinderWin.show();
   setCompFinderMenuVisible(true);
 };
+const minimizeInspect = inspectWin.minimize;
+const showInspect = inspectWin.show;
 
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
   updateToolbarButtonStates,
   updateLegendPosition,
+  onPinnedStateChanged: (element, pinned) => {
+    if (element !== inspectControlsEl) return;
+    if (pinned) {
+      if (S.activePopup) {
+        suppressPopupCloseClear = true;
+        S.activePopup.remove();
+        suppressPopupCloseClear = false;
+        S.activePopup = null;
+      }
+      if (!S.isInspectMinimized) {
+        renderInspectPinnedContent();
+      }
+      return;
+    }
+    if (S.lastPicked) {
+      showPopupForLastPicked();
+      minimizeInspect();
+    } else {
+      minimizeInspect();
+    }
+  },
 });
 initPositionElements({
   controlsEl,
@@ -829,6 +864,7 @@ initWindowDocking({
   btnPinStatistics,
   btnPinScatterplot,
   btnPinCompFinder,
+  btnPinInspect,
   btnPinLandSchedule,
   btnPinTimeAdjustment,
   btnPinLegend,
@@ -839,6 +875,7 @@ registerDockableWindow(filtersControlsEl, btnPinFilters);
 registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
 registerDockableWindow(compFinderControlsEl, btnPinCompFinder);
+registerDockableWindow(inspectControlsEl, btnPinInspect);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
 registerDockableWindow(timeAdjustmentControlsEl, btnPinTimeAdjustment);
 registerDockableWindow(floatingLegend, btnPinLegend);
@@ -848,6 +885,7 @@ enableWindowResizing(filtersControlsEl);
 enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
 enableWindowResizing(compFinderControlsEl);
+enableWindowResizing(inspectControlsEl);
 enableWindowResizing(landScheduleControlsEl);
 enableWindowResizing(timeAdjustmentControlsEl);
 enableWindowResizing(floatingLegend);
@@ -908,6 +946,21 @@ initRenderingCallbacks({
   buildPopupHTML,
   addPopupSearchFunctionality,
   addPopupEditFunctionality,
+  refreshInspectView: () => {
+    if (!S.lastPicked) {
+      if (isInspectPinned() && !S.isInspectMinimized) {
+        renderInspectPinnedContent();
+      }
+      return;
+    }
+    if (isInspectPinned()) {
+      if (!S.isInspectMinimized) {
+        renderInspectPinnedContent();
+      }
+      return;
+    }
+    showPopupForLastPicked();
+  },
   updateCursor,
   isTextInputElement,
   activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder'),
@@ -1628,24 +1681,97 @@ function clearData() {
   S.parcelPatchMap = new Map();
   hideRenderingToast();
 }
+
+let suppressPopupCloseClear = false;
+
+function isInspectPinned() {
+  return inspectControlsEl.dataset.pinned === 'true';
+}
+
+function buildInspectEmptyHTML() {
+  return '<div style="padding: 4px 2px; color:#6b7280; font-size: 12.5px;">select a parcel to inspect it</div>';
+}
+
+function renderInspectPinnedContent() {
+  if (!isInspectPinned()) return;
+  if (!S.lastPicked) {
+    inspectContent.innerHTML = buildInspectEmptyHTML();
+    return;
+  }
+  inspectContent.innerHTML = buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId);
+  addPopupSearchFunctionality();
+  addPopupEditFunctionality(S.lastPicked.parcelId);
+}
+
+function clearInspectState() {
+  if (S.activePopup) {
+    suppressPopupCloseClear = true;
+    S.activePopup.remove();
+    suppressPopupCloseClear = false;
+    S.activePopup = null;
+  }
+  S.lastPicked = null;
+  if (isInspectPinned() && !S.isInspectMinimized) {
+    renderInspectPinnedContent();
+  }
+}
+
+function closeInspectMenu() {
+  clearInspectState();
+  minimizeInspect();
+}
+
+function showPopupForLastPicked() {
+  if (!S.lastPicked || isInspectPinned()) return;
+
+  if (S.activePopup) {
+    suppressPopupCloseClear = true;
+    S.activePopup.remove();
+    suppressPopupCloseClear = false;
+  }
+
+  const popup = new maplibregl.Popup({
+    closeButton: true,
+    closeOnClick: true,
+    maxWidth: '460px'
+  })
+    .setLngLat(S.lastPicked.lngLat)
+    .setHTML(buildPopupHTML(S.lastPicked.props, S.lastPicked.parcelId))
+    .addTo(S.map);
+
+  popup.on('close', () => {
+    if (S.activePopup !== popup) return;
+    S.activePopup = null;
+    if (!suppressPopupCloseClear) {
+      S.lastPicked = null;
+    }
+  });
+
+  S.activePopup = popup;
+  addPopupSearchFunctionality();
+  addPopupEditFunctionality(S.lastPicked.parcelId);
+}
+
 function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) {
   // Only show popup if info tool is active
   if (!S.isInfoToolActive) return;
-  
-  if (S.activePopup) S.activePopup.remove();
-  S.activePopup = new maplibregl.Popup({
-    closeButton: true,
-    closeOnClick: true,
-    maxWidth: '460px'          // ← wider than default 240px
-  })
-    .setLngLat(lngLat)
-    .setHTML(buildPopupHTML(props, parcelId))
-    .addTo(S.map);
+
   S.lastPicked = { props, lngLat, parcelId };
-  
-  // Add search functionality to the popup
-  addPopupSearchFunctionality();
-  addPopupEditFunctionality(parcelId);
+
+  if (isInspectPinned()) {
+    showInspect();
+    renderInspectPinnedContent();
+    if (S.activePopup) {
+      suppressPopupCloseClear = true;
+      S.activePopup.remove();
+      suppressPopupCloseClear = false;
+      S.activePopup = null;
+    }
+    return;
+  }
+
+  showPopupForLastPicked();
+  minimizeInspect();
 }
 
 function isTextInputElement(element: Element | null): boolean {
@@ -1678,8 +1804,27 @@ function isTextInputElement(element: Element | null): boolean {
 
 function addPopupSearchFunctionality() {
   setTimeout(() => {
-    const popupElement = S.activePopup?.getElement();
+    const popupElement = isInspectPinned() ? inspectContent : S.activePopup?.getElement();
     if (popupElement) {
+      const pinButton = popupElement.querySelector('.inspect-popup-pin-btn') as HTMLButtonElement | null;
+      if (pinButton && pinButton.dataset.pinHandlerAttached !== 'true') {
+        pinButton.dataset.pinHandlerAttached = 'true';
+        pinButton.addEventListener('click', (event) => {
+          event.preventDefault();
+          showInspect();
+          if (!isInspectPinned()) {
+            btnPinInspect.click();
+          }
+          renderInspectPinnedContent();
+          if (S.activePopup) {
+            suppressPopupCloseClear = true;
+            S.activePopup.remove();
+            suppressPopupCloseClear = false;
+            S.activePopup = null;
+          }
+        });
+      }
+
       const searchInput = popupElement.querySelector('#popupSearch') as HTMLInputElement;
       const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement;
       
@@ -1798,7 +1943,7 @@ function formatPopupValue(fieldType: 'numeric' | 'categorical', value: any): str
 
 function addPopupEditFunctionality(parcelId: string) {
   setTimeout(() => {
-    const popupElement = S.activePopup?.getElement();
+    const popupElement = isInspectPinned() ? inspectContent : S.activePopup?.getElement();
     if (!popupElement) return;
     const tableBody = popupElement.querySelector('#popupFieldsTable') as HTMLTableSectionElement | null;
     if (!tableBody || tableBody.dataset.editHandlersAttached === 'true') return;
@@ -2064,10 +2209,14 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
 
   const errMsg = currentModeErrorMessage(props);
   const errRow = errMsg ? `<div style="margin-top:4px;color:#b00020;">${errMsg}</div>` : '';
+  const showInlinePin = !isInspectPinned();
 
   return `
     <div class="gvw-pop" style="max-width:min(92vw, 460px); font-size:12.5px; line-height:1.35;">
-      ${title ? `<div style="font-weight:600;margin-bottom:4px; overflow-wrap:anywhere;">${title}</div>` : ''}
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <div style="font-weight:600; overflow-wrap:anywhere; flex:1;">${escapeHtml(String(title || 'Inspect'))}</div>
+        ${showInlinePin ? `<button type="button" class="inspect-popup-pin-btn" title="Pin" style="border:none;background:none;cursor:pointer;padding:2px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;"><img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;"></button>` : ''}
+      </div>
       ${metricRow}
       ${heightRow}
 	  ${errRow}
@@ -2350,6 +2499,7 @@ btnMinimizeFilters.addEventListener('click', minimizeFilters);
 btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
 btnMinimizeCompFinder.addEventListener('click', minimizeCompFinder);
+btnMinimizeInspect.addEventListener('click', closeInspectMenu);
 
 landScheduleAddTableButton.addEventListener('click', () => {
   addLandScheduleTable();
@@ -2597,6 +2747,7 @@ makeDraggable(statisticsControlsEl);
 makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
 makeDraggable(compFinderControlsEl);
+makeDraggable(inspectControlsEl);
 makeDraggable(landScheduleControlsEl);
 makeDraggable(timeAdjustmentControlsEl);
 positionSettingsPanel();

@@ -175,7 +175,7 @@ export const S = {
   // --- Selection ---
   selectedLegendItems: new Set<string>(),
   selectedParcels: new Set<string>(),
-  highlightColor: '#FFFF00',
+  highlightColor: '#32CD32',
   selectionControlsPanel: null as HTMLDivElement | null,
 
   // --- Legend sorting ---

@@ -1704,10 +1704,10 @@ function createInspectFocusMarker() {
   markerEl.style.width = '26px';
   markerEl.style.height = '26px';
   markerEl.style.transform = 'translate(-13px, -26px)';
-  markerEl.style.setProperty('--c-outline2', '#4a0f0f');
-  markerEl.style.setProperty('--c-outline1', '#7f1d1d');
+  markerEl.style.setProperty('--c-outline2', '#ffffff');
+  markerEl.style.setProperty('--c-outline1', '#000000');
   markerEl.style.setProperty('--c-middle', '#dc2626');
-  markerEl.style.setProperty('--c-dot', '#ffffff');
+  markerEl.style.setProperty('--c-dot', '#000000');
   markerEl.innerHTML = PIN_SVG_RAW;
   return new maplibregl.Marker({ element: markerEl, anchor: 'bottom' });
 }
@@ -2209,10 +2209,15 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   }).join('');
 
   const showInlinePin = !isInspectPinned();
-  const popupMaxWidthStyle = showInlinePin ? 'max-width:min(92vw, 460px);' : 'max-width:none; width:100%;';
+  const popupContainerStyle = showInlinePin
+    ? 'max-width:min(92vw, 460px); font-size:12.5px; line-height:1.35;'
+    : 'max-width:none; width:100%; height:100%; display:flex; flex-direction:column; font-size:12.5px; line-height:1.35;';
+  const popupScrollStyle = showInlinePin
+    ? 'overflow-y:auto; max-height:400px;'
+    : 'overflow-y:auto; max-height:none; flex:1; min-height:0;';
 
   return `
-    <div class="gvw-pop" style="${popupMaxWidthStyle} font-size:12.5px; line-height:1.35;">
+    <div class="gvw-pop" style="${popupContainerStyle}">
       ${showInlinePin ? `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-bottom:4px;">
         <button type="button" class="inspect-popup-pin-btn" title="Pin" style="border:none;background:none;cursor:pointer;padding:2px;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;"><img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;"></button>
         <button type="button" class="inspect-popup-close-btn" title="Close" style="border:none;background:none;cursor:pointer;font-size:14px;color:#666;padding:2px;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;">❌</button>
@@ -2220,7 +2225,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <input type="text" id="popupSearch" placeholder="Search fields..." style="flex:1;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
       </div>
-      <div style="overflow-y:auto; max-height:400px;">
+      <div style="${popupScrollStyle}">
         <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
           <colgroup>
           <col span="1" style="width:8%">

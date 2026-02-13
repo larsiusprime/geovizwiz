@@ -255,6 +255,7 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
     S.activePopup.remove();
     S.activePopup = null;
     S.lastPicked = null;
+    if (S.inspectFocusMarker) { S.inspectFocusMarker.remove(); S.inspectFocusMarker = null; }
   }
 }
 

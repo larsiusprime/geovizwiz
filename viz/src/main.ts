@@ -5,7 +5,7 @@ import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
-
+import PIN_SVG_RAW from './svg/pin.svg?raw';
 
 // Local imports
 import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
@@ -109,7 +109,6 @@ import {
   buildNumericColorRanges, buildNumericColorExpression,
   buildValueExpression,
   fitToData, setQuality,
-  computeDisplayedMetricFromProps, computeExtrusionHeightMeters,
   scheduleUpdate, chooseBestMetricUnitForMultiplier,
   populateFieldDropdownFromList, detectNumericFieldsFromFeatures,
   getNumericValuesNormalized, computeStatsNormalized,
@@ -1692,6 +1691,33 @@ function buildInspectEmptyHTML() {
   return '<div style="padding: 4px 2px; color:#6b7280; font-size: 12.5px;">select a parcel to inspect it</div>';
 }
 
+function removeInspectFocusMarker() {
+  if (S.inspectFocusMarker) {
+    S.inspectFocusMarker.remove();
+    S.inspectFocusMarker = null;
+  }
+}
+
+function createInspectFocusMarker() {
+  const markerEl = document.createElement('div');
+  markerEl.className = 'inspect-focus-marker';
+  markerEl.style.width = '26px';
+  markerEl.style.height = '26px';
+  markerEl.style.transform = 'translate(-13px, -26px)';
+  markerEl.style.setProperty('--c-outline2', '#4a0f0f');
+  markerEl.style.setProperty('--c-outline1', '#7f1d1d');
+  markerEl.style.setProperty('--c-middle', '#dc2626');
+  markerEl.style.setProperty('--c-dot', '#ffffff');
+  markerEl.innerHTML = PIN_SVG_RAW;
+  return new maplibregl.Marker({ element: markerEl, anchor: 'bottom' });
+}
+
+function syncInspectFocusMarker() {
+  removeInspectFocusMarker();
+  if (!S.lastPicked) return;
+  S.inspectFocusMarker = createInspectFocusMarker().setLngLat(S.lastPicked.lngLat).addTo(S.map);
+}
+
 function renderInspectPinnedContent() {
   if (!isInspectPinned()) return;
   if (!S.lastPicked) {
@@ -1711,6 +1737,7 @@ function clearInspectState() {
     S.activePopup = null;
   }
   S.lastPicked = null;
+  removeInspectFocusMarker();
   if (isInspectPinned() && !S.isInspectMinimized) {
     renderInspectPinnedContent();
   }
@@ -1731,7 +1758,7 @@ function showPopupForLastPicked() {
   }
 
   const popup = new maplibregl.Popup({
-    closeButton: true,
+    closeButton: false,
     closeOnClick: true,
     maxWidth: '460px'
   })
@@ -1744,6 +1771,10 @@ function showPopupForLastPicked() {
     S.activePopup = null;
     if (!suppressPopupCloseClear) {
       S.lastPicked = null;
+      removeInspectFocusMarker();
+      if (isInspectPinned() && !S.isInspectMinimized) {
+        renderInspectPinnedContent();
+      }
     }
   });
 
@@ -1757,6 +1788,7 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, pa
   if (!S.isInfoToolActive) return;
 
   S.lastPicked = { props, lngLat, parcelId };
+  syncInspectFocusMarker();
 
   if (isInspectPinned()) {
     showInspect();
@@ -1822,6 +1854,15 @@ function addPopupSearchFunctionality() {
             suppressPopupCloseClear = false;
             S.activePopup = null;
           }
+        });
+      }
+
+      const closeButton = popupElement.querySelector('.inspect-popup-close-btn') as HTMLButtonElement | null;
+      if (closeButton && closeButton.dataset.closeHandlerAttached !== 'true') {
+        closeButton.dataset.closeHandlerAttached = 'true';
+        closeButton.addEventListener('click', (event) => {
+          event.preventDefault();
+          closeInspectMenu();
         });
       }
 
@@ -2134,26 +2175,7 @@ function addPopupEditFunctionality(parcelId: string) {
 /* --- rendering functions → see rendering.ts --- */
 
 
-function currentModeErrorMessage(props: Record<string, any>): string | null {
-  if (S.normalizationMode === 'perLand' && S.landSizeField) {
-    const v = Number((props as any)[S.landSizeField]);
-    if (!Number.isFinite(v) || v <= 0) return '⚠ Invalid land size (≤ 0 or missing)';
-  } else if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
-    const v = Number((props as any)[S.bldgSizeField]);
-    if (Number.isFinite(v) && v < 0) return '⚠ Negative building size';
-    if (v === 0) return 'ℹ Building size is 0 — shown flat (not an error)';
-  }
-  return null;
-}
-
 function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
-  const title = props.name ?? props.NAME ?? props.id ?? props.ID ?? '';
-  const metric = computeDisplayedMetricFromProps(props);
-  const heightM = metric != null ? computeExtrusionHeightMeters(metric) : null;
-
-  const unitKey = unitsSelect.value as keyof typeof UNIT_TO_METERS;
-  const unitText = (unitsSelect.options[unitsSelect.selectedIndex]?.text || unitKey);
-
   const fieldsToShow = Array.from(new Set([
     ...S.chosenNumericFields,
     ...S.chosenCategoricalFields,
@@ -2171,71 +2193,39 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
     const nameStyle = changed ? 'font-weight:700;' : '';
     return `
       <tr data-field="${escapeHtml(k)}" data-field-type="${fieldType}" style="${rowStyle}">
-        <td style="padding:2px 6px; overflow-wrap:anywhere;">
+        <td style="padding:2px 4px; text-align:left; white-space:nowrap; vertical-align:top;">
+          <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">✏️</button>
+        </td>
+        <td style="padding:2px 4px; text-align:left; white-space:nowrap; vertical-align:top;">
+          <button type="button" class="popup-reset-btn" title="Reset to original" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;${changed ? '' : 'display:none;'}">↩</button>
+        </td>
+        <td style="padding:2px 6px; overflow-wrap:anywhere; vertical-align:top;">
           <code style="white-space:normal;${nameStyle}">${escapeHtml(k)}</code>
         </td>
-        <td style="padding:2px 6px; text-align:right; white-space:nowrap;" data-value-cell>
+        <td style="padding:2px 6px; text-align:right; white-space:normal; overflow-wrap:anywhere;" data-value-cell>
           ${printable}
-        </td>
-        <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
-          <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">
-            ✏️
-          </button>
-        </td>
-        <td style="padding:2px 6px; text-align:right; white-space:nowrap;">
-          <button type="button" class="popup-reset-btn" title="Reset to original" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;${changed ? '' : 'display:none;'}">↩</button>
         </td>
       </tr>`;
   }).join('');
 
-  const modeLabel =
-    S.normalizationMode === 'perLand' ? `per ${S.landSizeField || 'land size'}` :
-    S.normalizationMode === 'perBuilding' ? `per ${S.bldgSizeField || 'building size'}` :
-    'as-is';
-
-  const metricRow = S.currentFieldType === 'categorical' 
-    ? `<div><strong>Category</strong>: ${S.currentField ? (props[S.currentField] ?? '—') : '—'}</div>`
-    : (metric != null)
-      ? `<div><strong>Display metric (${modeLabel})</strong>: ${fmt(metric)}</div>`
-      : `<div><strong>Display metric</strong>: —</div>`;
-
-  const heightRow = S.currentFieldType === 'categorical'
-    ? `<div><strong>Extrusion height</strong>: Flat (no extrusion for categorical fields)</div>`
-    : !S.is3DMode
-      ? `<div><strong>Extrusion height</strong>: Flat (3D mode disabled)</div>`
-      : (heightM != null)
-        ? `<div><strong>Extrusion height</strong>: ${fmt(heightM / (UNIT_TO_METERS[unitKey] || 1))} ${unitText} (${fmt(heightM)} m)</div>`
-        : `<div><strong>Extrusion height</strong>: —</div>`;
-
-  const errMsg = currentModeErrorMessage(props);
-  const errRow = errMsg ? `<div style="margin-top:4px;color:#b00020;">${errMsg}</div>` : '';
   const showInlinePin = !isInspectPinned();
 
   return `
     <div class="gvw-pop" style="max-width:min(92vw, 460px); font-size:12.5px; line-height:1.35;">
-      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-        <div style="font-weight:600; overflow-wrap:anywhere; flex:1;">${escapeHtml(String(title || 'Inspect'))}</div>
-        ${showInlinePin ? `<button type="button" class="inspect-popup-pin-btn" title="Pin" style="border:none;background:none;cursor:pointer;padding:2px;width:20px;height:20px;display:flex;align-items:center;justify-content:center;"><img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;"></button>` : ''}
-      </div>
-      ${metricRow}
-      ${heightRow}
-	  ${errRow}
-      ${S.is3DMode && S.currentFieldType === 'numeric' ? 
-        `<div style="margin-top:6px; font-size:12px; color:#666">
-          Multiplier × unit: ${fmt(Number(multInput.value))} × ${unitKey}
-        </div>` : ''}
-      <div style="height:1px;background:#eee;margin:6px 0"></div>
-      <div style="font-weight:600;margin-bottom:2px">Loaded fields</div>
+      ${showInlinePin ? `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-bottom:4px;">
+        <button type="button" class="inspect-popup-pin-btn" title="Pin" style="border:none;background:none;cursor:pointer;padding:2px;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;"><img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;"></button>
+        <button type="button" class="inspect-popup-close-btn" title="Close" style="border:none;background:none;cursor:pointer;font-size:14px;color:#666;padding:2px;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;">❌</button>
+      </div>` : ''}
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
         <input type="text" id="popupSearch" placeholder="Search fields..." style="flex:1;padding:4px 6px;border:1px solid #ddd;border-radius:4px;font-size:12px;">
       </div>
       <div style="overflow-y:auto; max-height:400px;">
         <table style="width:100%; border-collapse:collapse; font-size:12px; table-layout:fixed;">
           <colgroup>
-          <col span="1" style="width:53%">
-          <col span="1" style="width:29%">
-          <col span="1" style="width:9%">
-          <col span="1" style="width:9%">
+          <col span="1" style="width:8%">
+          <col span="1" style="width:8%">
+          <col span="1" style="width:44%">
+          <col span="1" style="width:40%">
           </colgroup>
           <tbody id="popupFieldsTable">
           ${rows}

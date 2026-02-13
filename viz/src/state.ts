@@ -86,6 +86,7 @@ export const S = {
   // --- Popup ---
   activePopup: null as maplibregl.Popup | null,
   lastPicked: null as { props: Record<string, any>; lngLat: maplibregl.LngLatLike; parcelId: string } | null,
+  inspectFocusMarker: null as maplibregl.Marker | null,
 
   // --- Update scheduling ---
   _updTimer: null as number | null,

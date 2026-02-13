@@ -139,6 +139,9 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   _addPopupSearchFunctionality = cb.addPopupSearchFunctionality;
   _addPopupEditFunctionality = cb.addPopupEditFunctionality;
   _refreshInspectView = cb.refreshInspectView ?? (() => {});
+  void _buildPopupHTML;
+  void _addPopupSearchFunctionality;
+  void _addPopupEditFunctionality;
   _updateCursor = cb.updateCursor;
   _isTextInputElement = cb.isTextInputElement;
   _activateTool = cb.activateTool;
@@ -280,6 +283,7 @@ export function addExtrusionLayer(layer: LayerState) {
       S.activePopup.remove();
       S.activePopup = null;
       S.lastPicked = null;
+      if (S.inspectFocusMarker) { S.inspectFocusMarker.remove(); S.inspectFocusMarker = null; }
     }
   });
 
@@ -300,6 +304,7 @@ export function addExtrusionLayer(layer: LayerState) {
         S.activePopup.remove();
         S.activePopup = null;
         S.lastPicked = null;
+        if (S.inspectFocusMarker) { S.inspectFocusMarker.remove(); S.inspectFocusMarker = null; }
       }
 
       const activeElement = document.activeElement;

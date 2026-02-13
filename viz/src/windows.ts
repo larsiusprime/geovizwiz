@@ -699,9 +699,7 @@ function getWindowRequiredMinWidth(element: HTMLElement) {
 }
 
 function getColumnMinWidth(column: HTMLDivElement) {
-  const children = Array.from(column.children)
-    .filter((child): child is HTMLElement => child instanceof HTMLElement)
-    .filter(child => child.classList.contains('viz-window'))
+  const children = getColumnWindows(column)
     .filter(child => window.getComputedStyle(child).display !== 'none');
   if (children.length === 0) return MIN_WINDOW_WIDTH;
   return children.reduce((maxWidth, child) => Math.max(maxWidth, getMinWindowWidth(child)), MIN_WINDOW_WIDTH);
@@ -713,7 +711,7 @@ function getColumnIndex(column: HTMLDivElement) {
 
 function hasPinnedWindows() {
   if (!pinnedContainer) return false;
-  return pinnedContainer.querySelectorAll('.pinned-column > .viz-window').length > 0;
+  return pinnedContainer.querySelectorAll('.pinned-column .viz-window').length > 0;
 }
 
 function isPinned(element: HTMLElement) {
@@ -837,7 +835,7 @@ function unpinWindow(element: HTMLElement) {
   element.style.right = element.dataset.floatRight ?? '';
   element.style.transform = element.dataset.floatTransform ?? 'none';
   appContainer.appendChild(element);
-  if (column?.classList.contains('pinned-column') && column.children.length === 0) {
+  if (column?.classList.contains('pinned-column') && getColumnWindows(column as HTMLDivElement).length === 0) {
     column.remove();
   }
   updatePinButtonState(element);
@@ -863,9 +861,7 @@ function updatePinnedLayout() {
   let totalWidth = paddingLeft + paddingRight;
   const visibleColumns: Array<{ column: HTMLDivElement; width: number }> = [];
   columns.forEach((column) => {
-    const children = Array.from(column.children) as HTMLElement[];
-    const visibleChildren = children
-      .filter(child => child.classList.contains('viz-window'))
+    const visibleChildren = getColumnWindows(column)
       .filter(child => window.getComputedStyle(child).display !== 'none');
     if (visibleChildren.length === 0) {
       columnWidthOverrides.delete(getColumnIndex(column));
@@ -914,6 +910,10 @@ function createPinnedColumn() {
   column.className = 'pinned-column';
   const nextIndex = getNextColumnIndex();
   column.dataset.columnIndex = `${nextIndex}`;
+  const scrollContent = document.createElement('div');
+  scrollContent.className = 'pinned-column-scroll';
+  column.appendChild(scrollContent);
+
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'pinned-column-resize-handle';
   resizeHandle.setAttribute('aria-hidden', 'true');
@@ -950,9 +950,7 @@ function canColumnFitWindow(
   containerHeight = pinnedContainer?.getBoundingClientRect().height ?? 0,
   gapValue = parseFloat(window.getComputedStyle(pinnedContainer ?? document.body).gap || `${PINNED_GAP_FALLBACK}`)
 ) {
-  const visibleChildren = Array.from(column.children)
-    .filter((child): child is HTMLElement => child instanceof HTMLElement)
-    .filter(child => child.classList.contains('viz-window'))
+  const visibleChildren = getColumnWindows(column)
     .filter(child => window.getComputedStyle(child).display !== 'none');
   const usedHeight = visibleChildren.reduce((sum, child) => sum + child.getBoundingClientRect().height, 0)
     + gapValue * Math.max(0, visibleChildren.length - 1);
@@ -963,12 +961,11 @@ function canColumnFitWindow(
 
 function insertWindowInColumn(column: HTMLDivElement, element: HTMLElement) {
   const desiredOrder = Number(element.dataset.pinnedOrder ?? '');
-  const windows = Array.from(column.children)
-    .filter((child): child is HTMLElement => child instanceof HTMLElement)
-    .filter(child => child.classList.contains('viz-window'));
+  const windows = getColumnWindows(column);
+  const windowContainer = getColumnWindowContainer(column);
   if (Number.isNaN(desiredOrder)) {
     element.dataset.pinnedOrder = `${windows.length}`;
-    column.appendChild(element);
+    windowContainer.appendChild(element);
     return;
   }
   const sorted = windows.sort((a, b) => {
@@ -978,9 +975,9 @@ function insertWindowInColumn(column: HTMLDivElement, element: HTMLElement) {
   });
   const target = sorted.find(child => Number(child.dataset.pinnedOrder ?? 0) > desiredOrder);
   if (target) {
-    column.insertBefore(element, target);
+    windowContainer.insertBefore(element, target);
   } else {
-    column.appendChild(element);
+    windowContainer.appendChild(element);
   }
 }
 
@@ -1018,6 +1015,9 @@ function getOrCreateColumnByIndex(index: number) {
   const column = document.createElement('div');
   column.className = 'pinned-column';
   column.dataset.columnIndex = `${index}`;
+  const scrollContent = document.createElement('div');
+  scrollContent.className = 'pinned-column-scroll';
+  column.appendChild(scrollContent);
   const resizeHandle = document.createElement('div');
   resizeHandle.className = 'pinned-column-resize-handle';
   resizeHandle.setAttribute('aria-hidden', 'true');
@@ -1072,4 +1072,15 @@ function getPinnedDropColumn(x: number, y: number) {
     const rect = column.getBoundingClientRect();
     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
   }) ?? null;
+}
+
+function getColumnWindowContainer(column: HTMLDivElement) {
+  return (column.querySelector(':scope > .pinned-column-scroll') as HTMLDivElement | null) ?? column;
+}
+
+function getColumnWindows(column: HTMLDivElement) {
+  const windowContainer = getColumnWindowContainer(column);
+  return Array.from(windowContainer.children)
+    .filter((child): child is HTMLElement => child instanceof HTMLElement)
+    .filter(child => child.classList.contains('viz-window'));
 }

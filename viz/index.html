@@ -28,24 +28,34 @@
     }
 
     .pinned-column {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) var(--pinned-gutter);
+      height: 100%;
+      position: relative;
+      overflow: hidden;
+      --pinned-gutter: 12px;
+      background: #f3f4f6;
+    }
+
+    .pinned-column-scroll {
       display: flex;
       flex-direction: column;
       gap: 2px;
-      height: 100%;
-      position: relative;
+      min-width: 0;
+      min-height: 0;
       overflow-y: auto;
       overflow-x: hidden;
-      --pinned-gutter: 16px;
-      padding-right: var(--pinned-gutter);
+      scrollbar-gutter: stable;
+    }
+
+    .pinned-column-scroll::-webkit-scrollbar-track {
       background: #f3f4f6;
     }
 
     .pinned-column-resize-handle {
-      position: absolute;
-      right: -8px;
-      top: 0;
-      bottom: 0;
-      width: 16px;
+      grid-column: 2;
+      width: 100%;
+      height: 100%;
       cursor: ew-resize;
       z-index: 2;
     }

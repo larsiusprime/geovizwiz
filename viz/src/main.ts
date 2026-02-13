@@ -1873,10 +1873,10 @@ function addPopupSearchFunctionality() {
         const filterFields = (searchText: string) => {
           const rows = tableBody.querySelectorAll('tr');
           rows.forEach(row => {
-            const fieldNameCell = row.querySelector('td:first-child code');
+            const fieldNameCell = row.querySelector('code');
             if (fieldNameCell) {
               const fieldName = fieldNameCell.textContent || '';
-              const matches = fieldName.toLowerCase().includes(searchText.toLowerCase());
+              const matches = fieldName.toLowerCase().startsWith(searchText.toLowerCase());
               (row as HTMLElement).style.display = matches ? '' : 'none';
             }
           });
@@ -1993,7 +1993,7 @@ function addPopupEditFunctionality(parcelId: string) {
     const updateRowChangedState = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical') => {
       const changed = isFieldChanged(parcelId, field, fieldType);
       row.style.background = changed ? 'rgba(255, 0, 0, 0.08)' : '';
-      const fieldCell = row.querySelector('td:first-child code') as HTMLElement | null;
+      const fieldCell = row.querySelector('code') as HTMLElement | null;
       if (fieldCell) fieldCell.style.fontWeight = changed ? '700' : '';
       const resetButton = row.querySelector('.popup-reset-btn') as HTMLButtonElement | null;
       if (resetButton) resetButton.style.display = changed ? 'inline-flex' : 'none';
@@ -2209,9 +2209,10 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   }).join('');
 
   const showInlinePin = !isInspectPinned();
+  const popupMaxWidthStyle = showInlinePin ? 'max-width:min(92vw, 460px);' : 'max-width:none; width:100%;';
 
   return `
-    <div class="gvw-pop" style="max-width:min(92vw, 460px); font-size:12.5px; line-height:1.35;">
+    <div class="gvw-pop" style="${popupMaxWidthStyle} font-size:12.5px; line-height:1.35;">
       ${showInlinePin ? `<div style="display:flex; align-items:center; justify-content:flex-end; gap:6px; margin-bottom:4px;">
         <button type="button" class="inspect-popup-pin-btn" title="Pin" style="border:none;background:none;cursor:pointer;padding:2px;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;"><img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;"></button>
         <button type="button" class="inspect-popup-close-btn" title="Close" style="border:none;background:none;cursor:pointer;font-size:14px;color:#666;padding:2px;width:20px;height:20px;border-radius:3px;display:flex;align-items:center;justify-content:center;">❌</button>

@@ -226,6 +226,60 @@ export function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
 
 let keyHandlersInstalled = false;
 
+
+function polygonCentroid(ring: number[][]): [number, number] | null {
+  if (ring.length < 3) return null;
+  let area2 = 0;
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < ring.length - 1; i += 1) {
+    const [x0, y0] = ring[i];
+    const [x1, y1] = ring[i + 1];
+    const cross = (x0 * y1) - (x1 * y0);
+    area2 += cross;
+    cx += (x0 + x1) * cross;
+    cy += (y0 + y1) * cross;
+  }
+  if (Math.abs(area2) < 1e-12) return null;
+  return [cx / (3 * area2), cy / (3 * area2)];
+}
+
+function getFeatureInspectFocusLngLat(feature: GeoJSON.Feature, fallback: maplibregl.LngLat): maplibregl.LngLatLike {
+  const geom = feature.geometry;
+  if (!geom) return fallback;
+
+  if (geom.type === 'Polygon') {
+    const centroid = polygonCentroid((geom.coordinates?.[0] ?? []) as number[][]);
+    if (centroid) return centroid as [number, number];
+  }
+
+  if (geom.type === 'MultiPolygon') {
+    let best: { area: number; centroid: [number, number] } | null = null;
+    for (const poly of geom.coordinates as number[][][][]) {
+      const ring = poly?.[0] ?? [];
+      const centroid = polygonCentroid(ring as number[][]);
+      if (!centroid) continue;
+      let area = 0;
+      for (let i = 0; i < ring.length - 1; i += 1) {
+        const [x0, y0] = ring[i];
+        const [x1, y1] = ring[i + 1];
+        area += (x0 * y1) - (x1 * y0);
+      }
+      const absArea = Math.abs(area);
+      if (!best || absArea > best.area) {
+        best = { area: absArea, centroid };
+      }
+    }
+    if (best) return best.centroid;
+  }
+
+  const bounds = bbox({ type: 'FeatureCollection', features: [feature] });
+  if (bounds) {
+    return [(bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2] as [number, number];
+  }
+  return fallback;
+}
+
 export function addExtrusionLayer(layer: LayerState) {
   if (S.map.getLayer(layer.layerId)) return;
   S.map.addLayer({
@@ -251,7 +305,8 @@ export function addExtrusionLayer(layer: LayerState) {
     if (S.isInfoToolActive) {
       const props = (f.properties || {}) as Record<string, any>;
       const parcelId = getParcelId(f);
-      _showPopup(props, e.lngLat, parcelId);
+      const focusLngLat = getFeatureInspectFocusLngLat(f as GeoJSON.Feature, e.lngLat);
+      _showPopup(props, focusLngLat, parcelId);
       return;
     }
 

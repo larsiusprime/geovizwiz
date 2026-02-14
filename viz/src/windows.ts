@@ -698,6 +698,15 @@ function getMinWindowHeight(element: HTMLElement) {
   if (isPinnedCollapsed(element)) {
     return getHeaderHeight(element);
   }
+  if (isPinned(element)) {
+    const styles = window.getComputedStyle(element);
+    const cssMinHeight = parseFloat(styles.minHeight || '0');
+    return Math.max(
+      MIN_WINDOW_HEIGHT,
+      Number.isFinite(cssMinHeight) ? cssMinHeight : 0,
+      getHeaderHeight(element) + 40
+    );
+  }
   return Math.max(MIN_WINDOW_HEIGHT, element.scrollHeight);
 }
 

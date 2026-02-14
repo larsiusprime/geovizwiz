@@ -167,7 +167,7 @@ export function getOpacityValue(): number {
 }
 
 export function getRampName(): string {
-  return _rampSelect?.value ?? 'Viridis';
+  return _rampSelect?.value ?? 'Magma';
 }
 
 /* ================================================================== */
@@ -535,7 +535,7 @@ export function buildCategoricalColorPairs(): Array<[string, string]> {
     pairs.push(['', S.singleColorValue]);
   } else if (S.categoricalColorMode === 'colorRamp') {
     // Color ramp: sort categories alphabetically and assign colors linearly
-    const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Viridis'];
+    const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Magma'];
     const denom = Math.max(1, sortedCategories.length - 1);
 
     for (let i = 0; i < sortedCategories.length; i++) {
@@ -603,7 +603,7 @@ export function buildCategoricalColorExpression(): Expression {
 export function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
   if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return [];
 
-  const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Viridis'];
+  const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Magma'];
   let ranges: Array<{ min: number; max: number; color: string; rangeKey: string }> = [];
 
   if (S.colorMode === 'quantiles' && S.colorBreaks && S.colorBreaks.length) {
@@ -714,8 +714,12 @@ export function applyGrayRendering() {
   const ids = _getCurrentLayerIds();
   if (!ids) return;
 
-  // Apply gray color and no extrusion when no field is selected
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', '#888');
+  // Apply gray color when no field is selected, but preserve selected-feature highlighting.
+  const grayWithSelectionColor: Expression = ['case',
+    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
+    '#888'
+  ] as any;
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
 
@@ -947,12 +951,12 @@ export function computeAndApplyAutoMultiplier(
 
   // ---- Color domain / breaks ----
   if (S.colorMode === 'quantiles') {
-    const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Viridis'];
+    const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Magma'];
     S.colorBreaks = quantileBreaks(vals, ramp.length, 1, 99); // p1..p99 equal-frequency bins
     S.colorDomain = null;
   } else {
     // continuous = EQUAL INTERVAL classes across p1..p99
-    const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Viridis'];
+    const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Magma'];
     const pLow = percentile(vals, 1);
     const pHigh = percentile(vals, 99);
     let lo = Number.isFinite(pLow) ? pLow : 0;

@@ -327,7 +327,7 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     colorMode: 'quantiles',
     categoricalColorMode: 'random',
     singleColorValue: '#3b82f6',
-    ramp: _rampSelect?.value ?? 'Viridis',
+    ramp: _rampSelect?.value ?? 'Magma',
     colorDomain: null,
     colorBreaks: null,
     cachedExtrusionSettings: null,
@@ -340,7 +340,7 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     hiddenLegendItems: new Set(),
     selectedLegendItems: new Set(),
     selectedParcels: new Set(),
-    highlightColor: '#32CD32',
+    highlightColor: '#00FF00',
     legendSortField: 'count',
     legendSortDirection: 'desc',
     customColors: new Map(),
@@ -634,7 +634,7 @@ export function removeLayer(layerId: string) {
       S.hiddenLegendItems = new Set();
       S.selectedLegendItems = new Set();
       S.selectedParcels = new Set();
-      S.highlightColor = '#32CD32';
+      S.highlightColor = '#00FF00';
       S.filters = [];
       S.filterMode = 'none';
       S.filterActionMode = 'none';

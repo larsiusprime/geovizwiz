@@ -676,7 +676,7 @@ compFinderCompsToggle.addEventListener('click', () => {
 for (const key of Object.keys(COLOR_RAMPS)) {
   const opt = document.createElement('option'); opt.value = key; opt.textContent = key; rampSelect.appendChild(opt);
 }
-rampSelect.value = 'Viridis';
+rampSelect.value = 'Magma';
 
 
 /* ---------------- Layer & Data Store functions — see ./layers.ts ----------------- */

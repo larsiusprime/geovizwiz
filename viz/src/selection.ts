@@ -19,6 +19,7 @@ let _persistCurrentLayerState: () => void = () => {};
 let _updateLegendPosition: () => void = () => {};
 let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
+let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
 const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
@@ -47,6 +48,12 @@ export function initSelection(cb: SelectionCallbacks) {
   _updateLegendPosition = cb.updateLegendPosition;
   _getFloatingLegend = cb.getFloatingLegend;
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
+
+  if (_selectionControlsInvariantTimer === null) {
+    _selectionControlsInvariantTimer = window.setInterval(() => {
+      enforceSelectionControlsVisibilityInvariant();
+    }, 150);
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -573,22 +580,29 @@ function ensureSelectionControlsOpen(panel: HTMLDivElement) {
   }
 }
 
+function enforceSelectionControlsVisibilityInvariant() {
+  if (S.selectedParcels.size <= 0) return;
+
+  if (!S.selectionControlsPanel) {
+    createSelectionControlsPanel();
+  }
+
+  if (!S.selectionControlsPanel) return;
+
+  ensureSelectionControlsOpen(S.selectionControlsPanel);
+  const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
+  if (countElement) {
+    countElement.textContent = S.selectedParcels.size.toString();
+  }
+}
+
 export function updateSelectionControls() {
   if (S.selectedParcels.size === 0) {
     if (S.selectionControlsPanel) {
       S.selectionControlsPanel.style.display = 'none';
     }
   } else {
-    if (!S.selectionControlsPanel) {
-      createSelectionControlsPanel();
-    }
-    if (S.selectionControlsPanel) {
-      ensureSelectionControlsOpen(S.selectionControlsPanel);
-      const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
-      if (countElement) {
-        countElement.textContent = S.selectedParcels.size.toString();
-      }
-    }
+    enforceSelectionControlsVisibilityInvariant();
   }
   if (S.statsSubjectMode === 'selected') {
     _updateStatisticsResults();

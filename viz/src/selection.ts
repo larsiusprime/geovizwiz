@@ -510,7 +510,7 @@ function createSelectionControlsPanel() {
         </button>
       </div>
     </div>
-    <div style="padding: 12px;">
+    <div data-window-content style="padding: 12px; display: block;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
         <span style="font-size: 12px;">Selected:</span>
         <span id="selectedCount" style="font-weight: 600;">${S.selectedParcels.size}</span>
@@ -550,6 +550,29 @@ function createSelectionControlsPanel() {
   _updateLegendPosition();
 }
 
+function ensureSelectionControlsOpen(panel: HTMLDivElement) {
+  panel.style.display = 'block';
+  if (panel.dataset.pinnedCollapsed !== 'true') return;
+
+  panel.dataset.pinnedCollapsed = 'false';
+  panel.classList.remove('is-pinned-collapsed');
+  panel.style.minHeight = panel.dataset.expandedMinHeight ?? '';
+  panel.style.height = '';
+
+  const contentEl = panel.querySelector('[data-window-content]') as HTMLDivElement | null;
+  if (contentEl) {
+    const expandedDisplay = contentEl.dataset.expandedDisplay || 'block';
+    contentEl.style.display = expandedDisplay;
+  }
+
+  const collapseButton = panel.querySelector('.window-pin-collapse') as HTMLButtonElement | null;
+  if (collapseButton) {
+    collapseButton.title = 'Collapse pinned menu';
+    collapseButton.setAttribute('aria-expanded', 'true');
+    collapseButton.style.transform = 'none';
+  }
+}
+
 export function updateSelectionControls() {
   if (S.selectedParcels.size === 0) {
     if (S.selectionControlsPanel) {
@@ -560,7 +583,7 @@ export function updateSelectionControls() {
       createSelectionControlsPanel();
     }
     if (S.selectionControlsPanel) {
-      S.selectionControlsPanel.style.display = 'block';
+      ensureSelectionControlsOpen(S.selectionControlsPanel);
       const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
       if (countElement) {
         countElement.textContent = S.selectedParcels.size.toString();

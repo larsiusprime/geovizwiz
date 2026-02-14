@@ -340,7 +340,7 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     hiddenLegendItems: new Set(),
     selectedLegendItems: new Set(),
     selectedParcels: new Set(),
-    highlightColor: '#FFFF00',
+    highlightColor: '#32CD32',
     legendSortField: 'count',
     legendSortDirection: 'desc',
     customColors: new Map(),
@@ -634,7 +634,7 @@ export function removeLayer(layerId: string) {
       S.hiddenLegendItems = new Set();
       S.selectedLegendItems = new Set();
       S.selectedParcels = new Set();
-      S.highlightColor = '#FFFF00';
+      S.highlightColor = '#32CD32';
       S.filters = [];
       S.filterMode = 'none';
       S.filterActionMode = 'none';

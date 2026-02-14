@@ -1572,6 +1572,8 @@ window.addEventListener('data-sources-changed', () => {
 async function loadSelectedColumns() {
   if (!S.lastAsyncBuffer || !S.lastFile) return;
   showLoading('Reading geometry + selected fields…');
+  const hadDataBeforeLoad = Boolean(S.currentGeoJSON?.features?.length);
+  let shouldAutoZoomAfterLoad = false;
 
   try {
     const result: any = await toGeoJson({ file: S.lastAsyncBuffer, compressors });
@@ -1659,13 +1661,16 @@ async function loadSelectedColumns() {
     refreshTimeAdjustmentPanel();
     renderSettingsDataSourcesSection();
 
-    fitToData(S.currentGeoJSON);
+    shouldAutoZoomAfterLoad = !hadDataBeforeLoad && S.currentGeoJSON.features.length > 0;
     persistCurrentLayerState();
   } catch (err: any) {
     console.error('GeoParquet load failed:', err);
     if (!S.cancelRequested) alert(`GeoParquet load failed: ${err?.message ?? err}`);
   } finally {
     hideLoading();
+    if (shouldAutoZoomAfterLoad && S.currentGeoJSON) {
+      requestAnimationFrame(() => fitToData(S.currentGeoJSON!));
+    }
   }
 }
 

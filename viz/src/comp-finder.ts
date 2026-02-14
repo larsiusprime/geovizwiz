@@ -932,7 +932,7 @@ function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'categorica
 
 
 function expandPanelForCompsIfNeeded() {
-  if (!isMenuVisible || comps.length === 0) return;
+  if (!isMenuVisible) return;
   const panel = els.panel;
   const header = panel.querySelector('.window-header') as HTMLElement | null;
   const content = panel.querySelector('[data-window-content]') as HTMLElement | null;
@@ -1247,6 +1247,7 @@ function updateEmptyStateUI() {
   els.criteriaSection.style.display = hasSubject ? 'grid' : 'none';
   updateThresholdUI();
   updateNoCompsIndicator();
+  setTimeout(() => expandPanelForCompsIfNeeded(), 0);
 }
 
 function renderCompsUI() {

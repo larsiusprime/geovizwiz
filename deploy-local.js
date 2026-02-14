@@ -1,3 +1,5 @@
+const fsSync = require("fs");
+
 // deploy-local.js (no external dependencies)
 const npmCmd = process.platform === "win32" ? "npm.cmd" : "npm";
 
@@ -6,7 +8,7 @@ const path = require("path");
 const http = require("http");
 const { spawnSync } = require("child_process");
 
-const repoRoot = process.cwd();
+const repoRoot = fsSync.realpathSync.native(process.cwd());
 const deployDir = path.join(repoRoot, "local-deploy");
 const staticSrc = path.join(repoRoot, "site");
 const utilSrc = path.join(repoRoot, "util");

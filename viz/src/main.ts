@@ -2942,5 +2942,10 @@ initSelection({
   persistCurrentLayerState,
   updateLegendPosition,
   getFloatingLegend: () => floatingLegend,
+  registerSelectionControlsDocking: (panel, pinButton) => {
+    initPinButton(pinButton);
+    registerDockableWindow(panel, pinButton);
+    enableWindowResizing(panel);
+  },
 });
 initSelectionElements();

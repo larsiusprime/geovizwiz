@@ -18,6 +18,10 @@ let _updateHighlightColors: () => void = () => {};
 let _persistCurrentLayerState: () => void = () => {};
 let _updateLegendPosition: () => void = () => {};
 let _getFloatingLegend: () => HTMLDivElement | null = () => null;
+let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
+
+const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
+const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
 
 export interface SelectionCallbacks {
   getCurrentSourceId: () => string | null;
@@ -29,6 +33,7 @@ export interface SelectionCallbacks {
   persistCurrentLayerState: () => void;
   updateLegendPosition: () => void;
   getFloatingLegend: () => HTMLDivElement | null;
+  registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
@@ -41,6 +46,7 @@ export function initSelection(cb: SelectionCallbacks) {
   _persistCurrentLayerState = cb.persistCurrentLayerState;
   _updateLegendPosition = cb.updateLegendPosition;
   _getFloatingLegend = cb.getFloatingLegend;
+  _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
 }
 
 /* ------------------------------------------------------------------ */
@@ -479,8 +485,12 @@ function createSelectionControlsPanel() {
     z-index: 15;
     backdrop-filter: blur(4px);
     min-width: 200px;
+    min-height: 120px;
     cursor: move;
+    display: grid;
+    grid-template-rows: auto 1fr;
   `;
+  S.selectionControlsPanel.classList.add('viz-window');
 
   S.selectionControlsPanel.innerHTML = `
     <div class="window-header" style="
@@ -494,6 +504,11 @@ function createSelectionControlsPanel() {
       cursor: move;
     ">
       <div style="font-weight: 600; font-size: 13px;">Selection Controls</div>
+      <div class="window-actions">
+        <button id="btnPinSelectionControls" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;">
+        </button>
+      </div>
     </div>
     <div style="padding: 12px;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
@@ -518,6 +533,7 @@ function createSelectionControlsPanel() {
 
   const unselectAllBtn = S.selectionControlsPanel.querySelector('#unselectAllBtn') as HTMLButtonElement;
   const colorPicker = S.selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement;
+  const pinButton = S.selectionControlsPanel.querySelector('#btnPinSelectionControls') as HTMLButtonElement;
 
   unselectAllBtn.addEventListener('click', clearAllSelections);
 
@@ -529,6 +545,7 @@ function createSelectionControlsPanel() {
   });
 
   document.body.appendChild(S.selectionControlsPanel);
+  _registerSelectionControlsDocking(S.selectionControlsPanel, pinButton);
   _makeDraggable(S.selectionControlsPanel);
   _updateLegendPosition();
 }
@@ -560,6 +577,8 @@ export function updateSelectionControls() {
 
 export function updateSelectionControlsPosition() {
   if (!S.selectionControlsPanel) return;
+  if (S.selectionControlsPanel.classList.contains('is-pinned')) return;
+  if (S.selectionControlsPanel.dataset.userPositioned === 'true') return;
 
   const floatingLegend = _getFloatingLegend();
   const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';

@@ -2947,5 +2947,8 @@ initSelection({
     registerDockableWindow(panel, pinButton);
     enableWindowResizing(panel);
   },
+  refreshSelectionControlsDockLayout: () => {
+    window.dispatchEvent(new Event('resize'));
+  },
 });
 initSelectionElements();

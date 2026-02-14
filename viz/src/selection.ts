@@ -19,6 +19,7 @@ let _persistCurrentLayerState: () => void = () => {};
 let _updateLegendPosition: () => void = () => {};
 let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
+let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
@@ -35,6 +36,7 @@ export interface SelectionCallbacks {
   updateLegendPosition: () => void;
   getFloatingLegend: () => HTMLDivElement | null;
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
+  refreshSelectionControlsDockLayout: () => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
@@ -48,6 +50,7 @@ export function initSelection(cb: SelectionCallbacks) {
   _updateLegendPosition = cb.updateLegendPosition;
   _getFloatingLegend = cb.getFloatingLegend;
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
+  _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
 
   if (_selectionControlsInvariantTimer === null) {
     _selectionControlsInvariantTimer = window.setInterval(() => {
@@ -578,12 +581,16 @@ function ensureSelectionControlsOpen(panel: HTMLDivElement) {
     collapseButton.setAttribute('aria-expanded', 'true');
     collapseButton.style.transform = 'none';
   }
+
+  if (panel.classList.contains('is-pinned')) {
+    _refreshSelectionControlsDockLayout();
+  }
 }
 
 function enforceSelectionControlsVisibilityInvariant() {
   if (S.selectedParcels.size <= 0) return;
 
-  if (!S.selectionControlsPanel) {
+  if (!S.selectionControlsPanel || !S.selectionControlsPanel.isConnected) {
     createSelectionControlsPanel();
   }
 
@@ -600,6 +607,9 @@ export function updateSelectionControls() {
   if (S.selectedParcels.size === 0) {
     if (S.selectionControlsPanel) {
       S.selectionControlsPanel.style.display = 'none';
+      if (S.selectionControlsPanel.classList.contains('is-pinned')) {
+        _refreshSelectionControlsDockLayout();
+      }
     }
   } else {
     enforceSelectionControlsVisibilityInvariant();

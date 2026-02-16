@@ -2110,34 +2110,68 @@ function renderWriteEquationUI() {
   row.append(lhs, operator, rhs);
   writeEquationSection.appendChild(row);
 
-  const renderConstantEditor = (side: 'lhs' | 'rhs') => {
-    const select = writeEquationSection.querySelector(`#writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}`) as HTMLSelectElement;
-    const rowId = `writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}Constant`;
-    const existing = writeEquationSection.querySelector(`#${rowId}`);
-    if (existing) existing.remove();
-    if (!select || select.value !== '__constant__') return;
-    const holder = document.createElement('div');
-    holder.id = rowId;
-    holder.style.display = 'grid';
-    holder.style.gap = '6px';
-    holder.innerHTML = `
-      <div class="write-row"><label>${side === 'lhs' ? 'Left constant type' : 'Right constant type'}</label><select id="${rowId}Type"><option value="categorical">Categorical</option><option value="numeric">Numeric</option></select><span></span></div>
-      <div class="write-row"><label>${side === 'lhs' ? 'Left constant value' : 'Right constant value'}</label><input id="${rowId}Value" type="text" /><span></span></div>
-    `;
-    writeEquationSection.appendChild(holder);
-    const typeSelect = holder.querySelector(`#${rowId}Type`) as HTMLSelectElement;
-    const valueInput = holder.querySelector(`#${rowId}Value`) as HTMLInputElement;
-    typeSelect.addEventListener('change', () => {
-      valueInput.type = typeSelect.value === 'numeric' ? 'number' : 'text';
-      valueInput.step = typeSelect.value === 'numeric' ? 'any' : '';
-      valueInput.value = '';
-    });
+  const constantTypeRow = document.createElement('div');
+  constantTypeRow.className = 'write-equation-row';
+  constantTypeRow.id = 'writeEquationConstantTypeRow';
+  constantTypeRow.style.display = 'none';
+
+  const lhsType = document.createElement('select');
+  lhsType.id = 'writeEquationLhsConstantType';
+  lhsType.innerHTML = '<option value="categorical">Categorical</option><option value="numeric">Numeric</option>';
+  const rhsType = document.createElement('select');
+  rhsType.id = 'writeEquationRhsConstantType';
+  rhsType.innerHTML = '<option value="categorical">Categorical</option><option value="numeric">Numeric</option>';
+  const typeSpacer = document.createElement('span');
+  constantTypeRow.append(lhsType, typeSpacer, rhsType);
+  writeEquationSection.appendChild(constantTypeRow);
+
+  const constantValueRow = document.createElement('div');
+  constantValueRow.className = 'write-equation-row';
+  constantValueRow.id = 'writeEquationConstantValueRow';
+  constantValueRow.style.display = 'none';
+  const lhsValue = document.createElement('input');
+  lhsValue.id = 'writeEquationLhsConstantValue';
+  lhsValue.type = 'text';
+  const rhsValue = document.createElement('input');
+  rhsValue.id = 'writeEquationRhsConstantValue';
+  rhsValue.type = 'text';
+  const valueSpacer = document.createElement('span');
+  constantValueRow.append(lhsValue, valueSpacer, rhsValue);
+  writeEquationSection.appendChild(constantValueRow);
+
+  const syncConstantWidgets = () => {
+    const lhsIsConstant = lhs.value === '__constant__';
+    const rhsIsConstant = rhs.value === '__constant__';
+    constantTypeRow.style.display = lhsIsConstant || rhsIsConstant ? 'grid' : 'none';
+    constantValueRow.style.display = lhsIsConstant || rhsIsConstant ? 'grid' : 'none';
+
+    lhsType.style.visibility = lhsIsConstant ? 'visible' : 'hidden';
+    lhsType.disabled = !lhsIsConstant;
+    lhsValue.style.visibility = lhsIsConstant ? 'visible' : 'hidden';
+    lhsValue.disabled = !lhsIsConstant;
+
+    rhsType.style.visibility = rhsIsConstant ? 'visible' : 'hidden';
+    rhsType.disabled = !rhsIsConstant;
+    rhsValue.style.visibility = rhsIsConstant ? 'visible' : 'hidden';
+    rhsValue.disabled = !rhsIsConstant;
+
+    if (!lhsIsConstant) lhsValue.value = '';
+    if (!rhsIsConstant) rhsValue.value = '';
   };
 
-  lhs.addEventListener('change', () => renderConstantEditor('lhs'));
-  rhs.addEventListener('change', () => renderConstantEditor('rhs'));
-  renderConstantEditor('lhs');
-  renderConstantEditor('rhs');
+  const syncInputType = (side: 'lhs' | 'rhs') => {
+    const typeSelect = side === 'lhs' ? lhsType : rhsType;
+    const valueInput = side === 'lhs' ? lhsValue : rhsValue;
+    valueInput.type = typeSelect.value === 'numeric' ? 'number' : 'text';
+    valueInput.step = typeSelect.value === 'numeric' ? 'any' : '';
+    valueInput.value = '';
+  };
+
+  lhs.addEventListener('change', syncConstantWidgets);
+  rhs.addEventListener('change', syncConstantWidgets);
+  lhsType.addEventListener('change', () => syncInputType('lhs'));
+  rhsType.addEventListener('change', () => syncInputType('rhs'));
+  syncConstantWidgets();
 
   const divisionRow = document.createElement('div');
   divisionRow.id = 'writeDivisionByZeroRow';
@@ -2165,7 +2199,11 @@ function refreshWriteUI() {
   }
 
   const fields = getAllFieldsForStore(store);
-  writeFieldSelect.innerHTML = `<option value="__new__">Create new field</option>${fields.map(field => `<option value="${escapeHtml(field)}">${escapeHtml(field)}</option>`).join('')}`;
+  const prevFieldValue = writeFieldSelect.value;
+  writeFieldSelect.innerHTML = `<option value="__new__">(Create new field)</option>${fields.map(field => `<option value="${escapeHtml(field)}">${escapeHtml(field)}</option>`).join('')}`;
+  if (prevFieldValue && (prevFieldValue === '__new__' || fields.includes(prevFieldValue))) {
+    writeFieldSelect.value = prevFieldValue;
+  }
   const currentMode = writeEditMode.value as WriteMode;
   const isCreate = writeFieldSelect.value === '__new__';
   writeNewFieldNameRow.style.display = isCreate ? 'grid' : 'none';
@@ -2197,9 +2235,8 @@ function readEquationOperand(side: 'lhs' | 'rhs', fields: string[]): WriteOperan
     if (!fields.includes(select.value)) return null;
     return { kind: 'field', field: select.value };
   }
-  const rowId = `writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}Constant`;
-  const typeSelect = writeEquationSection.querySelector(`#${rowId}Type`) as HTMLSelectElement | null;
-  const valueInput = writeEquationSection.querySelector(`#${rowId}Value`) as HTMLInputElement | null;
+  const typeSelect = writeEquationSection.querySelector(`#writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}ConstantType`) as HTMLSelectElement | null;
+  const valueInput = writeEquationSection.querySelector(`#writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}ConstantValue`) as HTMLInputElement | null;
   if (!typeSelect || !valueInput) return null;
   return { kind: 'constant', valueType: typeSelect.value as 'numeric' | 'categorical', value: valueInput.value };
 }

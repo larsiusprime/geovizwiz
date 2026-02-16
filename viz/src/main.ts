@@ -3116,10 +3116,6 @@ statsLayerName.addEventListener('change', () => {
   const selectedLayerId = statsLayerName.value || null;
   if (selectedLayerId === S.statsLayerId) return;
   S.statsLayerId = selectedLayerId;
-  S.statsCategoryField = null;
-  S.statsCategoryValueIndices = [];
-  S.statsField = null;
-  S.statsFieldType = null;
   renderStatsLayerOptions();
   refreshStatisticsPanel();
 });
@@ -3128,12 +3124,7 @@ scatterLayerName.addEventListener('change', () => {
   const selectedLayerId = scatterLayerName.value || null;
   if (selectedLayerId === S.scatterLayerId) return;
   S.scatterLayerId = selectedLayerId;
-  S.scatterCategoryField = null;
-  S.scatterCategoryValueIndices = [];
-  S.scatterXField = null;
-  S.scatterYField = null;
   S.scatterRangeIsCustom = false;
-  S.scatterColorByField = null;
   renderScatterLayerOptions();
   refreshScatterPanel();
 });

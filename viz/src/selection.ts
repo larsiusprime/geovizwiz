@@ -26,6 +26,7 @@ let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
 const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
+const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
 export interface SelectionCallbacks {
   getCurrentSourceId: () => string | null;
@@ -556,7 +557,7 @@ function createSelectionControlsPanel() {
           align-items: center;
           gap: 6px;
           justify-content: center;
-        "><img src="./src/svg/filters.svg" alt="Filters" style="width:12px;height:12px;">conditions...</button>
+        "><img src="${FILTER_ICON}" alt="Filters" style="width:12px;height:12px;">conditions...</button>
         <select id="selectionFilterOperation" style="
           width: 100%;
           border: 1px solid #ddd;

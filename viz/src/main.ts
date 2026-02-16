@@ -53,6 +53,7 @@ import {
   refreshFiltersUI,
   applyActiveFilterAction,
   persistFiltersContext,
+  setFiltersContext,
   invalidateFiltersContextIf,
 } from './filters';
 import {

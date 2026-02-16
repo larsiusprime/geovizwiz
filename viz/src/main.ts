@@ -811,6 +811,9 @@ const writeWin = createWindowManager({
   contentEl: writeContent,
   controlsEl: writeControlsEl,
   contentDisplay: 'block',
+  onShow: () => {
+    resetWriteMenu();
+  },
 });
 
 // Convenience aliases matching the old function names

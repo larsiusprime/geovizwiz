@@ -53,7 +53,8 @@ import {
   refreshFiltersUI,
   applyActiveFilterAction,
   persistFiltersContext,
-  setFiltersContext,
+  setSelectionFiltersContext,
+  clearSelectionFilters,
   invalidateFiltersContextIf,
 } from './filters';
 import {
@@ -3499,8 +3500,14 @@ initSelection({
     window.dispatchEvent(new Event('resize'));
   },
   openSelectionConditionsFilters: () => {
-    setFiltersContext({ type: 'layer' });
+    const layer = getCurrentLayer();
+    if (!layer) return;
+    setSelectionFiltersContext(layer.id, layer.name || layer.field || `layer ${S.layerOrder.indexOf(layer.id) + 1}`);
     showFilters();
+  },
+  clearSelectionConditionsForLayer: (layerId) => {
+    if (!layerId) return;
+    clearSelectionFilters(layerId);
   },
 });
 initSelectionElements();

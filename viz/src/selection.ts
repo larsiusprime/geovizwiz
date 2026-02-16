@@ -4,7 +4,7 @@
  */
 import maplibregl from 'maplibre-gl';
 import { S } from './state';
-import { getActiveFilters, matchesCurrentActiveFilters } from './filters';
+import { getSelectionFilterActiveCount, matchesSelectionFilters } from './filters';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initSelection)               */
@@ -22,6 +22,7 @@ let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
 let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
+let _clearSelectionConditionsForLayer: (layerId: string | null) => void = () => {};
 let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
@@ -41,6 +42,7 @@ export interface SelectionCallbacks {
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
   refreshSelectionControlsDockLayout: () => void;
   openSelectionConditionsFilters: () => void;
+  clearSelectionConditionsForLayer: (layerId: string | null) => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
@@ -56,6 +58,7 @@ export function initSelection(cb: SelectionCallbacks) {
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
   _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
   _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
+  _clearSelectionConditionsForLayer = cb.clearSelectionConditionsForLayer;
 
   if (_selectionControlsInvariantTimer === null) {
     _selectionControlsInvariantTimer = window.setInterval(() => {
@@ -456,8 +459,7 @@ export function toggleParcelSelection(feature: any) {
 
 export function clearAllSelections() {
   const sourceId = _getCurrentSourceId();
-  if (!sourceId) return;
-  if (S.currentGeoJSON) {
+  if (sourceId && S.currentGeoJSON) {
     for (const feature of S.currentGeoJSON.features) {
       if (feature.id !== undefined) {
         S.map.setFeatureState(
@@ -468,6 +470,7 @@ export function clearAllSelections() {
     }
   }
   S.selectedParcels.clear();
+  _clearSelectionConditionsForLayer(S.currentLayerId);
   updateSelectionControls();
 }
 
@@ -594,7 +597,7 @@ function createSelectionControlsPanel() {
   const statusLine = S.selectionControlsPanel.querySelector('#selectionFilterStatus') as HTMLDivElement;
 
   const updateConditionsButtonState = () => {
-    const activeCount = getActiveFilters().length;
+    const activeCount = S.currentLayerId ? getSelectionFilterActiveCount(S.currentLayerId) : 0;
     conditionsBtn.style.color = activeCount > 0 ? '#b91c1c' : '#111827';
     conditionsBtn.style.borderColor = activeCount > 0 ? '#ef4444' : '#ddd';
   };
@@ -609,8 +612,13 @@ function createSelectionControlsPanel() {
       setSelectionStatus('No conditions specified.', true);
       return;
     }
-    const activeFilters = getActiveFilters();
-    if (activeFilters.length === 0) {
+    const currentLayerId = S.currentLayerId;
+    if (!currentLayerId) {
+      setSelectionStatus('No conditions specified.', true);
+      return;
+    }
+    const activeCount = getSelectionFilterActiveCount(currentLayerId);
+    if (activeCount === 0) {
       setSelectionStatus('No conditions specified.', true);
       return;
     }
@@ -621,7 +629,7 @@ function createSelectionControlsPanel() {
       return;
     }
 
-    const matchedFeatures = S.currentGeoJSON.features.filter((feature) => feature.id !== undefined && matchesCurrentActiveFilters(feature));
+    const matchedFeatures = S.currentGeoJSON.features.filter((feature) => feature.id !== undefined && matchesSelectionFilters(feature, currentLayerId));
     const matchedIds = new Set<string>(matchedFeatures.map(feature => getParcelId(feature as any)));
     const operation = operationSelect.value;
 
@@ -672,6 +680,8 @@ function createSelectionControlsPanel() {
     }
 
     _persistCurrentLayerState();
+    _clearSelectionConditionsForLayer(currentLayerId);
+    updateConditionsButtonState();
     updateSelectionControls();
   };
 
@@ -733,6 +743,19 @@ function enforceSelectionControlsVisibilityInvariant() {
 
   if (!S.selectionControlsPanel) return;
 
+  const trackedLayerId = S.selectionControlsPanel.dataset.selectionContextLayerId ?? null;
+  const currentLayerId = S.currentLayerId ?? null;
+  if (trackedLayerId !== currentLayerId) {
+    _clearSelectionConditionsForLayer(trackedLayerId);
+    _clearSelectionConditionsForLayer(currentLayerId);
+    S.selectionControlsPanel.dataset.selectionContextLayerId = currentLayerId ?? '';
+    const statusLine = S.selectionControlsPanel.querySelector('#selectionFilterStatus') as HTMLDivElement | null;
+    if (statusLine) {
+      statusLine.textContent = '';
+      statusLine.style.color = '#111827';
+    }
+  }
+
   ensureSelectionControlsOpen(S.selectionControlsPanel);
   const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
   if (countElement) {
@@ -741,7 +764,7 @@ function enforceSelectionControlsVisibilityInvariant() {
 
   const conditionsBtn = S.selectionControlsPanel.querySelector('#selectionFilterConditionsBtn') as HTMLButtonElement | null;
   if (conditionsBtn) {
-    const activeCount = getActiveFilters().length;
+    const activeCount = currentLayerId ? getSelectionFilterActiveCount(currentLayerId) : 0;
     conditionsBtn.style.color = activeCount > 0 ? '#b91c1c' : '#111827';
     conditionsBtn.style.borderColor = activeCount > 0 ? '#ef4444' : '#ddd';
   }

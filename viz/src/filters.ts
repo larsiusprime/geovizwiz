@@ -89,6 +89,11 @@ let _hideFiltersPanel: () => void;
 type FiltersContext =
   | { type: 'layer' }
   | {
+      type: 'selection';
+      layerId: string;
+      layerName: string;
+    }
+  | {
       type: 'landSchedule';
       getFilters: () => FilterRule[];
       getFilterInvert: () => boolean;
@@ -98,6 +103,7 @@ type FiltersContext =
     };
 
 let filtersContext: FiltersContext = { type: 'layer' };
+const selectionContextStore = new Map<string, { filters: FilterRule[]; filterInvert: boolean }>();
 let layerFiltersSnapshot: {
   filters: FilterRule[];
   filterInvert: boolean;
@@ -111,9 +117,17 @@ function getLayerContextLabel() {
   return `Layer: ${name}`;
 }
 
+function getSelectionContextLabel(layerName: string) {
+  return `Selection in ${layerName}`;
+}
+
 function updateFiltersContextLine() {
   if (!filtersContextLine) return;
-  const label = filtersContext.type === 'landSchedule' ? filtersContext.label : getLayerContextLabel();
+  const label = filtersContext.type === 'landSchedule'
+    ? filtersContext.label
+    : filtersContext.type === 'selection'
+      ? getSelectionContextLabel(filtersContext.layerName)
+      : getLayerContextLabel();
   filtersContextLine.textContent = `Context: "${label}"`;
 }
 export function initFilterCallbacks(cbs: {
@@ -146,6 +160,13 @@ export function cloneFilters(source: FilterRule[]): FilterRule[] {
 }
 
 export function setFiltersContext(context: FiltersContext) {
+  if (filtersContext.type === 'selection') {
+    selectionContextStore.set(filtersContext.layerId, {
+      filters: cloneFilters(S.filters),
+      filterInvert: S.filterInvert,
+    });
+  }
+
   if (context.type === 'landSchedule') {
     if (!layerFiltersSnapshot) {
       layerFiltersSnapshot = {
@@ -159,12 +180,24 @@ export function setFiltersContext(context: FiltersContext) {
     S.filterInvert = context.getFilterInvert();
     S.filterMode = 'none';
     S.filterActionMode = 'none';
+  } else if (context.type === 'selection') {
+    const entry = selectionContextStore.get(context.layerId);
+    S.filters = cloneFilters(entry?.filters ?? []);
+    S.filterInvert = entry?.filterInvert ?? false;
+    S.filterMode = 'none';
+    S.filterActionMode = 'none';
   } else if (filtersContext.type === 'landSchedule' && layerFiltersSnapshot) {
     S.filters = cloneFilters(layerFiltersSnapshot.filters);
     S.filterInvert = layerFiltersSnapshot.filterInvert;
     S.filterMode = layerFiltersSnapshot.filterMode;
     S.filterActionMode = layerFiltersSnapshot.filterActionMode;
     layerFiltersSnapshot = null;
+  } else {
+    const layer = S.currentLayerId ? S.layers.get(S.currentLayerId) ?? null : null;
+    S.filters = cloneFilters(layer?.filters ?? []);
+    S.filterInvert = layer?.filterInvert ?? false;
+    S.filterMode = layer?.filterMode ?? 'none';
+    S.filterActionMode = layer?.filterActionMode ?? 'none';
   }
 
   filtersContext = context;
@@ -179,6 +212,13 @@ export function setFiltersContext(context: FiltersContext) {
 export function persistFiltersContext() {
   if (filtersContext.type === 'landSchedule') {
     filtersContext.setFilters(cloneFilters(S.filters), S.filterInvert);
+    return;
+  }
+  if (filtersContext.type === 'selection') {
+    selectionContextStore.set(filtersContext.layerId, {
+      filters: cloneFilters(S.filters),
+      filterInvert: S.filterInvert,
+    });
     return;
   }
   _persistCurrentLayerState();
@@ -1043,8 +1083,45 @@ function matchesActiveFilters(feature: GeoJSON.Feature): boolean {
   return S.filterInvert ? !baseMatch : baseMatch;
 }
 
+function matchesStoredFilters(
+  feature: GeoJSON.Feature,
+  filters: FilterRule[],
+  invert: boolean
+): boolean {
+  const activeFilters = filters.filter(isFilterComplete);
+  if (!activeFilters.length) return false;
+  const baseMatch = activeFilters.every(filter => matchesFilterRule(feature, filter));
+  return invert ? !baseMatch : baseMatch;
+}
+
 export function matchesCurrentActiveFilters(feature: GeoJSON.Feature): boolean {
   return matchesActiveFilters(feature);
+}
+
+export function setSelectionFiltersContext(layerId: string, layerName: string) {
+  setFiltersContext({ type: 'selection', layerId, layerName });
+}
+
+export function getSelectionFilterActiveCount(layerId: string): number {
+  const entry = selectionContextStore.get(layerId);
+  if (!entry) return 0;
+  return entry.filters.filter(isFilterComplete).length;
+}
+
+export function matchesSelectionFilters(feature: GeoJSON.Feature, layerId: string): boolean {
+  const entry = selectionContextStore.get(layerId);
+  if (!entry) return false;
+  return matchesStoredFilters(feature, entry.filters, entry.filterInvert);
+}
+
+export function clearSelectionFilters(layerId: string) {
+  selectionContextStore.delete(layerId);
+  if (filtersContext.type === 'selection' && filtersContext.layerId === layerId) {
+    S.filters = [];
+    S.filterInvert = false;
+    renderFiltersList();
+    updateFiltersUIState();
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1052,6 +1129,11 @@ export function matchesCurrentActiveFilters(feature: GeoJSON.Feature): boolean {
 /* ------------------------------------------------------------------ */
 
 export function applyActiveFilterAction() {
+  if (filtersContext.type === 'selection') {
+    persistFiltersContext();
+    updateFiltersUIState();
+    return;
+  }
   if (filtersContext.type === 'landSchedule') {
     persistFiltersContext();
     updateFiltersUIState();

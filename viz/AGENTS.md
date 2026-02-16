@@ -193,7 +193,7 @@ It includes:
 - **Unselect All** button
 
 It also includes a **Select with filter** section:
-- A **conditions...** button that opens the filters/conditions menu in selection/layer context (same behavior and icon state conventions as elsewhere; filters icon turns red when active conditions exist)
+- A **conditions...** button that opens the filters/conditions menu in a **selection-only context** labeled `Selection in <layer>` (same behavior and icon state conventions as elsewhere; filters icon turns red when active conditions exist)
 - An operation dropdown with exactly:
   - `add to selection` (default)
   - `remove from selection`
@@ -205,6 +205,8 @@ Apply behavior:
 - `add to selection`: adds matching parcels to current selection
 - `remove from selection`: removes matching parcels from current selection (ignores parcels that are not currently selected)
 - `set selection to`: replaces the current selection with exactly the matching parcels
+
+Selection-controls conditions are ephemeral scratch-pad conditions and do not govern hard layer filtering. They clear after Apply, when unselect-all closes selection controls, and when selection context changes to a different layer.
 
 Status feedback appears on apply with clear text, including redundant add reporting and zero-effect/no-condition outcomes.
 

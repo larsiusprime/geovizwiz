@@ -54,7 +54,6 @@ import {
   applyActiveFilterAction,
   persistFiltersContext,
   setSelectionFiltersContext,
-  clearSelectionFilters,
   invalidateFiltersContextIf,
 } from './filters';
 import {
@@ -3504,10 +3503,6 @@ initSelection({
     if (!layer) return;
     setSelectionFiltersContext(layer.id, layer.name || layer.field || `layer ${S.layerOrder.indexOf(layer.id) + 1}`);
     showFilters();
-  },
-  clearSelectionConditionsForLayer: (layerId) => {
-    if (!layerId) return;
-    clearSelectionFilters(layerId);
   },
 });
 initSelectionElements();

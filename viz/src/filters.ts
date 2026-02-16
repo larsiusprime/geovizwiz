@@ -161,10 +161,15 @@ export function cloneFilters(source: FilterRule[]): FilterRule[] {
 
 export function setFiltersContext(context: FiltersContext) {
   if (filtersContext.type === 'selection') {
-    selectionContextStore.set(filtersContext.layerId, {
-      filters: cloneFilters(S.filters),
-      filterInvert: S.filterInvert,
-    });
+    const isSameSelectionContext = context.type === 'selection' && context.layerId === filtersContext.layerId;
+    if (!isSameSelectionContext) {
+      selectionContextStore.delete(filtersContext.layerId);
+    } else {
+      selectionContextStore.set(filtersContext.layerId, {
+        filters: cloneFilters(S.filters),
+        filterInvert: S.filterInvert,
+      });
+    }
   }
 
   if (context.type === 'landSchedule') {
@@ -941,6 +946,9 @@ export function renderFiltersList() {
             return;
           }
           filter.value = selectedValue;
+          if (!filter.operator) {
+            filter.operator = 'ref-true';
+          }
           renderFiltersList();
           updateFiltersUIState();
           applyActiveFilterAction();

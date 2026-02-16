@@ -10,7 +10,7 @@ import { S } from './state';
 import { SOURCE_ID, LAYER_ID, ERROR_LAYER_ID } from './config';
 import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
-import { cloneFilters, setFiltersContext } from './filters';
+import { cloneFilters, setFiltersContext, isFilterComplete } from './filters';
 import { refreshLandSchedulePanel } from './land-schedule';
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
@@ -755,7 +755,7 @@ export function renderLayerList() {
       const toolsGroup = document.createElement('div');
       toolsGroup.className = 'layer-tools';
 
-      const hasActiveFilters = (layer.filters ?? []).some(filter => filter.active);
+      const hasActiveFilters = (layer.filters ?? []).some(filter => isFilterComplete(filter));
 
       const filterBtn = document.createElement('button');
       filterBtn.type = 'button';

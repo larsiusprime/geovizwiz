@@ -22,7 +22,6 @@ let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
 let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
-let _clearSelectionConditionsForLayer: (layerId: string | null) => void = () => {};
 let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
@@ -42,7 +41,6 @@ export interface SelectionCallbacks {
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
   refreshSelectionControlsDockLayout: () => void;
   openSelectionConditionsFilters: () => void;
-  clearSelectionConditionsForLayer: (layerId: string | null) => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
@@ -58,7 +56,6 @@ export function initSelection(cb: SelectionCallbacks) {
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
   _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
   _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
-  _clearSelectionConditionsForLayer = cb.clearSelectionConditionsForLayer;
 
   if (_selectionControlsInvariantTimer === null) {
     _selectionControlsInvariantTimer = window.setInterval(() => {
@@ -470,7 +467,6 @@ export function clearAllSelections() {
     }
   }
   S.selectedParcels.clear();
-  _clearSelectionConditionsForLayer(S.currentLayerId);
   updateSelectionControls();
 }
 
@@ -680,7 +676,6 @@ function createSelectionControlsPanel() {
     }
 
     _persistCurrentLayerState();
-    _clearSelectionConditionsForLayer(currentLayerId);
     updateConditionsButtonState();
     updateSelectionControls();
   };
@@ -743,18 +738,8 @@ function enforceSelectionControlsVisibilityInvariant() {
 
   if (!S.selectionControlsPanel) return;
 
-  const trackedLayerId = S.selectionControlsPanel.dataset.selectionContextLayerId ?? null;
   const currentLayerId = S.currentLayerId ?? null;
-  if (trackedLayerId !== currentLayerId) {
-    _clearSelectionConditionsForLayer(trackedLayerId);
-    _clearSelectionConditionsForLayer(currentLayerId);
-    S.selectionControlsPanel.dataset.selectionContextLayerId = currentLayerId ?? '';
-    const statusLine = S.selectionControlsPanel.querySelector('#selectionFilterStatus') as HTMLDivElement | null;
-    if (statusLine) {
-      statusLine.textContent = '';
-      statusLine.style.color = '#111827';
-    }
-  }
+  S.selectionControlsPanel.dataset.selectionContextLayerId = currentLayerId ?? '';
 
   ensureSelectionControlsOpen(S.selectionControlsPanel);
   const countElement = S.selectionControlsPanel.querySelector('#selectedCount');

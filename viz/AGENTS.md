@@ -206,7 +206,7 @@ Apply behavior:
 - `remove from selection`: removes matching parcels from current selection (ignores parcels that are not currently selected)
 - `set selection to`: replaces the current selection with exactly the matching parcels
 
-Selection-controls conditions are ephemeral scratch-pad conditions and do not govern hard layer filtering. They clear after Apply, when unselect-all closes selection controls, and when selection context changes to a different layer.
+Selection-controls conditions are ephemeral scratch-pad conditions and do not govern hard layer filtering. They remain available within that selection context, and clear when the filter menu context changes away from that selection context.
 
 Status feedback appears on apply with clear text, including redundant add reporting and zero-effect/no-condition outcomes.
 

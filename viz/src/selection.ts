@@ -594,8 +594,12 @@ function createSelectionControlsPanel() {
 
   const updateConditionsButtonState = () => {
     const activeCount = S.currentLayerId ? getSelectionFilterActiveCount(S.currentLayerId) : 0;
-    conditionsBtn.style.color = activeCount > 0 ? '#b91c1c' : '#111827';
-    conditionsBtn.style.borderColor = activeCount > 0 ? '#ef4444' : '#ddd';
+    const iconEl = conditionsBtn.querySelector('img') as HTMLImageElement | null;
+    if (iconEl) {
+      iconEl.style.filter = activeCount > 0
+        ? 'invert(19%) sepia(96%) saturate(7079%) hue-rotate(355deg) brightness(100%) contrast(112%)'
+        : 'none';
+    }
   };
 
   const setSelectionStatus = (message: string, red = false) => {
@@ -750,8 +754,12 @@ function enforceSelectionControlsVisibilityInvariant() {
   const conditionsBtn = S.selectionControlsPanel.querySelector('#selectionFilterConditionsBtn') as HTMLButtonElement | null;
   if (conditionsBtn) {
     const activeCount = currentLayerId ? getSelectionFilterActiveCount(currentLayerId) : 0;
-    conditionsBtn.style.color = activeCount > 0 ? '#b91c1c' : '#111827';
-    conditionsBtn.style.borderColor = activeCount > 0 ? '#ef4444' : '#ddd';
+    const iconEl = conditionsBtn.querySelector('img') as HTMLImageElement | null;
+    if (iconEl) {
+      iconEl.style.filter = activeCount > 0
+        ? 'invert(19%) sepia(96%) saturate(7079%) hue-rotate(355deg) brightness(100%) contrast(112%)'
+        : 'none';
+    }
   }
 }
 

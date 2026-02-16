@@ -103,6 +103,7 @@ type FiltersContext =
     };
 
 let filtersContext: FiltersContext = { type: 'layer' };
+let lastLayerContextLayerId: string | null = null;
 const selectionContextStore = new Map<string, { filters: FilterRule[]; filterInvert: boolean }>();
 let layerFiltersSnapshot: {
   filters: FilterRule[];
@@ -160,12 +161,19 @@ export function cloneFilters(source: FilterRule[]): FilterRule[] {
 }
 
 export function setFiltersContext(context: FiltersContext) {
-  if (filtersContext.type === 'selection') {
-    const isSameSelectionContext = context.type === 'selection' && context.layerId === filtersContext.layerId;
-    if (!isSameSelectionContext) {
-      selectionContextStore.delete(filtersContext.layerId);
+  const previousContext = filtersContext;
+  const contextChanged = (
+    previousContext.type !== context.type
+    || (previousContext.type === 'selection' && context.type === 'selection' && previousContext.layerId !== context.layerId)
+    || (previousContext.type === 'landSchedule' && context.type === 'landSchedule' && previousContext.key !== context.key)
+    || (previousContext.type === 'layer' && context.type === 'layer' && lastLayerContextLayerId !== (S.currentLayerId ?? null))
+  );
+
+  if (previousContext.type === 'selection') {
+    if (contextChanged || context.type !== 'selection' || context.layerId !== previousContext.layerId) {
+      selectionContextStore.delete(previousContext.layerId);
     } else {
-      selectionContextStore.set(filtersContext.layerId, {
+      selectionContextStore.set(previousContext.layerId, {
         filters: cloneFilters(S.filters),
         filterInvert: S.filterInvert,
       });
@@ -186,12 +194,20 @@ export function setFiltersContext(context: FiltersContext) {
     S.filterMode = 'none';
     S.filterActionMode = 'none';
   } else if (context.type === 'selection') {
-    const entry = selectionContextStore.get(context.layerId);
-    S.filters = cloneFilters(entry?.filters ?? []);
-    S.filterInvert = entry?.filterInvert ?? false;
-    S.filterMode = 'none';
-    S.filterActionMode = 'none';
-  } else if (filtersContext.type === 'landSchedule' && layerFiltersSnapshot) {
+    if (contextChanged) {
+      selectionContextStore.delete(context.layerId);
+      S.filters = [];
+      S.filterInvert = false;
+      S.filterMode = 'none';
+      S.filterActionMode = 'none';
+    } else {
+      const entry = selectionContextStore.get(context.layerId);
+      S.filters = cloneFilters(entry?.filters ?? []);
+      S.filterInvert = entry?.filterInvert ?? false;
+      S.filterMode = 'none';
+      S.filterActionMode = 'none';
+    }
+  } else if (previousContext.type === 'landSchedule' && layerFiltersSnapshot) {
     S.filters = cloneFilters(layerFiltersSnapshot.filters);
     S.filterInvert = layerFiltersSnapshot.filterInvert;
     S.filterMode = layerFiltersSnapshot.filterMode;
@@ -199,13 +215,23 @@ export function setFiltersContext(context: FiltersContext) {
     layerFiltersSnapshot = null;
   } else {
     const layer = S.currentLayerId ? S.layers.get(S.currentLayerId) ?? null : null;
-    S.filters = cloneFilters(layer?.filters ?? []);
-    S.filterInvert = layer?.filterInvert ?? false;
-    S.filterMode = layer?.filterMode ?? 'none';
-    S.filterActionMode = layer?.filterActionMode ?? 'none';
+    if (contextChanged) {
+      S.filters = [];
+      S.filterInvert = false;
+      S.filterMode = 'none';
+      S.filterActionMode = 'none';
+    } else {
+      S.filters = cloneFilters(layer?.filters ?? []);
+      S.filterInvert = layer?.filterInvert ?? false;
+      S.filterMode = layer?.filterMode ?? 'none';
+      S.filterActionMode = layer?.filterActionMode ?? 'none';
+    }
   }
 
   filtersContext = context;
+  if (context.type === 'layer') {
+    lastLayerContextLayerId = S.currentLayerId ?? null;
+  }
   if (filtersInvertToggle) {
     filtersInvertToggle.checked = S.filterInvert;
   }
@@ -227,6 +253,7 @@ export function persistFiltersContext() {
     return;
   }
   _persistCurrentLayerState();
+  _renderLayerList();
 }
 
 export function invalidateFiltersContextIf(predicate: (context: FiltersContext) => boolean) {

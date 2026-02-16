@@ -63,6 +63,7 @@ import {
   updateFiltersPanelLayout, refreshWindowMinHeight, refreshWindowMinWidth,
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
+  ensureFloatingWindowVisible,
   type WindowManager
 } from './windows';
 import {
@@ -3516,5 +3517,6 @@ initSelection({
     setSelectionFiltersContext(layer.id, layer.name || layer.field || `layer ${S.layerOrder.indexOf(layer.id) + 1}`);
     showFilters();
   },
+  ensureFloatingWindowVisible,
 });
 initSelectionElements();

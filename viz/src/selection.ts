@@ -20,6 +20,7 @@ let _persistCurrentLayerState: () => void = () => {};
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
 let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
+let _ensureFloatingWindowVisible: (el: HTMLElement) => void = () => {};
 let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
@@ -37,6 +38,7 @@ export interface SelectionCallbacks {
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
   refreshSelectionControlsDockLayout: () => void;
   openSelectionConditionsFilters: () => void;
+  ensureFloatingWindowVisible: (el: HTMLElement) => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
@@ -50,6 +52,7 @@ export function initSelection(cb: SelectionCallbacks) {
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
   _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
   _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
+  _ensureFloatingWindowVisible = cb.ensureFloatingWindowVisible;
 
   if (_selectionControlsInvariantTimer === null) {
     _selectionControlsInvariantTimer = window.setInterval(() => {
@@ -688,6 +691,7 @@ function createSelectionControlsPanel() {
   document.body.appendChild(S.selectionControlsPanel);
   _registerSelectionControlsDocking(S.selectionControlsPanel, pinButton);
   _makeDraggable(S.selectionControlsPanel);
+  _ensureFloatingWindowVisible(S.selectionControlsPanel);
 }
 
 function ensureSelectionControlsOpen(panel: HTMLDivElement) {

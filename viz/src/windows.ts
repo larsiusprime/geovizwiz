@@ -307,15 +307,16 @@ function getWindowClampBounds(target: HTMLElement) {
     minLeft: mapRect.left,
     maxLeft: Math.max(mapRect.left, mapRect.right - targetRect.width),
     minTop: mapRect.top,
+    maxTop: Math.max(mapRect.top, mapRect.bottom - targetRect.height),
   };
 }
 
 function clampWindowWithinBounds(target: HTMLElement) {
   if (isPinned(target)) return;
-  const { minLeft, maxLeft, minTop } = getWindowClampBounds(target);
+  const { minLeft, maxLeft, minTop, maxTop } = getWindowClampBounds(target);
   const rect = target.getBoundingClientRect();
   const nextLeft = Math.max(minLeft, Math.min(rect.left, maxLeft));
-  const nextTop = Math.max(minTop, rect.top);
+  const nextTop = Math.max(minTop, Math.min(rect.top, maxTop));
   target.style.left = `${nextLeft}px`;
   target.style.top = `${nextTop}px`;
   target.style.transform = 'none';
@@ -345,8 +346,33 @@ function getHeaderHeight(windowEl: HTMLElement) {
   return Math.max(24, Math.round(height));
 }
 
-function rectsOverlap(a: DOMRect, b: DOMRect) {
-  return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+function overlapArea(a: DOMRect, b: DOMRect) {
+  const width = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left));
+  const height = Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+  return width * height;
+}
+
+function makeCandidateRect(candidate: { left: number; top: number }, target: HTMLElement) {
+  const rect = target.getBoundingClientRect();
+  return new DOMRect(candidate.left, candidate.top, rect.width, rect.height);
+}
+
+function isHeaderInteractable(candidateRect: DOMRect, target: HTMLElement, windows: HTMLElement[]) {
+  const headerHeight = getHeaderHeight(target);
+  const closeZoneWidth = Math.min(40, Math.max(24, candidateRect.width * 0.2));
+  const dragZoneWidth = Math.min(Math.max(120, candidateRect.width * 0.4), Math.max(120, candidateRect.width - closeZoneWidth));
+  const headerDragRect = new DOMRect(candidateRect.left, candidateRect.top, dragZoneWidth, headerHeight);
+  const headerCloseRect = new DOMRect(candidateRect.right - closeZoneWidth, candidateRect.top, closeZoneWidth, headerHeight);
+  const coveredDrag = windows.reduce((sum, win) => sum + overlapArea(headerDragRect, win.getBoundingClientRect()), 0);
+  const coveredClose = windows.reduce((sum, win) => sum + overlapArea(headerCloseRect, win.getBoundingClientRect()), 0);
+  return coveredDrag < (headerDragRect.width * headerDragRect.height) && coveredClose < (headerCloseRect.width * headerCloseRect.height);
+}
+
+function computeUnobscuredArea(candidateRect: DOMRect, windows: HTMLElement[]) {
+  const total = candidateRect.width * candidateRect.height;
+  if (total <= 0) return 0;
+  const covered = windows.reduce((sum, win) => sum + overlapArea(candidateRect, win.getBoundingClientRect()), 0);
+  return Math.max(0, total - covered);
 }
 
 function candidateOverlaps(candidate: { left: number; top: number }, target: HTMLElement, windows: HTMLElement[]) {
@@ -403,28 +429,31 @@ function findUnoccupiedPosition(target: HTMLElement, anchor: { left: number; top
   return null;
 }
 
-function findOffsetOverlapPosition(target: HTMLElement, anchor: { left: number; top: number }) {
+function findBestVisiblePosition(target: HTMLElement, anchor: { left: number; top: number }) {
   const windows = getVisibleFloatingWindows(target);
-  const { minLeft, maxLeft, minTop } = getWindowClampBounds(target);
-  let nextLeft = Math.max(minLeft, Math.min(anchor.left, maxLeft));
-  let nextTop = Math.max(minTop, anchor.top);
-
-  let safety = 0;
-  while (safety < 24) {
-    safety += 1;
-    const targetRect = target.getBoundingClientRect();
-    const candidateRect = new DOMRect(nextLeft, nextTop, targetRect.width, targetRect.height);
-    const covered = windows.find(win => rectsOverlap(candidateRect, win.getBoundingClientRect()));
-    if (!covered) {
-      break;
-    }
-    nextTop += getHeaderHeight(covered);
+  const { minLeft, maxLeft, minTop, maxTop } = getWindowClampBounds(target);
+  const stepX = 28;
+  const stepY = Math.max(24, getHeaderHeight(target));
+  const xs: number[] = [];
+  for (let left = minLeft; left <= maxLeft; left += stepX) xs.push(left);
+  if (!xs.includes(Math.max(minLeft, Math.min(anchor.left, maxLeft)))) {
+    xs.unshift(Math.max(minLeft, Math.min(anchor.left, maxLeft)));
   }
 
-  return {
-    left: Math.max(minLeft, Math.min(nextLeft, maxLeft)),
-    top: Math.max(minTop, nextTop),
-  };
+  let best: { left: number; top: number; score: number } | null = null;
+  for (let top = minTop; top <= maxTop; top += stepY) {
+    for (const left of xs) {
+      const candidate = { left, top };
+      const candidateRect = makeCandidateRect(candidate, target);
+      const unobscuredArea = computeUnobscuredArea(candidateRect, windows);
+      const headerOk = isHeaderInteractable(candidateRect, target, windows);
+      const score = unobscuredArea + (headerOk ? 1_000_000_000 : 0);
+      if (!best || score > best.score) {
+        best = { ...candidate, score };
+      }
+    }
+  }
+  return best ? { left: best.left, top: best.top } : null;
 }
 
 function placeFloatingWindow(target: HTMLElement) {
@@ -435,11 +464,23 @@ function placeFloatingWindow(target: HTMLElement) {
   }
 
   const anchor = getAnchorPosition(target);
-  const candidate = findUnoccupiedPosition(target, anchor) ?? findOffsetOverlapPosition(target, anchor);
-  target.style.left = `${candidate.left}px`;
-  target.style.top = `${candidate.top}px`;
+  const exactCandidate = findUnoccupiedPosition(target, anchor);
+  const bestVisibleCandidate = exactCandidate ?? findBestVisiblePosition(target, anchor);
+  const fallbackCandidate = bestVisibleCandidate ?? {
+    left: Math.max(getMapRect().left + WINDOW_MARGIN, (window.innerWidth - target.getBoundingClientRect().width) / 2),
+    top: Math.max(getMapRect().top + WINDOW_MARGIN, (window.innerHeight - target.getBoundingClientRect().height) / 2),
+  };
+
+  target.style.left = `${fallbackCandidate.left}px`;
+  target.style.top = `${fallbackCandidate.top}px`;
   target.style.transform = 'none';
   clampWindowWithinBounds(target);
+}
+
+export function ensureFloatingWindowVisible(target: HTMLElement) {
+  placeFloatingWindow(target);
+  bringWindowToFront(target);
+  ensureWindowMinHeight(target);
 }
 
 function normalizeFloatingWindowStack() {

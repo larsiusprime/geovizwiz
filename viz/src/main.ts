@@ -3497,5 +3497,9 @@ initSelection({
   refreshSelectionControlsDockLayout: () => {
     window.dispatchEvent(new Event('resize'));
   },
+  openSelectionConditionsFilters: () => {
+    setFiltersContext({ type: 'layer' });
+    showFilters();
+  },
 });
 initSelectionElements();

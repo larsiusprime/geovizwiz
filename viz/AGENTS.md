@@ -185,6 +185,28 @@ Now for all of the tools:
 ### Pan
 
 ### Select
+Whenever a selection is active, the **SELECTION CONTROLS** menu appears.
+
+It includes:
+- Selected parcel count
+- Highlight color picker
+- **Unselect All** button
+
+It also includes a **Select with filter** section:
+- A **conditions...** button that opens the filters/conditions menu in selection/layer context (same behavior and icon state conventions as elsewhere; filters icon turns red when active conditions exist)
+- An operation dropdown with exactly:
+  - `add to selection` (default)
+  - `remove from selection`
+  - `set selection to`
+- An **Apply** button
+
+Apply behavior:
+- It evaluates the current conditions against the current selection context (layer-specific, with current layer visibility/filter gating)
+- `add to selection`: adds matching parcels to current selection
+- `remove from selection`: removes matching parcels from current selection (ignores parcels that are not currently selected)
+- `set selection to`: replaces the current selection with exactly the matching parcels
+
+Status feedback appears on apply with clear text, including redundant add reporting and zero-effect/no-condition outcomes.
 
 ### Inspect
 

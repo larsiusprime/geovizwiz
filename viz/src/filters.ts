@@ -1043,6 +1043,10 @@ function matchesActiveFilters(feature: GeoJSON.Feature): boolean {
   return S.filterInvert ? !baseMatch : baseMatch;
 }
 
+export function matchesCurrentActiveFilters(feature: GeoJSON.Feature): boolean {
+  return matchesActiveFilters(feature);
+}
+
 /* ------------------------------------------------------------------ */
 /*  Filter actions                                                    */
 /* ------------------------------------------------------------------ */

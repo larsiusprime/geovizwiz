@@ -4,6 +4,7 @@
  */
 import maplibregl from 'maplibre-gl';
 import { S } from './state';
+import { getActiveFilters, matchesCurrentActiveFilters } from './filters';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initSelection)               */
@@ -20,6 +21,7 @@ let _updateLegendPosition: () => void = () => {};
 let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
 let _refreshSelectionControlsDockLayout: () => void = () => {};
+let _openSelectionConditionsFilters: () => void = () => {};
 let _selectionControlsInvariantTimer: number | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
@@ -37,6 +39,7 @@ export interface SelectionCallbacks {
   getFloatingLegend: () => HTMLDivElement | null;
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
   refreshSelectionControlsDockLayout: () => void;
+  openSelectionConditionsFilters: () => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
@@ -51,6 +54,7 @@ export function initSelection(cb: SelectionCallbacks) {
   _getFloatingLegend = cb.getFloatingLegend;
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
   _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
+  _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
 
   if (_selectionControlsInvariantTimer === null) {
     _selectionControlsInvariantTimer = window.setInterval(() => {
@@ -538,14 +542,144 @@ function createSelectionControlsPanel() {
         cursor: pointer;
         font-size: 12px;
       ">Unselect All</button>
+      <div style="margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; display: grid; gap: 8px;">
+        <div style="font-size: 12px; font-weight: 600;">Select with filter:</div>
+        <button id="selectionFilterConditionsBtn" type="button" style="
+          width: 100%;
+          border: 1px solid #ddd;
+          background: #f8f8f8;
+          padding: 6px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          justify-content: center;
+        "><img src="./src/svg/filters.svg" alt="Filters" style="width:12px;height:12px;">conditions...</button>
+        <select id="selectionFilterOperation" style="
+          width: 100%;
+          border: 1px solid #ddd;
+          background: #fff;
+          padding: 6px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+        ">
+          <option value="add" selected>add to selection</option>
+          <option value="remove">remove from selection</option>
+          <option value="set">set selection to</option>
+        </select>
+        <button id="selectionFilterApplyBtn" style="
+          width: 100%;
+          border: 1px solid #ddd;
+          background: #f8f8f8;
+          padding: 6px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+        ">Apply</button>
+        <div id="selectionFilterStatus" style="font-size: 12px; min-height: 16px; color: #111827;"></div>
+      </div>
     </div>
   `;
 
   const unselectAllBtn = S.selectionControlsPanel.querySelector('#unselectAllBtn') as HTMLButtonElement;
   const colorPicker = S.selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement;
   const pinButton = S.selectionControlsPanel.querySelector('#btnPinSelectionControls') as HTMLButtonElement;
+  const conditionsBtn = S.selectionControlsPanel.querySelector('#selectionFilterConditionsBtn') as HTMLButtonElement;
+  const operationSelect = S.selectionControlsPanel.querySelector('#selectionFilterOperation') as HTMLSelectElement;
+  const applyBtn = S.selectionControlsPanel.querySelector('#selectionFilterApplyBtn') as HTMLButtonElement;
+  const statusLine = S.selectionControlsPanel.querySelector('#selectionFilterStatus') as HTMLDivElement;
+
+  const updateConditionsButtonState = () => {
+    const activeCount = getActiveFilters().length;
+    conditionsBtn.style.color = activeCount > 0 ? '#b91c1c' : '#111827';
+    conditionsBtn.style.borderColor = activeCount > 0 ? '#ef4444' : '#ddd';
+  };
+
+  const setSelectionStatus = (message: string, red = false) => {
+    statusLine.textContent = message;
+    statusLine.style.color = red ? '#b91c1c' : '#111827';
+  };
+
+  const applySelectionFromConditions = () => {
+    if (!S.currentGeoJSON) {
+      setSelectionStatus('No conditions specified.', true);
+      return;
+    }
+    const activeFilters = getActiveFilters();
+    if (activeFilters.length === 0) {
+      setSelectionStatus('No conditions specified.', true);
+      return;
+    }
+
+    const sourceId = _getCurrentSourceId();
+    if (!sourceId) {
+      setSelectionStatus('No conditions specified.', true);
+      return;
+    }
+
+    const matchedFeatures = S.currentGeoJSON.features.filter((feature) => feature.id !== undefined && matchesCurrentActiveFilters(feature));
+    const matchedIds = new Set<string>(matchedFeatures.map(feature => getParcelId(feature as any)));
+    const operation = operationSelect.value;
+
+    if (operation === 'add') {
+      let added = 0;
+      let alreadySelected = 0;
+      matchedFeatures.forEach((feature) => {
+        const parcelId = getParcelId(feature as any);
+        if (S.selectedParcels.has(parcelId)) {
+          alreadySelected += 1;
+          return;
+        }
+        S.selectedParcels.add(parcelId);
+        S.map.setFeatureState({ source: sourceId, id: feature.id! }, { selected: true });
+        added += 1;
+      });
+      const suffix = alreadySelected > 0 ? ` (${alreadySelected.toLocaleString()} already selected)` : '';
+      setSelectionStatus(`Added ${added.toLocaleString()} parcels to selection${suffix}.`, added === 0);
+    } else if (operation === 'remove') {
+      let removed = 0;
+      matchedFeatures.forEach((feature) => {
+        const parcelId = getParcelId(feature as any);
+        if (!S.selectedParcels.has(parcelId)) return;
+        S.selectedParcels.delete(parcelId);
+        S.map.setFeatureState({ source: sourceId, id: feature.id! }, { selected: false });
+        removed += 1;
+      });
+      setSelectionStatus(`Removed ${removed.toLocaleString()} parcels from selection.`, removed === 0);
+    } else {
+      let changed = 0;
+      for (const feature of S.currentGeoJSON.features) {
+        if (feature.id === undefined) continue;
+        const parcelId = getParcelId(feature as any);
+        const shouldBeSelected = matchedIds.has(parcelId);
+        const wasSelected = S.selectedParcels.has(parcelId);
+        if (shouldBeSelected !== wasSelected) {
+          changed += 1;
+        }
+        if (shouldBeSelected) {
+          S.selectedParcels.add(parcelId);
+        } else {
+          S.selectedParcels.delete(parcelId);
+        }
+        S.map.setFeatureState({ source: sourceId, id: feature.id }, { selected: shouldBeSelected });
+      }
+      const matchCount = matchedIds.size;
+      setSelectionStatus(`Set selection to ${matchCount.toLocaleString()} parcels.`, changed === 0 || matchCount === 0);
+    }
+
+    _persistCurrentLayerState();
+    updateSelectionControls();
+  };
 
   unselectAllBtn.addEventListener('click', clearAllSelections);
+  conditionsBtn.addEventListener('click', () => {
+    _openSelectionConditionsFilters();
+    updateConditionsButtonState();
+  });
+  applyBtn.addEventListener('click', applySelectionFromConditions);
 
   colorPicker.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;
@@ -553,6 +687,8 @@ function createSelectionControlsPanel() {
     _updateHighlightColors();
     _persistCurrentLayerState();
   });
+
+  updateConditionsButtonState();
 
   document.body.appendChild(S.selectionControlsPanel);
   _registerSelectionControlsDocking(S.selectionControlsPanel, pinButton);
@@ -600,6 +736,13 @@ function enforceSelectionControlsVisibilityInvariant() {
   const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
   if (countElement) {
     countElement.textContent = S.selectedParcels.size.toString();
+  }
+
+  const conditionsBtn = S.selectionControlsPanel.querySelector('#selectionFilterConditionsBtn') as HTMLButtonElement | null;
+  if (conditionsBtn) {
+    const activeCount = getActiveFilters().length;
+    conditionsBtn.style.color = activeCount > 0 ? '#b91c1c' : '#111827';
+    conditionsBtn.style.borderColor = activeCount > 0 ? '#ef4444' : '#ddd';
   }
 }
 

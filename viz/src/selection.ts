@@ -17,7 +17,6 @@ let _updateStatisticsResults: () => void = () => {};
 let _scheduleScatterPlotRefresh: () => void = () => {};
 let _updateHighlightColors: () => void = () => {};
 let _persistCurrentLayerState: () => void = () => {};
-let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
 let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
@@ -35,7 +34,6 @@ export interface SelectionCallbacks {
   scheduleScatterPlotRefresh: () => void;
   updateHighlightColors: () => void;
   persistCurrentLayerState: () => void;
-  getFloatingLegend: () => HTMLDivElement | null;
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
   refreshSelectionControlsDockLayout: () => void;
   openSelectionConditionsFilters: () => void;
@@ -49,7 +47,6 @@ export function initSelection(cb: SelectionCallbacks) {
   _scheduleScatterPlotRefresh = cb.scheduleScatterPlotRefresh;
   _updateHighlightColors = cb.updateHighlightColors;
   _persistCurrentLayerState = cb.persistCurrentLayerState;
-  _getFloatingLegend = cb.getFloatingLegend;
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
   _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
   _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
@@ -479,16 +476,10 @@ function createSelectionControlsPanel() {
   S.selectionControlsPanel = document.createElement('div');
   S.selectionControlsPanel.id = 'selectionControlsPanel';
 
-  const floatingLegend = _getFloatingLegend();
-  const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';
-  const legendWidth = legendVisible ? 280 : 0;
-  const legendRight = 20;
-  const panelRight = legendVisible ? (legendWidth + legendRight + 10) : 20;
-
   S.selectionControlsPanel.style.cssText = `
     position: absolute;
     top: 60px;
-    right: ${panelRight}px;
+    left: 120px;
     background: rgba(255, 255, 255, 0.95);
     border: 1px solid #ddd;
     border-radius: 8px;
@@ -776,17 +767,7 @@ export function updateSelectionControls() {
 }
 
 export function updateSelectionControlsPosition() {
-  if (!S.selectionControlsPanel) return;
-  if (S.selectionControlsPanel.classList.contains('is-pinned')) return;
-  if (S.selectionControlsPanel.dataset.userPositioned === 'true') return;
-
-  const floatingLegend = _getFloatingLegend();
-  const legendVisible = floatingLegend && floatingLegend.style.display !== 'none';
-  const legendWidth = legendVisible ? 280 : 0;
-  const legendRight = 20;
-  const panelRight = legendVisible ? (legendWidth + legendRight + 10) : 20;
-
-  S.selectionControlsPanel.style.right = `${panelRight}px`;
+  // no-op: selection controls follow standard floating window behavior
 }
 
 /* ------------------------------------------------------------------ */

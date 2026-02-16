@@ -27,7 +27,6 @@ export type WindowManager = {
 };
 
 let _updateToolbarButtonStates: () => void = () => {};
-let _updateLegendPosition: () => void = () => {};
 let _onPinnedStateChanged: (element: HTMLElement, pinned: boolean) => void = () => {};
 
 type DockableWindow = {
@@ -104,11 +103,9 @@ function logDockLayout(context: string) {
 /** Must be called once from main.ts to wire in the callbacks. */
 export function initWindowCallbacks(callbacks: {
   updateToolbarButtonStates: () => void;
-  updateLegendPosition: () => void;
   onPinnedStateChanged?: (element: HTMLElement, pinned: boolean) => void;
 }) {
   _updateToolbarButtonStates = callbacks.updateToolbarButtonStates;
-  _updateLegendPosition = callbacks.updateLegendPosition;
   _onPinnedStateChanged = callbacks.onPinnedStateChanged ?? (() => {});
 }
 
@@ -655,10 +652,6 @@ export function handleMouseMove(e: MouseEvent) {
   S.dragTarget.style.top = `${clampedY}px`;
   S.dragTarget.style.transform = 'none'; // Remove any transform when dragging
 
-  // If dragging the selection controls panel, update legend position
-  if (S.dragTarget.id === 'selectionControlsPanel') {
-    _updateLegendPosition();
-  }
 }
 
 export function handleMouseUp() {
@@ -946,7 +939,6 @@ function updatePinnedLayout() {
   if (visibleColumns.length === 0) {
     document.documentElement.style.setProperty('--pinned-width', '0px');
     ensureFloatingWindowsClearDock();
-    _updateLegendPosition();
     updateFiltersPanelLayout();
     logDockLayout('layout-empty');
     return;
@@ -965,7 +957,6 @@ function updatePinnedLayout() {
   });
   document.documentElement.style.setProperty('--pinned-width', `${totalWidth}px`);
   ensureFloatingWindowsClearDock();
-  _updateLegendPosition();
   updateFiltersPanelLayout();
   logDockLayout('layout');
 }

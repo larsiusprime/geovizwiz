@@ -72,7 +72,7 @@ import {
   applyCategorySelection, applyRangeSelection,
   getParcelId, findFeatureByParcelId,
   addParcelToSelection, removeParcelFromSelection, clearAllSelections,
-  updateSelectionControls, updateSelectionControlsPosition,
+  updateSelectionControls,
   handleLassoMouseDown, handleLassoMouseMove, handleLassoMouseUp,
   handlePolygonMouseDown, handlePolygonMouseMove, handlePolygonDoubleClick,
 } from './selection';
@@ -728,7 +728,6 @@ const legendWin = createWindowManager({
   contentDisplay: 'block',
   onMinimize: () => {
     S.isLegendVisible = false;
-    updateSelectionControlsPosition();
     updateLegendPosition();
   },
   onShow: () => {
@@ -736,7 +735,6 @@ const legendWin = createWindowManager({
     // Override the default 'grid' — floating legend uses 'block'
     floatingLegend.style.display = 'block';
     updateFloatingLegend();
-    updateSelectionControlsPosition();
     updateLegendPosition();
   },
 });
@@ -853,7 +851,6 @@ const toggleWrite = writeWin.toggle;
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
   updateToolbarButtonStates,
-  updateLegendPosition,
   onPinnedStateChanged: (element, pinned) => {
     if (element !== inspectControlsEl) return;
     if (pinned) {
@@ -3514,7 +3511,6 @@ initSelection({
   scheduleScatterPlotRefresh,
   updateHighlightColors,
   persistCurrentLayerState,
-  getFloatingLegend: () => floatingLegend,
   registerSelectionControlsDocking: (panel, pinButton) => {
     initPinButton(pinButton);
     registerDockableWindow(panel, pinButton);

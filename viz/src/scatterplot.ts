@@ -31,7 +31,7 @@ import type {
 /*  DOM element references (set once via initScatterplotElements)      */
 /* ------------------------------------------------------------------ */
 
-let scatterLayerName: HTMLDivElement;
+let scatterLayerName: HTMLSelectElement;
 let scatterSubjectControls: SubjectSelectorControls;
 let scatterCategoryFieldSelect: HTMLSelectElement;
 let scatterCategoryValueSelect: HTMLSelectElement;
@@ -50,7 +50,7 @@ let scatterPlot: HTMLDivElement;
 let scatterPlotEmpty: HTMLDivElement;
 
 export function initScatterplotElements(els: {
-  scatterLayerName: HTMLDivElement;
+  scatterLayerName: HTMLSelectElement;
   scatterSubjectControls: SubjectSelectorControls;
   scatterXFieldSelect: HTMLSelectElement;
   scatterYFieldSelect: HTMLSelectElement;
@@ -759,6 +759,30 @@ function getScatterLayerLabel(layerId: string | null): string {
 
 export function renderScatterLayerOptions() {
   if (!scatterLayerName) return;
-  S.scatterLayerId = resolveScatterLayerId();
-  scatterLayerName.textContent = getScatterLayerLabel(S.scatterLayerId);
+  const nextLayerId = resolveScatterLayerId();
+  S.scatterLayerId = nextLayerId;
+
+  const previousValue = scatterLayerName.value;
+  scatterLayerName.replaceChildren();
+
+  if (!S.layerOrder.length) {
+    const empty = new Option('Select a layer to view the scatterplot.', '');
+    empty.disabled = true;
+    empty.selected = true;
+    scatterLayerName.appendChild(empty);
+    scatterLayerName.disabled = true;
+    return;
+  }
+
+  S.layerOrder.forEach((layerId, index) => {
+    const label = getScatterLayerLabel(layerId) || `layer ${index + 1}`;
+    scatterLayerName.appendChild(new Option(label, layerId));
+  });
+
+  scatterLayerName.disabled = false;
+  const targetValue = nextLayerId && S.layers.has(nextLayerId) ? nextLayerId : previousValue;
+  if (targetValue && S.layers.has(targetValue)) {
+    scatterLayerName.value = targetValue;
+    S.scatterLayerId = targetValue;
+  }
 }

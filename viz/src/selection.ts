@@ -17,7 +17,6 @@ let _updateStatisticsResults: () => void = () => {};
 let _scheduleScatterPlotRefresh: () => void = () => {};
 let _updateHighlightColors: () => void = () => {};
 let _persistCurrentLayerState: () => void = () => {};
-let _updateLegendPosition: () => void = () => {};
 let _getFloatingLegend: () => HTMLDivElement | null = () => null;
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
 let _refreshSelectionControlsDockLayout: () => void = () => {};
@@ -36,7 +35,6 @@ export interface SelectionCallbacks {
   scheduleScatterPlotRefresh: () => void;
   updateHighlightColors: () => void;
   persistCurrentLayerState: () => void;
-  updateLegendPosition: () => void;
   getFloatingLegend: () => HTMLDivElement | null;
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
   refreshSelectionControlsDockLayout: () => void;
@@ -51,7 +49,6 @@ export function initSelection(cb: SelectionCallbacks) {
   _scheduleScatterPlotRefresh = cb.scheduleScatterPlotRefresh;
   _updateHighlightColors = cb.updateHighlightColors;
   _persistCurrentLayerState = cb.persistCurrentLayerState;
-  _updateLegendPosition = cb.updateLegendPosition;
   _getFloatingLegend = cb.getFloatingLegend;
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
   _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
@@ -526,12 +523,9 @@ function createSelectionControlsPanel() {
     </div>
     <div data-window-content style="padding: 12px; display: block;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <input type="color" id="highlightColorPicker" value="${S.highlightColor}" style="width: 30px; height: 20px; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
         <span style="font-size: 12px;">Selected:</span>
         <span id="selectedCount" style="font-weight: 600;">${S.selectedParcels.size}</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-        <span style="font-size: 12px;">Highlight color:</span>
-        <input type="color" id="highlightColorPicker" value="${S.highlightColor}" style="width: 30px; height: 20px; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
       </div>
       <button id="unselectAllBtn" style="
         width: 100%;
@@ -703,7 +697,6 @@ function createSelectionControlsPanel() {
   document.body.appendChild(S.selectionControlsPanel);
   _registerSelectionControlsDocking(S.selectionControlsPanel, pinButton);
   _makeDraggable(S.selectionControlsPanel);
-  _updateLegendPosition();
 }
 
 function ensureSelectionControlsOpen(panel: HTMLDivElement) {

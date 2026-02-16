@@ -330,10 +330,10 @@ const paintSectionContent = document.getElementById('paintSectionContent') as HT
 const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
 const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
 const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
-const statsLayerName = document.getElementById('statsLayerName') as HTMLDivElement;
+const statsLayerName = document.getElementById('statsLayerName') as HTMLSelectElement;
 const scatterplotControlsEl = document.getElementById('scatterplotControls') as HTMLDivElement;
 const scatterplotContent = document.getElementById('scatterplotContent') as HTMLDivElement;
-const scatterLayerName = document.getElementById('scatterLayerName') as HTMLDivElement;
+const scatterLayerName = document.getElementById('scatterLayerName') as HTMLSelectElement;
 const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
 const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
 const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
@@ -3115,6 +3115,32 @@ scatterSubjectButtons.forEach(button => {
   });
 });
 
+statsLayerName.addEventListener('change', () => {
+  const selectedLayerId = statsLayerName.value || null;
+  if (selectedLayerId === S.statsLayerId) return;
+  S.statsLayerId = selectedLayerId;
+  S.statsCategoryField = null;
+  S.statsCategoryValueIndices = [];
+  S.statsField = null;
+  S.statsFieldType = null;
+  renderStatsLayerOptions();
+  refreshStatisticsPanel();
+});
+
+scatterLayerName.addEventListener('change', () => {
+  const selectedLayerId = scatterLayerName.value || null;
+  if (selectedLayerId === S.scatterLayerId) return;
+  S.scatterLayerId = selectedLayerId;
+  S.scatterCategoryField = null;
+  S.scatterCategoryValueIndices = [];
+  S.scatterXField = null;
+  S.scatterYField = null;
+  S.scatterRangeIsCustom = false;
+  S.scatterColorByField = null;
+  renderScatterLayerOptions();
+  refreshScatterPanel();
+});
+
 statsCategoryFieldSelect.addEventListener('change', () => {
   S.statsCategoryField = statsCategoryFieldSelect.value || null;
   S.statsCategoryValueIndices = [];
@@ -3488,7 +3514,6 @@ initSelection({
   scheduleScatterPlotRefresh,
   updateHighlightColors,
   persistCurrentLayerState,
-  updateLegendPosition,
   getFloatingLegend: () => floatingLegend,
   registerSelectionControlsDocking: (panel, pinButton) => {
     initPinButton(pinButton);

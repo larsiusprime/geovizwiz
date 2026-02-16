@@ -1200,16 +1200,19 @@ export function openSizeModal(options: OpenSizeModalOptions = {}) {
   const improvementValueGuess = autoPickImprovementValueField(numericFields);
   if (improvementValueGuess) improvementValueFieldSel.value = improvementValueGuess;
 
-  const saleIdGuess = autoPickSaleIdField(categoricalFields);
-  if (saleIdGuess) saleIdFieldSel.value = saleIdGuess;
   const salePriceGuess = autoPickSalePriceField(numericFields);
-  if (salePriceGuess) salePriceFieldSel.value = salePriceGuess;
-  const saleDateGuess = autoPickSaleDateField(allFields);
-  if (saleDateGuess) saleDateFieldSel.value = saleDateGuess;
-  const validSaleGuess = autoPickValidSaleField(allFields);
-  if (validSaleGuess) validSaleFieldSel.value = validSaleGuess;
-  const vacantSaleGuess = autoPickVacantSaleField(allFields);
-  if (vacantSaleGuess) vacantSaleFieldSel.value = vacantSaleGuess;
+  if (salePriceGuess) {
+    salePriceFieldSel.value = salePriceGuess;
+
+    const saleIdGuess = autoPickSaleIdField(categoricalFields);
+    if (saleIdGuess) saleIdFieldSel.value = saleIdGuess;
+    const saleDateGuess = autoPickSaleDateField(allFields);
+    if (saleDateGuess) saleDateFieldSel.value = saleDateGuess;
+    const validSaleGuess = autoPickValidSaleField(allFields);
+    if (validSaleGuess) validSaleFieldSel.value = validSaleGuess;
+    const vacantSaleGuess = autoPickVacantSaleField(allFields);
+    if (vacantSaleGuess) vacantSaleFieldSel.value = vacantSaleGuess;
+  }
 
   if (targetStore) {
     parcelIdFieldSel.value = targetStore.parcelIdField || parcelIdFieldSel.value;

@@ -926,9 +926,5 @@ export function updateHighlightColors() {
 }
 
 export function updateLegendPosition() {
-  if (!floatingLegend || !S.selectionControlsPanel) return;
-  const panelRect = S.selectionControlsPanel.getBoundingClientRect();
-  const panelBottom = panelRect.bottom;
-  const legendTop = panelBottom + 10;
-  floatingLegend.style.top = `${legendTop}px`;
+  // Intentionally no-op: floating windows should not reposition each other.
 }

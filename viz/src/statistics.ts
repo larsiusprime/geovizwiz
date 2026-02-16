@@ -199,7 +199,7 @@ export function populateCategoryValues(
 /*  DOM element references (set once via initStatisticsElements)       */
 /* ------------------------------------------------------------------ */
 
-let statsLayerName: HTMLDivElement;
+let statsLayerName: HTMLSelectElement;
 let statsSubjectControls: SubjectSelectorControls;
 let statsCategoryFieldSelect: HTMLSelectElement;
 let statsCategoryValueSelect: HTMLSelectElement;
@@ -229,7 +229,7 @@ let statsOverflowMinPct: HTMLInputElement;
 let statsOverflowMaxPct: HTMLInputElement;
 
 export function initStatisticsElements(els: {
-  statsLayerName: HTMLDivElement;
+  statsLayerName: HTMLSelectElement;
   statsSubjectControls: SubjectSelectorControls;
   statsFieldSelect: HTMLSelectElement;
   statsDetails: HTMLDivElement;
@@ -862,6 +862,30 @@ function getStatsLayerLabel(layerId: string | null): string {
 
 export function renderStatsLayerOptions() {
   if (!statsLayerName) return;
-  S.statsLayerId = resolveStatsLayerId();
-  statsLayerName.textContent = getStatsLayerLabel(S.statsLayerId);
+  const nextLayerId = resolveStatsLayerId();
+  S.statsLayerId = nextLayerId;
+
+  const previousValue = statsLayerName.value;
+  statsLayerName.replaceChildren();
+
+  if (!S.layerOrder.length) {
+    const empty = new Option('Select a layer to view statistics.', '');
+    empty.disabled = true;
+    empty.selected = true;
+    statsLayerName.appendChild(empty);
+    statsLayerName.disabled = true;
+    return;
+  }
+
+  S.layerOrder.forEach((layerId, index) => {
+    const label = getStatsLayerLabel(layerId) || `layer ${index + 1}`;
+    statsLayerName.appendChild(new Option(label, layerId));
+  });
+
+  statsLayerName.disabled = false;
+  const targetValue = nextLayerId && S.layers.has(nextLayerId) ? nextLayerId : previousValue;
+  if (targetValue && S.layers.has(targetValue)) {
+    statsLayerName.value = targetValue;
+    S.statsLayerId = targetValue;
+  }
 }

@@ -16,6 +16,8 @@ let _toggleLandSchedule: () => void = () => {};
 let _toggleTimeAdjustment: () => void = () => {};
 let _showCompFinderMenu: () => void = () => {};
 let _setCompFinderToolActive: (active: boolean) => void = () => {};
+let _toggleWriteMenu: () => void = () => {};
+let _showWriteMenu: () => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
@@ -27,6 +29,8 @@ export interface ToolbarCallbacks {
   toggleTimeAdjustment: () => void;
   showCompFinderMenu: () => void;
   setCompFinderToolActive: (active: boolean) => void;
+  toggleWriteMenu: () => void;
+  showWriteMenu: () => void;
 }
 
 export function initToolbarCallbacks(cb: ToolbarCallbacks) {
@@ -39,6 +43,8 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _toggleTimeAdjustment = cb.toggleTimeAdjustment;
   _showCompFinderMenu = cb.showCompFinderMenu;
   _setCompFinderToolActive = cb.setCompFinderToolActive;
+  _toggleWriteMenu = cb.toggleWriteMenu;
+  _showWriteMenu = cb.showWriteMenu;
 }
 
 /* ---------- DOM elements ---------- */
@@ -54,6 +60,7 @@ const legendToolButton = document.getElementById('legendToolButton') as HTMLButt
 const landScheduleToolButton = document.getElementById('landScheduleToolButton') as HTMLButtonElement;
 const timeAdjustmentToolButton = document.getElementById('timeAdjustmentToolButton') as HTMLButtonElement;
 const compFinderToolButton = document.getElementById('compFinderToolButton') as HTMLButtonElement;
+const writeToolButton = document.getElementById('writeToolButton') as HTMLButtonElement;
 
 /* ---------- Constants ---------- */
 
@@ -63,6 +70,7 @@ export const HOTKEYS = {
   SELECT: 'v',
   INFO: 'i',
   COMP_FINDER: 'c',
+  WRITE: 'w',
 };
 
 // Icon mappings for different selection modes
@@ -200,17 +208,19 @@ export function setupSelectionModeHandlers() {
 }
 
 // Function to activate a specific tool and deactivate others
-export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
+export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder' | 'write') {
   // Deactivate all tools first
   S.isPanToolActive = false;
   S.isInfoToolActive = false;
   S.isCompFinderToolActive = false;
+  S.isWriteToolActive = false;
 
   // Remove active-tool class from all buttons
   panToolButton.classList.remove('active-tool');
   infoToolButton.classList.remove('active-tool');
   selectToolButton.classList.remove('active-tool');
   compFinderToolButton.classList.remove('active-tool');
+  writeToolButton.classList.remove('active-tool');
 
   // Activate the specified tool
   switch (tool) {
@@ -241,6 +251,13 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder') {
       S.map.dragPan.disable();
       _showCompFinderMenu();
       _setCompFinderToolActive(true);
+      break;
+    case 'write':
+      S.isWriteToolActive = true;
+      writeToolButton.classList.add('active-tool');
+      S.map.dragPan.disable();
+      _setCompFinderToolActive(false);
+      _showWriteMenu();
       break;
   }
 
@@ -316,6 +333,14 @@ export function updateToolbarButtonStates() {
   } else {
     timeAdjustmentToolButton.classList.remove('inactive');
     timeAdjustmentToolButton.classList.add('active');
+  }
+
+  if (S.isWriteMinimized) {
+    writeToolButton.classList.add('inactive');
+    writeToolButton.classList.remove('active');
+  } else {
+    writeToolButton.classList.remove('inactive');
+    writeToolButton.classList.add('active');
   }
 
 }
@@ -435,6 +460,20 @@ export function initializeToolbar() {
       activateTool('select');
     } else {
       activateTool('comp-finder');
+    }
+  });
+
+  writeToolButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeAllSubmenus();
+
+    if (S.isWriteToolActive) {
+      _toggleWriteMenu();
+      if (S.isWriteMinimized) {
+        activateTool('select');
+      }
+    } else {
+      activateTool('write');
     }
   });
 

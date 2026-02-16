@@ -381,6 +381,9 @@ export function addExtrusionLayer(layer: LayerState) {
       } else if (key === _hotkeys.COMP_FINDER) {
         e.preventDefault();
         _activateTool('comp-finder');
+      } else if (key === _hotkeys.WRITE) {
+        e.preventDefault();
+        _activateTool('write');
       }
     });
     keyHandlersInstalled = true;

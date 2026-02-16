@@ -1889,6 +1889,25 @@
       40% { transform: translateY(-13px); }
       100% { transform: translateY(0); }
     }
+
+    .write-form { display: grid; gap: 10px; }
+    .write-row { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12px; color: #374151; }
+    .write-row label { font-size: 12px; color: #374151; }
+    .write-row select,
+    .write-row input { width: 100%; border: 1px solid #d1d5db; border-radius: 6px; padding: 6px 8px; font-size: 12px; background: #fff; color: #111827; }
+    .write-selection-count { font-size: 12px; color: #4b5563; min-width: 50px; }
+    .write-equation-row { display: grid; grid-template-columns: minmax(0, 1fr) 100px minmax(0, 1fr); gap: 8px; }
+    .write-actions { display: flex; align-items: center; gap: 8px; }
+    .write-submit-btn,
+    .write-cancel-btn { border: 1px solid #d1d5db; background: #f9fafb; border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; }
+    .write-cancel-btn { display: none; }
+    .write-spinner { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #2563eb; border-radius: 50%; animation: write-spin 0.8s linear infinite; display: none; }
+    @keyframes write-spin { to { transform: rotate(360deg); } }
+    .write-error,
+    .write-status { font-size: 12px; min-height: 16px; }
+    .write-error { color: #b91c1c; }
+    .write-status { color: #111827; }
+    .write-status.is-zero { color: #b91c1c; }
   </style>
 </head>
   <body>
@@ -1917,6 +1936,11 @@
         <button id="infoToolButton" class="toolbar-button" title="Inspect tool (I)">
           <img src="./src/svg/info.svg" alt="Info" />
           <span class="hotkey">I</span>
+        </button>
+
+        <button id="writeToolButton" class="toolbar-button" title="Write tool (W)">
+          <img src="./src/svg/pencil.svg" alt="Write" />
+          <span class="hotkey">W</span>
         </button>
 
         <button id="compFinderToolButton" class="toolbar-button" title="Comp Finder tool (C)">
@@ -2627,6 +2651,79 @@
           <div id="landScheduleAdjustmentsContainer" style="display: grid; gap: 10px;"></div>
           <button id="landScheduleAddAdjustment" type="button" class="land-schedule-button">add adjustment</button>
         </div>
+      </div>
+    </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
+  </div>
+
+  <div id="writeControls" class="viz-window" style="position: absolute; top: 10px; left: 1120px; width: min(calc(92vw - 80px), 520px); min-width: 420px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div style="font-weight: 600; font-size: 13px;">Write</div>
+      <div class="window-actions">
+        <button id="btnPinWrite" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeWrite" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+          ❌
+        </button>
+      </div>
+    </div>
+    <div id="writeContent" data-window-content style="padding: 12px;">
+      <div class="write-form">
+        <div class="write-row">
+          <label for="writeDataSource">Data source</label>
+          <select id="writeDataSource"></select>
+          <span></span>
+        </div>
+        <div class="write-row">
+          <label for="writeApplyTo">Apply to</label>
+          <select id="writeApplyTo">
+            <option value="all">All parcels</option>
+            <option value="selection">Selection</option>
+          </select>
+          <span id="writeSelectionCount" class="write-selection-count"></span>
+        </div>
+        <div class="write-row">
+          <label for="writeFieldSelect">Field to edit</label>
+          <select id="writeFieldSelect"></select>
+          <span></span>
+        </div>
+        <div id="writeNewFieldNameRow" class="write-row" style="display:none;">
+          <label for="writeNewFieldName">New field</label>
+          <input id="writeNewFieldName" type="text" maxlength="100" placeholder="Type a name here" />
+          <span></span>
+        </div>
+        <div id="writeNewFieldTypeRow" class="write-row" style="display:none;">
+          <label for="writeNewFieldType">New field type</label>
+          <select id="writeNewFieldType">
+            <option value="categorical">Categorical</option>
+            <option value="numeric">Numeric</option>
+          </select>
+          <span></span>
+        </div>
+        <div class="write-row">
+          <label for="writeEditMode">Edit mode</label>
+          <select id="writeEditMode">
+            <option value="constant">Type a constant</option>
+            <option value="equation">Write an equation</option>
+            <option value="revert">Revert changes</option>
+          </select>
+          <span></span>
+        </div>
+
+        <div id="writeConstantSection" style="display:grid; gap: 8px;"></div>
+        <div id="writeEquationSection" style="display:none; gap: 8px;"></div>
+
+        <div id="writeActions" class="write-actions">
+          <button id="writeSubmit" class="write-submit-btn" type="button">Submit</button>
+          <button id="writeCancel" class="write-cancel-btn" type="button">Cancel</button>
+          <span id="writeSpinner" class="write-spinner" aria-hidden="true"></span>
+        </div>
+        <div id="writeError" class="write-error"></div>
+        <div id="writeStatus" class="write-status"></div>
       </div>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>

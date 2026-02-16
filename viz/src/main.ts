@@ -486,6 +486,7 @@ const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule
 const btnMinimizeTimeAdjustment = document.getElementById('btnMinimizeTimeAdjustment') as HTMLButtonElement;
 const btnMinimizeCompFinder = document.getElementById('btnMinimizeCompFinder') as HTMLButtonElement;
 const btnMinimizeInspect = document.getElementById('btnMinimizeInspect') as HTMLButtonElement;
+const btnMinimizeWrite = document.getElementById('btnMinimizeWrite') as HTMLButtonElement;
 
 // Floating legend elements
 const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
@@ -499,6 +500,25 @@ const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButt
 const inspectControlsEl = document.getElementById('inspectControls') as HTMLDivElement;
 const inspectContent = document.getElementById('inspectContent') as HTMLDivElement;
 const btnPinInspect = document.getElementById('btnPinInspect') as HTMLButtonElement;
+const writeControlsEl = document.getElementById('writeControls') as HTMLDivElement;
+const writeContent = document.getElementById('writeContent') as HTMLDivElement;
+const btnPinWrite = document.getElementById('btnPinWrite') as HTMLButtonElement;
+const writeDataSource = document.getElementById('writeDataSource') as HTMLSelectElement;
+const writeApplyTo = document.getElementById('writeApplyTo') as HTMLSelectElement;
+const writeSelectionCount = document.getElementById('writeSelectionCount') as HTMLSpanElement;
+const writeFieldSelect = document.getElementById('writeFieldSelect') as HTMLSelectElement;
+const writeNewFieldNameRow = document.getElementById('writeNewFieldNameRow') as HTMLDivElement;
+const writeNewFieldTypeRow = document.getElementById('writeNewFieldTypeRow') as HTMLDivElement;
+const writeNewFieldName = document.getElementById('writeNewFieldName') as HTMLInputElement;
+const writeNewFieldType = document.getElementById('writeNewFieldType') as HTMLSelectElement;
+const writeEditMode = document.getElementById('writeEditMode') as HTMLSelectElement;
+const writeConstantSection = document.getElementById('writeConstantSection') as HTMLDivElement;
+const writeEquationSection = document.getElementById('writeEquationSection') as HTMLDivElement;
+const writeSubmit = document.getElementById('writeSubmit') as HTMLButtonElement;
+const writeCancel = document.getElementById('writeCancel') as HTMLButtonElement;
+const writeSpinner = document.getElementById('writeSpinner') as HTMLSpanElement;
+const writeError = document.getElementById('writeError') as HTMLDivElement;
+const writeStatus = document.getElementById('writeStatus') as HTMLDivElement;
 const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
 const compFinderUseDistance = document.getElementById('compFinderUseDistance') as HTMLInputElement;
 const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
@@ -785,6 +805,14 @@ const inspectWin = createWindowManager({
   contentDisplay: 'block',
 });
 
+const writeWin = createWindowManager({
+  getMinimized: () => S.isWriteMinimized,
+  setMinimized: (v) => { S.isWriteMinimized = v; },
+  contentEl: writeContent,
+  controlsEl: writeControlsEl,
+  contentDisplay: 'block',
+});
+
 // Convenience aliases matching the old function names
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
@@ -814,6 +842,9 @@ const showCompFinder = () => {
 };
 const minimizeInspect = inspectWin.minimize;
 const showInspect = inspectWin.show;
+const minimizeWrite = writeWin.minimize;
+const showWrite = writeWin.show;
+const toggleWrite = writeWin.toggle;
 
 // Wire callbacks and DOM elements into the windows module
 initWindowCallbacks({
@@ -864,6 +895,7 @@ initWindowDocking({
   btnPinScatterplot,
   btnPinCompFinder,
   btnPinInspect,
+  btnPinWrite,
   btnPinLandSchedule,
   btnPinTimeAdjustment,
   btnPinLegend,
@@ -875,6 +907,7 @@ registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
 registerDockableWindow(compFinderControlsEl, btnPinCompFinder);
 registerDockableWindow(inspectControlsEl, btnPinInspect);
+registerDockableWindow(writeControlsEl, btnPinWrite);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
 registerDockableWindow(timeAdjustmentControlsEl, btnPinTimeAdjustment);
 registerDockableWindow(floatingLegend, btnPinLegend);
@@ -885,6 +918,7 @@ enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
 enableWindowResizing(compFinderControlsEl);
 enableWindowResizing(inspectControlsEl);
+enableWindowResizing(writeControlsEl);
 enableWindowResizing(landScheduleControlsEl);
 enableWindowResizing(timeAdjustmentControlsEl);
 enableWindowResizing(floatingLegend);
@@ -962,7 +996,7 @@ initRenderingCallbacks({
   },
   updateCursor,
   isTextInputElement,
-  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder'),
+  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder' | 'write'),
   setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => setCompFinderSubject(feature, layerId),
   hotkeys: HOTKEYS,
 });
@@ -1960,6 +1994,213 @@ function isFieldChanged(parcelId: string, field: string, fieldType: 'numeric' | 
   return !valuesEqualForField(fieldType, patch.original, patch.current);
 }
 
+type WriteMode = 'constant' | 'equation' | 'revert';
+type WriteOperand = { kind: 'field'; field: string } | { kind: 'constant'; valueType: 'numeric' | 'categorical'; value: string };
+
+let writeSelectionCountTimer: number | null = null;
+let writeBusy = false;
+let writeCancelRequested = false;
+let writeSafetyTimer: number | null = null;
+
+function getWriteDataStore() {
+  const id = writeDataSource.value;
+  return id ? (S.dataStores.get(id) ?? null) : null;
+}
+
+function getLayersForDataSource(dataStoreId: string) {
+  return S.layerOrder.map(id => S.layers.get(id)).filter((layer): layer is NonNullable<typeof layer> => Boolean(layer && layer.dataStoreId === dataStoreId));
+}
+
+function getSelectedParcelIdsForDataSource(dataStoreId: string): Set<string> {
+  const selected = new Set<string>();
+  getLayersForDataSource(dataStoreId).forEach(layer => {
+    layer.selectedParcels.forEach(parcelId => selected.add(parcelId));
+  });
+  return selected;
+}
+
+function getAllFieldsForStore(store: NonNullable<ReturnType<typeof getWriteDataStore>>) {
+  return [...store.chosenNumericFields, ...store.chosenCategoricalFields]
+    .filter((field, index, arr) => arr.indexOf(field) === index)
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function getFieldTypeFromStore(store: NonNullable<ReturnType<typeof getWriteDataStore>>, field: string): 'numeric' | 'categorical' {
+  return store.chosenNumericFields.includes(field) ? 'numeric' : 'categorical';
+}
+
+function setWriteError(message: string) {
+  writeError.textContent = message;
+}
+
+function setWriteStatus(message: string, isZero = false) {
+  writeStatus.textContent = message;
+  writeStatus.classList.toggle('is-zero', isZero);
+}
+
+function validateParquetFieldName(name: string) {
+  if (!name.trim()) return 'Field name is required.';
+  if (name.length > 100) return 'Field name must be 100 characters or fewer.';
+  if (/\p{C}/u.test(name)) return 'Field name cannot include control characters.';
+  return '';
+}
+
+function setWriteMenuDisabled(disabled: boolean) {
+  const controls = writeControlsEl.querySelectorAll('select, input, button');
+  controls.forEach((el) => {
+    if ((el as HTMLElement).id === 'writeCancel') return;
+    (el as HTMLInputElement | HTMLSelectElement | HTMLButtonElement).disabled = disabled;
+  });
+  writeSpinner.style.display = disabled ? 'inline-block' : 'none';
+  writeCancel.style.display = disabled ? 'inline-block' : 'none';
+  writeBusy = disabled;
+}
+
+function updateWriteSelectionCount() {
+  const store = getWriteDataStore();
+  if (!store || writeApplyTo.value !== 'selection') {
+    writeSelectionCount.textContent = '';
+    return;
+  }
+  const count = getSelectedParcelIdsForDataSource(store.id).size;
+  writeSelectionCount.textContent = `(${count.toLocaleString()})`;
+}
+
+function buildWriteOperandSelect(id: string, fields: string[]) {
+  const select = document.createElement('select');
+  select.id = id;
+  select.innerHTML = `<option value="__constant__">Type a constant</option>${fields.map(field => `<option value="${escapeHtml(field)}">${escapeHtml(field)}</option>`).join('')}`;
+  return select;
+}
+
+function renderWriteConstantUI() {
+  writeConstantSection.replaceChildren();
+  const store = getWriteDataStore();
+  if (!store) return;
+  const isCreate = writeFieldSelect.value === '__new__';
+  const type = isCreate ? (writeNewFieldType.value as 'numeric' | 'categorical') : getFieldTypeFromStore(store, writeFieldSelect.value);
+
+  const row = document.createElement('div');
+  row.className = 'write-row';
+  const inputType = type === 'numeric' ? 'number' : 'text';
+  row.innerHTML = `<label for="writeConstantValue">New value</label><input id="writeConstantValue" type="${inputType}" ${type === 'numeric' ? 'step="any"' : ''} /><span>(${type})</span>`;
+  writeConstantSection.appendChild(row);
+}
+
+function renderWriteEquationUI() {
+  writeEquationSection.replaceChildren();
+  const store = getWriteDataStore();
+  if (!store) return;
+  const fields = getAllFieldsForStore(store);
+  const row = document.createElement('div');
+  row.className = 'write-equation-row';
+  const lhs = buildWriteOperandSelect('writeEquationLhs', fields);
+  const rhs = buildWriteOperandSelect('writeEquationRhs', fields);
+  const operator = document.createElement('select');
+  operator.id = 'writeEquationOperator';
+  ['+', '-', '×', '÷', '^'].forEach(op => {
+    const option = document.createElement('option');
+    option.value = op;
+    option.textContent = op;
+    operator.appendChild(option);
+  });
+  row.append(lhs, operator, rhs);
+  writeEquationSection.appendChild(row);
+
+  const renderConstantEditor = (side: 'lhs' | 'rhs') => {
+    const select = writeEquationSection.querySelector(`#writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}`) as HTMLSelectElement;
+    const rowId = `writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}Constant`;
+    const existing = writeEquationSection.querySelector(`#${rowId}`);
+    if (existing) existing.remove();
+    if (!select || select.value !== '__constant__') return;
+    const holder = document.createElement('div');
+    holder.id = rowId;
+    holder.style.display = 'grid';
+    holder.style.gap = '6px';
+    holder.innerHTML = `
+      <div class="write-row"><label>${side === 'lhs' ? 'Left constant type' : 'Right constant type'}</label><select id="${rowId}Type"><option value="categorical">Categorical</option><option value="numeric">Numeric</option></select><span></span></div>
+      <div class="write-row"><label>${side === 'lhs' ? 'Left constant value' : 'Right constant value'}</label><input id="${rowId}Value" type="text" /><span></span></div>
+    `;
+    writeEquationSection.appendChild(holder);
+    const typeSelect = holder.querySelector(`#${rowId}Type`) as HTMLSelectElement;
+    const valueInput = holder.querySelector(`#${rowId}Value`) as HTMLInputElement;
+    typeSelect.addEventListener('change', () => {
+      valueInput.type = typeSelect.value === 'numeric' ? 'number' : 'text';
+      valueInput.step = typeSelect.value === 'numeric' ? 'any' : '';
+      valueInput.value = '';
+    });
+  };
+
+  lhs.addEventListener('change', () => renderConstantEditor('lhs'));
+  rhs.addEventListener('change', () => renderConstantEditor('rhs'));
+  renderConstantEditor('lhs');
+  renderConstantEditor('rhs');
+
+  const divisionRow = document.createElement('div');
+  divisionRow.id = 'writeDivisionByZeroRow';
+  divisionRow.className = 'write-row';
+  divisionRow.style.display = 'none';
+  divisionRow.innerHTML = '<label for="writeDivisionByZero">Divide by zero</label><select id="writeDivisionByZero"><option value="set-null">Set null</option><option value="skip">Skip parcel</option><option value="error">Fail operation</option></select><span></span>';
+  writeEquationSection.appendChild(divisionRow);
+
+  operator.addEventListener('change', () => {
+    divisionRow.style.display = operator.value === '÷' ? 'grid' : 'none';
+  });
+}
+
+function refreshWriteUI() {
+  const store = getWriteDataStore();
+  const hasStore = Boolean(store);
+  writeApplyTo.disabled = !hasStore;
+  writeFieldSelect.disabled = !hasStore;
+  writeEditMode.disabled = !hasStore;
+  if (!store) {
+    writeFieldSelect.innerHTML = '<option value="">No fields</option>';
+    writeConstantSection.replaceChildren();
+    writeEquationSection.replaceChildren();
+    return;
+  }
+
+  const fields = getAllFieldsForStore(store);
+  writeFieldSelect.innerHTML = `<option value="__new__">Create new field</option>${fields.map(field => `<option value="${escapeHtml(field)}">${escapeHtml(field)}</option>`).join('')}`;
+  const currentMode = writeEditMode.value as WriteMode;
+  const isCreate = writeFieldSelect.value === '__new__';
+  writeNewFieldNameRow.style.display = isCreate ? 'grid' : 'none';
+  writeNewFieldTypeRow.style.display = isCreate ? 'grid' : 'none';
+  writeConstantSection.style.display = currentMode === 'constant' ? 'grid' : 'none';
+  writeEquationSection.style.display = currentMode === 'equation' ? 'grid' : 'none';
+  if (currentMode === 'constant') renderWriteConstantUI();
+  if (currentMode === 'equation') renderWriteEquationUI();
+  updateWriteSelectionCount();
+}
+
+function parseStrictNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
+function getOperandValue(operand: WriteOperand, props: Record<string, any>) {
+  if (operand.kind === 'field') return props[operand.field];
+  if (operand.valueType === 'numeric') return parseStrictNumber(operand.value) ?? Number.NaN;
+  return String(operand.value);
+}
+
+function readEquationOperand(side: 'lhs' | 'rhs', fields: string[]): WriteOperand | null {
+  const select = writeEquationSection.querySelector(`#writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}`) as HTMLSelectElement | null;
+  if (!select) return null;
+  if (select.value !== '__constant__') {
+    if (!fields.includes(select.value)) return null;
+    return { kind: 'field', field: select.value };
+  }
+  const rowId = `writeEquation${side === 'lhs' ? 'Lhs' : 'Rhs'}Constant`;
+  const typeSelect = writeEquationSection.querySelector(`#${rowId}Type`) as HTMLSelectElement | null;
+  const valueInput = writeEquationSection.querySelector(`#${rowId}Value`) as HTMLInputElement | null;
+  if (!typeSelect || !valueInput) return null;
+  return { kind: 'constant', valueType: typeSelect.value as 'numeric' | 'categorical', value: valueInput.value };
+}
+
 
 
 function updateMapSourceData() {
@@ -1969,6 +2210,207 @@ function updateMapSourceData() {
   const source = S.map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
   if (source) {
     source.setData(S.currentGeoJSON);
+  }
+}
+
+function updateMapSourceDataForLayer(layerId: string) {
+  const layer = S.layers.get(layerId);
+  if (!layer || !layer.geojson) return;
+  const source = S.map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
+  if (source) source.setData(layer.geojson);
+}
+
+function setParcelPatchForLayer(layerId: string, parcelId: string, field: string, original: any, current: any, fieldType: 'numeric' | 'categorical') {
+  const layer = S.layers.get(layerId);
+  if (!layer) return;
+  let parcelEntry = layer.parcelPatchMap.get(parcelId);
+  if (!parcelEntry) {
+    parcelEntry = new Map();
+    layer.parcelPatchMap.set(parcelId, parcelEntry);
+  }
+  if (valuesEqualForField(fieldType, original, current)) {
+    parcelEntry.delete(field);
+    if (parcelEntry.size === 0) layer.parcelPatchMap.delete(parcelId);
+    return;
+  }
+  parcelEntry.set(field, { original, current });
+}
+
+async function runWriteOperation() {
+  setWriteError('');
+  const store = getWriteDataStore();
+  if (!store || !store.geojson) {
+    setWriteError('Select a valid data source.');
+    return;
+  }
+  const features = store.geojson.features;
+  const fieldSelection = writeFieldSelect.value;
+  const isCreateField = fieldSelection === '__new__';
+  let targetField = fieldSelection;
+  let targetFieldType: 'numeric' | 'categorical' = 'categorical';
+  if (isCreateField) {
+    const validationError = validateParquetFieldName(writeNewFieldName.value);
+    if (validationError) {
+      setWriteError(validationError);
+      return;
+    }
+    targetField = writeNewFieldName.value;
+    if (getAllFieldsForStore(store).includes(targetField)) {
+      setWriteError('Field already exists in this data source.');
+      return;
+    }
+    targetFieldType = writeNewFieldType.value as 'numeric' | 'categorical';
+  } else {
+    targetFieldType = getFieldTypeFromStore(store, targetField);
+  }
+
+  const selectedIds = getSelectedParcelIdsForDataSource(store.id);
+  const targetParcelSet = writeApplyTo.value === 'selection' ? selectedIds : null;
+  const mode = writeEditMode.value as WriteMode;
+  const operator = (writeEquationSection.querySelector('#writeEquationOperator') as HTMLSelectElement | null)?.value;
+  const divisionMode = (writeEquationSection.querySelector('#writeDivisionByZero') as HTMLSelectElement | null)?.value ?? 'set-null';
+
+  let constantValue: any = null;
+  if (mode === 'constant') {
+    const input = writeConstantSection.querySelector('#writeConstantValue') as HTMLInputElement | null;
+    const raw = input?.value ?? '';
+    if (targetFieldType === 'numeric') {
+      const parsed = parseStrictNumber(raw);
+      if (parsed === null) {
+        setWriteError('Enter a valid numeric constant (no scientific notation).');
+        return;
+      }
+      constantValue = parsed;
+    } else {
+      constantValue = String(raw);
+    }
+  }
+
+  const fields = getAllFieldsForStore(store);
+  const lhs = mode === 'equation' ? readEquationOperand('lhs', fields) : null;
+  const rhs = mode === 'equation' ? readEquationOperand('rhs', fields) : null;
+  if (mode === 'equation' && (!lhs || !rhs || !operator)) {
+    setWriteError('Equation is incomplete.');
+    return;
+  }
+  if (mode === 'equation' && targetFieldType === 'categorical' && operator !== '+') {
+    setWriteError('Categorical fields only support + for concatenation.');
+    return;
+  }
+
+  setWriteMenuDisabled(true);
+  writeCancelRequested = false;
+  const startTime = Date.now();
+  writeSafetyTimer = window.setTimeout(() => {
+    writeCancelRequested = true;
+    setWriteError('Write operation timed out and was canceled.');
+  }, 20000);
+
+  const stagedChanges: Array<{ feature: GeoJSON.Feature; parcelId: string; previous: any; next: any }> = [];
+  const layerIds = getLayersForDataSource(store.id).map(layer => layer.id);
+
+  for (let i = 0; i < features.length; i += 1) {
+    if (writeCancelRequested || Date.now() - startTime > 20000) break;
+    if (i % 400 === 0) await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    const feature = features[i];
+    const props = (feature.properties ??= {} as Record<string, any>);
+    const parcelId = getParcelId(feature as any);
+    if (targetParcelSet && !targetParcelSet.has(parcelId)) continue;
+
+    const previous = normalizeFieldValue(targetFieldType, props[targetField]);
+    let next = previous;
+
+    if (mode === 'constant') {
+      next = normalizeFieldValue(targetFieldType, constantValue);
+    } else if (mode === 'revert') {
+      const layer = layerIds.length > 0 ? S.layers.get(layerIds[0]) : null;
+      const patch = layer?.parcelPatchMap.get(parcelId)?.get(targetField);
+      if (!patch) continue;
+      next = patch.original;
+    } else if (mode === 'equation' && lhs && rhs && operator) {
+      const left = getOperandValue(lhs, props);
+      const right = getOperandValue(rhs, props);
+      if (targetFieldType === 'categorical') {
+        next = `${left ?? ''}${right ?? ''}`;
+      } else {
+        const lNum = Number(left);
+        const rNum = Number(right);
+        if (!Number.isFinite(lNum) || !Number.isFinite(rNum)) continue;
+        switch (operator) {
+          case '+': next = lNum + rNum; break;
+          case '-': next = lNum - rNum; break;
+          case '×': next = lNum * rNum; break;
+          case '÷':
+            if (rNum === 0) {
+              if (divisionMode === 'skip') continue;
+              if (divisionMode === 'error') {
+                setWriteError('Division by zero encountered.');
+                writeCancelRequested = true;
+                break;
+              }
+              next = null;
+              break;
+            }
+            next = lNum / rNum;
+            break;
+          case '^': next = lNum ** rNum; break;
+        }
+      }
+      if (writeCancelRequested) break;
+    }
+
+    if (valuesEqualForField(targetFieldType, previous, next)) continue;
+    stagedChanges.push({ feature, parcelId, previous, next });
+  }
+
+  if (writeSafetyTimer) { clearTimeout(writeSafetyTimer); writeSafetyTimer = null; }
+  setWriteMenuDisabled(false);
+  if (writeCancelRequested) {
+    if (!writeError.textContent) setWriteError('Write operation canceled. No changes applied.');
+    return;
+  }
+
+  if (isCreateField) {
+    if (targetFieldType === 'numeric') {
+      if (!store.chosenNumericFields.includes(targetField)) store.chosenNumericFields.push(targetField);
+    } else if (!store.chosenCategoricalFields.includes(targetField)) {
+      store.chosenCategoricalFields.push(targetField);
+    }
+    getLayersForDataSource(store.id).forEach(layer => {
+      if (targetFieldType === 'numeric' && !layer.chosenNumericFields.includes(targetField)) layer.chosenNumericFields.push(targetField);
+      if (targetFieldType === 'categorical' && !layer.chosenCategoricalFields.includes(targetField)) layer.chosenCategoricalFields.push(targetField);
+    });
+  }
+
+  stagedChanges.forEach(({ feature, parcelId, previous, next }) => {
+    const props = (feature.properties ??= {} as Record<string, any>);
+    props[targetField] = next;
+    layerIds.forEach(layerId => {
+      const layer = S.layers.get(layerId);
+      if (!layer) return;
+      const existingPatch = layer.parcelPatchMap.get(parcelId)?.get(targetField);
+      const original = existingPatch ? existingPatch.original : previous;
+      setParcelPatchForLayer(layerId, parcelId, targetField, original, next, targetFieldType);
+    });
+  });
+
+  const changed = stagedChanges.length;
+
+  layerIds.forEach(updateMapSourceDataForLayer);
+  if (S.currentLayerId && layerIds.includes(S.currentLayerId)) {
+    S.parcelPatchMap = S.layers.get(S.currentLayerId)?.parcelPatchMap ?? new Map();
+  }
+  if (S.lastPicked && targetField in (S.lastPicked.props ?? {})) {
+    const picked = findFeatureByParcelId(S.lastPicked.parcelId);
+    if (picked?.properties) S.lastPicked.props[targetField] = picked.properties[targetField];
+  }
+
+  if (changed === 0) {
+    setWriteStatus('0 parcels affected.', true);
+  } else if (mode === 'revert') {
+    setWriteStatus(`Reverted ${changed.toLocaleString()} parcels.`);
+  } else {
+    setWriteStatus(`Updated ${changed.toLocaleString()} parcels.`);
   }
 }
 
@@ -2501,6 +2943,68 @@ btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
 btnMinimizeCompFinder.addEventListener('click', minimizeCompFinder);
 btnMinimizeInspect.addEventListener('click', closeInspectMenu);
+btnMinimizeWrite.addEventListener('click', () => {
+  minimizeWrite();
+  if (S.isWriteToolActive) activateTool('select');
+});
+
+function resetWriteMenu() {
+  writeDataSource.replaceChildren();
+  if (S.dataStoreOrder.length === 0) {
+    const option = new Option('No data sources loaded', '');
+    option.disabled = true;
+    option.selected = true;
+    writeDataSource.appendChild(option);
+  } else {
+    S.dataStoreOrder.forEach((storeId, index) => {
+      const store = S.dataStores.get(storeId);
+      if (!store) return;
+      const option = new Option(store.file?.name ?? store.name, store.id);
+      if ((S.currentDataStoreId && S.currentDataStoreId === store.id) || (!S.currentDataStoreId && index === 0)) {
+        option.selected = true;
+      }
+      writeDataSource.appendChild(option);
+    });
+  }
+  writeApplyTo.value = 'all';
+  writeEditMode.value = 'constant';
+  writeFieldSelect.value = '__new__';
+  writeNewFieldName.value = '';
+  writeNewFieldType.value = 'categorical';
+  setWriteError('');
+  setWriteStatus('');
+  refreshWriteUI();
+}
+
+writeDataSource.addEventListener('change', () => {
+  setWriteError('');
+  refreshWriteUI();
+});
+writeApplyTo.addEventListener('change', updateWriteSelectionCount);
+writeFieldSelect.addEventListener('change', refreshWriteUI);
+writeNewFieldType.addEventListener('change', refreshWriteUI);
+writeEditMode.addEventListener('change', refreshWriteUI);
+writeSubmit.addEventListener('click', () => {
+  if (writeBusy) return;
+  void runWriteOperation();
+});
+writeCancel.addEventListener('click', () => {
+  writeCancelRequested = true;
+  setWriteError('Write operation canceled. No changes applied.');
+});
+
+window.addEventListener('data-sources-changed', () => {
+  resetWriteMenu();
+});
+
+if (writeSelectionCountTimer) {
+  window.clearInterval(writeSelectionCountTimer);
+}
+writeSelectionCountTimer = window.setInterval(() => {
+  if (!S.isWriteMinimized) updateWriteSelectionCount();
+}, 300);
+
+resetWriteMenu();
 
 landScheduleAddTableButton.addEventListener('click', () => {
   addLandScheduleTable();
@@ -2749,6 +3253,7 @@ makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
 makeDraggable(compFinderControlsEl);
 makeDraggable(inspectControlsEl);
+makeDraggable(writeControlsEl);
 makeDraggable(landScheduleControlsEl);
 makeDraggable(timeAdjustmentControlsEl);
 positionSettingsPanel();
@@ -2920,6 +3425,8 @@ initToolbarCallbacks({
   toggleTimeAdjustment,
   showCompFinderMenu: showCompFinder,
   setCompFinderToolActive: setCompFinderToolActive,
+  toggleWriteMenu: toggleWrite,
+  showWriteMenu: showWrite,
 });
 
 // Initialize toolbar when DOM is ready

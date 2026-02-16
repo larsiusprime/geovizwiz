@@ -112,6 +112,7 @@ export const S = {
   isTimeAdjustmentFiltersCollapsed: true,
   isCompFinderMinimized: true,
   isInspectMinimized: true,
+  isWriteMinimized: true,
   isCompFinderSubjectCollapsed: false,
   isCompFinderCriteriaCollapsed: false,
   isCompFinderCompsCollapsed: false,
@@ -203,6 +204,7 @@ export const S = {
   isInfoToolActive: false,
   isPanToolActive: false,
   isCompFinderToolActive: false,
+  isWriteToolActive: false,
   isPanning: false,
   currentSelectionMode: 'select-one' as string,
 

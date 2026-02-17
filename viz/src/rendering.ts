@@ -212,7 +212,7 @@ function ensureSelectionOverlayLayer(layer: LayerState) {
       'fill-extrusion-opacity': 1,
       'fill-extrusion-vertical-gradient': true
     }
-  }, layer.layerId);
+  });
 }
 
 /* ================================================================== */

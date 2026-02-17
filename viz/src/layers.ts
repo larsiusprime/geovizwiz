@@ -344,7 +344,7 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     hiddenLegendItems: new Set(),
     selectedLegendItems: new Set(),
     selectedParcels: new Set(),
-    highlightColor: '#00FF00',
+    highlightColor: S.highlightColor,
     legendSortField: 'count',
     legendSortDirection: 'desc',
     customColors: new Map(),
@@ -382,7 +382,6 @@ export function persistCurrentLayerState() {
   layer.hiddenLegendItems = S.hiddenLegendItems;
   layer.selectedLegendItems = S.selectedLegendItems;
   layer.selectedParcels = S.selectedParcels;
-  layer.highlightColor = S.highlightColor;
   layer.legendSortField = S.legendSortField;
   layer.legendSortDirection = S.legendSortDirection;
   layer.customColors = S.customColors;
@@ -416,7 +415,6 @@ export function applyLayerState(layer: LayerState) {
   S.hiddenLegendItems = layer.hiddenLegendItems;
   S.selectedLegendItems = layer.selectedLegendItems;
   S.selectedParcels = layer.selectedParcels;
-  S.highlightColor = layer.highlightColor;
   S.legendSortField = layer.legendSortField;
   S.legendSortDirection = layer.legendSortDirection;
   S.customColors = layer.customColors;
@@ -555,11 +553,11 @@ export function applyLayerOrderToMap() {
     const layer = S.layers.get(layerId);
     if (!layer) continue;
     const selectionOverlayLayerId = getSelectionOverlayLayerId(layer.layerId);
-    if (S.map.getLayer(selectionOverlayLayerId)) {
-      S.map.moveLayer(selectionOverlayLayerId);
-    }
     if (S.map.getLayer(layer.layerId)) {
       S.map.moveLayer(layer.layerId);
+    }
+    if (S.map.getLayer(selectionOverlayLayerId)) {
+      S.map.moveLayer(selectionOverlayLayerId);
     }
     if (S.map.getLayer(layer.errorLayerId)) {
       S.map.moveLayer(layer.errorLayerId);

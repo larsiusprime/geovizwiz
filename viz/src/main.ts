@@ -2080,13 +2080,6 @@ let writeCancelRequested = false;
 let writeSafetyTimer: number | null = null;
 
 const DATA_SOURCE_FIELDS_UPDATED_EVENT = 'data-source-fields-updated';
-const WRITE_FIELD_DEBUG = true;
-
-function writeFieldDebug(message: string, payload?: Record<string, unknown>) {
-  if (!WRITE_FIELD_DEBUG) return;
-  if (payload) console.debug(`[write-fields] ${message}`, payload);
-  else console.debug(`[write-fields] ${message}`);
-}
 
 function getWriteDataStore() {
   const id = writeDataSource.value;
@@ -2344,36 +2337,30 @@ function updateMapSourceDataForLayer(layerId: string) {
 }
 
 function dispatchDataSourceFieldsUpdated(dataStoreId: string, field: string, fieldType: 'numeric' | 'categorical') {
-  writeFieldDebug('dispatching datasource field update event', { dataStoreId, field, fieldType });
   window.dispatchEvent(new CustomEvent(DATA_SOURCE_FIELDS_UPDATED_EVENT, {
     detail: { dataStoreId, field, fieldType },
   }));
 }
 
 function refreshMenusBoundToDataSource(dataStoreId: string) {
-  const affectedLayers = S.layerOrder.filter((layerId) => S.layers.get(layerId)?.dataStoreId === dataStoreId);
-  writeFieldDebug('refreshMenusBoundToDataSource invoked', {
-    dataStoreId,
-    affectedLayerCount: affectedLayers.length,
-    affectedLayers,
-    currentLayerId: S.currentLayerId,
-  });
-  if (affectedLayers.length === 0) return;
+  const hasAffectedLayer = S.layerOrder.some((layerId) => S.layers.get(layerId)?.dataStoreId === dataStoreId);
+  if (!hasAffectedLayer) return;
 
   // Always refresh the Layers panel itself so all datasource-bound layers expose new fields immediately.
   renderLayerList();
 
   const currentLayer = getCurrentLayer();
-  if (!currentLayer || currentLayer.dataStoreId !== dataStoreId) {
-    writeFieldDebug('skipping current-layer panel refresh; current layer not bound to datasource', {
-      currentLayerId: currentLayer?.id ?? null,
-      currentLayerDataStoreId: currentLayer?.dataStoreId ?? null,
-      dataStoreId,
-    });
-    return;
+  if (!currentLayer || currentLayer.dataStoreId !== dataStoreId) return;
+
+  if (S.currentGeoJSON) {
+    const allAvailableFields = [
+      ...S.chosenNumericFields.filter((k) => S.currentGeoJSON?.features?.some((f) => f?.properties?.hasOwnProperty(k))),
+      ...S.chosenCategoricalFields.filter((k) => S.currentGeoJSON?.features?.some((f) => f?.properties?.hasOwnProperty(k))),
+    ];
+    populateFieldDropdownFromList(allAvailableFields);
+    fieldSelect.value = S.currentField ?? '';
   }
 
-  writeFieldDebug('refreshing panels for current layer bound to updated datasource', { currentLayerId: currentLayer.id, dataStoreId });
   renderDataStoreList();
   refreshFiltersUI();
   refreshStatisticsPanel();
@@ -2543,14 +2530,6 @@ async function runWriteOperation() {
   }
 
   if (isCreateField) {
-    writeFieldDebug('create-field operation completed staging; syncing schema lists', {
-      dataStoreId: store.id,
-      targetField,
-      targetFieldType,
-      changedCount: stagedChanges.length,
-      selectedMode: writeApplyTo.value,
-      selectedParcelCount: selectedIds.size,
-    });
     if (targetFieldType === 'numeric') {
       if (!store.chosenNumericFields.includes(targetField)) store.chosenNumericFields.push(targetField);
     } else if (!store.chosenCategoricalFields.includes(targetField)) {
@@ -2559,23 +2538,14 @@ async function runWriteOperation() {
     getLayersForDataSource(store.id).forEach(layer => {
       if (targetFieldType === 'numeric' && !layer.chosenNumericFields.includes(targetField)) layer.chosenNumericFields.push(targetField);
       if (targetFieldType === 'categorical' && !layer.chosenCategoricalFields.includes(targetField)) layer.chosenCategoricalFields.push(targetField);
-      writeFieldDebug('updated layer schema arrays from create-field', {
-        layerId: layer.id,
-        dataStoreId: layer.dataStoreId,
-        numericFieldCount: layer.chosenNumericFields.length,
-        categoricalFieldCount: layer.chosenCategoricalFields.length,
-      });
     });
 
     const activeLayer = getCurrentLayer();
-    writeFieldDebug('post-sync active field lists snapshot', {
-      activeLayerId: activeLayer?.id ?? null,
-      activeLayerDataStoreId: activeLayer?.dataStoreId ?? null,
-      stateNumericContainsField: S.chosenNumericFields.includes(targetField),
-      stateCategoricalContainsField: S.chosenCategoricalFields.includes(targetField),
-      storeNumericContainsField: store.chosenNumericFields.includes(targetField),
-      storeCategoricalContainsField: store.chosenCategoricalFields.includes(targetField),
-    });
+    const activeStateBoundToStore = S.currentDataStoreId === store.id || activeLayer?.dataStoreId === store.id;
+    if (activeStateBoundToStore) {
+      if (targetFieldType === 'numeric' && !S.chosenNumericFields.includes(targetField)) S.chosenNumericFields.push(targetField);
+      if (targetFieldType === 'categorical' && !S.chosenCategoricalFields.includes(targetField)) S.chosenCategoricalFields.push(targetField);
+    }
   }
 
   stagedChanges.forEach(({ feature, parcelId, previous, next }) => {
@@ -3233,17 +3203,10 @@ window.addEventListener('data-sources-changed', () => {
 });
 
 window.addEventListener(DATA_SOURCE_FIELDS_UPDATED_EVENT, (event) => {
-  const detail = (event as CustomEvent<{ dataStoreId?: string; field?: string; fieldType?: 'numeric' | 'categorical' }>).detail;
+  const detail = (event as CustomEvent<{ dataStoreId?: string }>).detail;
   const dataStoreId = detail?.dataStoreId;
-  writeFieldDebug('received datasource field update event', {
-    dataStoreId: dataStoreId ?? null,
-    field: detail?.field ?? null,
-    fieldType: detail?.fieldType ?? null,
-    writeDataSourceValue: writeDataSource.value || null,
-  });
   if (!dataStoreId) return;
   if (writeDataSource.value === dataStoreId) {
-    writeFieldDebug('refreshing write UI for matching datasource', { dataStoreId });
     refreshWriteUI();
   }
   refreshMenusBoundToDataSource(dataStoreId);

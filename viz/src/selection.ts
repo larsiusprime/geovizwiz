@@ -944,19 +944,6 @@ function createSelectionControlsPanel() {
   const saveLoadSection = document.createElement('div');
   saveLoadSection.style.cssText = 'margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; display: grid; gap: 8px;';
 
-  // Key selector
-  const keyRow = document.createElement('div');
-  keyRow.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 12px;';
-  const keyLabel = document.createElement('span');
-  keyLabel.textContent = 'Key:';
-  keyLabel.style.fontWeight = '600';
-  _selectionKeySelect = document.createElement('select');
-  _selectionKeySelect.style.cssText = 'flex: 1; border: 1px solid #ddd; background: #fff; padding: 4px 6px; border-radius: 6px; font-size: 12px; cursor: pointer;';
-  keyRow.appendChild(keyLabel);
-  keyRow.appendChild(_selectionKeySelect);
-  refreshKeySelector();
-  saveLoadSection.appendChild(keyRow);
-
   // Save/Load widget
   _selectionSaveLoadWidget = createSaveLoadWidget({
     label: 'selection',
@@ -968,6 +955,22 @@ function createSelectionControlsPanel() {
     canLoad: () => S.savedSelectionsStore.size > 0,
     getMatchName: () => getMatchingSavedSelectionName(),
   });
+  // Inject key selector into the widget's save panel (only visible when Save tab is open)
+  const savePanel = _selectionSaveLoadWidget.element.querySelector('#selectionsSavePanel') as HTMLDivElement;
+  if (savePanel) {
+    const keyRow = document.createElement('div');
+    keyRow.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 12px;';
+    const keyLabel = document.createElement('span');
+    keyLabel.textContent = 'Key:';
+    keyLabel.style.fontWeight = '600';
+    _selectionKeySelect = document.createElement('select');
+    _selectionKeySelect.style.cssText = 'flex: 1; border: 1px solid #ddd; background: #fff; padding: 4px 6px; border-radius: 6px; font-size: 12px; cursor: pointer;';
+    keyRow.appendChild(keyLabel);
+    keyRow.appendChild(_selectionKeySelect);
+    refreshKeySelector();
+    savePanel.insertBefore(keyRow, savePanel.firstChild);
+  }
+
   saveLoadSection.appendChild(_selectionSaveLoadWidget.element);
 
   // Status line for load feedback

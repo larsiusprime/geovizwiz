@@ -40,6 +40,13 @@ let _colorPicker: HTMLInputElement;
 let _enable3DCheckbox: HTMLInputElement;
 let _filtersInvertToggle: HTMLInputElement;
 
+const LAYERS_FIELD_DEBUG = true;
+function layersFieldDebug(message: string, payload?: Record<string, unknown>) {
+  if (!LAYERS_FIELD_DEBUG) return;
+  if (payload) console.debug(`[layers-fields] ${message}`, payload);
+  else console.debug(`[layers-fields] ${message}`);
+}
+
 export function initLayerElements(els: {
   layerList: HTMLDivElement;
   dataStoreList: HTMLDivElement;
@@ -473,6 +480,14 @@ export function applyLayerState(layer: LayerState) {
         ...S.chosenNumericFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))),
         ...S.chosenCategoricalFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k)))
       ];
+      layersFieldDebug('populating active-layer field dropdown', {
+        currentLayerId: S.currentLayerId,
+        currentDataStoreId: S.currentDataStoreId,
+        numericFieldCount: S.chosenNumericFields.length,
+        categoricalFieldCount: S.chosenCategoricalFields.length,
+        availableFieldCount: allAvailableFields.length,
+        sampleAvailableFields: allAvailableFields.slice(0, 10),
+      });
       _populateFieldDropdownFromList(allAvailableFields);
       _fieldSelect.value = S.currentField ?? '';
     }

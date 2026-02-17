@@ -3,6 +3,7 @@ import {
   handleRectangleMouseDown, handleRectangleMouseMove, handleRectangleMouseUp,
   handleLassoMouseDown, handleLassoMouseMove, handleLassoMouseUp,
   handlePolygonMouseDown, handlePolygonMouseMove, handlePolygonDoubleClick,
+  showSelectionControlsPanel,
 } from './selection';
 
 /* ---------- callbacks wired from main.ts ---------- */
@@ -243,6 +244,7 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder' | '
       // Disable drag pan for select tool
       S.map.dragPan.disable();
       _setCompFinderToolActive(false);
+      showSelectionControlsPanel();
       break;
     case 'comp-finder':
       S.isCompFinderToolActive = true;

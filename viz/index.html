@@ -842,7 +842,7 @@
     }
 
     button.saveload-tab{
-      border: 1px solid transparent;
+      border: 1px solid #000;
       background: transparent;
       padding: 8px 12px;
       border-radius: 8px 8px 0 0;
@@ -894,6 +894,9 @@
 
     .saveload-load-row {
       display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 6px;
+      align-items: center;
     }
 
     .saveload-status {

@@ -64,7 +64,7 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
            style="display:none;">
         <div class="saveload-save-row" style="display:none;">
           <input type="text" placeholder="type a name" />
-          <button type="button" title="Save">💾</button>
+          <button type="button" title="Save">save</button>
         </div>
         <div class="saveload-status" style="display:none;"></div>
       </div>
@@ -73,6 +73,7 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
            style="display:none;">
         <div class="saveload-load-row" style="display:none;">
           <select></select>
+          <button type="button" title="Load">load</button>
         </div>
       </div>
     </div>`;
@@ -88,6 +89,7 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
   const statusDiv   = savePanel.querySelector('.saveload-status') as HTMLDivElement;
   const loadRow     = loadPanel.querySelector('.saveload-load-row') as HTMLDivElement;
   const loadSelect  = loadRow.querySelector('select') as HTMLSelectElement;
+  const loadButton  = loadRow.querySelector('button') as HTMLButtonElement;
 
   /* ---- internal helpers ------------------------------------------ */
 
@@ -149,6 +151,7 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
     confirmBtn.disabled = !showSave || !nameInput.value.trim();
 
     if (showLoad) populateDropdown();
+    loadButton.disabled = !showLoad || !loadSelect.value;
   }
 
   /* ---- wire events ----------------------------------------------- */
@@ -175,6 +178,10 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
   });
 
   loadSelect.addEventListener('change', () => {
+    update();
+  });
+
+  loadButton.addEventListener('click', () => {
     const selected = loadSelect.value;
     if (!selected) return;
     config.onLoad(selected);

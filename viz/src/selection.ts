@@ -740,7 +740,7 @@ function createSelectionControlsPanel() {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     z-index: 15;
     backdrop-filter: blur(4px);
-    min-width: 200px;
+    min-width: 240px;
     min-height: 120px;
     cursor: move;
     display: grid;
@@ -764,6 +764,7 @@ function createSelectionControlsPanel() {
         <button id="btnPinSelectionControls" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;">
         </button>
+        <button id="btnCloseSelectionControls" type="button" title="Close" aria-label="Close" style="width:22px;height:22px;border:1px solid #ddd;background:#f8f8f8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;">❌</button>
       </div>
     </div>
     <div data-window-content style="padding: 12px; display: block;">
@@ -826,6 +827,7 @@ function createSelectionControlsPanel() {
   const unselectAllBtn = S.selectionControlsPanel.querySelector('#unselectAllBtn') as HTMLButtonElement;
   const colorPicker = S.selectionControlsPanel.querySelector('#highlightColorPicker') as HTMLInputElement;
   const pinButton = S.selectionControlsPanel.querySelector('#btnPinSelectionControls') as HTMLButtonElement;
+  const closeButton = S.selectionControlsPanel.querySelector('#btnCloseSelectionControls') as HTMLButtonElement;
   const conditionsBtn = S.selectionControlsPanel.querySelector('#selectionFilterConditionsBtn') as HTMLButtonElement;
   const operationSelect = S.selectionControlsPanel.querySelector('#selectionFilterOperation') as HTMLSelectElement;
   const applyBtn = S.selectionControlsPanel.querySelector('#selectionFilterApplyBtn') as HTMLButtonElement;
@@ -929,6 +931,12 @@ function createSelectionControlsPanel() {
     updateConditionsButtonState();
   });
   applyBtn.addEventListener('click', applySelectionFromConditions);
+  closeButton.addEventListener('click', () => {
+    S.selectionControlsPanel?.style.setProperty('display', 'none');
+    if (S.selectionControlsPanel?.classList.contains('is-pinned')) {
+      _refreshSelectionControlsDockLayout();
+    }
+  });
 
   colorPicker.addEventListener('change', (e) => {
     const target = e.target as HTMLInputElement;
@@ -1013,6 +1021,22 @@ function ensureSelectionControlsOpen(panel: HTMLDivElement) {
   }
 }
 
+export function showSelectionControlsPanel() {
+  if (!S.selectionControlsPanel || !S.selectionControlsPanel.isConnected) {
+    createSelectionControlsPanel();
+  }
+  if (!S.selectionControlsPanel) return;
+
+  const currentLayerId = S.currentLayerId ?? null;
+  S.selectionControlsPanel.dataset.selectionContextLayerId = currentLayerId ?? '';
+  ensureSelectionControlsOpen(S.selectionControlsPanel);
+
+  const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
+  if (countElement) {
+    countElement.textContent = S.selectedParcels.size.toString();
+  }
+}
+
 function enforceSelectionControlsVisibilityInvariant() {
   if (S.selectedParcels.size <= 0 && S.savedSelectionsStore.size <= 0) return;
 
@@ -1047,14 +1071,7 @@ export function updateSelectionControls() {
   const hasSelection = S.selectedParcels.size > 0;
   const hasSavedSelections = S.savedSelectionsStore.size > 0;
 
-  if (!hasSelection && !hasSavedSelections) {
-    if (S.selectionControlsPanel) {
-      S.selectionControlsPanel.style.display = 'none';
-      if (S.selectionControlsPanel.classList.contains('is-pinned')) {
-        _refreshSelectionControlsDockLayout();
-      }
-    }
-  } else {
+  if (hasSelection || hasSavedSelections) {
     enforceSelectionControlsVisibilityInvariant();
   }
 

@@ -2343,8 +2343,15 @@ function dispatchDataSourceFieldsUpdated(dataStoreId: string, field: string, fie
 }
 
 function refreshMenusBoundToDataSource(dataStoreId: string) {
+  const hasAffectedLayer = S.layerOrder.some((layerId) => S.layers.get(layerId)?.dataStoreId === dataStoreId);
+  if (!hasAffectedLayer) return;
+
+  // Always refresh the Layers panel itself so all datasource-bound layers expose new fields immediately.
+  renderLayerList();
+
   const currentLayer = getCurrentLayer();
   if (!currentLayer || currentLayer.dataStoreId !== dataStoreId) return;
+
   renderDataStoreList();
   refreshFiltersUI();
   refreshStatisticsPanel();

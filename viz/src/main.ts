@@ -3015,15 +3015,11 @@ if (normModeSelect) {
       return;
     }
 
-    S.normalizationMode = next;
-    normAsIs.checked = next === 'asis';
-    normLand.checked = next === 'perLand';
-    normBldg.checked = next === 'perBuilding';
-
-    S.cachedExtrusionSettings = null;
-    if (!S.currentGeoJSON || !S.currentField) return;
-    scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
-    persistCurrentLayerState();
+    const target = next === 'perLand'
+      ? normLand
+      : (next === 'perBuilding' ? normBldg : normAsIs);
+    target.checked = true;
+    target.dispatchEvent(new Event('change', { bubbles: true }));
   });
 }
 

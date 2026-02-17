@@ -76,11 +76,13 @@ export function buildSubjectSelector(
   categoryControls.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(0, 1fr)';
 
   const categoryFieldSelect = document.createElement('select');
+  categoryFieldSelect.className = 'layer-source-name';
   const fieldPlaceholder = new Option('Everything', '');
   fieldPlaceholder.selected = true;
   categoryFieldSelect.appendChild(fieldPlaceholder);
 
   const categoryValueSelect = document.createElement('select');
+  categoryValueSelect.className = 'layer-source-name';
   categoryValueSelect.disabled = true;
   const valuePlaceholder = new Option('Choose value', '');
   valuePlaceholder.disabled = true;
@@ -103,12 +105,12 @@ export function updateSubjectControls(
   controls: SubjectSelectorControls,
   mode: SubjectMode,
   hasFieldOptions: boolean,
-  hasFieldSelected: boolean
+  hasFieldChosen: boolean
 ) {
   const isGroup = mode === 'group';
   controls.categoryControls.style.display = isGroup ? 'grid' : 'none';
   controls.categoryFieldSelect.disabled = !isGroup || !hasFieldOptions;
-  controls.categoryValueSelect.disabled = !isGroup || !hasFieldSelected;
+  controls.categoryValueSelect.disabled = !isGroup || !hasFieldChosen;
 }
 
 /**
@@ -811,7 +813,7 @@ export function updateStatisticsSubjectControls() {
     statsSubjectControls,
     S.statsSubjectMode,
     true,
-    !S.statsCategoryField || Boolean(S.statsCategoryValueIndices[0])
+    !S.statsCategoryField || statsCategoryValueSelect.options.length > 1
   );
 }
 

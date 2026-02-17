@@ -240,7 +240,7 @@ export function updateScatterSubjectControls() {
     scatterSubjectControls,
     S.scatterSubjectMode,
     true,
-    !S.scatterCategoryField || Boolean(S.scatterCategoryValueIndices[0])
+    !S.scatterCategoryField || scatterCategoryValueSelect.options.length > 1
   );
 }
 

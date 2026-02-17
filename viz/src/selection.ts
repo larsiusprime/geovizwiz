@@ -30,6 +30,7 @@ let _selectionKeySelect: HTMLSelectElement | null = null;
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
 const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
+const RESIZE_ICON = new URL('./svg/expand.svg', import.meta.url).href;
 
 export interface SelectionCallbacks {
   getCurrentSourceId: () => string | null;
@@ -747,6 +748,7 @@ function createSelectionControlsPanel() {
     grid-template-rows: auto 1fr;
   `;
   S.selectionControlsPanel.classList.add('viz-window');
+  S.selectionControlsPanel.dataset.minWidth = '240';
 
   S.selectionControlsPanel.innerHTML = `
     <div class="window-header" style="
@@ -764,7 +766,7 @@ function createSelectionControlsPanel() {
         <button id="btnPinSelectionControls" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img src="${PIN_ICON_TILTED}" alt="Pin menu" style="width:14px;height:14px;display:block;">
         </button>
-        <button id="btnCloseSelectionControls" type="button" title="Close" aria-label="Close" style="width:22px;height:22px;border:1px solid #ddd;background:#f8f8f8;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;">❌</button>
+        <button id="btnCloseSelectionControls" type="button" title="Close" aria-label="Close" style="width:22px;height:22px;border:none;background:none;border-radius:6px;outline:none;box-shadow:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1;">❌</button>
       </div>
     </div>
     <div data-window-content style="padding: 12px; display: block;">
@@ -821,6 +823,10 @@ function createSelectionControlsPanel() {
         ">Apply</button>
         <div id="selectionFilterStatus" style="font-size: 12px; min-height: 16px; color: #111827;"></div>
       </div>
+    </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="${RESIZE_ICON}" alt="" />
     </div>
   `;
 

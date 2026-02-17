@@ -29,7 +29,7 @@ import {
   updateStatisticsSectionVisibility,
   updateStatisticsResults, refreshStatisticsPanel,
   updateStatisticsSubjectControls, setStatsSubjectMode,
-  renderStatsLayerOptions,
+  renderStatsLayerOptions, getCurrentStatsSubjectSelection,
 } from './statistics';
 import {
   initScatterplotElements, initScatterplotCallbacks,
@@ -39,7 +39,7 @@ import {
   scheduleScatterPlotRefresh,
   refreshScatterPanel, renderScatterLayerOptions,
   clearScatterSelection, clearScatterHover, zoomToScatterSelection,
-  initScatterplotMapLayers,
+  initScatterplotMapLayers, getCurrentScatterSubjectSelection,
 } from './scatterplot';
 
 
@@ -367,10 +367,12 @@ const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection, { tit
 const statsSubjectButtons = statsSubjectControls.buttons;
 const statsCategoryFieldSelect = statsSubjectControls.categoryFieldSelect;
 const statsCategoryValueSelect = statsSubjectControls.categoryValueSelect;
+const statsSelectOnMapButton = statsSubjectControls.selectOnMapButton;
 
 const scatterSubjectButtons = scatterSubjectControls.buttons;
 const scatterCategoryFieldSelect = scatterSubjectControls.categoryFieldSelect;
 const scatterCategoryValueSelect = scatterSubjectControls.categoryValueSelect;
+const scatterSelectOnMapButton = scatterSubjectControls.selectOnMapButton;
 const statsFieldSelect = document.getElementById('statsField') as HTMLSelectElement;
 const statsNormModeSelect = document.getElementById('statsNormModeSelect') as HTMLSelectElement | null;
 const statsDetails = document.getElementById('statsDetails') as HTMLDivElement;
@@ -3180,6 +3182,16 @@ filtersInvertToggle.addEventListener('change', () => {
   persistFiltersContext();
 });
 
+
+function replaceMapSelectionFromFeatures(features: GeoJSON.Feature[], contextLabel: string) {
+  if (features.length === 0) {
+    alert(`No parcels are currently resolved for ${contextLabel}.`);
+    return;
+  }
+  clearAllSelections();
+  features.forEach(feature => addParcelToSelection(feature));
+}
+
 statsSubjectButtons.forEach(button => {
   button.addEventListener('click', () => {
     const mode = button.dataset.subjectMode as SubjectMode | undefined;
@@ -3252,6 +3264,14 @@ scatterCategoryValueSelect.addEventListener('change', () => {
   updateScatterSubjectControls();
   S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
+});
+
+statsSelectOnMapButton.addEventListener('click', () => {
+  replaceMapSelectionFromFeatures(getCurrentStatsSubjectSelection(), 'the Statistics Group selection');
+});
+
+scatterSelectOnMapButton.addEventListener('click', () => {
+  replaceMapSelectionFromFeatures(getCurrentScatterSubjectSelection(), 'the Scatterplot Group selection');
 });
 
 scatterColorByFieldSelect.addEventListener('change', () => {

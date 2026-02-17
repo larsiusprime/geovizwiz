@@ -224,6 +224,7 @@ export type SubjectSelectorControls = {
   categoryControls: HTMLDivElement;
   categoryFieldSelect: HTMLSelectElement;
   categoryValueSelect: HTMLSelectElement;
+  selectOnMapButton: HTMLButtonElement;
 };
 
 export type SubjectSelectorOptions = {

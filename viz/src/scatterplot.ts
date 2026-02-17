@@ -571,6 +571,22 @@ function getScatterSubjectSelection(
   return layerGeoJSON?.features ?? [];
 }
 
+
+export function getCurrentScatterSubjectSelection(): GeoJSON.Feature[] {
+  const layer = _getScatterLayer();
+  const scatterStore = _getScatterDataStore();
+  if (!layer || !layer.geojson || !scatterStore?.geojson) return [];
+  return getScatterSubjectSelection(
+    layer,
+    layer.geojson,
+    scatterStore.geojson,
+    S.scatterSubjectMode,
+    S.scatterCategoryField,
+    S.scatterCategoryValueIndices,
+    S.scatterCategoryValueMap
+  );
+}
+
 export function updateScatterPlot() {
   const plotly = getPlotly();
   if (!plotly) {

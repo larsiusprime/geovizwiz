@@ -89,10 +89,16 @@ export function buildSubjectSelector(
   valuePlaceholder.selected = true;
   categoryValueSelect.appendChild(valuePlaceholder);
 
-  categoryControls.append(categoryFieldSelect, categoryValueSelect);
+  const selectOnMapButton = document.createElement('button');
+  selectOnMapButton.type = 'button';
+  selectOnMapButton.textContent = 'Select on map';
+  selectOnMapButton.style.gridColumn = '2';
+  selectOnMapButton.style.justifySelf = 'stretch';
+
+  categoryControls.append(categoryFieldSelect, categoryValueSelect, selectOnMapButton);
   container.append(subjectBlock, categoryControls);
 
-  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect };
+  return { buttons, categoryControls, categoryFieldSelect, categoryValueSelect, selectOnMapButton };
 }
 
 export function updateSubjectButtons(controls: SubjectSelectorControls, mode: SubjectMode) {
@@ -111,6 +117,7 @@ export function updateSubjectControls(
   controls.categoryControls.style.display = isGroup ? 'grid' : 'none';
   controls.categoryFieldSelect.disabled = !isGroup || !hasFieldOptions;
   controls.categoryValueSelect.disabled = !isGroup || !hasFieldChosen;
+  controls.selectOnMapButton.disabled = !isGroup;
 }
 
 /**
@@ -656,6 +663,16 @@ export function getStatsSubjectSelection(
     });
   }
   return layerGeoJSON?.features ?? [];
+}
+
+
+export function getCurrentStatsSubjectSelection(): GeoJSON.Feature[] {
+  return getStatsSubjectSelection(
+    S.statsSubjectMode,
+    S.statsCategoryField,
+    S.statsCategoryValueIndices,
+    S.statsCategoryValueMap
+  );
 }
 
 export function updateStatisticsResults() {

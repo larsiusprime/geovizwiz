@@ -1043,7 +1043,9 @@
       color: #333;
     }
 
-    .land-schedule-collapse-toggle {
+    .land-schedule-collapse-toggle,
+    #controls .land-schedule-collapse-toggle,
+    #settingsControls .land-schedule-collapse-toggle {
       border: none;
       background: transparent;
       cursor: pointer;
@@ -1053,12 +1055,16 @@
       transition: transform 0.2s ease;
     }
 
-    .land-schedule-collapse-toggle:hover {
+    .land-schedule-collapse-toggle:hover,
+    #controls .land-schedule-collapse-toggle:hover,
+    #settingsControls .land-schedule-collapse-toggle:hover {
       background: #f3f4f6;
       border-radius: 6px;
     }
 
-    .land-schedule-collapse-toggle.is-collapsed {
+    .land-schedule-collapse-toggle.is-collapsed,
+    #controls .land-schedule-collapse-toggle.is-collapsed,
+    #settingsControls .land-schedule-collapse-toggle.is-collapsed {
       transform: rotate(-90deg);
     }
 

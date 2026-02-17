@@ -295,13 +295,12 @@ const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
 const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
 const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 const colorRampOptions = document.getElementById('colorRampOptions') as HTMLFieldSetElement;
-const colorScalingOptions = document.getElementById('colorScalingOptions') as HTMLFieldSetElement;
+const colorScalingOptions = document.getElementById('colorScalingOptions') as HTMLFieldSetElement | null;
 const opacityOptions = document.getElementById('opacityOptions') as HTMLFieldSetElement;
 const paintDividerNumeric = document.getElementById('paintDividerNumeric') as HTMLDivElement;
 const paintDividerCategorical = document.getElementById('paintDividerCategorical') as HTMLDivElement;
 const paintDividerRamp = document.getElementById('paintDividerRamp') as HTMLDivElement;
-const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement;
-const currentLayerSource = document.getElementById('currentLayerSource') as HTMLDivElement;
+const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement | null;
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
@@ -576,6 +575,10 @@ const btnConfirmDeleteDataSource = document.getElementById('btnConfirmDeleteData
 // Color scaling radios
 const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
 const colorQuant = document.getElementById('color-quant') as HTMLInputElement | null;
+const colorModeSelect = document.getElementById('colorModeSelect') as HTMLSelectElement | null;
+const normModeSelect = document.getElementById('normModeSelect') as HTMLSelectElement | null;
+const fieldVisualizeToggle = document.getElementById('fieldVisualizeToggle') as HTMLButtonElement;
+const fieldVisualizeBody = document.getElementById('fieldVisualizeBody') as HTMLDivElement;
 
 // Color picker elements
 const colorOptions = document.getElementById('colorOptions') as HTMLDivElement;
@@ -594,6 +597,18 @@ const setPaintSectionCollapsed = (collapsed: boolean) => {
 setPaintSectionCollapsed(S.isPaintCollapsed);
 paintSectionToggle.addEventListener('click', () => {
   setPaintSectionCollapsed(!S.isPaintCollapsed);
+});
+
+const setFieldVisualizeCollapsed = (collapsed: boolean) => {
+  fieldVisualizeBody.style.display = collapsed ? 'none' : 'grid';
+  fieldVisualizeToggle.classList.toggle('is-collapsed', collapsed);
+  fieldVisualizeToggle.title = collapsed ? 'Expand Field to visualize' : 'Collapse Field to visualize';
+  refreshWindowMinHeight(controlsEl);
+};
+
+setFieldVisualizeCollapsed(false);
+fieldVisualizeToggle.addEventListener('click', () => {
+  setFieldVisualizeCollapsed(fieldVisualizeBody.style.display !== 'none');
 });
 
 const setStatsLayerCollapsed = (collapsed: boolean) => {
@@ -1306,7 +1321,6 @@ setCompFinderMenuVisible(!S.isCompFinderMinimized);
 initLayerElements({
   layerList,
   dataStoreList,
-  currentLayerSource,
   fieldSelect,
   rampSelect,
   opacityInput,
@@ -1314,8 +1328,10 @@ initLayerElements({
   normAsIs,
   normLand,
   normBldg,
+  normModeSelect,
   colorCont,
   colorQuant,
+  colorModeSelect,
   colorPicker,
   enable3DCheckbox: enable3DCheckbox,
   filtersInvertToggle,
@@ -2968,11 +2984,35 @@ fileInput.addEventListener('change', async () => {
     const val = (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value;
     if (val === 'continuous' || val === 'quantiles') {
       S.colorMode = val;
+      if (colorModeSelect) colorModeSelect.value = S.colorMode;
       scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
       persistCurrentLayerState();
     }
   })
 );
+
+if (colorModeSelect) {
+  colorModeSelect.addEventListener('change', () => {
+    if (!S.currentGeoJSON) return;
+    const next = colorModeSelect.value;
+    const target = next === 'continuous' ? colorCont : colorQuant;
+    if (target) {
+      target.checked = true;
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+}
+
+if (normModeSelect) {
+  normModeSelect.addEventListener('change', () => {
+    const next = normModeSelect.value;
+    const target = next === 'perLand' ? normLand : (next === 'perBuilding' ? normBldg : normAsIs);
+    if (target) {
+      target.checked = true;
+      target.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  });
+}
 
 // Categorical color mode event listeners
 document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(el =>
@@ -3454,6 +3494,7 @@ fieldSelect.addEventListener('change', () => {
 document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
   r.addEventListener('change', () => {
     S.normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
+    if (normModeSelect) normModeSelect.value = S.normalizationMode;
     // Clear cached extrusion settings when normalization mode changes
     S.cachedExtrusionSettings = null;
     if (!S.currentGeoJSON || !S.currentField) return;

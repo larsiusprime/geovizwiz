@@ -25,7 +25,6 @@ const SATELLITE_ICON = new URL('./svg/globe.svg', import.meta.url).href;
 
 let _layerList: HTMLDivElement;
 let _dataStoreList: HTMLDivElement;
-let _currentLayerSource: HTMLDivElement;
 let _fieldSelect: HTMLSelectElement;
 let _rampSelect: HTMLSelectElement;
 let _opacityInput: HTMLInputElement;
@@ -33,8 +32,10 @@ let _opacityOut: HTMLOutputElement;
 let _normAsIs: HTMLInputElement;
 let _normLand: HTMLInputElement;
 let _normBldg: HTMLInputElement;
+let _normModeSelect: HTMLSelectElement | null = null;
 let _colorCont: HTMLInputElement | null;
 let _colorQuant: HTMLInputElement | null;
+let _colorModeSelect: HTMLSelectElement | null = null;
 let _colorPicker: HTMLInputElement;
 let _enable3DCheckbox: HTMLInputElement;
 let _filtersInvertToggle: HTMLInputElement;
@@ -42,7 +43,6 @@ let _filtersInvertToggle: HTMLInputElement;
 export function initLayerElements(els: {
   layerList: HTMLDivElement;
   dataStoreList: HTMLDivElement;
-  currentLayerSource: HTMLDivElement;
   fieldSelect: HTMLSelectElement;
   rampSelect: HTMLSelectElement;
   opacityInput: HTMLInputElement;
@@ -50,15 +50,16 @@ export function initLayerElements(els: {
   normAsIs: HTMLInputElement;
   normLand: HTMLInputElement;
   normBldg: HTMLInputElement;
+  normModeSelect?: HTMLSelectElement | null;
   colorCont: HTMLInputElement | null;
   colorQuant: HTMLInputElement | null;
+  colorModeSelect?: HTMLSelectElement | null;
   colorPicker: HTMLInputElement;
   enable3DCheckbox: HTMLInputElement;
   filtersInvertToggle: HTMLInputElement;
 }) {
   _layerList = els.layerList;
   _dataStoreList = els.dataStoreList;
-  _currentLayerSource = els.currentLayerSource;
   _fieldSelect = els.fieldSelect;
   _rampSelect = els.rampSelect;
   _opacityInput = els.opacityInput;
@@ -66,8 +67,10 @@ export function initLayerElements(els: {
   _normAsIs = els.normAsIs;
   _normLand = els.normLand;
   _normBldg = els.normBldg;
+  _normModeSelect = els.normModeSelect ?? null;
   _colorCont = els.colorCont;
   _colorQuant = els.colorQuant;
+  _colorModeSelect = els.colorModeSelect ?? null;
   _colorPicker = els.colorPicker;
   _enable3DCheckbox = els.enable3DCheckbox;
   _filtersInvertToggle = els.filtersInvertToggle;
@@ -480,11 +483,27 @@ export function applyLayerState(layer: LayerState) {
     _normLand.checked = S.normalizationMode === 'perLand';
     _normBldg.checked = S.normalizationMode === 'perBuilding';
   }
+  if (_normModeSelect) {
+    const landUnit = (document.getElementById('normLandUnit')?.textContent || '(unit)').trim();
+    const bldgUnit = (document.getElementById('normBldgUnit')?.textContent || '(unit)').trim();
+    const perLandOption = _normModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
+    const perBuildingOption = _normModeSelect.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
+    if (perLandOption) {
+      perLandOption.disabled = _normLand?.disabled ?? false;
+      perLandOption.textContent = `…per land size ${landUnit}`;
+    }
+    if (perBuildingOption) {
+      perBuildingOption.disabled = _normBldg?.disabled ?? false;
+      perBuildingOption.textContent = `…per building size ${bldgUnit}`;
+    }
+    _normModeSelect.value = S.normalizationMode;
+  }
 
   if (_colorCont && _colorQuant) {
     _colorCont.checked = S.colorMode === 'continuous';
     _colorQuant.checked = S.colorMode === 'quantiles';
   }
+  if (_colorModeSelect) _colorModeSelect.value = S.colorMode;
 
   document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(radio => {
     radio.checked = radio.value === S.categoricalColorMode;
@@ -663,19 +682,7 @@ export function removeLayer(layerId: string) {
 /* ------------------------------------------------------------------ */
 
 export function updateCurrentLayerDetails() {
-  if (!_currentLayerSource) return;
-  if (!S.currentLayerId) {
-    _currentLayerSource.textContent = 'source: —';
-    return;
-  }
-  const layer = S.layers.get(S.currentLayerId);
-  if (!layer) {
-    _currentLayerSource.textContent = 'source: —';
-    return;
-  }
-  const store = S.dataStores.get(layer.dataStoreId);
-  const sourceName = store?.file?.name ?? store?.name ?? '—';
-  _currentLayerSource.textContent = `source: ${sourceName}`;
+  // Current layer/source readout removed from UI.
 }
 
 export function renderLayerList() {

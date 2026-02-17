@@ -36,7 +36,7 @@ export function buildSubjectSelector(
   subjectBlock.style.display = 'grid';
   subjectBlock.style.gap = '6px';
 
-  const titleText = options.title ?? 'Subject:';
+  const titleText = options.title !== undefined ? options.title : 'Subject:';
   let title: HTMLDivElement | null = null;
   if (titleText) {
     title = document.createElement('div');

@@ -1040,6 +1040,7 @@ export function update3DUI() {
 export function updateFieldTypeUI() {
   const numericOptions = document.getElementById('numericOptions');
   const categoricalOptions = document.getElementById('categoricalOptions');
+  const fieldTypeReadout = document.getElementById('fieldTypeReadout');
 
   if (!S.currentField) {
     // Hide all options when no field is selected
@@ -1054,16 +1055,19 @@ export function updateFieldTypeUI() {
     if (_paintDividerRamp) _paintDividerRamp.style.display = 'none';
     if (_paintDividerScaling) _paintDividerScaling.style.display = 'none';
     _extrusionOptions.style.display = 'none';
+    if (fieldTypeReadout) fieldTypeReadout.textContent = 'Field type: —';
   } else {
     const showNumericOptions = S.currentFieldType === 'numeric';
     const showCategoricalOptions = S.currentFieldType === 'categorical';
     const showColorRampOptions = showNumericOptions || (showCategoricalOptions && S.categoricalColorMode === 'colorRamp');
-    const showColorScalingOptions = showNumericOptions;
+    const showColorScalingOptions = !!_colorScalingOptions && showNumericOptions;
     const showOpacityOptions = true;
 
     if (_colorRampOptions) _colorRampOptions.style.display = showColorRampOptions ? 'grid' : 'none';
     if (_colorScalingOptions) _colorScalingOptions.style.display = showColorScalingOptions ? 'grid' : 'none';
     if (_opacityOptions) _opacityOptions.style.display = showOpacityOptions ? 'grid' : 'none';
+
+    if (fieldTypeReadout) fieldTypeReadout.textContent = `Field type: ${S.currentFieldType ?? '—'}`;
 
     if (showNumericOptions) {
       if (numericOptions) numericOptions.style.display = 'grid';

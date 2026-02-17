@@ -22,7 +22,6 @@ let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLBu
 let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
 let _ensureFloatingWindowVisible: (el: HTMLElement) => void = () => {};
-let _selectionControlsInvariantTimer: number | null = null;
 let _selectionSaveLoadWidget: SaveLoadWidgetHandle | null = null;
 let _selectionSaveLoadStatus: HTMLDivElement | null = null;
 let _selectionKeySelect: HTMLSelectElement | null = null;
@@ -59,11 +58,6 @@ export function initSelection(cb: SelectionCallbacks) {
   _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
   _ensureFloatingWindowVisible = cb.ensureFloatingWindowVisible;
 
-  if (_selectionControlsInvariantTimer === null) {
-    _selectionControlsInvariantTimer = window.setInterval(() => {
-      enforceSelectionControlsVisibilityInvariant();
-    }, 150);
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -1037,25 +1031,15 @@ export function showSelectionControlsPanel() {
   S.selectionControlsPanel.dataset.selectionContextLayerId = currentLayerId ?? '';
   ensureSelectionControlsOpen(S.selectionControlsPanel);
 
-  const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
-  if (countElement) {
-    countElement.textContent = S.selectedParcels.size.toString();
-  }
+  syncSelectionControlsPanelState();
 }
 
-function enforceSelectionControlsVisibilityInvariant() {
-  if (S.selectedParcels.size <= 0 && S.savedSelectionsStore.size <= 0) return;
-
-  if (!S.selectionControlsPanel || !S.selectionControlsPanel.isConnected) {
-    createSelectionControlsPanel();
-  }
-
-  if (!S.selectionControlsPanel) return;
+function syncSelectionControlsPanelState() {
+  if (!S.selectionControlsPanel || !S.selectionControlsPanel.isConnected) return;
 
   const currentLayerId = S.currentLayerId ?? null;
   S.selectionControlsPanel.dataset.selectionContextLayerId = currentLayerId ?? '';
 
-  ensureSelectionControlsOpen(S.selectionControlsPanel);
   const countElement = S.selectionControlsPanel.querySelector('#selectedCount');
   if (countElement) {
     countElement.textContent = S.selectedParcels.size.toString();
@@ -1074,18 +1058,7 @@ function enforceSelectionControlsVisibilityInvariant() {
 }
 
 export function updateSelectionControls() {
-  const hasSelection = S.selectedParcels.size > 0;
-  const hasSavedSelections = S.savedSelectionsStore.size > 0;
-
-  if (hasSelection || hasSavedSelections) {
-    enforceSelectionControlsVisibilityInvariant();
-  }
-
-  // Update the selected count display
-  if (S.selectionControlsPanel) {
-    const countEl = S.selectionControlsPanel.querySelector('#selectedCount');
-    if (countEl) countEl.textContent = String(S.selectedParcels.size);
-  }
+  syncSelectionControlsPanelState();
 
   refreshKeySelector();
   _selectionSaveLoadWidget?.update();

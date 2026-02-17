@@ -2079,6 +2079,8 @@ let writeBusy = false;
 let writeCancelRequested = false;
 let writeSafetyTimer: number | null = null;
 
+const DATA_SOURCE_FIELDS_UPDATED_EVENT = 'data-source-fields-updated';
+
 function getWriteDataStore() {
   const id = writeDataSource.value;
   return id ? (S.dataStores.get(id) ?? null) : null;
@@ -2334,6 +2336,31 @@ function updateMapSourceDataForLayer(layerId: string) {
   if (source) source.setData(layer.geojson);
 }
 
+function dispatchDataSourceFieldsUpdated(dataStoreId: string, field: string, fieldType: 'numeric' | 'categorical') {
+  window.dispatchEvent(new CustomEvent(DATA_SOURCE_FIELDS_UPDATED_EVENT, {
+    detail: { dataStoreId, field, fieldType },
+  }));
+}
+
+function refreshMenusBoundToDataSource(dataStoreId: string) {
+  const currentLayer = getCurrentLayer();
+  if (!currentLayer || currentLayer.dataStoreId !== dataStoreId) return;
+  renderDataStoreList();
+  refreshFiltersUI();
+  refreshStatisticsPanel();
+  refreshScatterPanel();
+  refreshLandSchedulePanel();
+  refreshTimeAdjustmentPanel();
+  renderStatsLayerOptions();
+  renderScatterLayerOptions();
+  if (S.isInspectMinimized || !S.lastPicked) return;
+  if (isInspectPinned()) {
+    renderInspectPinnedContent();
+    return;
+  }
+  showPopupForLastPicked();
+}
+
 function setParcelPatchForLayer(layerId: string, parcelId: string, field: string, original: any, current: any, fieldType: 'numeric' | 'categorical') {
   const layer = S.layers.get(layerId);
   if (!layer) return;
@@ -2431,6 +2458,7 @@ async function runWriteOperation() {
     const parcelId = getParcelId(feature as any);
     if (targetParcelSet && !targetParcelSet.has(parcelId)) continue;
 
+    const hadTargetField = Object.prototype.hasOwnProperty.call(props, targetField);
     const previous = normalizeFieldValue(targetFieldType, props[targetField]);
     let next = previous;
 
@@ -2473,7 +2501,8 @@ async function runWriteOperation() {
       if (writeCancelRequested) break;
     }
 
-    if (valuesEqualForField(targetFieldType, previous, next)) continue;
+    const unchangedValue = valuesEqualForField(targetFieldType, previous, next);
+    if (unchangedValue && (!isCreateField || hadTargetField)) continue;
     stagedChanges.push({ feature, parcelId, previous, next });
   }
 
@@ -2513,10 +2542,16 @@ async function runWriteOperation() {
   layerIds.forEach(updateMapSourceDataForLayer);
   if (S.currentLayerId && layerIds.includes(S.currentLayerId)) {
     S.parcelPatchMap = S.layers.get(S.currentLayerId)?.parcelPatchMap ?? new Map();
+    if (S.lastPicked) {
+      const picked = findFeatureByParcelId(S.lastPicked.parcelId);
+      if (picked?.properties) {
+        S.lastPicked.props = { ...picked.properties };
+      }
+    }
   }
-  if (S.lastPicked && targetField in (S.lastPicked.props ?? {})) {
-    const picked = findFeatureByParcelId(S.lastPicked.parcelId);
-    if (picked?.properties) S.lastPicked.props[targetField] = picked.properties[targetField];
+
+  if (isCreateField) {
+    dispatchDataSourceFieldsUpdated(store.id, targetField, targetFieldType);
   }
 
   if (changed === 0) {
@@ -3142,6 +3177,16 @@ writeCancel.addEventListener('click', () => {
 
 window.addEventListener('data-sources-changed', () => {
   resetWriteMenu();
+});
+
+window.addEventListener(DATA_SOURCE_FIELDS_UPDATED_EVENT, (event) => {
+  const detail = (event as CustomEvent<{ dataStoreId?: string }>).detail;
+  const dataStoreId = detail?.dataStoreId;
+  if (!dataStoreId) return;
+  if (writeDataSource.value === dataStoreId) {
+    refreshWriteUI();
+  }
+  refreshMenusBoundToDataSource(dataStoreId);
 });
 
 if (writeSelectionCountTimer) {

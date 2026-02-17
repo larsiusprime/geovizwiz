@@ -796,7 +796,6 @@ export function setStatsSubjectMode(mode: SubjectMode) {
 }
 
 export function updateStatisticsSectionVisibility() {
-  statisticsSection.style.display = 'grid';
   populateStatisticsFields();
   const hasField = Boolean(S.statsField);
   statsDetails.style.display = hasField ? 'grid' : 'none';

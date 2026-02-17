@@ -130,6 +130,11 @@ export const S = {
   statsOverflowPct: { min: 5, max: 95 },
   statsLayerId: null as string | null,
   statsFilteredName: null as string | null,
+  isStatsLayerCollapsed: false,
+  isStatsFieldCollapsed: false,
+  isStatsSummaryCollapsed: false,
+  isStatsPercentilesCollapsed: false,
+  isStatsHistogramCollapsed: false,
 
   // --- Scatterplot ---
   scatterSubjectMode: 'all' as SubjectMode,

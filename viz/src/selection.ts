@@ -764,20 +764,22 @@ function createSelectionControlsPanel() {
       </div>
     </div>
     <div data-window-content style="padding: 12px; display: block;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;">
         <input type="color" id="highlightColorPicker" value="${S.highlightColor}" style="width: 30px; height: 20px; border: 1px solid #ddd; border-radius: 3px; cursor: pointer;">
         <span style="font-size: 12px;">Selected:</span>
         <span id="selectedCount" style="font-weight: 600;">${S.selectedParcels.size}</span>
+        <button id="unselectAllBtn" style="
+          border: 1px solid #ddd;
+          background: #f8f8f8;
+          padding: 4px 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          font-size: 12px;
+          margin-left: auto;
+          width: auto;
+          white-space: nowrap;
+        ">Unselect all</button>
       </div>
-      <button id="unselectAllBtn" style="
-        width: 100%;
-        border: 1px solid #ddd;
-        background: #f8f8f8;
-        padding: 6px 8px;
-        border-radius: 6px;
-        cursor: pointer;
-        font-size: 12px;
-      ">Unselect All</button>
       <div style="margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; display: grid; gap: 8px;">
         <div style="font-size: 12px; font-weight: 600;">Select with filter:</div>
         <div style="display: flex; align-items: center; gap: 8px;">

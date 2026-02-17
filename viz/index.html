@@ -2279,48 +2279,105 @@
     </div>
     <div id="statisticsContent" data-window-content style="padding: 12px; display: grid; gap: 12px; align-content: start;">
       <div id="statsLayerSection" class="stats-section" style="display: grid; gap: 8px;">
-        <div style="font-weight: 600; font-size: 12px;">Layer:</div>
-        <select id="statsLayerName" class="layer-source-name"></select>
+        <div class="land-schedule-section-header">
+          <button id="statsLayerToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Layer">▼</button>
+          <div class="land-schedule-subtitle">Layer</div>
+        </div>
+        <div id="statsLayerBody" style="display: grid; gap: 8px;">
+          <select id="statsLayerName" class="layer-source-name"></select>
+          <div id="statsSubjectSection" class="stats-section"></div>
+        </div>
       </div>
-      <div id="statsSubjectSection" class="stats-section"></div>
 
       <div class="divider"></div>
 
-      <div id="statisticsSection" class="stats-section" style="display: none;">
-        <select id="statsField">
-          <option value="" selected disabled>Choose a field</option>
-        </select>
-        <div id="statsDetails" style="display: none; gap: 6px;">
-          <div id="statsNumericBlock" style="display: grid; gap: 6px;">
-            <div id="statsNormalizationControls" style="display: grid; gap: 6px;">
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
-                <span>as-is</span>
-              </label>
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
-                <span>…per land size <em id="statsNormLandUnit">(unit)</em></span>
-              </label>
-              <label style="display:flex; gap:8px; align-items:center;">
-                <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
-                <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
-              </label>
+      <div id="statsFieldSection" class="stats-section" style="display: grid; gap: 8px;">
+        <div class="land-schedule-section-header">
+          <button id="statsFieldToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Field">▼</button>
+          <div class="land-schedule-subtitle">Field</div>
+        </div>
+        <div id="statisticsSection" style="display: none; gap: 6px;">
+          <select id="statsField" class="layer-source-name">
+            <option value="" selected disabled>Choose a field</option>
+          </select>
+          <div id="statsDetails" style="display: none; gap: 6px;">
+            <div id="statsNumericBlock" style="display: grid; gap: 6px;">
+              <div id="statsNormalizationControls" style="display: grid; gap: 6px;">
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
+                  <span>as-is</span>
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
+                  <span>…per land size <em id="statsNormLandUnit">(unit)</em></span>
+                </label>
+                <label style="display:flex; gap:8px; align-items:center;">
+                  <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
+                  <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
+                </label>
+              </div>
+              <div class="divider"></div>
+              <div id="statsResults" style="display: grid; gap: 6px;">
+                <div class="stats-section" style="display: grid; gap: 6px;">
+                  <div class="land-schedule-section-header">
+                    <button id="statsSummaryToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Statistics">▼</button>
+                    <div class="land-schedule-subtitle">Statistics</div>
+                  </div>
+                  <div id="statsSummaryBody">
+                    <table class="stats-table">
+                      <tbody>
+                        <tr><td>Parcel count</td><td><span id="statsParcelCount">—</span></td></tr>
+                        <tr><td>Median</td><td><span id="statsMedian">—</span></td></tr>
+                        <tr><td>Mean</td><td><span id="statsMean">—</span></td></tr>
+                        <tr><td>Standard deviation</td><td><span id="statsStdDev">—</span></td></tr>
+                        <tr><td>Coefficient of dispersion</td><td><span id="statsCod">—</span></td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="stats-section" style="display: grid; gap: 6px;">
+                  <div class="land-schedule-section-header">
+                    <button id="statsPercentilesToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Percentiles">▼</button>
+                    <div class="land-schedule-subtitle">Percentiles</div>
+                  </div>
+                  <div id="statsPercentilesBody" class="stats-table-scroll">
+                    <table class="stats-table">
+                      <thead>
+                        <tr>
+                          <th>Tier</th>
+                          <th>Value</th>
+                          <th>Count</th>
+                        </tr>
+                      </thead>
+                      <tbody id="statsPercentiles"></tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="divider"></div>
+                <div class="stats-section" style="display: grid; gap: 6px;">
+                  <div class="land-schedule-section-header">
+                    <button id="statsHistogramToggle" class="land-schedule-collapse-toggle" type="button" title="Collapse Histogram">▼</button>
+                    <div class="land-schedule-subtitle">Histogram</div>
+                  </div>
+                  <div id="statsHistogramBody">
+                    <div class="stats-range">
+                      <div class="range-values">
+                        <label>Min: <input id="statsOverflowMinPct" type="text" inputmode="decimal" data-step="0.1" /></label>
+                        <label>Max: <input id="statsOverflowMaxPct" type="text" inputmode="decimal" data-step="0.1" /></label>
+                      </div>
+                    </div>
+                    <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="divider"></div>
-            <div id="statsResults" style="display: grid; gap: 6px;">
+            <div id="statsCategoricalBlock" style="display: none; gap: 6px;">
               <table class="stats-table">
-                <thead>
-                  <tr>
-                    <th>Statistic</th>
-                    <th>Value</th>
-                  </tr>
-                </thead>
                 <tbody>
-                  <tr><td>Parcel count</td><td><span id="statsParcelCount">—</span></td></tr>
-                  <tr><td>Median</td><td><span id="statsMedian">—</span></td></tr>
-                  <tr><td>Mean</td><td><span id="statsMean">—</span></td></tr>
-                  <tr><td>Standard deviation</td><td><span id="statsStdDev">—</span></td></tr>
-                  <tr><td>Coefficient of dispersion</td><td><span id="statsCod">—</span></td></tr>
+                  <tr><td>Parcel count</td><td><span id="statsCategoricalParcelCount">—</span></td></tr>
+                  <tr><td>Unique category values</td><td><span id="statsCategoricalUniqueCount">—</span></td></tr>
+                  <tr><td>Modal category value</td><td><span id="statsCategoricalModalValue">—</span></td></tr>
                 </tbody>
               </table>
               <div class="divider"></div>
@@ -2328,51 +2385,13 @@
                 <table class="stats-table">
                   <thead>
                     <tr>
-                      <th>Percentile</th>
                       <th>Value</th>
                       <th>Count</th>
                     </tr>
                   </thead>
-                  <tbody id="statsPercentiles"></tbody>
+                  <tbody id="statsCategoricalValues"></tbody>
                 </table>
               </div>
-              <div class="divider"></div>
-              <div>
-                <div class="stats-range">
-                  <div class="range-values">
-                    <label>Min: <input id="statsOverflowMinPct" type="text" inputmode="decimal" data-step="0.1" /></label>
-                    <label>Max: <input id="statsOverflowMaxPct" type="text" inputmode="decimal" data-step="0.1" /></label>
-                  </div>
-                </div>
-                <div id="statsHistogram" style="display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 6px;"></div>
-              </div>
-            </div>
-          </div>
-          <div id="statsCategoricalBlock" style="display: none; gap: 6px;">
-            <table class="stats-table">
-              <thead>
-                <tr>
-                  <th>Statistic</th>
-                  <th>Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr><td>Parcel count</td><td><span id="statsCategoricalParcelCount">—</span></td></tr>
-                <tr><td>Unique category values</td><td><span id="statsCategoricalUniqueCount">—</span></td></tr>
-                <tr><td>Modal category value</td><td><span id="statsCategoricalModalValue">—</span></td></tr>
-              </tbody>
-            </table>
-            <div class="divider"></div>
-            <div class="stats-table-scroll">
-              <table class="stats-table">
-                <thead>
-                  <tr>
-                    <th>Value</th>
-                    <th>Count</th>
-                  </tr>
-                </thead>
-                <tbody id="statsCategoricalValues"></tbody>
-              </table>
             </div>
           </div>
         </div>

@@ -362,7 +362,7 @@ const btnPinLandSchedule = document.getElementById('btnPinLandSchedule') as HTML
 const btnPinTimeAdjustment = document.getElementById('btnPinTimeAdjustment') as HTMLButtonElement;
 const btnPinLegend = document.getElementById('btnPinLegend') as HTMLButtonElement;
 
-const statsSubjectControls = buildSubjectSelector(statsSubjectSection);
+const statsSubjectControls = buildSubjectSelector(statsSubjectSection, { title: null });
 const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection, { title: null });
 
 const statsSubjectButtons = statsSubjectControls.buttons;
@@ -396,6 +396,15 @@ const statsNormLandUnitEl = document.getElementById('statsNormLandUnit') as HTML
 const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTMLElement;
 const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
 const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
+const statsLayerToggle = document.getElementById('statsLayerToggle') as HTMLButtonElement;
+const statsLayerBody = document.getElementById('statsLayerBody') as HTMLDivElement;
+const statsFieldToggle = document.getElementById('statsFieldToggle') as HTMLButtonElement;
+const statsSummaryToggle = document.getElementById('statsSummaryToggle') as HTMLButtonElement;
+const statsSummaryBody = document.getElementById('statsSummaryBody') as HTMLDivElement;
+const statsPercentilesToggle = document.getElementById('statsPercentilesToggle') as HTMLButtonElement;
+const statsPercentilesBody = document.getElementById('statsPercentilesBody') as HTMLDivElement;
+const statsHistogramToggle = document.getElementById('statsHistogramToggle') as HTMLButtonElement;
+const statsHistogramBody = document.getElementById('statsHistogramBody') as HTMLDivElement;
 const landScheduleControlsEl = document.getElementById('landScheduleControls') as HTMLDivElement;
 const timeAdjustmentControlsEl = document.getElementById('timeAdjustmentControls') as HTMLDivElement;
 const timeAdjustmentContent = document.getElementById('timeAdjustmentContent') as HTMLDivElement;
@@ -585,6 +594,72 @@ const setPaintSectionCollapsed = (collapsed: boolean) => {
 setPaintSectionCollapsed(S.isPaintCollapsed);
 paintSectionToggle.addEventListener('click', () => {
   setPaintSectionCollapsed(!S.isPaintCollapsed);
+});
+
+const setStatsLayerCollapsed = (collapsed: boolean) => {
+  S.isStatsLayerCollapsed = collapsed;
+  statsLayerBody.style.display = collapsed ? 'none' : 'grid';
+  statsLayerToggle.classList.toggle('is-collapsed', collapsed);
+  statsLayerToggle.title = collapsed ? 'Expand Layer' : 'Collapse Layer';
+  refreshWindowMinHeight(statisticsControlsEl);
+};
+
+const setStatsFieldCollapsed = (collapsed: boolean) => {
+  S.isStatsFieldCollapsed = collapsed;
+  statisticsSection.style.display = collapsed ? 'none' : 'grid';
+  statsFieldToggle.classList.toggle('is-collapsed', collapsed);
+  statsFieldToggle.title = collapsed ? 'Expand Field' : 'Collapse Field';
+  refreshWindowMinHeight(statisticsControlsEl);
+};
+
+const setStatsSummaryCollapsed = (collapsed: boolean) => {
+  S.isStatsSummaryCollapsed = collapsed;
+  statsSummaryBody.style.display = collapsed ? 'none' : 'block';
+  statsSummaryToggle.classList.toggle('is-collapsed', collapsed);
+  statsSummaryToggle.title = collapsed ? 'Expand Statistics' : 'Collapse Statistics';
+  refreshWindowMinHeight(statisticsControlsEl);
+};
+
+const setStatsPercentilesCollapsed = (collapsed: boolean) => {
+  S.isStatsPercentilesCollapsed = collapsed;
+  statsPercentilesBody.style.display = collapsed ? 'none' : 'block';
+  statsPercentilesToggle.classList.toggle('is-collapsed', collapsed);
+  statsPercentilesToggle.title = collapsed ? 'Expand Percentiles' : 'Collapse Percentiles';
+  refreshWindowMinHeight(statisticsControlsEl);
+};
+
+const setStatsHistogramCollapsed = (collapsed: boolean) => {
+  S.isStatsHistogramCollapsed = collapsed;
+  statsHistogramBody.style.display = collapsed ? 'none' : 'block';
+  statsHistogramToggle.classList.toggle('is-collapsed', collapsed);
+  statsHistogramToggle.title = collapsed ? 'Expand Histogram' : 'Collapse Histogram';
+  refreshWindowMinHeight(statisticsControlsEl);
+};
+
+setStatsLayerCollapsed(S.isStatsLayerCollapsed);
+setStatsFieldCollapsed(S.isStatsFieldCollapsed);
+setStatsSummaryCollapsed(S.isStatsSummaryCollapsed);
+setStatsPercentilesCollapsed(S.isStatsPercentilesCollapsed);
+setStatsHistogramCollapsed(S.isStatsHistogramCollapsed);
+
+statsLayerToggle.addEventListener('click', () => {
+  setStatsLayerCollapsed(!S.isStatsLayerCollapsed);
+});
+
+statsFieldToggle.addEventListener('click', () => {
+  setStatsFieldCollapsed(!S.isStatsFieldCollapsed);
+});
+
+statsSummaryToggle.addEventListener('click', () => {
+  setStatsSummaryCollapsed(!S.isStatsSummaryCollapsed);
+});
+
+statsPercentilesToggle.addEventListener('click', () => {
+  setStatsPercentilesCollapsed(!S.isStatsPercentilesCollapsed);
+});
+
+statsHistogramToggle.addEventListener('click', () => {
+  setStatsHistogramCollapsed(!S.isStatsHistogramCollapsed);
 });
 
 const setLandScheduleTablesCollapsed = (collapsed: boolean) => {

@@ -3015,20 +3015,6 @@ if (normModeSelect) {
       return;
     }
 
-    console.debug('[NormMode:normModeSelect.change]', {
-      requestedMode: next,
-      currentMode: S.normalizationMode,
-      landSizeField: S.landSizeField,
-      landSizeUnitLabel: S.landSizeUnitLabel,
-      bldgSizeField: S.bldgSizeField,
-      bldgSizeUnitLabel: S.bldgSizeUnitLabel,
-      options: Array.from(normModeSelect.options).map(option => ({
-        value: option.value,
-        text: option.text,
-        disabled: option.disabled,
-      })),
-    });
-
     const target = next === 'perLand'
       ? normLand
       : (next === 'perBuilding' ? normBldg : normAsIs);

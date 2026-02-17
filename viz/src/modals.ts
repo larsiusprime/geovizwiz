@@ -798,6 +798,20 @@ export function setSizeState(
   statsNormLandUnitEl.textContent = S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)';
   statsNormBldgUnitEl.textContent = S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)';
 
+  const normModeSelect = document.getElementById('normModeSelect') as HTMLSelectElement | null;
+  if (normModeSelect) {
+    const perLandOption = normModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
+    const perBuildingOption = normModeSelect.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
+    if (perLandOption) {
+      perLandOption.disabled = !S.landSizeField;
+      perLandOption.textContent = `…per land size ${S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)'}`;
+    }
+    if (perBuildingOption) {
+      perBuildingOption.disabled = !S.bldgSizeField;
+      perBuildingOption.textContent = `…per building size ${S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)'}`;
+    }
+  }
+
   if (S.statsNormalizationMode === 'perLand' && !S.landSizeField) {
     S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
@@ -807,38 +821,7 @@ export function setSizeState(
     statsNormAsIs.checked = true;
   }
 
-  console.debug('[NormMode:setSizeState]', {
-    currentLayerId: S.currentLayerId,
-    currentDataStoreId: S.currentDataStoreId,
-    incoming: {
-      bField,
-      bUnit,
-      lField,
-      lUnit,
-    },
-    resolvedState: {
-      landSizeField: S.landSizeField,
-      landSizeUnitLabel: S.landSizeUnitLabel,
-      bldgSizeField: S.bldgSizeField,
-      bldgSizeUnitLabel: S.bldgSizeUnitLabel,
-    },
-    activeStore: activeStore
-      ? {
-          id: activeStore.id,
-          name: activeStore.name,
-          landSizeField: activeStore.landSizeField,
-          landSizeUnitLabel: activeStore.landSizeUnitLabel,
-          bldgSizeField: activeStore.bldgSizeField,
-          bldgSizeUnitLabel: activeStore.bldgSizeUnitLabel,
-        }
-      : null,
-    ui: {
-      normLandDisabled: normLand.disabled,
-      normBldgDisabled: normBldg.disabled,
-      normLandUnitText: normLandUnitEl.textContent,
-      normBldgUnitText: normBldgUnitEl.textContent,
-    },
-  });
+
 }
 
 /* ------------------------------------------------------------------ */

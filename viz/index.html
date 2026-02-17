@@ -2310,26 +2310,26 @@
           <div class="land-schedule-subtitle">Field</div>
         </div>
         <div id="statisticsSection" style="display: none; gap: 6px;">
-          <select id="statsField" class="layer-source-name">
-            <option value="" selected disabled>Choose a field</option>
-          </select>
+          <div class="field-visualize-row">
+            <select id="statsField" class="layer-source-name">
+              <option value="" selected disabled>Choose a field</option>
+            </select>
+            <select id="statsNormModeSelect" class="layer-source-name">
+              <option value="asis">as-is</option>
+              <option value="perLand">…per land size (unit)</option>
+              <option value="perBuilding">…per building size (unit)</option>
+            </select>
+          </div>
+          <div id="statsNormalizationControls" style="display: none;">
+            <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
+            <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
+            <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
+            <em id="statsNormLandUnit">(unit)</em>
+            <em id="statsNormBldgUnit">(unit)</em>
+          </div>
         </div>
         <div id="statsDetails" style="display: none; gap: 6px;">
           <div id="statsNumericBlock" style="display: grid; gap: 6px;">
-              <div id="statsNormalizationControls" style="display: grid; gap: 6px;">
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="statsNormMode" id="stats-norm-asis" value="asis" checked />
-                  <span>as-is</span>
-                </label>
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="statsNormMode" id="stats-norm-land" value="perLand" disabled />
-                  <span>…per land size <em id="statsNormLandUnit">(unit)</em></span>
-                </label>
-                <label style="display:flex; gap:8px; align-items:center;">
-                  <input type="radio" name="statsNormMode" id="stats-norm-bldg" value="perBuilding" disabled />
-                  <span>…per building size <em id="statsNormBldgUnit">(unit)</em></span>
-                </label>
-              </div>
               <div class="divider"></div>
               <div id="statsResults" style="display: grid; gap: 6px;">
                 <div class="stats-section" style="display: grid; gap: 6px;">

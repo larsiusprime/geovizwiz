@@ -204,6 +204,7 @@ let statsSubjectControls: SubjectSelectorControls;
 let statsCategoryFieldSelect: HTMLSelectElement;
 let statsCategoryValueSelect: HTMLSelectElement;
 let statsFieldSelect: HTMLSelectElement;
+let statsNormModeSelect: HTMLSelectElement | null = null;
 let statsDetails: HTMLDivElement;
 let statsNumericBlock: HTMLDivElement;
 let statsCategoricalBlock: HTMLDivElement;
@@ -232,6 +233,7 @@ export function initStatisticsElements(els: {
   statsLayerName: HTMLSelectElement;
   statsSubjectControls: SubjectSelectorControls;
   statsFieldSelect: HTMLSelectElement;
+  statsNormModeSelect?: HTMLSelectElement | null;
   statsDetails: HTMLDivElement;
   statsNumericBlock: HTMLDivElement;
   statsCategoricalBlock: HTMLDivElement;
@@ -261,6 +263,7 @@ export function initStatisticsElements(els: {
   statsCategoryFieldSelect = els.statsSubjectControls.categoryFieldSelect;
   statsCategoryValueSelect = els.statsSubjectControls.categoryValueSelect;
   statsFieldSelect = els.statsFieldSelect;
+  statsNormModeSelect = els.statsNormModeSelect ?? null;
   statsDetails = els.statsDetails;
   statsNumericBlock = els.statsNumericBlock;
   statsCategoricalBlock = els.statsCategoricalBlock;
@@ -581,6 +584,20 @@ export function updateStatisticsNormalizationControls() {
     S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
   }
+
+  if (statsNormModeSelect) {
+    const perLandOption = statsNormModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
+    const perBuildingOption = statsNormModeSelect.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
+    if (perLandOption) {
+      perLandOption.disabled = !context.landField;
+      perLandOption.textContent = `…per land size ${context.landField ? (context.landUnit ?? '(unit)') : '(unit)'}`;
+    }
+    if (perBuildingOption) {
+      perBuildingOption.disabled = !context.bldgField;
+      perBuildingOption.textContent = `…per building size ${context.bldgField ? (context.bldgUnit ?? '(unit)') : '(unit)'}`;
+    }
+    statsNormModeSelect.value = S.statsNormalizationMode;
+  }
 }
 
 export function getStatsSubjectSelection(
@@ -818,7 +835,7 @@ export function updateStatisticsSectionVisibility() {
   const isNumeric = S.statsFieldType === 'numeric';
   statsNumericBlock.style.display = isNumeric ? 'grid' : 'none';
   statsCategoricalBlock.style.display = isNumeric ? 'none' : 'grid';
-  statsNormalizationControls.style.display = isNumeric ? 'grid' : 'none';
+  statsNormalizationControls.style.display = 'none';
   updateStatisticsNormalizationControls();
 }
 

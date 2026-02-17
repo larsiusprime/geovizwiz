@@ -372,6 +372,7 @@ const scatterSubjectButtons = scatterSubjectControls.buttons;
 const scatterCategoryFieldSelect = scatterSubjectControls.categoryFieldSelect;
 const scatterCategoryValueSelect = scatterSubjectControls.categoryValueSelect;
 const statsFieldSelect = document.getElementById('statsField') as HTMLSelectElement;
+const statsNormModeSelect = document.getElementById('statsNormModeSelect') as HTMLSelectElement | null;
 const statsDetails = document.getElementById('statsDetails') as HTMLDivElement;
 const statsNumericBlock = document.getElementById('statsNumericBlock') as HTMLDivElement;
 const statsCategoricalBlock = document.getElementById('statsCategoricalBlock') as HTMLDivElement;
@@ -1168,6 +1169,7 @@ initStatisticsElements({
   statsLayerName,
   statsSubjectControls,
   statsFieldSelect,
+  statsNormModeSelect,
   statsDetails,
   statsNumericBlock,
   statsCategoricalBlock,
@@ -3271,6 +3273,23 @@ statsFieldSelect.addEventListener('change', () => {
   }
 });
 
+if (statsNormModeSelect) {
+  statsNormModeSelect.addEventListener('change', () => {
+    const next = statsNormModeSelect.value as 'asis' | 'perLand' | 'perBuilding';
+    if (next === 'perLand' && statsNormLand.disabled) {
+      statsNormModeSelect.value = S.statsNormalizationMode;
+      return;
+    }
+    if (next === 'perBuilding' && statsNormBldg.disabled) {
+      statsNormModeSelect.value = S.statsNormalizationMode;
+      return;
+    }
+    const target = next === 'perLand' ? statsNormLand : (next === 'perBuilding' ? statsNormBldg : statsNormAsIs);
+    target.checked = true;
+    target.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 scatterXFieldSelect.addEventListener('change', () => {
   S.scatterXField = scatterXFieldSelect.value || null;
   S.scatterRangeIsCustom = false;
@@ -3311,6 +3330,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEa
   radio.addEventListener('change', () => {
     S.statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
       ?.value as 'asis' | 'perLand' | 'perBuilding';
+    if (statsNormModeSelect) statsNormModeSelect.value = S.statsNormalizationMode;
     updateStatisticsResults();
   });
 });

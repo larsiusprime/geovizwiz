@@ -780,41 +780,47 @@ function createSelectionControlsPanel() {
       ">Unselect All</button>
       <div style="margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; display: grid; gap: 8px;">
         <div style="font-size: 12px; font-weight: 600;">Select with filter:</div>
-        <button id="selectionFilterConditionsBtn" type="button" style="
-          width: 100%;
-          border: 1px solid #ddd;
-          background: #f8f8f8;
-          padding: 6px 8px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          justify-content: center;
-        "><img src="${FILTER_ICON}" alt="Filters" style="width:12px;height:12px;">conditions...</button>
-        <select id="selectionFilterOperation" style="
-          width: 100%;
-          border: 1px solid #ddd;
-          background: #fff;
-          padding: 6px 8px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 12px;
-        ">
-          <option value="add" selected>add to selection</option>
-          <option value="remove">remove from selection</option>
-          <option value="set">set selection to</option>
-        </select>
-        <button id="selectionFilterApplyBtn" style="
-          width: 100%;
-          border: 1px solid #ddd;
-          background: #f8f8f8;
-          padding: 6px 8px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-size: 12px;
-        ">Apply</button>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <button id="selectionFilterConditionsBtn" type="button" style="
+            flex: 1 1 auto;
+            min-width: 0;
+            border: 1px solid #ddd;
+            background: #f8f8f8;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            justify-content: center;
+          "><img src="${FILTER_ICON}" alt="Filters" style="width:12px;height:12px;">conditions...</button>
+          <select id="selectionFilterOperation" style="
+            flex: 0 0 142px;
+            border: 1px solid #ddd;
+            background: #fff;
+            padding: 6px 8px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+          ">
+            <option value="add" selected>add to selection</option>
+            <option value="remove">remove from selection</option>
+            <option value="set">set selection to</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: flex-end;">
+          <button id="selectionFilterApplyBtn" style="
+            border: 1px solid #ddd;
+            background: #f8f8f8;
+            padding: 6px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            width: auto;
+            text-transform: lowercase;
+          ">apply</button>
+        </div>
         <div id="selectionFilterStatus" style="font-size: 12px; min-height: 16px; color: #111827;"></div>
       </div>
     </div>

@@ -842,13 +842,14 @@
     }
 
     button.saveload-tab{
-      border-bottom: none;
+      border: 1px solid transparent;
       background: transparent;
       padding: 8px 12px;
       border-radius: 8px 8px 0 0;
       cursor: pointer;
       font-size: 12px;
       color: #4b5563;
+      outline: none;
     }
 
     button.saveload-tab:hover:not(:disabled) {
@@ -856,8 +857,9 @@
     }
 
     button.saveload-tab.active {
-      border-color: #e5e7eb;
-      background: #fff;
+      border-color: #3b82f6;
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      background: #eef2ff;
       color: #111827;
       font-weight: 600;
     }

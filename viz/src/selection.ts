@@ -5,6 +5,7 @@
 import maplibregl from 'maplibre-gl';
 import { S } from './state';
 import { getSelectionFilterActiveCount, matchesSelectionFilters } from './filters';
+import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initSelection)               */
@@ -22,6 +23,9 @@ let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
 let _ensureFloatingWindowVisible: (el: HTMLElement) => void = () => {};
 let _selectionControlsInvariantTimer: number | null = null;
+let _selectionSaveLoadWidget: SaveLoadWidgetHandle | null = null;
+let _selectionSaveLoadStatus: HTMLDivElement | null = null;
+let _selectionKeySelect: HTMLSelectElement | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
 const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
@@ -468,6 +472,253 @@ export function clearAllSelections() {
 }
 
 /* ------------------------------------------------------------------ */
+/*  Saved selection helpers                                            */
+/* ------------------------------------------------------------------ */
+
+/** Return the list of ID field names the user chose in the key dropdown. */
+function getSelectedKeyFields(): string[] {
+  const mode = _selectionKeySelect?.value ?? '';
+  if (mode === 'both') {
+    const fields: string[] = [];
+    if (S.parcelIdField) fields.push(S.parcelIdField);
+    if (S.saleIdField)   fields.push(S.saleIdField);
+    return fields;
+  }
+  if (mode === 'parcel' && S.parcelIdField) return [S.parcelIdField];
+  if (mode === 'sale'   && S.saleIdField)   return [S.saleIdField];
+  return [];
+}
+
+/** Return all possible key mode options based on currently configured fields. */
+function getKeyModeOptions(): Array<{ value: string; label: string }> {
+  const opts: Array<{ value: string; label: string }> = [];
+  const hasParcel = Boolean(S.parcelIdField);
+  const hasSale   = Boolean(S.saleIdField);
+  if (hasParcel && hasSale) {
+    opts.push({ value: 'both',   label: `${S.parcelIdField} + ${S.saleIdField}` });
+    opts.push({ value: 'parcel', label: `${S.parcelIdField}` });
+    opts.push({ value: 'sale',   label: `${S.saleIdField}` });
+  } else if (hasParcel) {
+    opts.push({ value: 'parcel', label: `${S.parcelIdField}` });
+  } else if (hasSale) {
+    opts.push({ value: 'sale',   label: `${S.saleIdField}` });
+  }
+  return opts;
+}
+
+function refreshKeySelector() {
+  if (!_selectionKeySelect) return;
+  const prev = _selectionKeySelect.value;
+  _selectionKeySelect.replaceChildren();
+  const opts = getKeyModeOptions();
+  if (opts.length === 0) {
+    _selectionKeySelect.appendChild(new Option('No ID fields configured', ''));
+    _selectionKeySelect.disabled = true;
+  } else {
+    for (const o of opts) _selectionKeySelect.appendChild(new Option(o.label, o.value));
+    _selectionKeySelect.disabled = false;
+    // Restore previous value if still valid
+    if (opts.some(o => o.value === prev)) _selectionKeySelect.value = prev;
+  }
+}
+
+function buildParcelKey(feature: GeoJSON.Feature, keyFields: string[]): Record<string, string> {
+  const key: Record<string, string> = {};
+  for (const f of keyFields) {
+    key[f] = String(feature.properties?.[f] ?? '');
+  }
+  return key;
+}
+
+function getCurrentDataSourceName(): string | null {
+  if (!S.currentLayerId) return null;
+  const layer = S.layers.get(S.currentLayerId);
+  if (!layer) return null;
+  return S.dataStores.get(layer.dataStoreId)?.name ?? null;
+}
+
+function setSelectionSaveLoadStatus(msg: string, isError = false) {
+  if (!_selectionSaveLoadStatus) return;
+  _selectionSaveLoadStatus.textContent = msg;
+  _selectionSaveLoadStatus.style.color = isError ? '#b91c1c' : '#111827';
+  _selectionSaveLoadStatus.style.display = msg ? 'block' : 'none';
+}
+
+function saveCurrentSelection(name: string): boolean | void {
+  const trimmedName = name.trim();
+  if (!trimmedName) return false;
+
+  const keyFields = getSelectedKeyFields();
+  if (keyFields.length === 0) {
+    window.alert('Configure a Parcel ID or Sale ID field before saving selections.');
+    return false;
+  }
+
+  if (S.savedSelectionsStore.has(trimmedName)) {
+    if (!window.confirm(`Selection "${trimmedName}" already exists. Overwrite?`)) return false;
+  }
+
+  // Build keys for selected parcels and check for partial-duplicate warnings
+  const parcelKeys: Array<Record<string, string>> = [];
+  const keyToSelectedCount = new Map<string, number>();
+  const keyToTotalCount = new Map<string, number>();
+
+  if (S.currentGeoJSON) {
+    for (const feature of S.currentGeoJSON.features) {
+      if (feature.id === undefined) continue;
+      const compoundKey = buildParcelKey(feature, keyFields);
+      const keyStr = JSON.stringify(compoundKey);
+      keyToTotalCount.set(keyStr, (keyToTotalCount.get(keyStr) ?? 0) + 1);
+
+      const pid = getParcelId(feature as any);
+      if (S.selectedParcels.has(pid)) {
+        parcelKeys.push(compoundKey);
+        keyToSelectedCount.set(keyStr, (keyToSelectedCount.get(keyStr) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Check for partial duplicates: keys where some-but-not-all features are selected
+  const partialWarnings: string[] = [];
+  for (const [keyStr, selectedCount] of keyToSelectedCount) {
+    const totalCount = keyToTotalCount.get(keyStr) ?? 0;
+    if (selectedCount < totalCount) {
+      const keyObj = JSON.parse(keyStr);
+      const keyDesc = Object.entries(keyObj).map(([k, v]) => `${k}="${v}"`).join(', ');
+      partialWarnings.push(
+        `${totalCount} parcels share key (${keyDesc}) but only ${selectedCount} selected — loading will restore all ${totalCount}.`
+      );
+    }
+  }
+
+  if (partialWarnings.length > 0) {
+    const maxShow = 5;
+    let msg = 'Some IDs match more parcels than you selected:\n\n';
+    msg += partialWarnings.slice(0, maxShow).join('\n');
+    if (partialWarnings.length > maxShow) {
+      msg += `\n...and ${partialWarnings.length - maxShow} more.`;
+    }
+    msg += '\n\nSave anyway?';
+    if (!window.confirm(msg)) return false;
+  }
+
+  // Deduplicate: store unique keys only (since loading selects all matches)
+  const seen = new Set<string>();
+  const uniqueKeys: Array<Record<string, string>> = [];
+  for (const k of parcelKeys) {
+    const s = JSON.stringify(k);
+    if (!seen.has(s)) {
+      seen.add(s);
+      uniqueKeys.push(k);
+    }
+  }
+
+  S.savedSelectionsStore.set(trimmedName, {
+    name: trimmedName,
+    keyFields,
+    parcelKeys: uniqueKeys,
+    sourceName: getCurrentDataSourceName(),
+  });
+
+  setSelectionSaveLoadStatus(`Saved ${S.selectedParcels.size} parcels as "${trimmedName}".`);
+}
+
+function loadSavedSelection(name: string) {
+  const entry = S.savedSelectionsStore.get(name);
+  if (!entry || !S.currentGeoJSON) return;
+
+  const sourceId = _getCurrentSourceId();
+  if (!sourceId) return;
+
+  // Check field availability
+  const sampleProps = S.currentGeoJSON.features[0]?.properties ?? {};
+  const availableFields = Object.keys(sampleProps);
+  const matchFields = entry.keyFields.filter(f => availableFields.includes(f));
+  const missingFields = entry.keyFields.filter(f => !availableFields.includes(f));
+
+  if (matchFields.length === 0) {
+    setSelectionSaveLoadStatus(
+      `Cannot load: fields [${entry.keyFields.join(', ')}] not in current layer.`,
+      true
+    );
+    return;
+  }
+
+  // Build a set of keys to match, projected onto available fields only
+  const savedKeySet = new Set<string>();
+  for (const k of entry.parcelKeys) {
+    const projected: Record<string, string> = {};
+    for (const f of matchFields) projected[f] = k[f] ?? '';
+    savedKeySet.add(JSON.stringify(projected));
+  }
+
+  // Clear current selection
+  for (const feature of S.currentGeoJSON.features) {
+    if (feature.id === undefined) continue;
+    const pid = getParcelId(feature as any);
+    if (S.selectedParcels.has(pid)) {
+      S.selectedParcels.delete(pid);
+      S.map.setFeatureState({ source: sourceId, id: feature.id }, { selected: false });
+    }
+  }
+
+  // Select matches
+  let matched = 0;
+  for (const feature of S.currentGeoJSON.features) {
+    if (feature.id === undefined) continue;
+    const key: Record<string, string> = {};
+    for (const f of matchFields) key[f] = String(feature.properties?.[f] ?? '');
+    if (savedKeySet.has(JSON.stringify(key))) {
+      const pid = getParcelId(feature as any);
+      S.selectedParcels.add(pid);
+      S.map.setFeatureState({ source: sourceId, id: feature.id }, { selected: true });
+      matched++;
+    }
+  }
+
+  _persistCurrentLayerState();
+  updateSelectionControls();
+
+  // Build status message
+  const srcLabel = entry.sourceName ? ` (from: ${entry.sourceName})` : '';
+  let statusMsg: string;
+  if (missingFields.length > 0) {
+    statusMsg = `Loaded ${matched} parcels using partial key [${matchFields.join(', ')}] — ${missingFields.join(', ')} not in current layer${srcLabel}`;
+  } else if (matched === 0) {
+    statusMsg = `No matching parcels found${srcLabel}`;
+  } else {
+    const uniqueKeys = entry.parcelKeys.length;
+    statusMsg = `Loaded ${matched} parcels (${uniqueKeys} unique key${uniqueKeys !== 1 ? 's' : ''})${srcLabel}`;
+  }
+  setSelectionSaveLoadStatus(statusMsg, matched === 0);
+}
+
+function getMatchingSavedSelectionName(): string | null {
+  if (S.selectedParcels.size === 0) return null;
+  const keyFields = getSelectedKeyFields();
+  if (keyFields.length === 0) return null;
+
+  // Build current selection's key set
+  const currentKeys = new Set<string>();
+  for (const feature of S.currentGeoJSON?.features ?? []) {
+    const pid = getParcelId(feature as any);
+    if (S.selectedParcels.has(pid)) {
+      const key = buildParcelKey(feature, keyFields);
+      currentKeys.add(JSON.stringify(key));
+    }
+  }
+  const currentSorted = JSON.stringify([...currentKeys].sort());
+
+  for (const [entryName, entry] of S.savedSelectionsStore) {
+    const entrySorted = JSON.stringify(
+      entry.parcelKeys.map(k => JSON.stringify(k)).sort()
+    );
+    if (entrySorted === currentSorted) return entryName;
+  }
+  return null;
+}
+
+/* ------------------------------------------------------------------ */
 /*  Selection controls panel                                          */
 /* ------------------------------------------------------------------ */
 
@@ -688,6 +939,44 @@ function createSelectionControlsPanel() {
 
   updateConditionsButtonState();
 
+  // --- Save/Load selections section ---
+  const contentDiv = S.selectionControlsPanel.querySelector('[data-window-content]') as HTMLDivElement;
+  const saveLoadSection = document.createElement('div');
+  saveLoadSection.style.cssText = 'margin-top: 10px; border-top: 1px solid #e5e7eb; padding-top: 10px; display: grid; gap: 8px;';
+
+  // Key selector
+  const keyRow = document.createElement('div');
+  keyRow.style.cssText = 'display: flex; align-items: center; gap: 6px; font-size: 12px;';
+  const keyLabel = document.createElement('span');
+  keyLabel.textContent = 'Key:';
+  keyLabel.style.fontWeight = '600';
+  _selectionKeySelect = document.createElement('select');
+  _selectionKeySelect.style.cssText = 'flex: 1; border: 1px solid #ddd; background: #fff; padding: 4px 6px; border-radius: 6px; font-size: 12px; cursor: pointer;';
+  keyRow.appendChild(keyLabel);
+  keyRow.appendChild(_selectionKeySelect);
+  refreshKeySelector();
+  saveLoadSection.appendChild(keyRow);
+
+  // Save/Load widget
+  _selectionSaveLoadWidget = createSaveLoadWidget({
+    label: 'selection',
+    idPrefix: 'selections',
+    onSave: (name) => saveCurrentSelection(name),
+    onLoad: (name) => loadSavedSelection(name),
+    getEntries: () => Array.from(S.savedSelectionsStore.keys()),
+    canSave: () => S.selectedParcels.size > 0 && getSelectedKeyFields().length > 0,
+    canLoad: () => S.savedSelectionsStore.size > 0,
+    getMatchName: () => getMatchingSavedSelectionName(),
+  });
+  saveLoadSection.appendChild(_selectionSaveLoadWidget.element);
+
+  // Status line for load feedback
+  _selectionSaveLoadStatus = document.createElement('div');
+  _selectionSaveLoadStatus.style.cssText = 'font-size: 12px; color: #111827; display: none;';
+  saveLoadSection.appendChild(_selectionSaveLoadStatus);
+
+  contentDiv.appendChild(saveLoadSection);
+
   document.body.appendChild(S.selectionControlsPanel);
   _registerSelectionControlsDocking(S.selectionControlsPanel, pinButton);
   _makeDraggable(S.selectionControlsPanel);
@@ -722,7 +1011,7 @@ function ensureSelectionControlsOpen(panel: HTMLDivElement) {
 }
 
 function enforceSelectionControlsVisibilityInvariant() {
-  if (S.selectedParcels.size <= 0) return;
+  if (S.selectedParcels.size <= 0 && S.savedSelectionsStore.size <= 0) return;
 
   if (!S.selectionControlsPanel || !S.selectionControlsPanel.isConnected) {
     createSelectionControlsPanel();
@@ -752,7 +1041,10 @@ function enforceSelectionControlsVisibilityInvariant() {
 }
 
 export function updateSelectionControls() {
-  if (S.selectedParcels.size === 0) {
+  const hasSelection = S.selectedParcels.size > 0;
+  const hasSavedSelections = S.savedSelectionsStore.size > 0;
+
+  if (!hasSelection && !hasSavedSelections) {
     if (S.selectionControlsPanel) {
       S.selectionControlsPanel.style.display = 'none';
       if (S.selectionControlsPanel.classList.contains('is-pinned')) {
@@ -762,6 +1054,16 @@ export function updateSelectionControls() {
   } else {
     enforceSelectionControlsVisibilityInvariant();
   }
+
+  // Update the selected count display
+  if (S.selectionControlsPanel) {
+    const countEl = S.selectionControlsPanel.querySelector('#selectedCount');
+    if (countEl) countEl.textContent = String(S.selectedParcels.size);
+  }
+
+  refreshKeySelector();
+  _selectionSaveLoadWidget?.update();
+
   if (S.statsSubjectMode === 'selected') {
     _updateStatisticsResults();
   }

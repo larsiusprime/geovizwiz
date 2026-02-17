@@ -5,6 +5,7 @@ import type {
   DataStore,
   LayerState,
   SavedFilterEntry,
+  SavedSelectionEntry,
   ProjectFileV1,
   SerializedDataSource,
   SerializedLayer,
@@ -98,6 +99,19 @@ function serializeSavedFilters(): SavedFilterEntry[] {
   return result;
 }
 
+function serializeSavedSelections(): SavedSelectionEntry[] {
+  const result: SavedSelectionEntry[] = [];
+  S.savedSelectionsStore.forEach((entry) => {
+    result.push({
+      name: entry.name,
+      keyFields: [...entry.keyFields],
+      parcelKeys: entry.parcelKeys.map(k => ({...k})),
+      sourceName: entry.sourceName,
+    });
+  });
+  return result;
+}
+
 function serializeLandSchedules(): SerializedLandSchedule {
   const tables: SerializedLandScheduleTable[] = (S.landScheduleStore.tables ?? []).map(table => ({
     id: table.id,
@@ -150,6 +164,7 @@ export function exportProject() {
     dataSources,
     layers: serializedLayers,
     savedFilters: serializeSavedFilters(),
+    savedSelections: serializeSavedSelections(),
     landSchedule: serializeLandSchedules()
   };
 
@@ -260,6 +275,7 @@ export async function loadProjectFile(file: File) {
     S.layers.clear();
     S.layerOrder.length = 0;
     S.savedFiltersStore.clear();
+    S.savedSelectionsStore.clear();
     S.landScheduleStore = {
       tables: [],
       activeTableId: null,
@@ -287,6 +303,18 @@ export async function loadProjectFile(file: File) {
         filterInvert: entry.filterInvert
       });
     });
+
+    // Restore saved selections
+    if (projectData.savedSelections) {
+      projectData.savedSelections.forEach((entry: SavedSelectionEntry) => {
+        S.savedSelectionsStore.set(entry.name, {
+          name: entry.name,
+          keyFields: [...entry.keyFields],
+          parcelKeys: entry.parcelKeys.map(k => ({...k})),
+          sourceName: entry.sourceName ?? null,
+        });
+      });
+    }
 
     if (projectData.landSchedule) {
       S.landScheduleStore = {

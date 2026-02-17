@@ -6,7 +6,7 @@
  */
 import maplibregl from 'maplibre-gl';
 import type {
-  LayerState, DataStore, FilterRule, SavedFilterEntry,
+  LayerState, DataStore, FilterRule, SavedFilterEntry, SavedSelectionEntry,
   ParcelPatchMap, ColorMode, CategoricalColorMode, QualityMode,
   UpdateMode, SubjectMode, FilterMode, FilterActionMode,
   LandScheduleEntry, NumericFilterOperator, CategoricalFilterOperator, ReferenceFilterOperator,
@@ -199,6 +199,7 @@ export const S = {
   savedFiltersStore: new Map<string, SavedFilterEntry>(),
   savedFiltersPanelMode: 'none' as 'none' | 'save' | 'load',
   savedFilterMatchName: null as string | null,
+  savedSelectionsStore: new Map<string, SavedSelectionEntry>(),
 
   // --- Tool state ---
   isInfoToolActive: false,

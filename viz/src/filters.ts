@@ -13,6 +13,7 @@ import {
 } from './state';
 import { numOrNull } from './utils.number';
 import { updateFiltersPanelLayout } from './windows';
+import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
 import type {
   FilterFieldType, FilterMode, FilterActionMode,
   FilterOperator, FilterRule, SavedFilterEntry,
@@ -29,48 +30,37 @@ const FILTER_REFERENCE_LABEL = 'Named filter...';
 let filtersListEl: HTMLDivElement;
 let filtersInvertToggle: HTMLInputElement;
 let addFilterButton: HTMLButtonElement;
-let filtersSaveToggle: HTMLButtonElement;
-let filtersLoadToggle: HTMLButtonElement;
-let filtersSavePanel: HTMLDivElement;
-let filtersLoadPanel: HTMLDivElement;
-let filtersSaveControls: HTMLDivElement;
-let filtersSaveNameInput: HTMLInputElement;
-let filtersSaveConfirmButton: HTMLButtonElement;
-let filtersSavedStatus: HTMLDivElement;
-let filtersLoadControls: HTMLDivElement;
-let filtersLoadSelect: HTMLSelectElement;
 let filtersContextLine: HTMLDivElement;
+let filtersSaveLoadWidget: SaveLoadWidgetHandle | null = null;
 
 export function initFilterElements(els: {
   filtersListEl: HTMLDivElement;
   filtersInvertToggle: HTMLInputElement;
   addFilterButton: HTMLButtonElement;
-  filtersSaveToggle: HTMLButtonElement;
-  filtersLoadToggle: HTMLButtonElement;
-  filtersSavePanel: HTMLDivElement;
-  filtersLoadPanel: HTMLDivElement;
-  filtersSaveControls: HTMLDivElement;
-  filtersSaveNameInput: HTMLInputElement;
-  filtersSaveConfirmButton: HTMLButtonElement;
-  filtersSavedStatus: HTMLDivElement;
-  filtersLoadControls: HTMLDivElement;
-  filtersLoadSelect: HTMLSelectElement;
+  filtersSavedContainer: HTMLDivElement;
   filtersContextLine: HTMLDivElement;
 }) {
   filtersListEl = els.filtersListEl;
   filtersInvertToggle = els.filtersInvertToggle;
   addFilterButton = els.addFilterButton;
-  filtersSaveToggle = els.filtersSaveToggle;
-  filtersLoadToggle = els.filtersLoadToggle;
-  filtersSavePanel = els.filtersSavePanel;
-  filtersLoadPanel = els.filtersLoadPanel;
-  filtersSaveControls = els.filtersSaveControls;
-  filtersSaveNameInput = els.filtersSaveNameInput;
-  filtersSaveConfirmButton = els.filtersSaveConfirmButton;
-  filtersSavedStatus = els.filtersSavedStatus;
-  filtersLoadControls = els.filtersLoadControls;
-  filtersLoadSelect = els.filtersLoadSelect;
   filtersContextLine = els.filtersContextLine;
+
+  filtersSaveLoadWidget = createSaveLoadWidget({
+    label: 'filter',
+    idPrefix: 'filters',
+    onSave: (name) => {
+      saveCurrentFilters(name);
+    },
+    onLoad: (name) => {
+      applySavedFilter(name);
+    },
+    getEntries: () => Array.from(S.savedFiltersStore.keys()),
+    canSave: () => S.filters.length > 0,
+    canLoad: () => S.savedFiltersStore.size > 0,
+    getMatchName: () => getMatchingSavedFilterName(),
+  });
+  els.filtersSavedContainer.appendChild(filtersSaveLoadWidget.element);
+
   updateFiltersContextLine();
 }
 
@@ -334,96 +324,16 @@ export function getMatchingSavedFilterName(): string | null {
 /*  Saved filters UI                                                  */
 /* ------------------------------------------------------------------ */
 
-export function renderSavedFiltersOptions() {
-  if (!filtersLoadSelect) return;
-  filtersLoadSelect.replaceChildren();
-  const placeholder = new Option('Choose a saved filter', '');
-  placeholder.disabled = true;
-  placeholder.selected = true;
-  filtersLoadSelect.appendChild(placeholder);
-  S.savedFiltersStore.forEach((entry, name) => {
-    filtersLoadSelect.appendChild(new Option(entry.name, name));
-  });
-
-  if (S.savedFilterMatchName) {
-    filtersLoadSelect.value = S.savedFilterMatchName;
-  }
-
-  filtersLoadSelect.disabled = S.savedFiltersStore.size === 0;
-}
-
-export function setSavedFiltersPanelMode(nextMode: 'none' | 'save' | 'load') {
-  S.savedFiltersPanelMode = nextMode;
-  updateSavedFiltersUIState();
-}
-
 export function updateSavedFiltersUIState() {
-  const hasConditions = S.filters.length > 0;
-  const hasSaved = S.savedFiltersStore.size > 0;
-  if (!hasConditions && S.savedFiltersPanelMode === 'save') {
-    S.savedFiltersPanelMode = 'none';
-  }
-  if (!hasSaved && S.savedFiltersPanelMode === 'load') {
-    S.savedFiltersPanelMode = 'none';
-  }
-
-  S.savedFilterMatchName = getMatchingSavedFilterName();
-
-  if (filtersSaveToggle) {
-    filtersSaveToggle.disabled = !hasConditions;
-    const isActive = S.savedFiltersPanelMode === 'save';
-    filtersSaveToggle.classList.toggle('active', isActive);
-    filtersSaveToggle.setAttribute('aria-selected', String(isActive));
-    filtersSaveToggle.tabIndex = isActive ? 0 : -1;
-  }
-  if (filtersLoadToggle) {
-    filtersLoadToggle.disabled = !hasSaved;
-    const isActive = S.savedFiltersPanelMode === 'load';
-    filtersLoadToggle.classList.toggle('active', isActive);
-    filtersLoadToggle.setAttribute('aria-selected', String(isActive));
-    filtersLoadToggle.tabIndex = isActive ? 0 : -1;
-  }
-
-  const showSave = S.savedFiltersPanelMode === 'save' && hasConditions;
-  const showLoad = S.savedFiltersPanelMode === 'load' && hasSaved;
-  const hasMatch = Boolean(S.savedFilterMatchName);
-
-  if (filtersSavePanel) {
-    filtersSavePanel.style.display = showSave ? 'grid' : 'none';
-  }
-  if (filtersLoadPanel) {
-    filtersLoadPanel.style.display = showLoad ? 'grid' : 'none';
-  }
-  if (filtersSaveControls) {
-    filtersSaveControls.style.display = showSave && !hasMatch ? 'grid' : 'none';
-  }
-  if (filtersSavedStatus) {
-    filtersSavedStatus.style.display = showSave && hasMatch ? 'block' : 'none';
-    if (showSave && hasMatch) {
-      filtersSavedStatus.textContent = `Saved as: "${S.savedFilterMatchName}"`;
-    }
-  }
-  if (filtersLoadControls) {
-    filtersLoadControls.style.display = showLoad ? 'grid' : 'none';
-  }
-
-  if (filtersSaveConfirmButton) {
-    const hasName = Boolean(filtersSaveNameInput?.value.trim());
-    filtersSaveConfirmButton.disabled = !showSave || !hasName;
-  }
-
-  if (showLoad) {
-    renderSavedFiltersOptions();
-  }
-
+  filtersSaveLoadWidget?.update();
 }
 
-export function saveCurrentFilters(name: string) {
+export function saveCurrentFilters(name: string): boolean | void {
   const trimmedName = name.trim();
-  if (!trimmedName) return;
+  if (!trimmedName) return false;
   if (S.savedFiltersStore.has(trimmedName)) {
     const overwrite = window.confirm('You already have a filter with this name. Overwrite? Yes/Cancel');
-    if (!overwrite) return;
+    if (!overwrite) return false;
   }
   S.savedFiltersStore.set(trimmedName, {
     name: trimmedName,

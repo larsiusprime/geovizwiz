@@ -46,8 +46,6 @@ import {
 import { S } from './state';
 import {
   initFilterElements, initFilterCallbacks,
-  setSavedFiltersPanelMode, updateSavedFiltersUIState,
-  saveCurrentFilters, applySavedFilter,
   getCategoricalValues,
   createFilterRule, updateFiltersUIState, renderFiltersList,
   refreshFiltersUI,
@@ -354,16 +352,7 @@ const filtersContent = document.getElementById('filtersContent') as HTMLDivEleme
 const filtersListEl = document.getElementById('filtersList') as HTMLDivElement;
 const filtersInvertToggle = document.getElementById('filtersInvertToggle') as HTMLInputElement;
 const addFilterButton = document.getElementById('addFilterButton') as HTMLButtonElement;
-const filtersSaveToggle = document.getElementById('filtersSaveToggle') as HTMLButtonElement;
-const filtersLoadToggle = document.getElementById('filtersLoadToggle') as HTMLButtonElement;
-const filtersSavePanel = document.getElementById('filtersSavePanel') as HTMLDivElement;
-const filtersLoadPanel = document.getElementById('filtersLoadPanel') as HTMLDivElement;
-const filtersSaveControls = document.getElementById('filtersSaveControls') as HTMLDivElement;
-const filtersSaveNameInput = document.getElementById('filtersSaveName') as HTMLInputElement;
-const filtersSaveConfirmButton = document.getElementById('filtersSaveConfirm') as HTMLButtonElement;
-const filtersSavedStatus = document.getElementById('filtersSavedStatus') as HTMLDivElement;
-const filtersLoadControls = document.getElementById('filtersLoadControls') as HTMLDivElement;
-const filtersLoadSelect = document.getElementById('filtersLoadSelect') as HTMLSelectElement;
+const filtersSavedContainer = document.getElementById('filtersSavedContainer') as HTMLDivElement;
 const btnPinLayers = document.getElementById('btnPinLayers') as HTMLButtonElement;
 const btnPinSettings = document.getElementById('btnPinSettings') as HTMLButtonElement;
 const btnPinFilters = document.getElementById('btnPinFilters') as HTMLButtonElement;
@@ -930,16 +919,7 @@ initFilterElements({
   filtersListEl,
   filtersInvertToggle,
   addFilterButton,
-  filtersSaveToggle,
-  filtersLoadToggle,
-  filtersSavePanel,
-  filtersLoadPanel,
-  filtersSaveControls,
-  filtersSaveNameInput,
-  filtersSaveConfirmButton,
-  filtersSavedStatus,
-  filtersLoadControls,
-  filtersLoadSelect,
+  filtersSavedContainer,
   filtersContextLine: document.getElementById('filtersContextLine') as HTMLDivElement,
 });
 initFilterCallbacks({
@@ -3060,29 +3040,6 @@ landScheduleTableSelect.addEventListener('change', () => {
   refreshWindowMinWidth(landScheduleControlsEl);
 });
 
-filtersSaveToggle.addEventListener('click', () => {
-  if (filtersSaveToggle.disabled) return;
-  setSavedFiltersPanelMode('save');
-});
-
-filtersLoadToggle.addEventListener('click', () => {
-  if (filtersLoadToggle.disabled) return;
-  setSavedFiltersPanelMode('load');
-});
-
-filtersSaveNameInput.addEventListener('input', () => {
-  updateSavedFiltersUIState();
-});
-
-filtersSaveConfirmButton.addEventListener('click', () => {
-  saveCurrentFilters(filtersSaveNameInput.value);
-});
-
-filtersLoadSelect.addEventListener('change', () => {
-  const selected = filtersLoadSelect.value;
-  if (!selected) return;
-  applySavedFilter(selected);
-});
 
 addFilterButton.addEventListener('click', () => {
   S.filters.push(createFilterRule());

@@ -826,14 +826,14 @@
       background: #eef2ff;
     }
 
-    .filters-saved-container {
+    .saveload-container {
       border: 1px solid #e5e7eb;
       border-radius: 10px;
       background: #fff;
       overflow: hidden;
     }
 
-    .filters-saved-tabs {
+    .saveload-tabs {
       display: flex;
       align-items: flex-end;
       border-bottom: 1px solid #e5e7eb;
@@ -841,7 +841,7 @@
       gap: 0;
     }
 
-    #filtersControls button.filters-saved-tab{
+    button.saveload-tab{
       border-bottom: none;
       background: transparent;
       padding: 8px 12px;
@@ -851,22 +851,22 @@
       color: #4b5563;
     }
 
-    #filtersControls button.filters-saved-tab:hover:not(:disabled) {
+    button.saveload-tab:hover:not(:disabled) {
       background: #eef2f7;
     }
 
-    #filtersControls button.filters-saved-tab.active {
+    button.saveload-tab.active {
       border-color: #e5e7eb;
       background: #fff;
       color: #111827;
       font-weight: 600;
     }
 
-    #filtersControls button.filters-saved-tab:disabled {
+    button.saveload-tab:disabled {
       color: #9ca3af;
     }
 
-    .filters-saved-section {
+    .saveload-section {
       display: grid;
       gap: 8px;
       padding: 12px;
@@ -878,23 +878,23 @@
       padding: 0 12px 12px;
     }
 
-    .filters-saved-panel {
+    .saveload-panel {
       display: grid;
       gap: 8px;
     }
 
-    .filters-save-row {
+    .saveload-save-row {
       display: grid;
       grid-template-columns: minmax(0, 1fr) auto;
       gap: 6px;
       align-items: center;
     }
 
-    .filters-load-row {
+    .saveload-load-row {
       display: grid;
     }
 
-    .filters-saved-status {
+    .saveload-status {
       font-size: 12px;
       color: #333;
     }
@@ -2241,26 +2241,7 @@
     </div>
     <div id="filtersContent" data-window-content style="padding: 12px; display: grid; gap: 12px;">
       <div id="filtersContextLine" class="filters-context-line">Context: "—"</div>
-      <div class="filters-saved-container">
-        <div class="filters-saved-tabs" role="tablist" aria-label="Saved filters">
-          <button id="filtersSaveToggle" class="filters-saved-tab" type="button" role="tab" aria-controls="filtersSavePanel" aria-selected="false">Save</button>
-          <button id="filtersLoadToggle" class="filters-saved-tab" type="button" role="tab" aria-controls="filtersLoadPanel" aria-selected="false">Load</button>
-        </div>
-        <div class="filters-saved-section">
-          <div id="filtersSavePanel" class="filters-saved-panel" role="tabpanel" aria-labelledby="filtersSaveToggle" style="display: none;">
-            <div id="filtersSaveControls" class="filters-save-row" style="display: none;">
-              <input id="filtersSaveName" type="text" placeholder="type a name" />
-              <button id="filtersSaveConfirm" type="button" title="Save">💾</button>
-            </div>
-            <div id="filtersSavedStatus" class="filters-saved-status" style="display: none;"></div>
-          </div>
-          <div id="filtersLoadPanel" class="filters-saved-panel" role="tabpanel" aria-labelledby="filtersLoadToggle" style="display: none;">
-            <div id="filtersLoadControls" class="filters-load-row" style="display: none;">
-              <select id="filtersLoadSelect"></select>
-            </div>
-          </div>
-        </div>
-      </div>
+      <div id="filtersSavedContainer"></div>
 
       <div class="divider"></div>
 

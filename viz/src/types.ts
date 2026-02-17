@@ -25,6 +25,16 @@ export type SavedFilterEntry = {
   filterInvert: boolean;
 };
 
+export type SavedSelectionEntry = {
+  name: string;
+  /** Which field names were used to build the compound keys */
+  keyFields: string[];
+  /** One compound key per selected parcel */
+  parcelKeys: Array<Record<string, string>>;
+  /** Originating data source name (for status messages on load) */
+  sourceName: string | null;
+};
+
 export type ParcelFieldPatch = {
   original: any;
   current: any;
@@ -290,6 +300,7 @@ export type ProjectFileV1 = {
   dataSources: SerializedDataSource[];
   layers: SerializedLayer[];
   savedFilters: SavedFilterEntry[];
+  savedSelections?: SavedSelectionEntry[];
   landSchedule?: SerializedLandSchedule;
   landSchedules?: SerializedLandScheduleEntry[];
 };

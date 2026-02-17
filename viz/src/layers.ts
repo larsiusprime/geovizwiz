@@ -308,6 +308,10 @@ export function renderDataStoreList() {
 /*  Layer state management                                            */
 /* ------------------------------------------------------------------ */
 
+function getSelectionOverlayLayerId(layerId: string): string {
+  return `${layerId}-selection-overlay`;
+}
+
 export function createLayerState(name: string, dataStoreId: string): LayerState {
   S.layerCounter += 1;
   const suffix = `layer-${S.layerCounter}`;
@@ -550,6 +554,10 @@ export function applyLayerOrderToMap() {
     const layerId = S.layerOrder[i];
     const layer = S.layers.get(layerId);
     if (!layer) continue;
+    const selectionOverlayLayerId = getSelectionOverlayLayerId(layer.layerId);
+    if (S.map.getLayer(selectionOverlayLayerId)) {
+      S.map.moveLayer(selectionOverlayLayerId);
+    }
     if (S.map.getLayer(layer.layerId)) {
       S.map.moveLayer(layer.layerId);
     }
@@ -604,6 +612,10 @@ export function setLayerVisibility(layer: LayerState, visible: boolean) {
   if (S.map.getLayer(layer.layerId)) {
     S.map.setLayoutProperty(layer.layerId, 'visibility', visibility);
   }
+  const selectionOverlayLayerId = getSelectionOverlayLayerId(layer.layerId);
+  if (S.map.getLayer(selectionOverlayLayerId)) {
+    S.map.setLayoutProperty(selectionOverlayLayerId, 'visibility', visibility);
+  }
   if (S.map.getLayer(layer.errorLayerId)) {
     S.map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
   }
@@ -613,6 +625,8 @@ export function removeLayer(layerId: string) {
   const layer = S.layers.get(layerId);
   if (!layer) return;
   if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
+  const selectionOverlayLayerId = getSelectionOverlayLayerId(layer.layerId);
+  if (S.map.getLayer(selectionOverlayLayerId)) S.map.removeLayer(selectionOverlayLayerId);
   if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
   if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
   S.layers.delete(layerId);

@@ -166,15 +166,32 @@ export function getOpacityValue(): number {
   return parseFloat(_opacityInput.value);
 }
 
-function buildSelectionOpacityExpression(): Expression {
-  return ['case',
-    ['boolean', ['feature-state', 'selected'], false], 1,
-    getOpacityValue()
-  ] as any;
-}
 
 export function getRampName(): string {
   return _rampSelect?.value ?? 'Magma';
+}
+
+function getSelectionOverlayLayerId(layerId: string): string {
+  return `${layerId}-selection-overlay`;
+}
+
+function ensureSelectionOverlayLayer(layer: LayerState) {
+  const overlayLayerId = getSelectionOverlayLayerId(layer.layerId);
+  if (S.map.getLayer(overlayLayerId)) return;
+  S.map.addLayer({
+    id: overlayLayerId,
+    type: 'fill-extrusion',
+    source: layer.sourceId,
+    paint: {
+      'fill-extrusion-color': ['case',
+        ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
+        'rgba(0,0,0,0)'
+      ] as any,
+      'fill-extrusion-height': 0,
+      'fill-extrusion-opacity': 1,
+      'fill-extrusion-vertical-gradient': true
+    }
+  }, layer.layerId);
 }
 
 /* ================================================================== */
@@ -294,10 +311,11 @@ export function addExtrusionLayer(layer: LayerState) {
     paint: {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
-      'fill-extrusion-opacity': buildSelectionOpacityExpression(),
+      'fill-extrusion-opacity': getOpacityValue(),
       'fill-extrusion-vertical-gradient': true
     }
   });
+  ensureSelectionOverlayLayer(layer);
   _setLayerVisibility(layer, layer.visible);
 
   // NEW: parcel selection and inspection
@@ -731,7 +749,14 @@ export function applyGrayRendering() {
   ] as any;
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', buildSelectionOpacityExpression());
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getOpacityValue());
+
+  const overlayLayerId = getSelectionOverlayLayerId(ids.layerId);
+  if (S.map.getLayer(overlayLayerId)) {
+    S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
+    S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-height', 0);
+    S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-opacity', 1);
+  }
 
   applyMapFilters();
 
@@ -752,13 +777,21 @@ export function applyExtrusion() {
     return;
   }
 
+  const overlayLayerId = getSelectionOverlayLayerId(ids.layerId);
+
   if (S.currentFieldType === 'categorical') {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
 
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', buildSelectionOpacityExpression());
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getOpacityValue());
+
+    if (S.map.getLayer(overlayLayerId)) {
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-height', 0);
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-opacity', 1);
+    }
   } else {
     // For numeric fields, use the new color expression builder
     const colorExpr = buildNumericColorExpression();
@@ -771,7 +804,13 @@ export function applyExtrusion() {
 
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', buildSelectionOpacityExpression());
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getOpacityValue());
+
+    if (S.map.getLayer(overlayLayerId)) {
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-height', heightExpr);
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-opacity', 1);
+    }
   }
 
   // refresh which features are flagged as erroneous for current mode

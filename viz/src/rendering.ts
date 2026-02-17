@@ -166,6 +166,23 @@ export function getOpacityValue(): number {
   return parseFloat(_opacityInput.value);
 }
 
+function getSafeOpacityScalar(): number {
+  const value = getOpacityValue();
+  if (!Number.isFinite(value)) {
+    console.warn('[rendering] Invalid opacity value; expected finite number. Falling back to 1.', {
+      raw: _opacityInput?.value,
+      parsed: value
+    });
+    return 1;
+  }
+  if (value < 0 || value > 1) {
+    const clamped = Math.max(0, Math.min(1, value));
+    console.warn('[rendering] Opacity out of range; clamping to [0,1].', { value, clamped });
+    return clamped;
+  }
+  return value;
+}
+
 
 export function getRampName(): string {
   return _rampSelect?.value ?? 'Magma';
@@ -306,12 +323,23 @@ function getFeatureInspectFocusLngLat(feature: GeoJSON.Feature, fallback: maplib
 
 export function addExtrusionLayer(layer: LayerState) {
   if (S.map.getLayer(layer.layerId)) return;
+
+  const baseOpacity = getSafeOpacityScalar();
+  if (!Number.isFinite(baseOpacity)) {
+    console.error('[rendering] Refusing to add extrusion layer with non-finite opacity.', {
+      layerId: layer.layerId,
+      rawOpacityInput: _opacityInput?.value,
+      parsedOpacity: baseOpacity
+    });
+    return;
+  }
+
   S.map.addLayer({
     id: layer.layerId, type: 'fill-extrusion', source: layer.sourceId,
     paint: {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
-      'fill-extrusion-opacity': getOpacityValue(),
+      'fill-extrusion-opacity': baseOpacity,
       'fill-extrusion-vertical-gradient': true
     }
   });
@@ -749,7 +777,7 @@ export function applyGrayRendering() {
   ] as any;
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getOpacityValue());
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getSafeOpacityScalar());
 
   const overlayLayerId = getSelectionOverlayLayerId(ids.layerId);
   if (S.map.getLayer(overlayLayerId)) {
@@ -785,7 +813,7 @@ export function applyExtrusion() {
 
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getOpacityValue());
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getSafeOpacityScalar());
 
     if (S.map.getLayer(overlayLayerId)) {
       S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
@@ -804,7 +832,7 @@ export function applyExtrusion() {
 
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getOpacityValue());
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getSafeOpacityScalar());
 
     if (S.map.getLayer(overlayLayerId)) {
       S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);

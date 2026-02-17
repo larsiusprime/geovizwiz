@@ -99,25 +99,31 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
   }
 
   function populateDropdown() {
+    const previousValue = loadSelect.value;
+
     loadSelect.replaceChildren();
     const placeholder = new Option(`Choose a saved ${config.label}`, '');
     placeholder.disabled = true;
-    placeholder.selected = true;
     loadSelect.appendChild(placeholder);
 
     const entries = config.getEntries();
     for (const name of entries) {
       loadSelect.appendChild(new Option(name, name));
     }
+
+    if (previousValue && entries.includes(previousValue)) {
+      loadSelect.value = previousValue;
+    } else {
+      loadSelect.value = '';
+    }
+
     loadSelect.disabled = entries.length === 0;
   }
 
   function update() {
     const canSave = config.canSave();
-    const canLoad = config.canLoad();
 
     if (!canSave && mode === 'save') mode = 'none';
-    if (!canLoad && mode === 'load') mode = 'none';
 
     const matchName = config.getMatchName();
 
@@ -128,7 +134,7 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
     saveToggle.setAttribute('aria-selected', String(saveActive));
     saveToggle.tabIndex = saveActive ? 0 : -1;
 
-    loadToggle.disabled = !canLoad;
+    loadToggle.disabled = false;
     const loadActive = mode === 'load';
     loadToggle.classList.toggle('active', loadActive);
     loadToggle.setAttribute('aria-selected', String(loadActive));
@@ -136,7 +142,7 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
 
     /* panels */
     const showSave = mode === 'save' && canSave;
-    const showLoad = mode === 'load' && canLoad;
+    const showLoad = mode === 'load';
     const hasMatch = Boolean(matchName);
 
     savePanel.style.display  = showSave ? 'grid' : 'none';

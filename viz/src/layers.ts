@@ -484,6 +484,24 @@ export function applyLayerState(layer: LayerState) {
     _normBldg.checked = S.normalizationMode === 'perBuilding';
   }
   if (_normModeSelect) {
+    console.debug('[NormMode:applyLayerState.beforeOptions]', {
+      layerId: layer.id,
+      layerName: layer.name,
+      layerStoreId: layer.dataStoreId,
+      layerSize: {
+        landSizeField: layer.landSizeField,
+        landSizeUnitLabel: layer.landSizeUnitLabel,
+        bldgSizeField: layer.bldgSizeField,
+        bldgSizeUnitLabel: layer.bldgSizeUnitLabel,
+      },
+      stateSize: {
+        landSizeField: S.landSizeField,
+        landSizeUnitLabel: S.landSizeUnitLabel,
+        bldgSizeField: S.bldgSizeField,
+        bldgSizeUnitLabel: S.bldgSizeUnitLabel,
+      },
+      normModeSelectExists: true,
+    });
     const landUnit = (document.getElementById('normLandUnit')?.textContent || '(unit)').trim();
     const bldgUnit = (document.getElementById('normBldgUnit')?.textContent || '(unit)').trim();
     const perLandOption = _normModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
@@ -497,6 +515,19 @@ export function applyLayerState(layer: LayerState) {
       perBuildingOption.textContent = `…per building size ${bldgUnit}`;
     }
     _normModeSelect.value = S.normalizationMode;
+    console.debug('[NormMode:applyLayerState.afterOptions]', {
+      layerId: layer.id,
+      selectedMode: _normModeSelect.value,
+      options: Array.from(_normModeSelect.options).map(option => ({
+        value: option.value,
+        text: option.text,
+        disabled: option.disabled,
+      })),
+      labelSources: {
+        normLandUnitText: document.getElementById('normLandUnit')?.textContent,
+        normBldgUnitText: document.getElementById('normBldgUnit')?.textContent,
+      },
+    });
   }
 
   if (_colorCont && _colorQuant) {
@@ -595,6 +626,17 @@ export function addLayerFromDataStore(storeId: string): boolean {
   layer.landSizeUnitLabel = store.landSizeUnitLabel;
   layer.bldgSizeField = store.bldgSizeField;
   layer.bldgSizeUnitLabel = store.bldgSizeUnitLabel;
+  console.debug('[NormMode:addLayerFromDataStore]', {
+    storeId: store.id,
+    storeName: store.name,
+    storeSize: {
+      landSizeField: store.landSizeField,
+      landSizeUnitLabel: store.landSizeUnitLabel,
+      bldgSizeField: store.bldgSizeField,
+      bldgSizeUnitLabel: store.bldgSizeUnitLabel,
+    },
+    newLayerId: layer.id,
+  });
   registerLayer(layer);
   _addOrUpdateSource(layer.geojson);
   _applyGrayRendering();

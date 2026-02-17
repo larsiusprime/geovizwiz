@@ -806,6 +806,39 @@ export function setSizeState(
     S.statsNormalizationMode = 'asis';
     statsNormAsIs.checked = true;
   }
+
+  console.debug('[NormMode:setSizeState]', {
+    currentLayerId: S.currentLayerId,
+    currentDataStoreId: S.currentDataStoreId,
+    incoming: {
+      bField,
+      bUnit,
+      lField,
+      lUnit,
+    },
+    resolvedState: {
+      landSizeField: S.landSizeField,
+      landSizeUnitLabel: S.landSizeUnitLabel,
+      bldgSizeField: S.bldgSizeField,
+      bldgSizeUnitLabel: S.bldgSizeUnitLabel,
+    },
+    activeStore: activeStore
+      ? {
+          id: activeStore.id,
+          name: activeStore.name,
+          landSizeField: activeStore.landSizeField,
+          landSizeUnitLabel: activeStore.landSizeUnitLabel,
+          bldgSizeField: activeStore.bldgSizeField,
+          bldgSizeUnitLabel: activeStore.bldgSizeUnitLabel,
+        }
+      : null,
+    ui: {
+      normLandDisabled: normLand.disabled,
+      normBldgDisabled: normBldg.disabled,
+      normLandUnitText: normLandUnitEl.textContent,
+      normBldgUnitText: normBldgUnitEl.textContent,
+    },
+  });
 }
 
 /* ------------------------------------------------------------------ */

@@ -166,6 +166,13 @@ export function getOpacityValue(): number {
   return parseFloat(_opacityInput.value);
 }
 
+function buildSelectionOpacityExpression(): Expression {
+  return ['case',
+    ['boolean', ['feature-state', 'selected'], false], 1,
+    getOpacityValue()
+  ] as any;
+}
+
 export function getRampName(): string {
   return _rampSelect?.value ?? 'Magma';
 }
@@ -287,7 +294,7 @@ export function addExtrusionLayer(layer: LayerState) {
     paint: {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
-      'fill-extrusion-opacity': parseFloat(_opacityInput.value),
+      'fill-extrusion-opacity': buildSelectionOpacityExpression(),
       'fill-extrusion-vertical-gradient': true
     }
   });
@@ -724,7 +731,7 @@ export function applyGrayRendering() {
   ] as any;
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
   S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', buildSelectionOpacityExpression());
 
   applyMapFilters();
 
@@ -751,7 +758,7 @@ export function applyExtrusion() {
 
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', buildSelectionOpacityExpression());
   } else {
     // For numeric fields, use the new color expression builder
     const colorExpr = buildNumericColorExpression();
@@ -764,7 +771,7 @@ export function applyExtrusion() {
 
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', buildSelectionOpacityExpression());
   }
 
   // refresh which features are flagged as erroneous for current mode

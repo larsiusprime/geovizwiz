@@ -3005,12 +3005,25 @@ if (colorModeSelect) {
 
 if (normModeSelect) {
   normModeSelect.addEventListener('change', () => {
-    const next = normModeSelect.value;
-    const target = next === 'perLand' ? normLand : (next === 'perBuilding' ? normBldg : normAsIs);
-    if (target) {
-      target.checked = true;
-      target.dispatchEvent(new Event('change', { bubbles: true }));
+    const next = normModeSelect.value as 'asis' | 'perLand' | 'perBuilding';
+    if (next === 'perLand' && !S.landSizeField) {
+      normModeSelect.value = S.normalizationMode;
+      return;
     }
+    if (next === 'perBuilding' && !S.bldgSizeField) {
+      normModeSelect.value = S.normalizationMode;
+      return;
+    }
+
+    S.normalizationMode = next;
+    normAsIs.checked = next === 'asis';
+    normLand.checked = next === 'perLand';
+    normBldg.checked = next === 'perBuilding';
+
+    S.cachedExtrusionSettings = null;
+    if (!S.currentGeoJSON || !S.currentField) return;
+    scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    persistCurrentLayerState();
   });
 }
 

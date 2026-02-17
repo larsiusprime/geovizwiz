@@ -489,11 +489,11 @@ export function applyLayerState(layer: LayerState) {
     const perLandOption = _normModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
     const perBuildingOption = _normModeSelect.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
     if (perLandOption) {
-      perLandOption.disabled = _normLand?.disabled ?? false;
+      perLandOption.disabled = !S.landSizeField;
       perLandOption.textContent = `…per land size ${landUnit}`;
     }
     if (perBuildingOption) {
-      perBuildingOption.disabled = _normBldg?.disabled ?? false;
+      perBuildingOption.disabled = !S.bldgSizeField;
       perBuildingOption.textContent = `…per building size ${bldgUnit}`;
     }
     _normModeSelect.value = S.normalizationMode;

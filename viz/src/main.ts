@@ -3219,15 +3219,18 @@ statsCategoryFieldSelect.addEventListener('change', () => {
   populateStatisticsCategoryValues(S.statsCategoryField);
   updateStatisticsSubjectControls();
   updateStatisticsSectionVisibility();
-  resetStatisticsDisplay();
+  if (S.statsField && (!S.statsCategoryField || S.statsCategoryValueIndices.length > 0)) {
+    updateStatisticsResults();
+  } else {
+    resetStatisticsDisplay();
+  }
 });
 
 statsCategoryValueSelect.addEventListener('change', () => {
-  S.statsCategoryValueIndices = Array.from(statsCategoryValueSelect.selectedOptions)
-    .map(option => option.value)
-    .filter(value => value);
+  const selected = statsCategoryValueSelect.value || '';
+  S.statsCategoryValueIndices = selected ? [selected] : [];
   updateStatisticsSectionVisibility();
-  if (S.statsCategoryValueIndices.length > 0 && S.statsField) {
+  if ((!S.statsCategoryField || S.statsCategoryValueIndices.length > 0) && S.statsField) {
     updateStatisticsResults();
     return;
   }
@@ -3244,9 +3247,8 @@ scatterCategoryFieldSelect.addEventListener('change', () => {
 });
 
 scatterCategoryValueSelect.addEventListener('change', () => {
-  S.scatterCategoryValueIndices = Array.from(scatterCategoryValueSelect.selectedOptions)
-    .map(option => option.value)
-    .filter(value => value);
+  const selected = scatterCategoryValueSelect.value || '';
+  S.scatterCategoryValueIndices = selected ? [selected] : [];
   updateScatterSubjectControls();
   S.scatterRangeIsCustom = false;
   scheduleScatterPlotRefresh();
@@ -3260,10 +3262,8 @@ scatterColorByFieldSelect.addEventListener('change', () => {
 statsFieldSelect.addEventListener('change', () => {
   S.statsField = statsFieldSelect.value || null;
   const layer = getStatsLayer();
-  const dataStore = getLayerDataStore(layer);
-  const useDataSource = S.statsSubjectMode === 'category';
-  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
-  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+  const numericFields = layer?.chosenNumericFields ?? [];
+  const categoricalFields = layer?.chosenCategoricalFields ?? [];
   S.statsFieldType = getStatsFieldType(S.statsField, numericFields, categoricalFields);
   updateStatisticsSectionVisibility();
   if (S.statsField) {

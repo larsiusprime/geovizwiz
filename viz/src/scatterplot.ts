@@ -124,9 +124,9 @@ let scatterPlotPointsByParcelId = new Map<string, ScatterPoint>();
 let scatterPlotEventsBound = false;
 
 export function populateScatterCategoryFields() {
-  const scatterStore = _getScatterDataStore();
-  const geoJSON = scatterStore?.geojson ?? null;
-  const categoricalFields = scatterStore?.chosenCategoricalFields ?? [];
+  const layer = _getScatterLayer();
+  const geoJSON = layer?.geojson ?? null;
+  const categoricalFields = layer?.chosenCategoricalFields ?? [];
   const available = populateCategoryFields(geoJSON, categoricalFields, scatterCategoryFieldSelect);
 
   if (S.scatterCategoryField && available.includes(S.scatterCategoryField)) {
@@ -137,8 +137,8 @@ export function populateScatterCategoryFields() {
 }
 
 export function populateScatterCategoryValues(field: string | null) {
-  const scatterStore = _getScatterDataStore();
-  const geoJSON = scatterStore?.geojson ?? null;
+  const layer = _getScatterLayer();
+  const geoJSON = layer?.geojson ?? null;
   const result = populateCategoryValues(
     geoJSON,
     field,
@@ -227,9 +227,8 @@ export function populateScatterColorByFields() {
 
 export function updateScatterSubjectControls() {
   const layer = _getScatterLayer();
-  const scatterStore = _getScatterDataStore();
-  const scatterGeoJSON = scatterStore?.geojson ?? null;
-  if (!layer || !scatterGeoJSON) {
+  const hasLayerData = Boolean(layer?.geojson);
+  if (!hasLayerData) {
     scatterSubjectControls.buttons.forEach(button => { button.disabled = true; });
     scatterSubjectControls.categoryControls.style.display = 'none';
     scatterCategoryFieldSelect.disabled = true;
@@ -240,8 +239,8 @@ export function updateScatterSubjectControls() {
   updateSubjectControls(
     scatterSubjectControls,
     S.scatterSubjectMode,
-    scatterCategoryFieldSelect.options.length > 1,
-    Boolean(S.scatterCategoryField)
+    true,
+    !S.scatterCategoryField || Boolean(S.scatterCategoryValueIndices[0])
   );
 }
 
@@ -250,7 +249,7 @@ function updateScatterSubjectButtons() {
 }
 
 export function setScatterSubjectMode(mode: SubjectMode) {
-  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected', 'group'];
   S.scatterSubjectMode = allowedModes.includes(mode) ? mode : 'all';
   updateScatterSubjectButtons();
   updateScatterSubjectControls();
@@ -558,17 +557,15 @@ function getScatterSubjectSelection(
     if (!layerGeoJSON) return [];
     return layerGeoJSON.features.filter(feature => layer.selectedParcels.has(_getParcelId(feature)));
   }
-  if (mode === 'category') {
-    if (!dataGeoJSON || !categoryField || categoryValueIndices.length === 0) return [];
-    const selectedValues = new Set(
-      categoryValueIndices
-        .map(index => categoryValueMap[Number(index)])
-        .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
-        .map(entry => entry.value)
-    );
-    return dataGeoJSON.features.filter(feature => {
+  if (mode === 'group') {
+    if (!layerGeoJSON) return [];
+    if (!categoryField) return layerGeoJSON.features;
+    if (categoryValueIndices.length === 0) return [];
+    const selected = categoryValueMap[Number(categoryValueIndices[0])];
+    if (!selected) return [];
+    return layerGeoJSON.features.filter(feature => {
       const value = (feature.properties as Record<string, unknown> | undefined)?.[categoryField];
-      return selectedValues.has(value);
+      return value === selected.value;
     });
   }
   return layerGeoJSON?.features ?? [];
@@ -591,8 +588,8 @@ export function updateScatterPlot() {
     resetScatterPlot('Load data to render the scatterplot.');
     return;
   }
-  if (S.scatterSubjectMode === 'category' && (!S.scatterCategoryField || S.scatterCategoryValueIndices.length === 0)) {
-    resetScatterPlot('Choose category values to render the scatterplot.');
+  if (S.scatterSubjectMode === 'group' && S.scatterCategoryField && S.scatterCategoryValueIndices.length === 0) {
+    resetScatterPlot('Choose value to render the scatterplot.');
     return;
   }
   if (!S.scatterXField || !S.scatterYField) {
@@ -730,7 +727,7 @@ export function refreshScatterPanel() {
   populateScatterCategoryValues(S.scatterCategoryField);
   populateScatterFields();
   populateScatterColorByFields();
-  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected', 'group'];
   if (!allowedModes.includes(S.scatterSubjectMode)) {
     S.scatterSubjectMode = 'all';
   }

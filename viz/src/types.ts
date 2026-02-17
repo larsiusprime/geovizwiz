@@ -47,7 +47,7 @@ export type CategoricalColorMode = 'random' | 'single' | 'colorRamp';
 export type QualityMode = 'fast' | 'high';
 export type UpdateMode = 'applyOnly' | 'recomputeAndAutoScale';
 export type MetricUnitKey = 'centimeters' | 'meters' | 'kilometers';
-export type SubjectMode = 'all' | 'visible' | 'selected' | 'category';
+export type SubjectMode = 'all' | 'visible' | 'selected' | 'group';
 export type LandSchedulePerUnit = 'lot' | 'area' | 'frontage';
 
 export type LandScheduleBaseLot = {

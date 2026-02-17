@@ -52,7 +52,8 @@ export function buildSubjectSelector(
   const modes: Array<{ mode: SubjectMode; label: string }> = [
     { mode: 'all', label: 'All' },
     { mode: 'visible', label: 'Visible' },
-    { mode: 'selected', label: 'Selected' }
+    { mode: 'selected', label: 'Selected' },
+    { mode: 'group', label: 'Group...' }
   ];
   modes.forEach(({ mode, label }) => {
     const button = document.createElement('button');
@@ -70,20 +71,18 @@ export function buildSubjectSelector(
 
   const categoryControls = document.createElement('div');
   categoryControls.style.display = 'none';
-  categoryControls.style.gap = '6px';
+  categoryControls.style.gap = '8px';
   categoryControls.style.marginTop = '8px';
+  categoryControls.style.gridTemplateColumns = 'minmax(0, 1fr) minmax(0, 1fr)';
 
   const categoryFieldSelect = document.createElement('select');
-  const fieldPlaceholder = new Option('Choose a field', '');
-  fieldPlaceholder.disabled = true;
+  const fieldPlaceholder = new Option('Everything', '');
   fieldPlaceholder.selected = true;
   categoryFieldSelect.appendChild(fieldPlaceholder);
 
   const categoryValueSelect = document.createElement('select');
-  categoryValueSelect.multiple = true;
-  categoryValueSelect.size = 4;
   categoryValueSelect.disabled = true;
-  const valuePlaceholder = new Option('Choose value(s)', '');
+  const valuePlaceholder = new Option('Choose value', '');
   valuePlaceholder.disabled = true;
   valuePlaceholder.selected = true;
   categoryValueSelect.appendChild(valuePlaceholder);
@@ -106,10 +105,10 @@ export function updateSubjectControls(
   hasFieldOptions: boolean,
   hasFieldSelected: boolean
 ) {
-  const isCategory = mode === 'category';
-  controls.categoryControls.style.display = isCategory ? 'grid' : 'none';
-  controls.categoryFieldSelect.disabled = !isCategory || !hasFieldOptions;
-  controls.categoryValueSelect.disabled = !isCategory || !hasFieldSelected;
+  const isGroup = mode === 'group';
+  controls.categoryControls.style.display = isGroup ? 'grid' : 'none';
+  controls.categoryFieldSelect.disabled = !isGroup || !hasFieldOptions;
+  controls.categoryValueSelect.disabled = !isGroup || !hasFieldSelected;
 }
 
 /**
@@ -122,8 +121,7 @@ export function populateCategoryFields(
   select: HTMLSelectElement
 ): string[] {
   select.replaceChildren();
-  const placeholder = new Option('Choose a field', '');
-  placeholder.disabled = true;
+  const placeholder = new Option('Everything', '');
   placeholder.selected = true;
   select.appendChild(placeholder);
 
@@ -140,7 +138,7 @@ export function populateCategoryFields(
     select.appendChild(new Option(field, field));
   });
 
-  select.disabled = available.length === 0;
+  select.disabled = false;
   return available;
 }
 
@@ -155,9 +153,9 @@ export function populateCategoryValues(
   currentIndices: string[]
 ): { valueMap: Array<{ label: string; value: unknown }>; indices: string[] } {
   select.replaceChildren();
-  const placeholder = new Option('Choose value(s)', '');
+  const placeholder = new Option('Choose value', '');
   placeholder.disabled = true;
-  placeholder.selected = currentIndices.length === 0;
+  placeholder.selected = true;
   select.appendChild(placeholder);
 
   if (!geoJSON || !field) {
@@ -165,35 +163,61 @@ export function populateCategoryValues(
     return { valueMap: [], indices: [] };
   }
 
-  const rawMap = new Map<string, { label: string; value: unknown }>();
+  const formatCount = (count: number) => {
+    if (count >= 1_000_000_000) return `${(count / 1_000_000_000).toFixed(count >= 10_000_000_000 ? 0 : 1).replace(/\.0$/, '')}B`;
+    if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(count >= 10_000_000 ? 0 : 1).replace(/\.0$/, '')}M`;
+    if (count >= 1_000) return `${(count / 1_000).toFixed(count >= 10_000 ? 0 : 1).replace(/\.0$/, '')}K`;
+    return String(count);
+  };
+
+  const buckets = new Map<string, { label: string; value: unknown; count: number }>();
   geoJSON.features.forEach(feature => {
     const raw = (feature.properties as Record<string, unknown> | undefined)?.[field];
-    if (raw === null || raw === undefined) return;
-    const key = `${typeof raw}:${String(raw)}`;
-    if (!rawMap.has(key)) {
-      rawMap.set(key, { label: String(raw), value: raw });
+    let key: string;
+    let label: string;
+    if (raw === undefined) {
+      key = 'undefined';
+      label = '(undefined)';
+    } else if (raw === null) {
+      key = 'null';
+      label = '(null)';
+    } else if (typeof raw === 'string' && raw.length === 0) {
+      key = 'string:';
+      label = '(empty)';
+    } else {
+      key = `${typeof raw}:${String(raw)}`;
+      label = String(raw);
+    }
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      buckets.set(key, { label, value: raw, count: 1 });
     }
   });
 
-  const valueMap = Array.from(rawMap.values()).sort((a, b) => a.label.localeCompare(b.label));
+  const sortedEntries = Array.from(buckets.values())
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 
-  valueMap.forEach((entry, index) => {
-    select.appendChild(new Option(entry.label, String(index)));
+  sortedEntries.forEach((entry, index) => {
+    select.appendChild(new Option(`(${formatCount(entry.count)}) ${entry.label}`, String(index)));
   });
 
-  select.disabled = false;
-  const validSelections = new Set(
-    currentIndices.filter(index => valueMap[Number(index)])
-  );
-  const indices = Array.from(validSelections);
-  Array.from(select.options).forEach(option => {
-    option.selected = validSelections.has(option.value);
-  });
-  if (indices.length === 0) {
-    placeholder.selected = true;
+  select.disabled = sortedEntries.length === 0;
+
+  const valueMap = sortedEntries.map(({ label, value }) => ({ label, value }));
+  const selectedIndex = currentIndices.length ? currentIndices[0] : '';
+  const hasSelected = selectedIndex !== '' && valueMap[Number(selectedIndex)];
+  if (hasSelected) {
+    select.value = selectedIndex;
+    placeholder.selected = false;
+    return { valueMap, indices: [selectedIndex] };
   }
-  return { valueMap, indices };
+
+  placeholder.selected = true;
+  return { valueMap, indices: [] };
 }
+
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initStatisticsElements)       */
@@ -332,9 +356,8 @@ export function resetStatisticsDisplay() {
 
 export function populateStatisticsCategoryFields() {
   const layer = _getStatsLayer();
-  const dataStore = _getLayerDataStore(layer);
-  const geoJSON = dataStore?.geojson ?? null;
-  const categoricalFields = dataStore?.chosenCategoricalFields ?? [];
+  const geoJSON = _getLayerGeoJSON(layer);
+  const categoricalFields = layer?.chosenCategoricalFields ?? [];
   const available = populateCategoryFields(geoJSON, categoricalFields, statsCategoryFieldSelect);
 
   if (S.statsCategoryField && available.includes(S.statsCategoryField)) {
@@ -346,8 +369,7 @@ export function populateStatisticsCategoryFields() {
 
 export function populateStatisticsCategoryValues(field: string | null) {
   const layer = _getStatsLayer();
-  const dataStore = _getLayerDataStore(layer);
-  const geoJSON = dataStore?.geojson ?? null;
+  const geoJSON = _getLayerGeoJSON(layer);
   const result = populateCategoryValues(
     geoJSON,
     field,
@@ -367,11 +389,9 @@ export function getStatsFieldType(field: string | null, numericFields: string[],
 
 export function populateStatisticsFields() {
   const layer = _getStatsLayer();
-  const dataStore = _getLayerDataStore(layer);
-  const useDataSource = S.statsSubjectMode === 'category';
-  const sourceGeoJSON = useDataSource ? dataStore?.geojson ?? null : _getLayerGeoJSON(layer);
-  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
-  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+  const sourceGeoJSON = _getLayerGeoJSON(layer);
+  const numericFields = layer?.chosenNumericFields ?? [];
+  const categoricalFields = layer?.chosenCategoricalFields ?? [];
 
   statsFieldSelect.replaceChildren();
   const placeholder = new Option('Choose a field', '');
@@ -559,13 +579,12 @@ export function getStatsSourceContext() {
 }
 
 export function getStatsNormalizationContext() {
-  const { layer, dataStore } = getStatsSourceContext();
-  const useDataSource = S.statsSubjectMode === 'category';
+  const { layer } = getStatsSourceContext();
   return {
-    landField: useDataSource ? dataStore?.landSizeField ?? null : layer?.landSizeField ?? null,
-    landUnit: useDataSource ? dataStore?.landSizeUnitLabel ?? null : layer?.landSizeUnitLabel ?? null,
-    bldgField: useDataSource ? dataStore?.bldgSizeField ?? null : layer?.bldgSizeField ?? null,
-    bldgUnit: useDataSource ? dataStore?.bldgSizeUnitLabel ?? null : layer?.bldgSizeUnitLabel ?? null
+    landField: layer?.landSizeField ?? null,
+    landUnit: layer?.landSizeUnitLabel ?? null,
+    bldgField: layer?.bldgSizeField ?? null,
+    bldgUnit: layer?.bldgSizeUnitLabel ?? null
   };
 }
 
@@ -623,28 +642,25 @@ export function getStatsSubjectSelection(
     if (!layerGeoJSON) return [];
     return layerGeoJSON.features.filter(feature => layer.selectedParcels.has(_getParcelId(feature)));
   }
-  if (mode === 'category') {
-    if (!dataGeoJSON || !categoryField || categoryValueIndices.length === 0) return [];
-    const selectedValues = new Set(
-      categoryValueIndices
-        .map(index => categoryValueMap[Number(index)])
-        .filter((entry): entry is { label: string; value: unknown } => Boolean(entry))
-        .map(entry => entry.value)
-    );
-    return dataGeoJSON.features.filter(feature => {
+  if (mode === 'group') {
+    if (!layerGeoJSON) return [];
+    if (!categoryField) return layerGeoJSON.features;
+    if (categoryValueIndices.length === 0) return [];
+    const selected = categoryValueMap[Number(categoryValueIndices[0])];
+    if (!selected) return [];
+    return layerGeoJSON.features.filter(feature => {
       const value = (feature.properties as Record<string, unknown> | undefined)?.[categoryField];
-      return selectedValues.has(value);
+      return value === selected.value;
     });
   }
   return layerGeoJSON?.features ?? [];
 }
 
 export function updateStatisticsResults() {
-  const { layer, layerGeoJSON, dataGeoJSON, dataStore } = getStatsSourceContext();
-  const useDataSource = S.statsSubjectMode === 'category';
-  const sourceGeoJSON = useDataSource ? dataGeoJSON : layerGeoJSON;
-  const numericFields = useDataSource ? dataStore?.chosenNumericFields ?? [] : layer?.chosenNumericFields ?? [];
-  const categoricalFields = useDataSource ? dataStore?.chosenCategoricalFields ?? [] : layer?.chosenCategoricalFields ?? [];
+  const { layer, layerGeoJSON } = getStatsSourceContext();
+  const sourceGeoJSON = layerGeoJSON;
+  const numericFields = layer?.chosenNumericFields ?? [];
+  const categoricalFields = layer?.chosenCategoricalFields ?? [];
 
   updateStatisticsNormalizationControls();
 
@@ -653,7 +669,7 @@ export function updateStatisticsResults() {
     resetStatisticsDisplay();
     return;
   }
-  if (S.statsSubjectMode === 'category' && (!S.statsCategoryField || S.statsCategoryValueIndices.length === 0)) {
+  if (S.statsSubjectMode === 'group' && S.statsCategoryField && S.statsCategoryValueIndices.length === 0) {
     S.statsValuesCache = [];
     resetStatisticsDisplay();
     return;
@@ -794,8 +810,8 @@ export function updateStatisticsSubjectControls() {
   updateSubjectControls(
     statsSubjectControls,
     S.statsSubjectMode,
-    statsCategoryFieldSelect.options.length > 1,
-    Boolean(S.statsCategoryField)
+    true,
+    !S.statsCategoryField || Boolean(S.statsCategoryValueIndices[0])
   );
 }
 
@@ -804,7 +820,7 @@ function updateStatisticsSubjectButtons() {
 }
 
 export function setStatsSubjectMode(mode: SubjectMode) {
-  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected', 'group'];
   S.statsSubjectMode = allowedModes.includes(mode) ? mode : 'all';
   updateStatisticsSubjectButtons();
   updateStatisticsSubjectControls();
@@ -843,7 +859,7 @@ export function refreshStatisticsPanel() {
   populateStatisticsCategoryFields();
   populateStatisticsCategoryValues(S.statsCategoryField);
 
-  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected'];
+  const allowedModes: SubjectMode[] = ['all', 'visible', 'selected', 'group'];
   if (!allowedModes.includes(S.statsSubjectMode)) {
     S.statsSubjectMode = 'all';
   }

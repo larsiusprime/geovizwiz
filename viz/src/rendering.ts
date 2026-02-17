@@ -192,6 +192,13 @@ function getSelectionOverlayLayerId(layerId: string): string {
   return `${layerId}-selection-overlay`;
 }
 
+function getSelectionOverlayColorExpression(): Expression {
+  return ['case',
+    ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
+    'rgba(0,0,0,0)'
+  ] as any;
+}
+
 function ensureSelectionOverlayLayer(layer: LayerState) {
   const overlayLayerId = getSelectionOverlayLayerId(layer.layerId);
   if (S.map.getLayer(overlayLayerId)) return;
@@ -200,10 +207,7 @@ function ensureSelectionOverlayLayer(layer: LayerState) {
     type: 'fill-extrusion',
     source: layer.sourceId,
     paint: {
-      'fill-extrusion-color': ['case',
-        ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
-        'rgba(0,0,0,0)'
-      ] as any,
+      'fill-extrusion-color': getSelectionOverlayColorExpression(),
       'fill-extrusion-height': 0,
       'fill-extrusion-opacity': 1,
       'fill-extrusion-vertical-gradient': true
@@ -781,7 +785,7 @@ export function applyGrayRendering() {
 
   const overlayLayerId = getSelectionOverlayLayerId(ids.layerId);
   if (S.map.getLayer(overlayLayerId)) {
-    S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
+    S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', getSelectionOverlayColorExpression());
     S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-height', 0);
     S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-opacity', 1);
   }
@@ -816,7 +820,7 @@ export function applyExtrusion() {
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getSafeOpacityScalar());
 
     if (S.map.getLayer(overlayLayerId)) {
-      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', getSelectionOverlayColorExpression());
       S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-height', 0);
       S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-opacity', 1);
     }
@@ -835,7 +839,7 @@ export function applyExtrusion() {
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', getSafeOpacityScalar());
 
     if (S.map.getLayer(overlayLayerId)) {
-      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', S.highlightColor);
+      S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-color', getSelectionOverlayColorExpression());
       S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-height', heightExpr);
       S.map.setPaintProperty(overlayLayerId, 'fill-extrusion-opacity', 1);
     }

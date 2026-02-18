@@ -205,6 +205,19 @@ const joinRows = (leftRows, rightRows, options) => {
 
 const buildFeatureCollection = (rows) => ({ type:'FeatureCollection', features: rows.filter((r)=>r.__geometry && ['Polygon','MultiPolygon'].includes(r.__geometry.type)).map((r)=>({ type:'Feature', geometry:r.__geometry, properties:Object.fromEntries(Object.entries(r).filter(([k])=>!k.startsWith('__'))) })) });
 
+const buildConstructPreview = (rows) => {
+  const featureRows = rows.filter((r) => r.__geometry && ['Polygon', 'MultiPolygon'].includes(r.__geometry.type));
+  const propertyRows = featureRows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('__'))));
+  const fields = Array.from(new Set(propertyRows.flatMap((r) => Object.keys(r))));
+  const columns = buildColumnProfiles(propertyRows, fields);
+  return {
+    joinedRows: rows.length,
+    featureRows: featureRows.length,
+    droppedGeometryRows: rows.length - featureRows.length,
+    columns
+  };
+};
+
 const exportGeoPackage = async (geojson) => { const gdal = await gdalPromise; const file = new File([JSON.stringify(geojson)], 'source.geojson', { type:'application/geo+json' }); const { datasets } = await gdal.open(file); const out = await gdal.ogr2ogr(datasets[0], ['-f','GPKG']); return new Uint8Array(await gdal.getFileBytes(out)); };
 const exportShpZip = async (geojson) => { const gdal = await gdalPromise; const file = new File([JSON.stringify(geojson)], 'source.geojson', { type:'application/geo+json' }); const { datasets } = await gdal.open(file); const out = await gdal.ogr2ogr(datasets[0], ['-f','ESRI Shapefile']); return new Uint8Array(await gdal.getFileBytes(out)); };
 const exportGeoParquet = async (geojson) => new Promise((resolve, reject) => { const worker = new Worker(new URL('./converterExportWorker.js', self.location.href)); worker.onmessage = (e) => { const { type, payload } = e.data || {}; if (type === 'error') { worker.terminate(); reject(new Error(payload.message)); } if (type === 'success') { worker.terminate(); if (payload?.blob instanceof Blob) { payload.blob.arrayBuffer().then((buf)=>resolve(new Uint8Array(buf))).catch((err)=>reject(new Error(err?.message || 'Unable to read GeoParquet output blob.'))); return; } if (payload?.bytes) { resolve(new Uint8Array(payload.bytes)); return; } reject(new Error('GeoParquet export returned no output bytes.')); } }; worker.postMessage({ file: new File([JSON.stringify(geojson)], 'joined.geojson', { type:'application/geo+json' }), outputFormat:'geoparquet' }); });
@@ -227,6 +240,13 @@ self.onmessage = async (event) => {
 
     if (mode === 'preview') {
       send('success', { matched:joined.matched, unmatchedLeft:joined.unmatchedLeft, unmatchedRight:joined.unmatchedRight, emptyLeft:joined.emptyLeft, emptyRight:joined.emptyRight, leftDropped:leftDedup.dropped, rightDropped:rightDedup.dropped, sampleColumns:Object.keys(joined.rows[0] || {}).filter((k)=>!k.startsWith('__')).slice(0,20), leftTypeErrors:leftReview.errors.length, rightTypeErrors:rightReview.errors.length });
+      return;
+    }
+
+    if (mode === 'build') {
+      const build = buildConstructPreview(joined.rows);
+      send('log', { message: `Constructed ${build.featureRows} features.` });
+      send('success', build);
       return;
     }
 

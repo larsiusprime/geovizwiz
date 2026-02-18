@@ -8,7 +8,7 @@ export default function startConstructApp() {
   const byId = (id) => document.getElementById(id);
   const pages = [1,2,3,4,5].map((n)=>byId(`page${n}`));
   const breadcrumbButtons = Array.from(document.querySelectorAll('.breadcrumb'));
-  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[]}, preview:null, built:false };
+  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[]}, preview:null, built:false, exportCache:null };
 
   const logEl = byId('log');
   const log = (msg) => { logEl.textContent += `${msg}\n`; logEl.scrollTop = logEl.scrollHeight; };
@@ -206,6 +206,13 @@ export default function startConstructApp() {
 
   const extForFormat = (format) => (format === 'geopackage' ? 'gpkg' : format === 'shpzip' ? 'shp.zip' : 'geoparquet');
 
+  const resetBuildState = (message = 'Build to inspect output columns and type/profile diagnostics before export.') => {
+    state.built = false;
+    state.exportCache = null;
+    byId('saveBtn').disabled = true;
+    byId('buildPreview').innerHTML = `<span class="muted">${message}</span>`;
+  };
+
   const renderBuildPreview = (build) => {
     const by = byId('buildPreview');
     const exportRows = (build?.columns || []).map((c) => `<tr><td>${c.name}</td><td>${c.inferredType}</td><td>${c.nonNullCount}</td><td>${c.uniqueCount}</td></tr>`).join('');
@@ -232,47 +239,57 @@ export default function startConstructApp() {
   byId('runConstruct').onclick = () => {
     state.max = Math.max(state.max,5);
     byId('outName').value = `constructed_${fmtTime()}.${extForFormat(byId('outFmt').value)}`;
-    byId('saveBtn').disabled = true;
-    byId('buildPreview').innerHTML = '<span class="muted">Build to inspect output columns and type/profile diagnostics before export.</span>';
+    resetBuildState();
     byId('constructStatus').textContent = 'Ready.';
-    state.built = false;
     setStep(5);
   };
 
   byId('outFmt').onchange = () => {
+    const selectedFormat = byId('outFmt').value;
     const name = byId('outName').value?.trim();
-    if (!name) return;
-    const ext = extForFormat(byId('outFmt').value);
-    byId('outName').value = name.replace(/(\.gpkg|\.geoparquet|\.shp\.zip)$/i, `.${ext}`);
+    if (name) {
+      const ext = extForFormat(selectedFormat);
+      byId('outName').value = name.replace(/(\.gpkg|\.geoparquet|\.shp\.zip)$/i, `.${ext}`);
+    }
+    if (!state.exportCache || state.exportCache.format !== selectedFormat) {
+      resetBuildState('Format changed. Build again to validate and enable export for this format.');
+      byId('constructStatus').textContent = 'Format changed. Please Build again before export.';
+    }
   };
 
   byId('buildBtn').onclick = async () => {
     byId('constructStatus').textContent = 'Building...';
     byId('saveBtn').disabled = true;
+    state.exportCache = null;
     try {
-      const build = await workerCall({ mode:'build', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
+      const options = collectOptions();
+      const outputFormat = byId('outFmt').value;
+      const build = await workerCall({ mode:'build', leftFile:state.leftFile, rightFile:state.rightFile, options, csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
       renderBuildPreview(build);
+      const exportPayload = await workerCall({ mode:'construct', leftFile:state.leftFile, rightFile:state.rightFile, options, outputFormat, csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
+      state.exportCache = { format: outputFormat, result: exportPayload };
       const status = build.featureRows === 0
         ? `Build complete. Exportable features: 0. Check Build preview + Log for geometry diagnostics.`
-        : `Build complete. Exportable features: ${build.featureRows}.`;
+        : `Build complete. Exportable features: ${build.featureRows}. Ready to export ${extForFormat(outputFormat)}.`;
       byId('constructStatus').textContent = status;
       state.built = true;
       byId('saveBtn').disabled = false;
     } catch (err) {
       state.built = false;
+      state.exportCache = null;
       byId('constructStatus').textContent = err.message;
     }
   };
 
   byId('saveBtn').onclick = async () => {
-    if (!state.built) {
+    if (!state.built || !state.exportCache || state.exportCache.format !== byId('outFmt').value) {
       byId('constructStatus').textContent = 'Please run Build first.';
       return;
     }
-    byId('constructStatus').textContent = 'Constructing...';
-    try { const result = await workerCall({ mode:'construct', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), outputFormat:byId('outFmt').value, csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
-      const name = byId('outName').value?.trim() || `constructed_${fmtTime()}.${result.extension}`; triggerDownload(new Blob([result.bytes], { type: result.mimeType }), name); byId('constructStatus').textContent = `Saved ${name}`;
-    } catch (err) { byId('constructStatus').textContent = err.message; }
+    const result = state.exportCache.result;
+    const name = byId('outName').value?.trim() || `constructed_${fmtTime()}.${result.extension}`;
+    triggerDownload(new Blob([result.bytes], { type: result.mimeType }), name);
+    byId('constructStatus').textContent = `Saved ${name}`;
   };
 
   ['left','right'].forEach(setupDrop);

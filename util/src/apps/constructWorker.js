@@ -209,6 +209,8 @@ const joinRows = (leftRows, rightRows, options) => {
     if (lGeom) diagnostics.leftGeomRows += 1;
     if (rGeom) diagnostics.rightGeomRows += 1;
     const out={ ...(l||{}), ...(r||{}) };
+    // RIGHT-side geometry is ignored for construct output; retain LEFT geometry when available.
+    out.__geometry = lGeom || null;
     if (options.outputKeys==='normalized' || options.outputKeys==='all') out.__normalized_key = k;
     if (options.outputKeys==='all') { out.__left_key=l?.[options.leftKey]??null; out.__right_key=r?.[options.rightKey]??null; }
     const outGeom = out.__geometry || null;

@@ -119,7 +119,13 @@ CSV parsing behavior
 - Show a preview of parsed rows.
 - Expose CSV parse controls and update preview live so users can correct parsing before proceeding.
 
-Step 2: Configure key matching and deduplication.
+Step 2: Review columns and types.
+- Always show both LEFT and RIGHT columns in side-by-side review panels.
+- Columns are selected by default; users can exclude columns.
+- Users can rename output columns, override target types, set mixed-type policy, and fallback values.
+- Detect collisions among selected output column names and require resolution before continue.
+
+Step 3: Configure key matching and deduplication.
 - Single-key equi-join in this version.
 - Join types supported: LEFT, RIGHT, INNER.
 - UI must explain join type behavior (tooltip/help text).
@@ -147,7 +153,7 @@ Normalized key output strategy
   - keep normalized key
   - keep all as separate columns
 
-Step 3: Preview match quality and compatibility.
+Step 4: Preview match quality and compatibility.
 Before construct can run, show:
 - matched row count
 - unmatched LEFT count
@@ -159,12 +165,12 @@ Before construct can run, show:
 For long-running operations, show progress + cancel, same paradigm as other apps.
 Logs persist during the browser session, but must reset if user returns to an earlier step and changes context.
 
-Step 4: Construct dataset.
+Step 5: Construct dataset.
 - Execute the join using selected join type and options.
 - Allow cancel during processing.
 - Inline step messaging required; persistent log panel for detailed events.
 
-Step 5: Download output.
+Step 6: Download output.
 Supported output formats:
 - Zipped ESRI Shapefile (.shp.zip)
 - GeoPackage (.gpkg)

@@ -1,279 +1,186 @@
 import { triggerDownload } from '../export/download.js';
 
-const fmtTime = () => {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-};
+const TYPE_OPTIONS = ['source', 'string', 'integer', 'float', 'boolean', 'date', 'datetime'];
+const fmtTime = () => { const d = new Date(); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; };
 
 export default function startConstructApp() {
-  const page = (n) => document.getElementById(`page${n}`);
+  const byId = (id) => document.getElementById(id);
+  const pages = [1,2,3,4,5].map((n)=>byId(`page${n}`));
   const breadcrumbButtons = Array.from(document.querySelectorAll('.breadcrumb'));
-  const leftInput = document.getElementById('leftInput');
-  const rightInput = document.getElementById('rightInput');
-  const leftBrowse = document.getElementById('leftBrowse');
-  const rightBrowse = document.getElementById('rightBrowse');
-  const leftDrop = document.getElementById('leftDrop');
-  const rightDrop = document.getElementById('rightDrop');
-  const leftStatus = document.getElementById('leftStatus');
-  const rightStatus = document.getElementById('rightStatus');
-  const swapNotice = document.getElementById('swapNotice');
-  const toStep2 = document.getElementById('toStep2');
-  const toStep3 = document.getElementById('toStep3');
-  const runConstruct = document.getElementById('runConstruct');
-  const leftKey = document.getElementById('leftKey');
-  const rightKey = document.getElementById('rightKey');
-  const leftDedup = document.getElementById('leftDedup');
-  const rightDedup = document.getElementById('rightDedup');
-  const leftSort = document.getElementById('leftSort');
-  const rightSort = document.getElementById('rightSort');
-  const previewStats = document.getElementById('previewStats');
-  const previewCols = document.getElementById('previewCols');
-  const logEl = document.getElementById('log');
-  const outFmt = document.getElementById('outFmt');
-  const outName = document.getElementById('outName');
-  const constructStatus = document.getElementById('constructStatus');
-  const leftCsvPanel = document.getElementById('leftCsvPanel');
-  const rightCsvPanel = document.getElementById('rightCsvPanel');
-  const leftCsvDelimiter = document.getElementById('leftCsvDelimiter');
-  const rightCsvDelimiter = document.getElementById('rightCsvDelimiter');
-  const leftCsvHeader = document.getElementById('leftCsvHeader');
-  const rightCsvHeader = document.getElementById('rightCsvHeader');
-  const leftCsvPreview = document.getElementById('leftCsvPreview');
-  const rightCsvPreview = document.getElementById('rightCsvPreview');
-  const leftCsvApply = document.getElementById('leftCsvApply');
-  const rightCsvApply = document.getElementById('rightCsvApply');
+  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[],globalFallback:'null'}, preview:null };
 
-  const state = {
-    step: 1,
-    max: 1,
-    leftFile: null,
-    rightFile: null,
-    leftInfo: null,
-    rightInfo: null,
-    leftCsvOptions: null,
-    rightCsvOptions: null,
-    preview: null
-  };
-
-  const setStep = (n) => {
-    state.step = n;
-    for (let i = 1; i <= 4; i += 1) page(i).classList.toggle('hidden', i !== n);
-    breadcrumbButtons.forEach((b) => {
-      const s = Number(b.dataset.step);
-      b.classList.toggle('current', s === n);
-      if (s > state.max) b.setAttribute('disabled', 'disabled'); else b.removeAttribute('disabled');
-    });
-  };
-
-  const log = (msg) => {
-    logEl.textContent += `${msg}\n`;
-    logEl.scrollTop = logEl.scrollHeight;
-  };
+  const logEl = byId('log');
+  const log = (msg) => { logEl.textContent += `${msg}\n`; logEl.scrollTop = logEl.scrollHeight; };
 
   const workerCall = (payload) => new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./constructWorker.js', import.meta.url));
-    const timeout = setTimeout(() => {
-      worker.terminate();
-      reject(new Error('Operation timed out while loading data. Please verify the file and try again.'));
-    }, 120000);
-    worker.onmessage = (e) => {
-      const { type, payload: p } = e.data || {};
-      if (type === 'log') log(p.message);
-      if (type === 'error') { clearTimeout(timeout); worker.terminate(); reject(new Error(p.message)); }
-      if (type === 'success') { clearTimeout(timeout); worker.terminate(); resolve(p); }
-    };
+    const timeout = setTimeout(() => { worker.terminate(); reject(new Error('Operation timed out while loading data. Please verify the file and try again.')); }, 180000);
+    worker.onmessage = (e) => { const { type, payload:p } = e.data || {}; if (type === 'log') log(p.message); if (type === 'error') { clearTimeout(timeout); worker.terminate(); reject(new Error(p.message)); } if (type === 'success') { clearTimeout(timeout); worker.terminate(); resolve(p); } };
     worker.onerror = (e) => { clearTimeout(timeout); worker.terminate(); reject(new Error(e.message || 'Worker failure')); };
     worker.postMessage(payload);
   });
 
-  const fillFields = () => {
-    const leftFields = state.leftInfo?.fields || [];
-    const rightFields = state.rightInfo?.fields || [];
-    const fill = (sel, arr) => {
-      sel.innerHTML = '';
-      arr.forEach((f) => {
-        const o = document.createElement('option'); o.value = f; o.textContent = f; sel.appendChild(o);
-      });
-    };
-    [leftKey, leftDedup, leftSort].forEach((s) => fill(s, leftFields));
-    [rightKey, rightDedup, rightSort].forEach((s) => fill(s, rightFields));
+  const setStep = (n) => {
+    state.step = n; pages.forEach((p,i)=>p.classList.toggle('hidden', i !== n-1));
+    breadcrumbButtons.forEach((b)=>{ const s = Number(b.dataset.step); b.classList.toggle('current', s===n); if (s>state.max) b.setAttribute('disabled','disabled'); else b.removeAttribute('disabled');});
   };
 
   const renderCsvPreview = (side, info) => {
-    const panel = side === 'left' ? leftCsvPanel : rightCsvPanel;
-    const delimiter = side === 'left' ? leftCsvDelimiter : rightCsvDelimiter;
-    const header = side === 'left' ? leftCsvHeader : rightCsvHeader;
-    const preview = side === 'left' ? leftCsvPreview : rightCsvPreview;
-    if (!info?.csv) {
-      panel.classList.add('hidden');
-      preview.innerHTML = '';
-      return;
-    }
-    panel.classList.remove('hidden');
-    delimiter.value = info.csv.delimiter || ',';
-    header.checked = info.csv.hasHeader !== false;
-    const cols = info.csv.header || [];
-    const rows = info.csv.previewRows || [];
-    const headerHtml = cols.map((c) => `<th>${c}</th>`).join('');
-    const rowsHtml = rows.map((row) => `<tr>${cols.map((c) => `<td>${row[c] ?? ''}</td>`).join('')}</tr>`).join('');
-    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.</p><div style="overflow:auto"><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml || '<tr><td colspan="99">No rows parsed</td></tr>'}</tbody></table></div>`;
+    const panel = byId(`${side}CsvPanel`), preview = byId(`${side}CsvPreview`), d = byId(`${side}CsvDelimiter`), h = byId(`${side}CsvHeader`);
+    if (!info?.csv) { panel.classList.add('hidden'); preview.innerHTML = ''; return; }
+    panel.classList.remove('hidden'); d.value = info.csv.delimiter || ','; h.checked = info.csv.hasHeader !== false;
+    const cols = info.csv.header || []; const rows = info.csv.previewRows || [];
+    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.</p><div style="overflow:auto"><table><thead><tr>${cols.map((c)=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r)=>`<tr>${cols.map((c)=>`<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   };
 
   const checkStep1 = () => {
     const leftGeom = Boolean(state.leftInfo?.hasGeometry);
-    toStep2.disabled = !(state.leftInfo && state.rightInfo && leftGeom);
+    byId('toStep2').disabled = !(state.leftInfo && state.rightInfo && leftGeom);
     let html = '';
-    if (state.rightInfo?.hasGeometry) {
-      html += '<p><strong>RIGHT contains geometry.</strong> RIGHT geometry will be ignored.</p>';
-      html += '<button type="button" id="swapBtn" class="button-secondary">Swap LEFT and RIGHT</button>';
-    }
-    if (state.leftInfo?.hasGeometry && state.rightInfo?.hasGeometry) {
-      html += '<p class="muted">Only LEFT geometry will be retained in output.</p>';
-    }
-    swapNotice.innerHTML = html;
-    swapNotice.classList.toggle('hidden', !html);
-    const swapBtn = document.getElementById('swapBtn');
+    if (state.rightInfo?.hasGeometry) html += '<p><strong>RIGHT contains geometry.</strong> RIGHT geometry will be ignored.</p><button type="button" id="swapBtn" class="button-secondary">Swap LEFT and RIGHT</button>';
+    if (state.leftInfo?.hasGeometry && state.rightInfo?.hasGeometry) html += '<p class="muted">Only LEFT geometry will be retained in output.</p>';
+    byId('swapNotice').innerHTML = html; byId('swapNotice').classList.toggle('hidden', !html);
+    const swapBtn = byId('swapBtn');
     if (swapBtn) swapBtn.onclick = () => {
-      [state.leftFile, state.rightFile] = [state.rightFile, state.leftFile];
-      [state.leftInfo, state.rightInfo] = [state.rightInfo, state.leftInfo];
-      [state.leftCsvOptions, state.rightCsvOptions] = [state.rightCsvOptions, state.leftCsvOptions];
-      leftStatus.textContent = `Loaded: ${state.leftInfo.label}`;
-      rightStatus.textContent = `Loaded: ${state.rightInfo.label}`;
-      renderCsvPreview('left', state.leftInfo);
-      renderCsvPreview('right', state.rightInfo);
-      checkStep1();
+      [state.leftFile, state.rightFile] = [state.rightFile, state.leftFile]; [state.leftInfo, state.rightInfo] = [state.rightInfo, state.leftInfo]; [state.leftCsvOptions, state.rightCsvOptions] = [state.rightCsvOptions, state.leftCsvOptions];
+      byId('leftStatus').textContent = `Loaded: ${state.leftInfo.label}`; byId('rightStatus').textContent = `Loaded: ${state.rightInfo.label}`;
+      renderCsvPreview('left', state.leftInfo); renderCsvPreview('right', state.rightInfo); checkStep1();
     };
   };
 
   const loadSide = async (side, file) => {
-    if (!file) return;
-    const statusEl = side === 'left' ? leftStatus : rightStatus;
-    statusEl.textContent = 'Loading...';
+    if (!file) return; const statusEl = byId(`${side}Status`); statusEl.textContent = 'Loading...';
     try {
       const csvOptions = side === 'left' ? state.leftCsvOptions : state.rightCsvOptions;
-      const info = await workerCall({ mode: 'inspect', file, side, csvOptions });
-      if (side === 'left') { state.leftFile = file; state.leftInfo = info; }
-      else { state.rightFile = file; state.rightInfo = info; }
+      const info = await workerCall({ mode:'inspect', file, side, csvOptions });
+      if (side === 'left') { state.leftFile = file; state.leftInfo = info; state.leftCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
+      else { state.rightFile = file; state.rightInfo = info; state.rightCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
       statusEl.textContent = `Loaded: ${info.label} (${info.rowCount} rows, ${info.hasGeometry ? 'with' : 'no'} geometry)`;
-      if (side === 'left') {
-        state.leftCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null;
-      } else {
-        state.rightCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null;
-      }
-      renderCsvPreview(side, info);
-      checkStep1();
-    } catch (err) {
-      statusEl.textContent = err.message;
-    }
+      renderCsvPreview(side, info); checkStep1();
+    } catch (err) { statusEl.textContent = err.message; }
   };
 
-  const setupDrop = (drop, input, side) => {
-    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('drag'); });
-    drop.addEventListener('dragleave', () => drop.classList.remove('drag'));
-    drop.addEventListener('drop', (e) => {
-      e.preventDefault(); drop.classList.remove('drag');
-      const [file] = e.dataTransfer.files || [];
-      loadSide(side, file);
+  const setupDrop = (side) => {
+    const drop = byId(`${side}Drop`), input = byId(`${side}Input`);
+    drop.addEventListener('dragover', (e)=>{ e.preventDefault(); drop.classList.add('drag');});
+    drop.addEventListener('dragleave', ()=>drop.classList.remove('drag'));
+    drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.classList.remove('drag'); loadSide(side, (e.dataTransfer.files || [])[0]);});
+    input.addEventListener('change', ()=>loadSide(side, input.files?.[0]));
+    byId(`${side}Browse`).onclick = () => input.click();
+  };
+
+  const columnRow = (side, col, idx) => {
+    const target = col.targetType || 'source';
+    const options = TYPE_OPTIONS.map((t)=>`<option value="${t}" ${t===target?'selected':''}>${t}${t==='source' ? ` (${col.inferredType})` : ''}</option>`).join('');
+    const mixed = col.mixed ? '<span class="warn">mixed values</span>' : '';
+    return `<tr>
+      <td><input type="checkbox" data-side="${side}" data-idx="${idx}" data-k="selected" ${col.selected?'checked':''}></td>
+      <td>${col.sourceName}</td>
+      <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="outputName" value="${col.outputName}"></td>
+      <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select></td>
+      <td>${col.inferredType} ${mixed}</td>
+      <td><select data-side="${side}" data-idx="${idx}" data-k="policy"><option value="string" ${col.policy==='string'?'selected':''}>string</option><option value="coerce" ${col.policy==='coerce'?'selected':''}>coerce</option></select></td>
+      <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="fallback" value="${col.fallback ?? ''}" placeholder="null"></td>
+      <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="format" value="${col.format ?? ''}" placeholder="auto"></td>
+      <td>${col.nonNullCount}/${col.totalCount}</td>
+    </tr>`;
+  };
+
+  const renderReviewTables = () => {
+    const render = (side) => {
+      const rows = state.review[side].map((c, i) => columnRow(side, c, i)).join('');
+      byId(`${side}Columns`).innerHTML = `<table><thead><tr><th>Use</th><th>Source</th><th>Output name</th><th>Type</th><th>Inferred</th><th>Mixed policy</th><th>Fallback</th><th>Date format</th><th>Filled</th></tr></thead><tbody>${rows}</tbody></table>`;
+    };
+    render('left'); render('right');
+    document.querySelectorAll('[data-side][data-idx][data-k]').forEach((el)=>{
+      el.onchange = () => {
+        const side = el.dataset.side; const idx = Number(el.dataset.idx); const k = el.dataset.k;
+        const value = el.type === 'checkbox' ? el.checked : el.value;
+        state.review[side][idx][k] = value;
+        fillKeySelectors();
+        validateReview();
+      };
     });
-    input.addEventListener('change', () => loadSide(side, input.files?.[0]));
   };
 
-  leftBrowse.onclick = () => leftInput.click();
-  rightBrowse.onclick = () => rightInput.click();
-  setupDrop(leftDrop, leftInput, 'left');
-  setupDrop(rightDrop, rightInput, 'right');
-
-  toStep2.onclick = () => {
-    fillFields();
-    state.max = Math.max(state.max, 2);
-    setStep(2);
+  const detectCollisions = () => {
+    const left = state.review.left.filter((c)=>c.selected).map((c)=>c.outputName.trim());
+    const right = state.review.right.filter((c)=>c.selected).map((c)=>c.outputName.trim());
+    const set = new Set(left); return right.filter((n)=>set.has(n));
   };
 
-  document.getElementById('backTo1').onclick = () => setStep(1);
-  document.getElementById('backTo2').onclick = () => setStep(2);
-  document.getElementById('backTo3').onclick = () => setStep(3);
+  const validateReview = () => {
+    const messages = [];
+    const invalidName = [...state.review.left, ...state.review.right].filter((c)=>c.selected && !c.outputName.trim());
+    if (invalidName.length) messages.push('All selected columns must have an output name.');
+    const selectedAll = [...state.review.left.filter((c)=>c.selected), ...state.review.right.filter((c)=>c.selected)];
+    const dupes = selectedAll.map((c)=>c.outputName.trim()).filter((n,i,a)=>n && a.indexOf(n)!==i);
+    if (dupes.length) messages.push(`Duplicate output names: ${Array.from(new Set(dupes)).join(', ')}`);
+    const unresolvedMixed = selectedAll.filter((c)=>c.mixed && !c.policy);
+    if (unresolvedMixed.length) messages.push('Mixed-type columns require a policy.');
+    const dateMissing = selectedAll.filter((c)=>['date','datetime'].includes(c.targetType) && !c.format);
+    if (dateMissing.length) messages.push('Date/datetime columns require a format token or "auto".');
+    const mismatchedKey = byId('leftKey')?.value && byId('rightKey')?.value && (state.review.left.find((c)=>c.sourceName===byId('leftKey').value)?.targetType !== state.review.right.find((c)=>c.sourceName===byId('rightKey').value)?.targetType);
+    if (mismatchedKey) messages.push('Join key types differ between LEFT and RIGHT.');
+    const collisions = detectCollisions();
+    if (collisions.length) {
+      byId('collisionPanel').classList.remove('hidden');
+      byId('collisionPanel').innerHTML = `<div class="warn">Column collisions detected: ${collisions.join(', ')}</div><div class="row"><button type="button" id="suffixBtn" class="button-secondary">Auto suffix RIGHT collisions (_right)</button></div>`;
+      byId('suffixBtn').onclick = () => { state.review.right.forEach((c)=>{ if (c.selected && collisions.includes(c.outputName.trim())) c.outputName = `${c.outputName}_right`; }); renderReviewTables(); validateReview(); };
+      messages.push('Resolve column collisions before continuing.');
+    } else byId('collisionPanel').classList.add('hidden');
+    byId('reviewStatus').innerHTML = messages.length ? `<span class="error">${messages.join(' ')}</span>` : '<span class="muted">Review checks passed.</span>';
+    byId('toStep3').disabled = messages.length > 0;
+  };
 
-  toStep3.onclick = async () => {
-    try {
-      const options = collectOptions();
-      const preview = await workerCall({ mode: 'preview', leftFile: state.leftFile, rightFile: state.rightFile, options });
-      state.preview = preview;
-      previewStats.innerHTML = `<table><tbody>
-      <tr><th>Matched rows</th><td>${preview.matched}</td></tr>
-      <tr><th>Unmatched LEFT</th><td>${preview.unmatchedLeft}</td></tr>
-      <tr><th>Unmatched RIGHT</th><td>${preview.unmatchedRight}</td></tr>
-      <tr><th>Null/empty LEFT keys</th><td>${preview.emptyLeft}</td></tr>
-      <tr><th>Null/empty RIGHT keys</th><td>${preview.emptyRight}</td></tr>
-      <tr><th>LEFT duplicates dropped</th><td>${preview.leftDropped}</td></tr>
-      <tr><th>RIGHT duplicates dropped</th><td>${preview.rightDropped}</td></tr>
-      </tbody></table>`;
-      previewCols.textContent = (preview.sampleColumns || []).join(', ');
-      state.max = Math.max(state.max, 3);
-      setStep(3);
-    } catch (err) {
-      previewStats.textContent = err.message;
-    }
+  const buildInitialReview = () => {
+    const init = (info) => (info.columnProfiles || []).map((p)=>({ selected:true, sourceName:p.name, outputName:p.name, inferredType:p.inferredType || 'string', sourceType:p.inferredType || 'string', targetType:'source', policy:p.mixed ? '' : 'coerce', fallback:'', format:'auto', mixed:p.mixed, nonNullCount:p.nonNullCount, totalCount:p.totalCount }));
+    state.review.left = init(state.leftInfo); state.review.right = init(state.rightInfo); state.review.globalFallback = byId('globalFallback').value || 'null';
+    renderReviewTables(); validateReview();
+  };
+
+  const fillKeySelectors = () => {
+    const fill = (id, arr) => {
+      const el = byId(id); el.innerHTML = '';
+      arr.filter((f) => f.selected).forEach((f) => {
+        const o = document.createElement('option');
+        o.value = f.outputName;
+        o.textContent = `${f.outputName} ← ${f.sourceName}`;
+        el.appendChild(o);
+      });
+    };
+    fill('leftKey', state.review.left); fill('leftDedup', state.review.left); fill('leftSort', state.review.left);
+    fill('rightKey', state.review.right); fill('rightDedup', state.review.right); fill('rightSort', state.review.right);
   };
 
   const collectOptions = () => ({
-    joinType: document.getElementById('joinType').value,
-    leftKey: leftKey.value,
-    rightKey: rightKey.value,
-    leftDedup: leftDedup.value,
-    rightDedup: rightDedup.value,
-    leftSort: leftSort.value,
-    rightSort: rightSort.value,
-    leftSortDir: document.getElementById('leftSortDir').value,
-    rightSortDir: document.getElementById('rightSortDir').value,
-    outputKeys: document.getElementById('outputKeys').value,
-    normalize: {
-      trim: document.getElementById('optTrim').checked,
-      caseInsensitive: document.getElementById('optCase').checked,
-      slugify: document.getElementById('optSlug').checked,
-      stripLeadingZeroes: document.getElementById('optZeroL').checked,
-      stripTrailingZeroes: document.getElementById('optZeroR').checked,
-      removeChars: document.getElementById('optRemove').value,
-      replaceFrom: document.getElementById('optReplaceFrom').value,
-      replaceTo: document.getElementById('optReplaceTo').value
-    }
+    joinType: byId('joinType').value, leftKey: byId('leftKey').value, rightKey: byId('rightKey').value, leftDedup: byId('leftDedup').value, rightDedup: byId('rightDedup').value, leftSort: byId('leftSort').value, rightSort: byId('rightSort').value, leftSortDir: byId('leftSortDir').value, rightSortDir: byId('rightSortDir').value, outputKeys: byId('outputKeys').value,
+    normalize: { trim: byId('optTrim').checked, caseInsensitive: byId('optCase').checked, slugify: byId('optSlug').checked, stripLeadingZeroes: byId('optZeroL').checked, stripTrailingZeroes: byId('optZeroR').checked, removeChars: byId('optRemove').value, replaceFrom: byId('optReplaceFrom').value, replaceTo: byId('optReplaceTo').value },
+    review: state.review
   });
 
-  runConstruct.onclick = () => {
-    state.max = Math.max(state.max, 4);
-    const ext = outFmt.value === 'geopackage' ? 'gpkg' : outFmt.value === 'shpzip' ? 'shp.zip' : 'geoparquet';
-    outName.value = `constructed_${fmtTime()}.${ext}`;
-    setStep(4);
+  byId('toStep2').onclick = () => { state.max = Math.max(state.max,2); buildInitialReview(); fillKeySelectors(); setStep(2); };
+  byId('toStep3').onclick = () => { state.max = Math.max(state.max,3); fillKeySelectors(); setStep(3); };
+  byId('toStep4').onclick = async () => {
+    try { const preview = await workerCall({ mode:'preview', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
+      state.preview = preview; byId('previewStats').innerHTML = `<table><tbody><tr><th>Matched rows</th><td>${preview.matched}</td></tr><tr><th>Unmatched LEFT</th><td>${preview.unmatchedLeft}</td></tr><tr><th>Unmatched RIGHT</th><td>${preview.unmatchedRight}</td></tr><tr><th>Null/empty LEFT keys</th><td>${preview.emptyLeft}</td></tr><tr><th>Null/empty RIGHT keys</th><td>${preview.emptyRight}</td></tr><tr><th>LEFT duplicates dropped</th><td>${preview.leftDropped}</td></tr><tr><th>RIGHT duplicates dropped</th><td>${preview.rightDropped}</td></tr></tbody></table>`; byId('previewCols').textContent = (preview.sampleColumns||[]).join(', '); state.max = Math.max(state.max,4); setStep(4);
+    } catch (err) { byId('previewStats').innerHTML = `<span class="error">${err.message}</span>`; }
   };
 
-  outFmt.onchange = () => runConstruct.click();
+  byId('runConstruct').onclick = () => { state.max = Math.max(state.max,5); const ext = byId('outFmt').value === 'geopackage' ? 'gpkg' : byId('outFmt').value === 'shpzip' ? 'shp.zip' : 'geoparquet'; byId('outName').value = `constructed_${fmtTime()}.${ext}`; setStep(5); };
+  byId('outFmt').onchange = () => byId('runConstruct').click();
 
-  document.getElementById('saveBtn').onclick = async () => {
-    constructStatus.textContent = 'Constructing...';
-    try {
-      const options = collectOptions();
-      const result = await workerCall({ mode: 'construct', leftFile: state.leftFile, rightFile: state.rightFile, options, outputFormat: outFmt.value });
-      const name = outName.value?.trim() || `constructed_${fmtTime()}.${result.extension}`;
-      triggerDownload(new Blob([result.bytes], { type: result.mimeType }), name);
-      constructStatus.textContent = `Saved ${name}`;
-    } catch (err) {
-      constructStatus.textContent = err.message;
-    }
+  byId('saveBtn').onclick = async () => {
+    byId('constructStatus').textContent = 'Constructing...';
+    try { const result = await workerCall({ mode:'construct', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), outputFormat:byId('outFmt').value, csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
+      const name = byId('outName').value?.trim() || `constructed_${fmtTime()}.${result.extension}`; triggerDownload(new Blob([result.bytes], { type: result.mimeType }), name); byId('constructStatus').textContent = `Saved ${name}`;
+    } catch (err) { byId('constructStatus').textContent = err.message; }
   };
 
-  breadcrumbButtons.forEach((b) => b.addEventListener('click', () => {
-    const n = Number(b.dataset.step);
-    if (n <= state.max) setStep(n);
-  }));
-
+  ['left','right'].forEach(setupDrop);
+  byId('leftCsvApply').onclick = () => { state.leftCsvOptions = { delimiter: byId('leftCsvDelimiter').value, hasHeader: byId('leftCsvHeader').checked }; loadSide('left', state.leftFile); state.review.left = []; };
+  byId('rightCsvApply').onclick = () => { state.rightCsvOptions = { delimiter: byId('rightCsvDelimiter').value, hasHeader: byId('rightCsvHeader').checked }; loadSide('right', state.rightFile); state.review.right = []; };
+  byId('backTo1').onclick = () => setStep(1); byId('backTo2').onclick = () => setStep(2); byId('backTo3').onclick = () => setStep(3); byId('backTo4').onclick = () => setStep(4);
+  breadcrumbButtons.forEach((b)=>b.onclick = ()=>{ const s = Number(b.dataset.step); if (s <= state.max) setStep(s); });
   setStep(1);
 }
-  leftCsvApply.onclick = () => {
-    state.leftCsvOptions = { delimiter: leftCsvDelimiter.value, hasHeader: leftCsvHeader.checked };
-    loadSide('left', state.leftFile);
-  };
-
-  rightCsvApply.onclick = () => {
-    state.rightCsvOptions = { delimiter: rightCsvDelimiter.value, hasHeader: rightCsvHeader.checked };
-    loadSide('right', state.rightFile);
-  };

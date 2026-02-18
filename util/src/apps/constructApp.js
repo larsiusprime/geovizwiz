@@ -208,8 +208,15 @@ export default function startConstructApp() {
 
   const renderBuildPreview = (build) => {
     const by = byId('buildPreview');
-    const rows = (build?.columns || []).map((c) => `<tr><td>${c.name}</td><td>${c.inferredType}</td><td>${c.nonNullCount}</td><td>${c.uniqueCount}</td></tr>`).join('');
-    by.innerHTML = `<div class="muted" style="margin-bottom:.5rem">Constructed rows: ${build.joinedRows} | Exportable features (Polygon/MultiPolygon): ${build.featureRows} | Geometry dropped: ${build.droppedGeometryRows}</div>${rows ? `<table><thead><tr><th>Column</th><th>Type</th><th>Non-null</th><th>Unique</th></tr></thead><tbody>${rows}</tbody></table>` : '<span class="error">No output columns detected.</span>'}`;
+    const exportRows = (build?.columns || []).map((c) => `<tr><td>${c.name}</td><td>${c.inferredType}</td><td>${c.nonNullCount}</td><td>${c.uniqueCount}</td></tr>`).join('');
+    const joinedRows = (build?.joinedColumns || []).map((c) => `<tr><td>${c.name}</td><td>${c.inferredType}</td><td>${c.nonNullCount}</td><td>${c.uniqueCount}</td></tr>`).join('');
+    const exportTable = exportRows
+      ? `<h4 style="margin:.5rem 0">Exportable feature columns</h4><table><thead><tr><th>Column</th><th>Type</th><th>Non-null</th><th>Unique</th></tr></thead><tbody>${exportRows}</tbody></table>`
+      : '<span class="error">No exportable feature columns detected.</span>';
+    const joinedTable = joinedRows
+      ? `<h4 style="margin:1rem 0 .5rem">Joined rows (before geometry filtering)</h4><table><thead><tr><th>Column</th><th>Type</th><th>Non-null</th><th>Unique</th></tr></thead><tbody>${joinedRows}</tbody></table>`
+      : '<span class="muted">No joined-row columns available.</span>';
+    by.innerHTML = `<div class="muted" style="margin-bottom:.5rem">Constructed rows: ${build.joinedRows} | Exportable features (Polygon/MultiPolygon): ${build.featureRows} | Geometry dropped: ${build.droppedGeometryRows}</div>${exportTable}${joinedTable}`;
   };
 
   byId('toStep2').onclick = () => { state.max = Math.max(state.max,2); buildInitialReview(); fillKeySelectors(); setStep(2); };
@@ -245,7 +252,10 @@ export default function startConstructApp() {
     try {
       const build = await workerCall({ mode:'build', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
       renderBuildPreview(build);
-      byId('constructStatus').textContent = `Build complete. Exportable features: ${build.featureRows}.`;
+      const status = build.featureRows === 0
+        ? `Build complete. Exportable features: 0. Check Build preview + Log for geometry diagnostics.`
+        : `Build complete. Exportable features: ${build.featureRows}.`;
+      byId('constructStatus').textContent = status;
       state.built = true;
       byId('saveBtn').disabled = false;
     } catch (err) {

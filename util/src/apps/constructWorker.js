@@ -199,22 +199,49 @@ const joinRows = (leftRows, rightRows, options) => {
   rightRows.forEach((r)=>{ const nk = normalizeKey(r[options.rightKey], options.normalize); if (!nk) { emptyRight += 1; return; } rightMap.set(nk,r); });
   const keys = new Set(); if (options.joinType === 'left') leftMap.forEach((_,k)=>keys.add(k)); else if (options.joinType === 'right') rightMap.forEach((_,k)=>keys.add(k)); else leftMap.forEach((_,k)=>{ if (rightMap.has(k)) keys.add(k); });
   const rows = []; let matched=0, unmatchedLeft=0, unmatchedRight=0;
-  keys.forEach((k)=>{ const l=leftMap.get(k); const r=rightMap.get(k); if(l&&r) matched += 1; else if(l&&!r) unmatchedLeft += 1; else if(!l&&r) unmatchedRight += 1; const out={ ...(l||{}), ...(r||{}) }; if (options.outputKeys==='normalized' || options.outputKeys==='all') out.__normalized_key = k; if (options.outputKeys==='all') { out.__left_key=l?.[options.leftKey]??null; out.__right_key=r?.[options.rightKey]??null; } rows.push(out); });
-  return { rows, matched, unmatchedLeft, unmatchedRight, emptyLeft, emptyRight };
+  const diagnostics = { joinedKeys: 0, leftGeomRows: 0, rightGeomRows: 0, outGeomRows: 0, missingGeomRows: 0, likelyGeomOverwriteRows: 0, sampleOutGeomTypes: [] };
+  const sampleTypes = new Set();
+  keys.forEach((k)=>{
+    const l=leftMap.get(k); const r=rightMap.get(k);
+    if(l&&r) matched += 1; else if(l&&!r) unmatchedLeft += 1; else if(!l&&r) unmatchedRight += 1;
+    const lGeom = l?.__geometry || null;
+    const rGeom = r?.__geometry || null;
+    if (lGeom) diagnostics.leftGeomRows += 1;
+    if (rGeom) diagnostics.rightGeomRows += 1;
+    const out={ ...(l||{}), ...(r||{}) };
+    if (options.outputKeys==='normalized' || options.outputKeys==='all') out.__normalized_key = k;
+    if (options.outputKeys==='all') { out.__left_key=l?.[options.leftKey]??null; out.__right_key=r?.[options.rightKey]??null; }
+    const outGeom = out.__geometry || null;
+    if (outGeom) {
+      diagnostics.outGeomRows += 1;
+      if (sampleTypes.size < 6 && outGeom.type) sampleTypes.add(outGeom.type);
+    } else {
+      diagnostics.missingGeomRows += 1;
+      if (lGeom && !rGeom) diagnostics.likelyGeomOverwriteRows += 1;
+    }
+    diagnostics.joinedKeys += 1;
+    rows.push(out);
+  });
+  diagnostics.sampleOutGeomTypes = Array.from(sampleTypes);
+  return { rows, matched, unmatchedLeft, unmatchedRight, emptyLeft, emptyRight, diagnostics };
 };
 
 const buildFeatureCollection = (rows) => ({ type:'FeatureCollection', features: rows.filter((r)=>r.__geometry && ['Polygon','MultiPolygon'].includes(r.__geometry.type)).map((r)=>({ type:'Feature', geometry:r.__geometry, properties:Object.fromEntries(Object.entries(r).filter(([k])=>!k.startsWith('__'))) })) });
 
 const buildConstructPreview = (rows) => {
   const featureRows = rows.filter((r) => r.__geometry && ['Polygon', 'MultiPolygon'].includes(r.__geometry.type));
-  const propertyRows = featureRows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('__'))));
-  const fields = Array.from(new Set(propertyRows.flatMap((r) => Object.keys(r))));
-  const columns = buildColumnProfiles(propertyRows, fields);
+  const allPropertyRows = rows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('__'))));
+  const exportPropertyRows = featureRows.map((r) => Object.fromEntries(Object.entries(r).filter(([k]) => !k.startsWith('__'))));
+  const allFields = Array.from(new Set(allPropertyRows.flatMap((r) => Object.keys(r))));
+  const exportFields = Array.from(new Set(exportPropertyRows.flatMap((r) => Object.keys(r))));
+  const columns = buildColumnProfiles(exportPropertyRows, exportFields);
+  const joinedColumns = buildColumnProfiles(allPropertyRows, allFields);
   return {
     joinedRows: rows.length,
     featureRows: featureRows.length,
     droppedGeometryRows: rows.length - featureRows.length,
-    columns
+    columns,
+    joinedColumns
   };
 };
 
@@ -238,6 +265,10 @@ self.onmessage = async (event) => {
     const rightDedup = dedup(rightReview.rows, options.rightDedup || options.rightKey, options.rightSort || options.rightKey, options.rightSortDir || 'asc');
     const joined = joinRows(leftDedup.kept, rightDedup.kept, options);
 
+    send('log', { message: `[Construct debug] rows: leftRaw=${left.records.length}, rightRaw=${right.records.length}, leftAfterType=${leftReview.rows.length}, rightAfterType=${rightReview.rows.length}, leftAfterDedup=${leftDedup.kept.length}, rightAfterDedup=${rightDedup.kept.length}, joined=${joined.rows.length}` });
+    send('log', { message: `[Construct debug] geometry: leftGeomRows=${joined.diagnostics.leftGeomRows}, rightGeomRows=${joined.diagnostics.rightGeomRows}, outGeomRows=${joined.diagnostics.outGeomRows}, missingGeomRows=${joined.diagnostics.missingGeomRows}, likelyGeomOverwriteRows=${joined.diagnostics.likelyGeomOverwriteRows}, outGeomTypes=${joined.diagnostics.sampleOutGeomTypes.join(', ') || 'none'}` });
+    send('log', { message: `[Construct debug] selected columns: left=${leftReview.fields.length} (${leftReview.fields.slice(0,8).join(', ') || 'none'}${leftReview.fields.length > 8 ? ', …' : ''}), right=${rightReview.fields.length} (${rightReview.fields.slice(0,8).join(', ') || 'none'}${rightReview.fields.length > 8 ? ', …' : ''})` });
+
     if (mode === 'preview') {
       send('success', { matched:joined.matched, unmatchedLeft:joined.unmatchedLeft, unmatchedRight:joined.unmatchedRight, emptyLeft:joined.emptyLeft, emptyRight:joined.emptyRight, leftDropped:leftDedup.dropped, rightDropped:rightDedup.dropped, sampleColumns:Object.keys(joined.rows[0] || {}).filter((k)=>!k.startsWith('__')).slice(0,20), leftTypeErrors:leftReview.errors.length, rightTypeErrors:rightReview.errors.length });
       return;
@@ -246,6 +277,9 @@ self.onmessage = async (event) => {
     if (mode === 'build') {
       const build = buildConstructPreview(joined.rows);
       send('log', { message: `Constructed ${build.featureRows} features.` });
+      if (build.featureRows === 0) {
+        send('log', { message: `[Construct debug] zero-feature build: joinedColumns=${build.joinedColumns.length}, exportColumns=${build.columns.length}, likelyGeomOverwriteRows=${joined.diagnostics.likelyGeomOverwriteRows}` });
+      }
       send('success', build);
       return;
     }

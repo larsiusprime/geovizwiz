@@ -39,13 +39,9 @@ export default function startConstructApp() {
       custom.classList.remove('hidden');
       custom.value = info.csv.delimiter || '';
     }
-    const allCols = info.csv.header || [];
-    const cols = allCols.slice(0, 20);
+    const cols = info.csv.header || [];
     const rows = (info.csv.previewRows || []).slice(0, 5);
-    const colNotice = allCols.length > cols.length
-      ? ` Showing first ${cols.length} of ${allCols.length} columns.`
-      : '';
-    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.${colNotice}</p><div style="overflow:auto"><table style="table-layout:auto"><thead><tr>${cols.map((c)=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r)=>`<tr>${cols.map((c)=>`<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.</p><div style="overflow:auto"><table style="table-layout:auto;width:auto"><thead><tr>${cols.map((c)=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r)=>`<tr>${cols.map((c)=>`<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   };
 
   const checkStep1 = () => {
@@ -194,7 +190,7 @@ export default function startConstructApp() {
     if (mismatchedKey) messages.push('Join key types differ between LEFT and RIGHT.');
     // Collision validation intentionally deferred until Step 3 after join keys are selected.
     byId('reviewStatus').innerHTML = messages.length ? `<span class="error">${messages.join(' ')}</span>` : '<span class="muted">Review checks passed.</span>';
-    byId('toStep3').disabled = messages.length > 0;
+    return { ok: messages.length === 0, messages };
   };
 
   const validateConfigureCollisions = () => {
@@ -250,6 +246,74 @@ export default function startConstructApp() {
     byId('rightDedupTitle').textContent = `RIGHT (${state.rightFile?.name || 'not loaded'})`;
   };
 
+  const slugifyLocal = (v) => String(v).normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+  const normalizeKeyLocal = (value, n) => {
+    if (value == null) return '';
+    let v = String(value);
+    if (n.trim) v = v.trim();
+    if (n.caseInsensitive) v = v.toLowerCase();
+    if (n.slugify) v = slugifyLocal(v);
+    if (n.stripLeadingZeroes) v = v.replace(/^0+/, '');
+    if (n.stripTrailingZeroes) v = v.replace(/0+$/, '');
+    return v;
+  };
+
+  const getNormOptions = () => ({
+    trim: byId('optTrim').checked, caseInsensitive: byId('optCase').checked,
+    slugify: byId('optSlug').checked, stripLeadingZeroes: byId('optZeroL').checked,
+    stripTrailingZeroes: byId('optZeroR').checked
+  });
+
+  const pickExampleKey = () => {
+    const lk = byId('leftKey').value, rk = byId('rightKey').value;
+    const keys = new Set();
+    if (lk && state.leftInfo?.records) state.leftInfo.records.forEach((r) => { const v = r[lk]; if (v != null && String(v).trim()) keys.add(String(v)); });
+    if (rk && state.rightInfo?.records) state.rightInfo.records.forEach((r) => { const v = r[rk]; if (v != null && String(v).trim()) keys.add(String(v)); });
+    let best = null, bestScore = 0;
+    for (const k of keys) {
+      let score = 0;
+      if (/\s/.test(k)) score++;
+      if (/[A-Z]/.test(k)) score++;
+      if (/[^\w]/.test(k)) score++;
+      if (/^0\d/.test(k)) score++;
+      if (/\d0+$/.test(k)) score++;
+      if (score > bestScore) { bestScore = score; best = k; }
+    }
+    if (!best) best = keys.values().next().value || null;
+    return best;
+  };
+
+  const updateNormExample = () => {
+    const el = byId('normExample');
+    const opts = getNormOptions();
+    const anyChecked = opts.trim || opts.caseInsensitive || opts.slugify || opts.stripLeadingZeroes || opts.stripTrailingZeroes;
+    if (!anyChecked) { el.innerHTML = ''; return; }
+    const key = pickExampleKey();
+    if (!key) { el.innerHTML = ''; return; }
+    const after = normalizeKeyLocal(key, opts);
+    if (key === after) { el.innerHTML = ''; return; }
+    el.innerHTML = `<strong>Example:</strong><br>Before: <code>${key}</code><br>After\u2003: <code>${after}</code>`;
+  };
+
+  const updateDedupVisibility = () => {
+    const lk = byId('leftKey').value, rk = byId('rightKey').value;
+    const opts = getNormOptions();
+    let leftDups = 0, rightDups = 0;
+    if (lk && state.leftInfo?.records) {
+      const seen = new Set();
+      state.leftInfo.records.forEach((r) => { const nk = normalizeKeyLocal(r[lk], opts); if (!nk) return; if (seen.has(nk)) leftDups++; else seen.add(nk); });
+    }
+    if (rk && state.rightInfo?.records) {
+      const seen = new Set();
+      state.rightInfo.records.forEach((r) => { const nk = normalizeKeyLocal(r[rk], opts); if (!nk) return; if (seen.has(nk)) rightDups++; else seen.add(nk); });
+    }
+    const panel = byId('dedupPanel');
+    const hasDups = leftDups > 0 || rightDups > 0;
+    panel.classList.toggle('hidden', !hasDups);
+  };
+
+  const updateStep3Derived = () => { updateNormExample(); updateDedupVisibility(); };
+
   const collectOptions = () => ({
     joinType: byId('joinType').value, leftKey: byId('leftKey').value, rightKey: byId('rightKey').value, leftDedup: byId('leftKey').value, rightDedup: byId('rightKey').value, leftSort: byId('leftSort').value, rightSort: byId('rightSort').value, leftSortDir: byId('leftSortDir').value, rightSortDir: byId('rightSortDir').value, outputKeys: byId('outputKeys').value,
     normalize: { trim: byId('optTrim').checked, caseInsensitive: byId('optCase').checked, slugify: byId('optSlug').checked, stripLeadingZeroes: byId('optZeroL').checked, stripTrailingZeroes: byId('optZeroR').checked },
@@ -287,9 +351,12 @@ export default function startConstructApp() {
       updateReviewPhaseUI();
       return;
     }
+    const rv = validateReview();
+    if (!rv.ok) return;
     state.max = Math.max(state.max,3);
     fillKeySelectors();
     validateConfigureCollisions();
+    updateStep3Derived();
     setStep(3);
   };
   byId('toStep4').onclick = async () => {
@@ -376,6 +443,9 @@ export default function startConstructApp() {
   byId('leftCsvApply').onclick = () => { state.leftCsvOptions = { delimiter: readDelimiter('left'), hasHeader: byId('leftCsvHeader').checked }; loadSide('left', state.leftFile); state.review.left = []; };
   byId('rightCsvApply').onclick = () => { state.rightCsvOptions = { delimiter: readDelimiter('right'), hasHeader: byId('rightCsvHeader').checked }; loadSide('right', state.rightFile); state.review.right = []; };
   byId('joinType').onchange = () => { byId('joinTypeHelp').textContent = joinHelp[byId('joinType').value] || ''; };
+  byId('leftKey').onchange = () => { byId('leftDedupKey').textContent = byId('leftKey').value || '(choose key)'; updateStep3Derived(); };
+  byId('rightKey').onchange = () => { byId('rightDedupKey').textContent = byId('rightKey').value || '(choose key)'; updateStep3Derived(); };
+  ['optTrim','optCase','optSlug','optZeroL','optZeroR'].forEach((id) => { byId(id).onchange = () => updateStep3Derived(); });
   byId('backTo1').onclick = () => {
     if (state.reviewPhase === 'right') {
       state.reviewPhase = 'left';

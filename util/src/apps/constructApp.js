@@ -8,7 +8,7 @@ export default function startConstructApp() {
   const byId = (id) => document.getElementById(id);
   const pages = [1,2,3,4,5].map((n)=>byId(`page${n}`));
   const breadcrumbButtons = Array.from(document.querySelectorAll('.breadcrumb'));
-  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[]}, preview:null, built:false, exportCache:null };
+  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[]}, preview:null, built:false, exportCache:null, loading:{ left:null, right:null }, reviewPhase:'left' };
 
   const logEl = byId('log');
   const log = (msg) => { logEl.textContent += `${msg}\n`; logEl.scrollTop = logEl.scrollHeight; };
@@ -28,11 +28,20 @@ export default function startConstructApp() {
 
   const renderCsvPreview = (side, info) => {
     const panel = byId(`${side}CsvPanel`), preview = byId(`${side}CsvPreview`), d = byId(`${side}CsvDelimiter`), h = byId(`${side}CsvHeader`);
+    const custom = byId(`${side}CsvCustomDelimiter`);
     if (!info?.csv) { panel.classList.add('hidden'); preview.innerHTML = ''; return; }
     panel.classList.remove('hidden'); d.value = info.csv.delimiter || ','; h.checked = info.csv.hasHeader !== false;
+    if ([',', ';', '\t', '|'].includes(d.value)) {
+      custom.classList.add('hidden');
+      custom.value = '';
+    } else {
+      d.value = 'custom';
+      custom.classList.remove('hidden');
+      custom.value = info.csv.delimiter || '';
+    }
     const allCols = info.csv.header || [];
     const cols = allCols.slice(0, 20);
-    const rows = info.csv.previewRows || [];
+    const rows = (info.csv.previewRows || []).slice(0, 5);
     const colNotice = allCols.length > cols.length
       ? ` Showing first ${cols.length} of ${allCols.length} columns.`
       : '';
@@ -54,16 +63,56 @@ export default function startConstructApp() {
     };
   };
 
+  const cancelLoad = (side) => {
+    const active = state.loading[side];
+    if (active?.worker) {
+      active.worker.terminate();
+      state.loading[side] = null;
+      byId(`${side}Status`).textContent = 'Load canceled.';
+      byId(`${side}Cancel`).classList.add('hidden');
+    }
+  };
+
   const loadSide = async (side, file) => {
-    if (!file) return; const statusEl = byId(`${side}Status`); statusEl.textContent = 'Loading...';
-    try {
-      const csvOptions = side === 'left' ? state.leftCsvOptions : state.rightCsvOptions;
-      const info = await workerCall({ mode:'inspect', file, side, csvOptions });
-      if (side === 'left') { state.leftFile = file; state.leftInfo = info; state.leftCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
-      else { state.rightFile = file; state.rightInfo = info; state.rightCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
-      statusEl.textContent = `Loaded: ${info.label} (${info.rowCount} rows, ${info.hasGeometry ? 'with' : 'no'} geometry)`;
-      renderCsvPreview(side, info); checkStep1();
-    } catch (err) { statusEl.textContent = err.message; }
+    if (!file) return;
+    cancelLoad(side);
+    const statusEl = byId(`${side}Status`);
+    const cancelBtn = byId(`${side}Cancel`);
+    statusEl.innerHTML = '<span class="spinner">⟳</span> Loading...';
+    cancelBtn.classList.remove('hidden');
+    const worker = new Worker(new URL('./constructWorker.js', import.meta.url));
+    state.loading[side] = { worker };
+    const csvOptions = side === 'left' ? state.leftCsvOptions : state.rightCsvOptions;
+    worker.onmessage = (e) => {
+      const { type, payload:p } = e.data || {};
+      if (type === 'log') log(p.message);
+      if (type === 'error') {
+        if (state.loading[side]?.worker !== worker) return;
+        worker.terminate();
+        state.loading[side] = null;
+        cancelBtn.classList.add('hidden');
+        statusEl.textContent = p.message;
+      }
+      if (type === 'success') {
+        if (state.loading[side]?.worker !== worker) return;
+        worker.terminate();
+        state.loading[side] = null;
+        cancelBtn.classList.add('hidden');
+        const info = p;
+        if (side === 'left') { state.leftFile = file; state.leftInfo = info; state.leftCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
+        else { state.rightFile = file; state.rightInfo = info; state.rightCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
+        statusEl.textContent = `Loaded: ${info.label} (${info.rowCount} rows, ${info.hasGeometry ? 'with' : 'no'} geometry)`;
+        renderCsvPreview(side, info); checkStep1();
+      }
+    };
+    worker.onerror = (e) => {
+      if (state.loading[side]?.worker !== worker) return;
+      worker.terminate();
+      state.loading[side] = null;
+      cancelBtn.classList.add('hidden');
+      statusEl.textContent = e.message || 'Worker failure';
+    };
+    worker.postMessage({ mode:'inspect', file, side, csvOptions });
   };
 
   const setupDrop = (side) => {
@@ -73,6 +122,7 @@ export default function startConstructApp() {
     drop.addEventListener('drop', (e)=>{ e.preventDefault(); drop.classList.remove('drag'); loadSide(side, (e.dataTransfer.files || [])[0]);});
     input.addEventListener('change', ()=>loadSide(side, input.files?.[0]));
     byId(`${side}Browse`).onclick = () => input.click();
+    byId(`${side}Cancel`).onclick = () => cancelLoad(side);
   };
 
   const columnRow = (side, col, idx, showDateFormat) => {
@@ -88,7 +138,6 @@ export default function startConstructApp() {
       <td class="source-cell">${col.sourceName}</td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="outputName" value="${col.outputName}"></td>
       <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select> ${mixed}</td>
-      <td><select data-side="${side}" data-idx="${idx}" data-k="policy"><option value="string" ${col.policy==='string'?'selected':''}>string</option><option value="coerce" ${col.policy==='coerce'?'selected':''}>coerce</option></select></td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="fallback" value="${col.fallback ?? ''}" placeholder="null"></td>
       ${showDateFormat ? `<td>${showFormatInput ? `<input type="text" data-side="${side}" data-idx="${idx}" data-k="format" value="${col.format ?? ''}" placeholder="auto">` : ''}</td>` : ''}
       <td>${col.nonNullCount}</td>
@@ -102,7 +151,7 @@ export default function startConstructApp() {
       const rows = cols.map((c, i) => columnRow(side, c, i, showDateFormat)).join('');
       const total = side === 'left' ? (state.leftInfo?.rowCount ?? 0) : (state.rightInfo?.rowCount ?? 0);
       const allSelected = cols.length > 0 && cols.every((c) => c.selected);
-      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th><label style="display:flex;align-items:center;gap:.35rem;"><input type="checkbox" data-side-toggle="${side}" ${allSelected ? 'checked' : ''}> <span>Use</span></label></th><th class="source-cell">Field</th><th>Output name</th><th>Type</th><th>Mixed policy</th><th>Default</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
+      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th><label style="display:flex;align-items:center;gap:.35rem;"><input type="checkbox" data-side-toggle="${side}" ${allSelected ? 'checked' : ''}> <span>Use</span></label></th><th class="source-cell">Field</th><th>Output name</th><th>Type</th><th>Default</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
     };
     render('left'); render('right');
     document.querySelectorAll('[data-side-toggle]').forEach((el) => {
@@ -125,16 +174,13 @@ export default function startConstructApp() {
     });
   };
 
-  const setupReviewTabs = () => {
-    const tabs = Array.from(document.querySelectorAll('#reviewTabs .review-tab'));
-    tabs.forEach((tab) => {
-      tab.onclick = () => {
-        const side = tab.dataset.side;
-        tabs.forEach((t) => t.classList.toggle('active', t === tab));
-        byId('leftColumns').classList.toggle('hidden', side !== 'left');
-        byId('rightColumns').classList.toggle('hidden', side !== 'right');
-      };
-    });
+  const updateReviewPhaseUI = () => {
+    const right = state.reviewPhase === 'right';
+    byId('leftColumns').classList.toggle('hidden', right);
+    byId('rightColumns').classList.toggle('hidden', !right);
+    byId('reviewPhaseLabel').textContent = right ? 'Reviewing RIGHT columns.' : 'Reviewing LEFT columns.';
+    byId('toStep3').textContent = right ? 'Continue to configure' : 'Continue to RIGHT columns';
+    byId('backTo1').textContent = right ? 'Back to LEFT columns' : 'Back to Step 1';
   };
 
   const validateReview = () => {
@@ -142,8 +188,6 @@ export default function startConstructApp() {
     const invalidName = [...state.review.left, ...state.review.right].filter((c)=>c.selected && !c.outputName.trim());
     if (invalidName.length) messages.push('All selected columns must have an output name.');
     const selectedAll = [...state.review.left.filter((c)=>c.selected), ...state.review.right.filter((c)=>c.selected)];
-    const unresolvedMixed = selectedAll.filter((c)=>c.mixed && !c.policy);
-    if (unresolvedMixed.length) messages.push('Mixed-type columns require a policy.');
     const dateMissing = selectedAll.filter((c)=>['date','datetime'].includes(resolvedType(c)) && !c.format);
     if (dateMissing.length) messages.push('Date/datetime columns require a format token or "auto".');
     const mismatchedKey = byId('leftKey')?.value && byId('rightKey')?.value && (state.review.left.find((c)=>c.sourceName===byId('leftKey').value)?.targetType !== state.review.right.find((c)=>c.sourceName===byId('rightKey').value)?.targetType);
@@ -179,8 +223,10 @@ export default function startConstructApp() {
   };
 
   const buildInitialReview = () => {
-    const init = (info) => (info.columnProfiles || []).map((p)=>({ selected:true, sourceName:p.name, outputName:p.name, inferredType:p.inferredType || 'string', sourceType:p.inferredType || 'string', targetType:'source', policy:'string', fallback:'', format:'auto', mixed:p.mixed, nonNullCount:p.nonNullCount, totalCount:p.totalCount }));
+    const init = (info) => (info.columnProfiles || []).map((p)=>({ selected:true, sourceName:p.name, outputName:p.name, inferredType:p.inferredType || 'string', sourceType:p.inferredType || 'string', targetType:'source', fallback:'', format:'auto', mixed:p.mixed, nonNullCount:p.nonNullCount, totalCount:p.totalCount }));
     state.review.left = init(state.leftInfo); state.review.right = init(state.rightInfo);
+    state.reviewPhase = 'left';
+    updateReviewPhaseUI();
     renderReviewTables(); validateReview();
   };
 
@@ -190,19 +236,27 @@ export default function startConstructApp() {
       arr.filter((f) => f.selected).forEach((f) => {
         const o = document.createElement('option');
         o.value = f.outputName;
-        o.textContent = `${f.outputName} ← ${f.sourceName}`;
+        o.textContent = f.outputName === f.sourceName ? f.outputName : `${f.outputName} ← ${f.sourceName}`;
         el.appendChild(o);
       });
     };
-    fill('leftKey', state.review.left); fill('leftDedup', state.review.left); fill('leftSort', state.review.left);
-    fill('rightKey', state.review.right); fill('rightDedup', state.review.right); fill('rightSort', state.review.right);
+    fill('leftKey', state.review.left); fill('leftSort', state.review.left);
+    fill('rightKey', state.review.right); fill('rightSort', state.review.right);
+    const lk = byId('leftKey').value;
+    const rk = byId('rightKey').value;
+    byId('leftDedupKey').textContent = lk || '(choose key)';
+    byId('rightDedupKey').textContent = rk || '(choose key)';
+    byId('leftDedupTitle').textContent = `LEFT (${state.leftFile?.name || 'not loaded'})`;
+    byId('rightDedupTitle').textContent = `RIGHT (${state.rightFile?.name || 'not loaded'})`;
   };
 
   const collectOptions = () => ({
-    joinType: byId('joinType').value, leftKey: byId('leftKey').value, rightKey: byId('rightKey').value, leftDedup: byId('leftDedup').value, rightDedup: byId('rightDedup').value, leftSort: byId('leftSort').value, rightSort: byId('rightSort').value, leftSortDir: byId('leftSortDir').value, rightSortDir: byId('rightSortDir').value, outputKeys: byId('outputKeys').value,
-    normalize: { trim: byId('optTrim').checked, caseInsensitive: byId('optCase').checked, slugify: byId('optSlug').checked, stripLeadingZeroes: byId('optZeroL').checked, stripTrailingZeroes: byId('optZeroR').checked, removeChars: byId('optRemove').value, replaceFrom: byId('optReplaceFrom').value, replaceTo: byId('optReplaceTo').value },
+    joinType: byId('joinType').value, leftKey: byId('leftKey').value, rightKey: byId('rightKey').value, leftDedup: byId('leftKey').value, rightDedup: byId('rightKey').value, leftSort: byId('leftSort').value, rightSort: byId('rightSort').value, leftSortDir: byId('leftSortDir').value, rightSortDir: byId('rightSortDir').value, outputKeys: byId('outputKeys').value,
+    normalize: { trim: byId('optTrim').checked, caseInsensitive: byId('optCase').checked, slugify: byId('optSlug').checked, stripLeadingZeroes: byId('optZeroL').checked, stripTrailingZeroes: byId('optZeroR').checked },
     review: state.review
   });
+
+  const joinHelp = { left: 'Keep all LEFT rows', right: 'Keep all RIGHT rows', inner: 'Keep only matching rows' };
 
   const extForFormat = (format) => (format === 'geopackage' ? 'gpkg' : format === 'shpzip' ? 'shp.zip' : 'geoparquet');
 
@@ -227,7 +281,17 @@ export default function startConstructApp() {
   };
 
   byId('toStep2').onclick = () => { state.max = Math.max(state.max,2); buildInitialReview(); fillKeySelectors(); setStep(2); };
-  byId('toStep3').onclick = () => { state.max = Math.max(state.max,3); fillKeySelectors(); validateConfigureCollisions(); setStep(3); };
+  byId('toStep3').onclick = () => {
+    if (state.reviewPhase === 'left') {
+      state.reviewPhase = 'right';
+      updateReviewPhaseUI();
+      return;
+    }
+    state.max = Math.max(state.max,3);
+    fillKeySelectors();
+    validateConfigureCollisions();
+    setStep(3);
+  };
   byId('toStep4').onclick = async () => {
     const cc = validateConfigureCollisions();
     if (!cc.ok) return;
@@ -293,10 +357,31 @@ export default function startConstructApp() {
   };
 
   ['left','right'].forEach(setupDrop);
-  setupReviewTabs();
-  byId('leftCsvApply').onclick = () => { state.leftCsvOptions = { delimiter: byId('leftCsvDelimiter').value, hasHeader: byId('leftCsvHeader').checked }; loadSide('left', state.leftFile); state.review.left = []; };
-  byId('rightCsvApply').onclick = () => { state.rightCsvOptions = { delimiter: byId('rightCsvDelimiter').value, hasHeader: byId('rightCsvHeader').checked }; loadSide('right', state.rightFile); state.review.right = []; };
-  byId('backTo1').onclick = () => setStep(1); byId('backTo2').onclick = () => setStep(2); byId('backTo3').onclick = () => setStep(3); byId('backTo4').onclick = () => setStep(4);
+  const syncCustomDelimiter = (side) => {
+    const sel = byId(`${side}CsvDelimiter`);
+    const custom = byId(`${side}CsvCustomDelimiter`);
+    custom.classList.toggle('hidden', sel.value !== 'custom');
+  };
+  byId('leftCsvDelimiter').onchange = () => syncCustomDelimiter('left');
+  byId('rightCsvDelimiter').onchange = () => syncCustomDelimiter('right');
+  const readDelimiter = (side) => {
+    const v = byId(`${side}CsvDelimiter`).value;
+    if (v !== 'custom') return v;
+    return byId(`${side}CsvCustomDelimiter`).value || ',';
+  };
+  byId('leftCsvApply').onclick = () => { state.leftCsvOptions = { delimiter: readDelimiter('left'), hasHeader: byId('leftCsvHeader').checked }; loadSide('left', state.leftFile); state.review.left = []; };
+  byId('rightCsvApply').onclick = () => { state.rightCsvOptions = { delimiter: readDelimiter('right'), hasHeader: byId('rightCsvHeader').checked }; loadSide('right', state.rightFile); state.review.right = []; };
+  byId('joinType').onchange = () => { byId('joinTypeHelp').textContent = joinHelp[byId('joinType').value] || ''; };
+  byId('backTo1').onclick = () => {
+    if (state.reviewPhase === 'right') {
+      state.reviewPhase = 'left';
+      updateReviewPhaseUI();
+      return;
+    }
+    setStep(1);
+  };
+  byId('backTo2').onclick = () => { state.reviewPhase = 'right'; updateReviewPhaseUI(); setStep(2); };
+  byId('backTo3').onclick = () => setStep(3); byId('backTo4').onclick = () => setStep(4);
   breadcrumbButtons.forEach((b)=>b.onclick = ()=>{ const s = Number(b.dataset.step); if (s <= state.max) setStep(s); });
   setStep(1);
 }

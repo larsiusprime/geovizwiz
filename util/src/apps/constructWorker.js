@@ -176,7 +176,7 @@ const applyReview = (rows, reviewSide) => {
       const raw = row[c.sourceName];
       const res = parseByType(raw, c.targetType, c.format);
       if (res.ok) { next[c.outputName] = res.value; return; }
-      if (c.policy === 'string') { next[c.outputName] = raw == null ? null : String(raw); return; }
+      if (c.targetType === 'source' || c.targetType === 'string') { next[c.outputName] = raw == null ? null : String(raw); return; }
       const fb = parseFallback(c.fallback);
       next[c.outputName] = fb;
       errors.push({ column:c.sourceName, outputName:c.outputName, row: idx, reason: res.reason, raw });

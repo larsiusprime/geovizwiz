@@ -86,3 +86,106 @@ The conversion process will show progress information (with an option to gracefu
 
 When the user clicks "save file", the processed file will be saved to their computer.
 
+CONSTRUCT
+-----
+This app has a multi-stage step by step process, akin to a wizard, where the user uploads a geometry source and a tabular data source, picks a common key, previews match quality, constructs a joined dataset, and downloads the assembled result.
+
+It shares code with the other /util/ apps. Its unique app logic lives in /apps/constructApp.js (and any construct-specific workers). It uses the same styling and workflow paradigm as fetch.html/convert.html.
+
+Step 1: Upload LEFT and RIGHT sources.
+- LEFT is the geometry side and RIGHT is the data side.
+- UI must explicitly label LEFT as geometry and RIGHT as data.
+- If LEFT has no valid geometry, block progress and warn.
+- If RIGHT has geometry, warn that RIGHT-side geometry is ignored and provide a one-click swap-sides button.
+- If both sides have geometry, warn that only LEFT geometry is retained and provide a swap-sides button.
+- File-upload only in this version (no URL fetch).
+
+Supported input formats (for both sides)
+- Geoparquet (.parquet or .geoparquet)
+- ESRI Shapefile (.shp.zip)
+- Geopackage (.gpkg)
+- GeoJSON (.geojson, .json, .geo.json)
+- CSV (.csv)
+
+When a format contains geometry and is used as the RIGHT/data side, geometry is stripped for join purposes.
+
+Layer/geometry rules
+- User must choose one geometry layer when a source contains multiple layers.
+- Mixed geometry types can be loaded, but construct only supports Polygon and MultiPolygon output geometries in this version.
+- Preserve geometry column name, CRS, and metadata where possible.
+
+CSV parsing behavior
+- Auto-detect delimiter, first-row-header=true, UTF-8 by default.
+- Show a preview of parsed rows.
+- Expose CSV parse controls and update preview live so users can correct parsing before proceeding.
+
+Step 2: Configure key matching and deduplication.
+- Single-key equi-join in this version.
+- Join types supported: LEFT, RIGHT, INNER.
+- UI must explain join type behavior (tooltip/help text).
+- Null/empty keys are not joinable and must be counted/reported as non-matches.
+
+Key normalization options (user-configurable)
+- Slugify
+- Case-sensitive or case-insensitive matching
+- Trim whitespace
+- Strip leading and/or trailing zeroes
+- Remove specific characters (user-supplied list)
+- Replace specific characters (user-supplied find/replace)
+
+Deduplication (configurable on BOTH LEFT and RIGHT)
+- User chooses dedup key (join key or another field)
+- User chooses sort method (single-field by default, multi-field supported)
+- Keep-first semantics after sorting; all other duplicates are discarded
+- UI must explain retained/discarded behavior
+- Future iterations may add aggregation-based deduplication
+
+Normalized key output strategy
+- If normalized matching is enabled, let user choose output key strategy:
+  - keep original LEFT key
+  - keep original RIGHT key
+  - keep normalized key
+  - keep all as separate columns
+
+Step 3: Preview match quality and compatibility.
+Before construct can run, show:
+- matched row count
+- unmatched LEFT count
+- unmatched RIGHT count
+- null/empty key counts per side
+- duplicate-key diagnostics/warnings
+- sample output schema/columns
+
+For long-running operations, show progress + cancel, same paradigm as other apps.
+Logs persist during the browser session, but must reset if user returns to an earlier step and changes context.
+
+Step 4: Construct dataset.
+- Execute the join using selected join type and options.
+- Allow cancel during processing.
+- Inline step messaging required; persistent log panel for detailed events.
+
+Step 5: Download output.
+Supported output formats:
+- Zipped ESRI Shapefile (.shp.zip)
+- GeoPackage (.gpkg)
+- GeoParquet (.geoparquet)
+
+Default output filename:
+- <base>_constructed_YYYYMMDD_HHmm.<ext>
+- User can override with a custom name.
+
+Shapefile field-name constraints
+- Preflight field names before export.
+- If constraints are violated, present a field remapping screen:
+  - auto-fix option
+  - manual edit with live validation
+  - proceed only when valid
+- Users may choose to skip remap and accept auto-truncation/coercion with explicit warning.
+
+Format compatibility/coercion behavior
+- Warn when output format forces coercion (for example geometry normalization).
+- Let user go back and choose another output format, or accept coercion and proceed.
+
+Processing model
+- All processing is local/in-browser only.
+

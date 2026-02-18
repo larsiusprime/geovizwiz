@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Construct GIS Dataset</title>
+  <link rel="stylesheet" href="/shared.css" />
+  <style>
+    main { padding: 32px 20px 60px; }
+    .fetch-main { display: flex; flex-direction: column; gap: 1.5rem; }
+    .page-intro h1 { margin: 0 0 0.35rem; font-size: 1.9rem; }
+    .page-intro p { margin: 0; color: var(--muted); max-width: 760px; }
+    section { background: var(--card); border-radius: 16px; border: 1px solid var(--border); padding: 1.2rem 1.4rem; margin-bottom: 1rem; box-shadow: 0 10px 24px rgba(21, 30, 50, 0.05); }
+    .hidden { display: none; }
+    .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
+    .breadcrumb { border: 1px solid var(--border); background: #fff; color: var(--accent); padding: 0.35rem 0.7rem; border-radius: 999px; font-size: 0.9rem; cursor: pointer; }
+    .breadcrumb[disabled] { opacity: 0.5; cursor: not-allowed; }
+    .breadcrumb.current { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pair { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .drop { border:2px dashed var(--border); border-radius:12px; padding:1rem; text-align:center; background:#fff; }
+    .drop.drag { border-color: var(--accent); background:#eef2ff; }
+    .status { margin-top: .5rem; font-weight:600; }
+    .muted { color: var(--muted); }
+    .step-actions { display:flex; gap:.75rem; flex-wrap:wrap; margin-top:1rem; }
+    .preview-panel { margin-top: 1rem; border: 1px solid var(--border); border-radius: 12px; padding: .75rem 1rem; background: #f9fafc; }
+    .log { background:#0d1a2b; color:#dce6ff; border-radius:10px; padding:.75rem; font-family:monospace; max-height:220px; overflow:auto; white-space:pre-wrap; }
+    table { width:100%; border-collapse: collapse; }
+    th,td { border-bottom:1px solid #e5e9f2; padding:.35rem .4rem; text-align:left; font-size:.92rem; }
+    .row { display:flex; align-items:center; gap:.5rem; flex-wrap: wrap; margin:.4rem 0; }
+    select,input[type="text"] { padding:.4rem; border:1px solid var(--border); border-radius:8px; }
+    button { padding: 0.65rem 1rem; background: var(--accent); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; }
+    button[disabled] { opacity:.6; cursor:not-allowed; }
+    .button-secondary { background:#fff; color:var(--accent); border:1px solid var(--border); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="container header-row">
+    <a class="brand" href="/" aria-label="Put It On A Map home">
+      <img src="/images/logo.svg" alt="putitonamap logo"><div>PutItOnAMap.com</div>
+    </a>
+  </div>
+</header>
+<main class="container fetch-main">
+  <div class="page-intro">
+    <h1>Construct</h1>
+    <p>Upload geometry on LEFT and data on RIGHT, define a common key, preview matches, and construct a new joined GIS file locally.</p>
+  </div>
+
+  <nav class="breadcrumbs" id="breadcrumbNav">
+    <button class="breadcrumb current" type="button" data-step="1">Step 1: Upload</button>
+    <button class="breadcrumb" type="button" data-step="2" disabled>Step 2: Configure</button>
+    <button class="breadcrumb" type="button" data-step="3" disabled>Step 3: Preview</button>
+    <button class="breadcrumb" type="button" data-step="4" disabled>Step 4: Construct</button>
+  </nav>
+
+  <section id="page1">
+    <h2>Step 1: Upload LEFT geometry and RIGHT data</h2>
+    <div class="pair">
+      <div>
+        <h3>LEFT (Geometry)</h3>
+        <div class="drop" id="leftDrop">Drop file or <button type="button" id="leftBrowse" class="button-secondary">Browse</button><input id="leftInput" type="file" class="hidden"></div>
+        <div id="leftStatus" class="status muted">No file loaded.</div>
+      </div>
+      <div>
+        <h3>RIGHT (Data)</h3>
+        <div class="drop" id="rightDrop">Drop file or <button type="button" id="rightBrowse" class="button-secondary">Browse</button><input id="rightInput" type="file" class="hidden"></div>
+        <div id="rightStatus" class="status muted">No file loaded.</div>
+      </div>
+    </div>
+    <div id="swapNotice" class="preview-panel hidden"></div>
+    <div class="step-actions"><button id="toStep2" disabled>Continue</button></div>
+  </section>
+
+  <section id="page2" class="hidden">
+    <h2>Step 2: Configure join, normalization, and deduplication</h2>
+    <div class="row"><label>Join type</label><select id="joinType"><option value="left">LEFT</option><option value="right">RIGHT</option><option value="inner">INNER</option></select><span class="muted">LEFT keeps all LEFT rows, RIGHT keeps all RIGHT rows, INNER keeps matching rows only.</span></div>
+    <div class="row"><label>LEFT key</label><select id="leftKey"></select><label>RIGHT key</label><select id="rightKey"></select></div>
+    <div class="preview-panel">
+      <strong>Normalization</strong>
+      <div class="row"><label><input type="checkbox" id="optTrim">Trim whitespace</label><label><input type="checkbox" id="optCase">Case-insensitive</label><label><input type="checkbox" id="optSlug">Slugify</label></div>
+      <div class="row"><label><input type="checkbox" id="optZeroL">Strip leading zeroes</label><label><input type="checkbox" id="optZeroR">Strip trailing zeroes</label></div>
+      <div class="row"><label>Remove chars</label><input type="text" id="optRemove" placeholder="e.g. -_ "></div>
+      <div class="row"><label>Replace chars</label><input type="text" id="optReplaceFrom" placeholder="from"><input type="text" id="optReplaceTo" placeholder="to"></div>
+    </div>
+    <div class="preview-panel">
+      <strong>Deduplicate</strong>
+      <div class="row"><label>LEFT dedup field</label><select id="leftDedup"></select><label>sort by</label><select id="leftSort"></select><select id="leftSortDir"><option value="asc">ASC</option><option value="desc">DESC</option></select></div>
+      <div class="row"><label>RIGHT dedup field</label><select id="rightDedup"></select><label>sort by</label><select id="rightSort"></select><select id="rightSortDir"><option value="asc">ASC</option><option value="desc">DESC</option></select></div>
+    </div>
+    <div class="row"><label>Output keys</label><select id="outputKeys"><option value="left">Original LEFT key</option><option value="right">Original RIGHT key</option><option value="normalized">Normalized key only</option><option value="all">All key variants</option></select></div>
+    <div class="step-actions"><button class="button-secondary" id="backTo1">Back</button><button id="toStep3">Preview matches</button></div>
+  </section>
+
+  <section id="page3" class="hidden">
+    <h2>Step 3: Preview</h2>
+    <div id="previewStats" class="preview-panel"></div>
+    <div class="preview-panel"><h3>Output sample columns</h3><div id="previewCols"></div></div>
+    <div class="step-actions"><button class="button-secondary" id="backTo2">Back</button><button id="runConstruct">Construct</button></div>
+  </section>
+
+  <section id="page4" class="hidden">
+    <h2>Step 4: Construct and download</h2>
+    <div class="row"><label>Output format</label><select id="outFmt"><option value="geoparquet">GeoParquet (.geoparquet)</option><option value="geopackage">GeoPackage (.gpkg)</option><option value="shpzip">Zipped Shapefile (.shp.zip)</option></select></div>
+    <div class="row"><label>Filename</label><input type="text" id="outName" style="min-width:280px"></div>
+    <div id="constructStatus" class="status muted">Ready.</div>
+    <div class="step-actions"><button class="button-secondary" id="backTo3">Back</button><button id="saveBtn">Build & Save</button></div>
+    <div class="preview-panel"><h3>Log</h3><div class="log" id="log"></div></div>
+  </section>
+</main>
+<script src="./vendor/wkx/dist/wkx.js"></script>
+<script src="./vendor/apache-arrow.js"></script>
+<script type="module">
+import startConstructApp from './src/apps/constructApp.js';
+startConstructApp();
+</script>
+</body>
+</html>

@@ -11,15 +11,76 @@ const readZipEntries = (buffer) => { const sig = new Uint8Array(buffer.slice(0,4
 const toFilesFromZipEntries = (entries) => Object.entries(entries || {}).map(([name, bytes]) => new File([bytes], name));
 const ensureShapefileParts = (entries) => { const names = Object.keys(entries||{}).map((name)=>name.toLowerCase()); if (!names.some((n)=>n.endsWith('.shp')) || !names.some((n)=>n.endsWith('.dbf'))) throw new Error('Not a supported format. This zip archive does not contain the required .shp and .dbf files for a valid ESRI Shapefile.'); if (!names.some((n)=>n.endsWith('.shx'))) throw new Error('Not a supported format. The zip archive is missing the .shx index file required for a complete ESRI Shapefile.'); };
 
+const parseDelimitedRows = (text, delimiter) => {
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    const next = text[i + 1];
+
+    if (ch === '"') {
+      if (inQuotes && next === '"') {
+        field += '"';
+        i += 1;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && ch === delimiter) {
+      row.push(field);
+      field = '';
+      continue;
+    }
+
+    if (!inQuotes && (ch === '\n' || ch === '\r')) {
+      if (ch === '\r' && next === '\n') {
+        i += 1;
+      }
+      row.push(field);
+      field = '';
+      if (row.some((v) => v !== '')) {
+        rows.push(row);
+      }
+      row = [];
+      continue;
+    }
+
+    field += ch;
+  }
+
+  row.push(field);
+  if (row.some((v) => v !== '')) {
+    rows.push(row);
+  }
+
+  return rows;
+};
+
+const guessDelimiter = (text) => {
+  const firstLine = (text || '').split(/\r?\n/)[0] || '';
+  const cands = [',', ';', '\t', '|'];
+  return cands
+    .map((d) => ({ d, s: parseDelimitedRows(firstLine, d)[0]?.length || 0 }))
+    .sort((a, b) => b.s - a.s)[0]?.d || ',';
+};
+
 const parseCsvContent = (text, csv = {}) => {
-  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(Boolean);
-  const cands = [',',';','\t','|'];
-  const delimiter = csv.delimiter || cands.map((d)=>({d,s:(lines[0]||'').split(d).length})).sort((a,b)=>b.s-a.s)[0]?.d || ',';
+  const normalized = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  const delimiter = csv.delimiter || guessDelimiter(normalized);
   const hasHeader = csv.hasHeader !== false;
-  const rawRows = lines.map((line)=>line.split(delimiter));
-  const header = hasHeader ? (rawRows[0] || []).map((v,i)=>v?.trim() || `field_${i+1}`) : (rawRows[0] || []).map((_,i)=>`field_${i+1}`);
-  const rows = (hasHeader ? rawRows.slice(1) : rawRows).map((arr) => Object.fromEntries(header.map((h,i)=>[h, arr[i] ?? ''])));
-  return { delimiter, hasHeader, header, rows, previewRows: rows.slice(0,8) };
+  const rawRows = parseDelimitedRows(normalized, delimiter);
+  const width = rawRows.reduce((m, r) => Math.max(m, r.length), 0);
+  const header = hasHeader
+    ? Array.from({ length: width }, (_, i) => (rawRows[0]?.[i] ?? '').trim() || `field_${i + 1}`)
+    : Array.from({ length: width }, (_, i) => `field_${i + 1}`);
+  const dataRows = hasHeader ? rawRows.slice(1) : rawRows;
+  const rows = dataRows.map((arr) => Object.fromEntries(header.map((h, i) => [h, arr[i] ?? ''])));
+  return { delimiter, hasHeader, header, rows, previewRows: rows.slice(0, 8) };
 };
 
 const inferScalarType = (value) => {

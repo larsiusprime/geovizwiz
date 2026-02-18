@@ -30,8 +30,13 @@ export default function startConstructApp() {
     const panel = byId(`${side}CsvPanel`), preview = byId(`${side}CsvPreview`), d = byId(`${side}CsvDelimiter`), h = byId(`${side}CsvHeader`);
     if (!info?.csv) { panel.classList.add('hidden'); preview.innerHTML = ''; return; }
     panel.classList.remove('hidden'); d.value = info.csv.delimiter || ','; h.checked = info.csv.hasHeader !== false;
-    const cols = info.csv.header || []; const rows = info.csv.previewRows || [];
-    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.</p><div style="overflow:auto"><table><thead><tr>${cols.map((c)=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r)=>`<tr>${cols.map((c)=>`<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    const allCols = info.csv.header || [];
+    const cols = allCols.slice(0, 20);
+    const rows = info.csv.previewRows || [];
+    const colNotice = allCols.length > cols.length
+      ? ` Showing first ${cols.length} of ${allCols.length} columns.`
+      : '';
+    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.${colNotice}</p><div style="overflow:auto"><table style="table-layout:auto"><thead><tr>${cols.map((c)=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${rows.map((r)=>`<tr>${cols.map((c)=>`<td>${r[c] ?? ''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   };
 
   const checkStep1 = () => {

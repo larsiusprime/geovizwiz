@@ -295,9 +295,13 @@ export default function startConstructApp() {
   byId('toStep4').onclick = async () => {
     const cc = validateConfigureCollisions();
     if (!cc.ok) return;
+    const btn = byId('toStep4');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner">&#9696;</span> Working\u2026';
     try { const preview = await workerCall({ mode:'preview', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
       state.preview = preview; byId('previewStats').innerHTML = `<table><tbody><tr><th>Matched rows</th><td>${preview.matched}</td></tr><tr><th>Unmatched LEFT</th><td>${preview.unmatchedLeft}</td></tr><tr><th>Unmatched RIGHT</th><td>${preview.unmatchedRight}</td></tr><tr><th>Null/empty LEFT keys</th><td>${preview.emptyLeft}</td></tr><tr><th>Null/empty RIGHT keys</th><td>${preview.emptyRight}</td></tr><tr><th>LEFT duplicates dropped</th><td>${preview.leftDropped}</td></tr><tr><th>RIGHT duplicates dropped</th><td>${preview.rightDropped}</td></tr></tbody></table>`; byId('previewCols').textContent = (preview.sampleColumns||[]).join(', '); state.max = Math.max(state.max,4); setStep(4);
     } catch (err) { byId('previewStats').innerHTML = `<span class="error">${err.message}</span>`; }
+    finally { btn.disabled = false; btn.textContent = 'Preview matches'; }
   };
 
   byId('runConstruct').onclick = () => {

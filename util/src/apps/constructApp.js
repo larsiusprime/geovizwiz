@@ -84,8 +84,8 @@ export default function startConstructApp() {
       <td><input type="checkbox" data-side="${side}" data-idx="${idx}" data-k="selected" ${col.selected?'checked':''}></td>
       <td class="source-cell">${col.sourceName}</td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="outputName" value="${col.outputName}"></td>
-      <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select></td>
       <td>${col.inferredType} ${mixed}</td>
+      <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select></td>
       <td><select data-side="${side}" data-idx="${idx}" data-k="policy"><option value="string" ${col.policy==='string'?'selected':''}>string</option><option value="coerce" ${col.policy==='coerce'?'selected':''}>coerce</option></select></td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="fallback" value="${col.fallback ?? ''}" placeholder="null"></td>
       ${showDateFormat ? `<td>${showFormatInput ? `<input type="text" data-side="${side}" data-idx="${idx}" data-k="format" value="${col.format ?? ''}" placeholder="auto">` : ''}</td>` : ''}
@@ -99,7 +99,7 @@ export default function startConstructApp() {
       const showDateFormat = cols.some((c) => ['date', 'datetime'].includes(resolvedType(c)));
       const rows = cols.map((c, i) => columnRow(side, c, i, showDateFormat)).join('');
       const total = side === 'left' ? (state.leftInfo?.rowCount ?? 0) : (state.rightInfo?.rowCount ?? 0);
-      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th>Use</th><th class="source-cell">Source</th><th>Output name</th><th>Type</th><th>Inferred</th><th>Mixed policy</th><th>Fallback</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
+      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th>Use</th><th class="source-cell">Field</th><th>Output name</th><th>Source Type</th><th>Change Type</th><th>Mixed policy</th><th>Fallback</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
     };
     render('left'); render('right');
     document.querySelectorAll('[data-side][data-idx][data-k]').forEach((el)=>{

@@ -53,13 +53,17 @@ export default function startConstructApp() {
 
   const workerCall = (payload) => new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./constructWorker.js', import.meta.url));
+    const timeout = setTimeout(() => {
+      worker.terminate();
+      reject(new Error('Operation timed out while loading data. Please verify the file and try again.'));
+    }, 120000);
     worker.onmessage = (e) => {
       const { type, payload: p } = e.data || {};
       if (type === 'log') log(p.message);
-      if (type === 'error') { worker.terminate(); reject(new Error(p.message)); }
-      if (type === 'success') { worker.terminate(); resolve(p); }
+      if (type === 'error') { clearTimeout(timeout); worker.terminate(); reject(new Error(p.message)); }
+      if (type === 'success') { clearTimeout(timeout); worker.terminate(); resolve(p); }
     };
-    worker.onerror = (e) => { worker.terminate(); reject(new Error(e.message || 'Worker failure')); };
+    worker.onerror = (e) => { clearTimeout(timeout); worker.terminate(); reject(new Error(e.message || 'Worker failure')); };
     worker.postMessage(payload);
   });
 

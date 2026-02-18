@@ -15,6 +15,24 @@ const readZipEntries = (buffer) => {
   try { return self.fflate.unzipSync(new Uint8Array(buffer)); } catch (_) { return null; }
 };
 
+const toFilesFromZipEntries = (entries) => Object.entries(entries || {}).map(([name, bytes]) => {
+  // WORKERFS path handling in gdal3.js expects File-like entries.
+  return new File([bytes], name);
+});
+
+const ensureShapefileParts = (entries) => {
+  const names = Object.keys(entries || {}).map((name) => name.toLowerCase());
+  const hasShp = names.some((name) => name.endsWith('.shp'));
+  const hasDbf = names.some((name) => name.endsWith('.dbf'));
+  const hasShx = names.some((name) => name.endsWith('.shx'));
+  if (!hasShp || !hasDbf) {
+    throw new Error('Not a supported format. This zip archive does not contain the required .shp and .dbf files for a valid ESRI Shapefile.');
+  }
+  if (!hasShx) {
+    throw new Error('Not a supported format. The zip archive is missing the .shx index file required for a complete ESRI Shapefile.');
+  }
+};
+
 const parseCsvPreview = (text, csv = {}) => {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean);
   const cands = [',',';','\t','|'];
@@ -53,7 +71,15 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
     geojson = JSON.parse(textDecoder.decode(new Uint8Array(buffer)));
   } else {
     const gdal = await gdalPromise;
-    const input = isZip ? Object.entries(readZipEntries(buffer) || {}).map(([path, bytes]) => ({ path, bytes })) : file;
+    let input = file;
+    if (isZip) {
+      const entries = readZipEntries(buffer);
+      if (!entries) {
+        throw new Error('Not a supported format. This zip archive could not be read as a shapefile bundle.');
+      }
+      ensureShapefileParts(entries);
+      input = toFilesFromZipEntries(entries);
+    }
     const { datasets, errors } = await gdal.open(input);
     if (!datasets?.length) throw new Error(errors?.[0] || 'Unable to open dataset');
     const out = await gdal.ogr2ogr(datasets[0], ['-f', 'GeoJSON']);

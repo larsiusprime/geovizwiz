@@ -256,7 +256,7 @@ export default function startConstructApp() {
     review: state.review
   });
 
-  const joinHelp = { left: 'Keep all LEFT rows', right: 'Keep all RIGHT rows', inner: 'Keep only matching rows' };
+  const joinHelp = { left: '(Keep all LEFT rows)', right: '(Keep all RIGHT rows)', inner: '(Keep only matching rows)' };
 
   const extForFormat = (format) => (format === 'geopackage' ? 'gpkg' : format === 'shpzip' ? 'shp.zip' : 'geoparquet');
 

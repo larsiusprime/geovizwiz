@@ -69,6 +69,16 @@
       </div>
     </div>
     <div id="swapNotice" class="preview-panel hidden"></div>
+    <div id="leftCsvPanel" class="preview-panel hidden">
+      <h3>LEFT CSV parsing preview</h3>
+      <div class="row"><label>Delimiter</label><select id="leftCsvDelimiter"><option value=",">Comma</option><option value=";">Semicolon</option><option value="\t">Tab</option><option value="|">Pipe</option></select><label><input id="leftCsvHeader" type="checkbox" checked> First row is header</label><button type="button" id="leftCsvApply" class="button-secondary">Re-parse CSV</button></div>
+      <div id="leftCsvPreview" class="muted"></div>
+    </div>
+    <div id="rightCsvPanel" class="preview-panel hidden">
+      <h3>RIGHT CSV parsing preview</h3>
+      <div class="row"><label>Delimiter</label><select id="rightCsvDelimiter"><option value=",">Comma</option><option value=";">Semicolon</option><option value="\t">Tab</option><option value="|">Pipe</option></select><label><input id="rightCsvHeader" type="checkbox" checked> First row is header</label><button type="button" id="rightCsvApply" class="button-secondary">Re-parse CSV</button></div>
+      <div id="rightCsvPreview" class="muted"></div>
+    </div>
     <div class="step-actions"><button id="toStep2" disabled>Continue</button></div>
   </section>
 

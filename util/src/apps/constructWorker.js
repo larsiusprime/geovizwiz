@@ -33,26 +33,27 @@ const ensureShapefileParts = (entries) => {
   }
 };
 
-const parseCsvPreview = (text, csv = {}) => {
+const parseCsvContent = (text, csv = {}) => {
   const lines = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(Boolean);
   const cands = [',',';','\t','|'];
   const delimiter = csv.delimiter || cands.map((d) => ({ d, s: (lines[0] || '').split(d).length })).sort((a,b)=>b.s-a.s)[0]?.d || ',';
   const hasHeader = csv.hasHeader !== false;
-  const rawRows = lines.slice(0, 300).map((line) => line.split(delimiter));
+  const rawRows = lines.map((line) => line.split(delimiter));
   const header = hasHeader ? (rawRows[0] || []).map((v, i) => v?.trim() || `field_${i + 1}`) : (rawRows[0] || []).map((_, i) => `field_${i + 1}`);
   const rows = (hasHeader ? rawRows.slice(1) : rawRows).map((arr) => {
     const obj = {};
     header.forEach((h, i) => { obj[h] = arr[i] ?? ''; });
     return obj;
   });
-  return { delimiter, hasHeader, header, rows };
+  const previewRows = rows.slice(0, 8);
+  return { delimiter, hasHeader, header, rows, previewRows };
 };
 
 const loadAsFeatures = async (file, side, csvOptions = {}) => {
   const name = file.name?.toLowerCase() || '';
   if (name.endsWith('.csv')) {
     const text = await file.text();
-    const csv = parseCsvPreview(text, csvOptions);
+    const csv = parseCsvContent(text, csvOptions);
     return { label: 'CSV (.csv)', hasGeometry: false, rowCount: csv.rows.length, fields: csv.header, records: csv.rows, csv };
   }
 

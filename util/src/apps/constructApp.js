@@ -33,8 +33,28 @@ export default function startConstructApp() {
   const outFmt = document.getElementById('outFmt');
   const outName = document.getElementById('outName');
   const constructStatus = document.getElementById('constructStatus');
+  const leftCsvPanel = document.getElementById('leftCsvPanel');
+  const rightCsvPanel = document.getElementById('rightCsvPanel');
+  const leftCsvDelimiter = document.getElementById('leftCsvDelimiter');
+  const rightCsvDelimiter = document.getElementById('rightCsvDelimiter');
+  const leftCsvHeader = document.getElementById('leftCsvHeader');
+  const rightCsvHeader = document.getElementById('rightCsvHeader');
+  const leftCsvPreview = document.getElementById('leftCsvPreview');
+  const rightCsvPreview = document.getElementById('rightCsvPreview');
+  const leftCsvApply = document.getElementById('leftCsvApply');
+  const rightCsvApply = document.getElementById('rightCsvApply');
 
-  const state = { step: 1, max: 1, leftFile: null, rightFile: null, leftInfo: null, rightInfo: null, preview: null };
+  const state = {
+    step: 1,
+    max: 1,
+    leftFile: null,
+    rightFile: null,
+    leftInfo: null,
+    rightInfo: null,
+    leftCsvOptions: null,
+    rightCsvOptions: null,
+    preview: null
+  };
 
   const setStep = (n) => {
     state.step = n;
@@ -80,6 +100,26 @@ export default function startConstructApp() {
     [rightKey, rightDedup, rightSort].forEach((s) => fill(s, rightFields));
   };
 
+  const renderCsvPreview = (side, info) => {
+    const panel = side === 'left' ? leftCsvPanel : rightCsvPanel;
+    const delimiter = side === 'left' ? leftCsvDelimiter : rightCsvDelimiter;
+    const header = side === 'left' ? leftCsvHeader : rightCsvHeader;
+    const preview = side === 'left' ? leftCsvPreview : rightCsvPreview;
+    if (!info?.csv) {
+      panel.classList.add('hidden');
+      preview.innerHTML = '';
+      return;
+    }
+    panel.classList.remove('hidden');
+    delimiter.value = info.csv.delimiter || ',';
+    header.checked = info.csv.hasHeader !== false;
+    const cols = info.csv.header || [];
+    const rows = info.csv.previewRows || [];
+    const headerHtml = cols.map((c) => `<th>${c}</th>`).join('');
+    const rowsHtml = rows.map((row) => `<tr>${cols.map((c) => `<td>${row[c] ?? ''}</td>`).join('')}</tr>`).join('');
+    preview.innerHTML = `<p class="muted">Previewing ${rows.length} rows. Parsed total rows: ${info.rowCount}.</p><div style="overflow:auto"><table><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml || '<tr><td colspan="99">No rows parsed</td></tr>'}</tbody></table></div>`;
+  };
+
   const checkStep1 = () => {
     const leftGeom = Boolean(state.leftInfo?.hasGeometry);
     toStep2.disabled = !(state.leftInfo && state.rightInfo && leftGeom);
@@ -97,8 +137,11 @@ export default function startConstructApp() {
     if (swapBtn) swapBtn.onclick = () => {
       [state.leftFile, state.rightFile] = [state.rightFile, state.leftFile];
       [state.leftInfo, state.rightInfo] = [state.rightInfo, state.leftInfo];
+      [state.leftCsvOptions, state.rightCsvOptions] = [state.rightCsvOptions, state.leftCsvOptions];
       leftStatus.textContent = `Loaded: ${state.leftInfo.label}`;
       rightStatus.textContent = `Loaded: ${state.rightInfo.label}`;
+      renderCsvPreview('left', state.leftInfo);
+      renderCsvPreview('right', state.rightInfo);
       checkStep1();
     };
   };
@@ -108,10 +151,17 @@ export default function startConstructApp() {
     const statusEl = side === 'left' ? leftStatus : rightStatus;
     statusEl.textContent = 'Loading...';
     try {
-      const info = await workerCall({ mode: 'inspect', file, side });
+      const csvOptions = side === 'left' ? state.leftCsvOptions : state.rightCsvOptions;
+      const info = await workerCall({ mode: 'inspect', file, side, csvOptions });
       if (side === 'left') { state.leftFile = file; state.leftInfo = info; }
       else { state.rightFile = file; state.rightInfo = info; }
       statusEl.textContent = `Loaded: ${info.label} (${info.rowCount} rows, ${info.hasGeometry ? 'with' : 'no'} geometry)`;
+      if (side === 'left') {
+        state.leftCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null;
+      } else {
+        state.rightCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null;
+      }
+      renderCsvPreview(side, info);
       checkStep1();
     } catch (err) {
       statusEl.textContent = err.message;
@@ -218,3 +268,12 @@ export default function startConstructApp() {
 
   setStep(1);
 }
+  leftCsvApply.onclick = () => {
+    state.leftCsvOptions = { delimiter: leftCsvDelimiter.value, hasHeader: leftCsvHeader.checked };
+    loadSide('left', state.leftFile);
+  };
+
+  rightCsvApply.onclick = () => {
+    state.rightCsvOptions = { delimiter: rightCsvDelimiter.value, hasHeader: rightCsvHeader.checked };
+    loadSide('right', state.rightFile);
+  };

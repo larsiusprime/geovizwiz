@@ -160,13 +160,13 @@ const parseByType = (value, type, format) => {
   return { ok:true, value };
 };
 
-const parseFallback = (fallbackRaw, globalRaw) => {
-  const v = (fallbackRaw ?? '') === '' ? globalRaw : fallbackRaw;
+const parseFallback = (fallbackRaw) => {
+  const v = fallbackRaw;
   if (v === null || v === undefined || String(v).trim().toLowerCase() === 'null') return null;
   return v;
 };
 
-const applyReview = (rows, reviewSide, globalFallback) => {
+const applyReview = (rows, reviewSide) => {
   const cfg = (reviewSide || []).filter((c)=>c.selected);
   const byName = new Map(cfg.map((c)=>[c.sourceName, c]));
   const errors = [];
@@ -177,7 +177,7 @@ const applyReview = (rows, reviewSide, globalFallback) => {
       const res = parseByType(raw, c.targetType, c.format);
       if (res.ok) { next[c.outputName] = res.value; return; }
       if (c.policy === 'string') { next[c.outputName] = raw == null ? null : String(raw); return; }
-      const fb = parseFallback(c.fallback, globalFallback);
+      const fb = parseFallback(c.fallback);
       next[c.outputName] = fb;
       errors.push({ column:c.sourceName, outputName:c.outputName, row: idx, reason: res.reason, raw });
     });
@@ -216,8 +216,8 @@ self.onmessage = async (event) => {
     const left = await loadAsFeatures(leftFile, 'left', csvOptions?.left || {}); const right = await loadAsFeatures(rightFile, 'right', csvOptions?.right || {});
     if (!left.hasGeometry) throw new Error('LEFT side must contain valid geometry.');
 
-    const leftReview = applyReview(left.records, options.review?.left, options.review?.globalFallback ?? 'null');
-    const rightReview = applyReview(right.records, options.review?.right, options.review?.globalFallback ?? 'null');
+    const leftReview = applyReview(left.records, options.review?.left);
+    const rightReview = applyReview(right.records, options.review?.right);
 
     if (leftReview.errors.length || rightReview.errors.length) send('log', { message: `Type coercion issues: left=${leftReview.errors.length}, right=${rightReview.errors.length}` });
 

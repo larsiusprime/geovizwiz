@@ -8,7 +8,7 @@ export default function startConstructApp() {
   const byId = (id) => document.getElementById(id);
   const pages = [1,2,3,4,5].map((n)=>byId(`page${n}`));
   const breadcrumbButtons = Array.from(document.querySelectorAll('.breadcrumb'));
-  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[],globalFallback:'null'}, preview:null };
+  const state = { step:1, max:1, leftFile:null,rightFile:null,leftInfo:null,rightInfo:null,leftCsvOptions:null,rightCsvOptions:null,review:{left:[],right:[]}, preview:null };
 
   const logEl = byId('log');
   const log = (msg) => { logEl.textContent += `${msg}\n`; logEl.scrollTop = logEl.scrollHeight; };
@@ -77,15 +77,17 @@ export default function startConstructApp() {
 
   const columnRow = (side, col, idx, showDateFormat) => {
     const target = col.targetType || 'source';
-    const options = TYPE_OPTIONS.map((t)=>`<option value="${t}" ${t===target?'selected':''}>${t}</option>`).join('');
+    const options = TYPE_OPTIONS.map((t)=>{
+      const label = t === 'source' ? `source (${col.inferredType})` : t;
+      return `<option value="${t}" ${t===target?'selected':''}>${label}</option>`;
+    }).join('');
     const mixed = col.mixed ? '<span class="warn">mixed values</span>' : '';
     const showFormatInput = showDateFormat && ['date', 'datetime'].includes(resolvedType(col));
     return `<tr>
       <td><input type="checkbox" data-side="${side}" data-idx="${idx}" data-k="selected" ${col.selected?'checked':''}></td>
       <td class="source-cell">${col.sourceName}</td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="outputName" value="${col.outputName}"></td>
-      <td>${col.inferredType} ${mixed}</td>
-      <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select></td>
+      <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select> ${mixed}</td>
       <td><select data-side="${side}" data-idx="${idx}" data-k="policy"><option value="string" ${col.policy==='string'?'selected':''}>string</option><option value="coerce" ${col.policy==='coerce'?'selected':''}>coerce</option></select></td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="fallback" value="${col.fallback ?? ''}" placeholder="null"></td>
       ${showDateFormat ? `<td>${showFormatInput ? `<input type="text" data-side="${side}" data-idx="${idx}" data-k="format" value="${col.format ?? ''}" placeholder="auto">` : ''}</td>` : ''}
@@ -99,9 +101,19 @@ export default function startConstructApp() {
       const showDateFormat = cols.some((c) => ['date', 'datetime'].includes(resolvedType(c)));
       const rows = cols.map((c, i) => columnRow(side, c, i, showDateFormat)).join('');
       const total = side === 'left' ? (state.leftInfo?.rowCount ?? 0) : (state.rightInfo?.rowCount ?? 0);
-      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th>Use</th><th class="source-cell">Field</th><th>Output name</th><th>Source Type</th><th>Change Type</th><th>Mixed policy</th><th>Fallback</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const allSelected = cols.length > 0 && cols.every((c) => c.selected);
+      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th><label style="display:flex;align-items:center;gap:.35rem;"><input type="checkbox" data-side-toggle="${side}" ${allSelected ? 'checked' : ''}> <span>Use</span></label></th><th class="source-cell">Field</th><th>Output name</th><th>Type</th><th>Mixed policy</th><th>Default</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
     };
     render('left'); render('right');
+    document.querySelectorAll('[data-side-toggle]').forEach((el) => {
+      el.onchange = () => {
+        const side = el.dataset.sideToggle;
+        state.review[side].forEach((col) => { col.selected = el.checked; });
+        renderReviewTables();
+        fillKeySelectors();
+        validateReview();
+      };
+    });
     document.querySelectorAll('[data-side][data-idx][data-k]').forEach((el)=>{
       el.onchange = () => {
         const side = el.dataset.side; const idx = Number(el.dataset.idx); const k = el.dataset.k;
@@ -123,12 +135,6 @@ export default function startConstructApp() {
         byId('rightColumns').classList.toggle('hidden', side !== 'right');
       };
     });
-  };
-
-  const detectCollisions = () => {
-    const left = state.review.left.filter((c)=>c.selected).map((c)=>c.outputName.trim());
-    const right = state.review.right.filter((c)=>c.selected).map((c)=>c.outputName.trim());
-    const set = new Set(left); return right.filter((n)=>set.has(n));
   };
 
   const validateReview = () => {
@@ -174,7 +180,7 @@ export default function startConstructApp() {
 
   const buildInitialReview = () => {
     const init = (info) => (info.columnProfiles || []).map((p)=>({ selected:true, sourceName:p.name, outputName:p.name, inferredType:p.inferredType || 'string', sourceType:p.inferredType || 'string', targetType:'source', policy:'string', fallback:'', format:'auto', mixed:p.mixed, nonNullCount:p.nonNullCount, totalCount:p.totalCount }));
-    state.review.left = init(state.leftInfo); state.review.right = init(state.rightInfo); state.review.globalFallback = byId('globalFallback').value || 'null';
+    state.review.left = init(state.leftInfo); state.review.right = init(state.rightInfo);
     renderReviewTables(); validateReview();
   };
 

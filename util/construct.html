@@ -11,7 +11,8 @@
     .pair{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.drop{border:2px dashed var(--border);border-radius:12px;padding:1rem;text-align:center;background:#fff}.drop.drag{border-color:var(--accent);background:#eef2ff}.status{margin-top:.5rem;font-weight:600}.muted{color:var(--muted)}.step-actions{display:flex;gap:.75rem;flex-wrap:wrap;margin-top:1rem}.preview-panel{margin-top:1rem;border:1px solid var(--border);border-radius:12px;padding:.75rem 1rem;background:#f9fafc}.log{background:#0d1a2b;color:#dce6ff;border-radius:10px;padding:.75rem;font-family:monospace;max-height:220px;overflow:auto;white-space:pre-wrap}
     table{width:100%;border-collapse:collapse}th,td{border-bottom:1px solid #e5e9f2;padding:.35rem .4rem;text-align:left;font-size:.9rem}.row{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:.4rem 0}select,input[type="text"],input[type="number"]{padding:.4rem;border:1px solid var(--border);border-radius:8px}
     button{padding:.65rem 1rem;background:var(--accent);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600}button[disabled]{opacity:.6;cursor:not-allowed}.button-secondary{background:#fff;color:var(--accent);border:1px solid var(--border)}
-    .columns-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}.col-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:.5rem;max-height:420px;overflow:auto}.warn{color:#b26a00;font-weight:600}.error{color:#b71c1c;font-weight:700}
+    .review-tabs{display:flex;gap:.5rem;margin:.5rem 0}.review-tab{padding:.45rem .8rem;border:1px solid var(--border);border-radius:999px;background:#fff;color:var(--accent);cursor:pointer}.review-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .col-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:.5rem;max-height:420px;overflow:auto}.warn{color:#b26a00;font-weight:600}.error{color:#b71c1c;font-weight:700}
   </style>
 </head>
 <body>
@@ -39,8 +40,9 @@
     <h2>Step 2: Review columns and types</h2>
     <p class="muted">Select columns, set output names, assign target types, and resolve mixed-type/coercion rules.</p>
     <div class="row"><label>Global coercion fallback</label><input id="globalFallback" type="text" value="null"><span class="muted">Used when column fallback is empty.</span></div>
-    <div class="columns-grid"><div><h3>LEFT columns</h3><div id="leftColumns" class="col-card"></div></div><div><h3>RIGHT columns</h3><div id="rightColumns" class="col-card"></div></div></div>
-    <div id="collisionPanel" class="preview-panel hidden"></div>
+    <div class="review-tabs" id="reviewTabs"><button type="button" class="review-tab active" data-side="left">LEFT columns</button><button type="button" class="review-tab" data-side="right">RIGHT columns</button></div>
+    <div id="leftColumns" class="col-card"></div>
+    <div id="rightColumns" class="col-card hidden"></div>
     <div id="reviewStatus" class="status"></div>
     <div class="step-actions"><button id="backTo1" class="button-secondary">Back</button><button id="toStep3">Continue to configure</button></div>
   </section>
@@ -52,6 +54,7 @@
     <div class="preview-panel"><strong>Normalization</strong><div class="row"><label><input type="checkbox" id="optTrim">Trim whitespace</label><label><input type="checkbox" id="optCase">Case-insensitive</label><label><input type="checkbox" id="optSlug">Slugify</label></div><div class="row"><label><input type="checkbox" id="optZeroL">Strip leading zeroes</label><label><input type="checkbox" id="optZeroR">Strip trailing zeroes</label></div><div class="row"><label>Remove chars</label><input type="text" id="optRemove" placeholder="e.g. -_ "></div><div class="row"><label>Replace chars</label><input type="text" id="optReplaceFrom" placeholder="from"><input type="text" id="optReplaceTo" placeholder="to"></div></div>
     <div class="preview-panel"><strong>Deduplicate</strong><div class="row"><label>LEFT dedup field</label><select id="leftDedup"></select><label>sort by</label><select id="leftSort"></select><select id="leftSortDir"><option value="asc">ASC</option><option value="desc">DESC</option></select></div><div class="row"><label>RIGHT dedup field</label><select id="rightDedup"></select><label>sort by</label><select id="rightSort"></select><select id="rightSortDir"><option value="asc">ASC</option><option value="desc">DESC</option></select></div></div>
     <div class="row"><label>Output keys</label><select id="outputKeys"><option value="left">Original LEFT key</option><option value="right">Original RIGHT key</option><option value="normalized">Normalized key only</option><option value="all">All key variants</option></select></div>
+    <div id="configureStatus" class="status"></div>
     <div class="step-actions"><button id="backTo2" class="button-secondary">Back</button><button id="toStep4">Preview matches</button></div>
   </section>
 

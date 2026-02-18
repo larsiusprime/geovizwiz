@@ -123,13 +123,15 @@ Step 2: Review columns and types.
 - Always show both LEFT and RIGHT columns in side-by-side review panels.
 - Columns are selected by default; users can exclude columns.
 - Users can rename output columns, override target types, set mixed-type policy, and fallback values.
-- Detect collisions among selected output column names and require resolution before continue.
+- Type-review validation must pass before continue.
 
 Step 3: Configure key matching and deduplication.
 - Single-key equi-join in this version.
 - Join types supported: LEFT, RIGHT, INNER.
 - UI must explain join type behavior (tooltip/help text).
 - Null/empty keys are not joinable and must be counted/reported as non-matches.
+- Detect collisions among selected output column names AFTER join keys are selected.
+- The shared join-key column name may be exempted when both sides explicitly use it as the selected join key.
 
 Key normalization options (user-configurable)
 - Slugify
@@ -194,4 +196,3 @@ Format compatibility/coercion behavior
 
 Processing model
 - All processing is local/in-browser only.
-

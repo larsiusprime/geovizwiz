@@ -103,6 +103,18 @@ export default function startConstructApp() {
     });
   };
 
+  const setupReviewTabs = () => {
+    const tabs = Array.from(document.querySelectorAll('#reviewTabs .review-tab'));
+    tabs.forEach((tab) => {
+      tab.onclick = () => {
+        const side = tab.dataset.side;
+        tabs.forEach((t) => t.classList.toggle('active', t === tab));
+        byId('leftColumns').classList.toggle('hidden', side !== 'left');
+        byId('rightColumns').classList.toggle('hidden', side !== 'right');
+      };
+    });
+  };
+
   const detectCollisions = () => {
     const left = state.review.left.filter((c)=>c.selected).map((c)=>c.outputName.trim());
     const right = state.review.right.filter((c)=>c.selected).map((c)=>c.outputName.trim());
@@ -122,15 +134,34 @@ export default function startConstructApp() {
     if (dateMissing.length) messages.push('Date/datetime columns require a format token or "auto".');
     const mismatchedKey = byId('leftKey')?.value && byId('rightKey')?.value && (state.review.left.find((c)=>c.sourceName===byId('leftKey').value)?.targetType !== state.review.right.find((c)=>c.sourceName===byId('rightKey').value)?.targetType);
     if (mismatchedKey) messages.push('Join key types differ between LEFT and RIGHT.');
-    const collisions = detectCollisions();
-    if (collisions.length) {
-      byId('collisionPanel').classList.remove('hidden');
-      byId('collisionPanel').innerHTML = `<div class="warn">Column collisions detected: ${collisions.join(', ')}</div><div class="row"><button type="button" id="suffixBtn" class="button-secondary">Auto suffix RIGHT collisions (_right)</button></div>`;
-      byId('suffixBtn').onclick = () => { state.review.right.forEach((c)=>{ if (c.selected && collisions.includes(c.outputName.trim())) c.outputName = `${c.outputName}_right`; }); renderReviewTables(); validateReview(); };
-      messages.push('Resolve column collisions before continuing.');
-    } else byId('collisionPanel').classList.add('hidden');
+    // Collision validation intentionally deferred until Step 3 after join keys are selected.
     byId('reviewStatus').innerHTML = messages.length ? `<span class="error">${messages.join(' ')}</span>` : '<span class="muted">Review checks passed.</span>';
     byId('toStep3').disabled = messages.length > 0;
+  };
+
+  const validateConfigureCollisions = () => {
+    const leftKey = byId('leftKey').value;
+    const rightKey = byId('rightKey').value;
+    const leftNames = state.review.left.filter((c) => c.selected).map((c) => c.outputName.trim()).filter(Boolean);
+    const rightNames = state.review.right.filter((c) => c.selected).map((c) => c.outputName.trim()).filter(Boolean);
+    const intersection = rightNames.filter((n) => leftNames.includes(n));
+    const exempt = leftKey && rightKey && leftKey === rightKey ? new Set([leftKey]) : new Set();
+    const collisions = intersection.filter((n) => !exempt.has(n));
+    if (!collisions.length) {
+      byId('configureStatus').innerHTML = '<span class="muted">Column collision checks passed.</span>';
+      return { ok: true, collisions: [] };
+    }
+    byId('configureStatus').innerHTML = `<span class="error">Column name collisions after key selection: ${collisions.join(', ')}. Go back to Review and rename/exclude or use auto-suffix.</span> <button type="button" id="autoSuffixFromConfigure" class="button-secondary">Auto suffix RIGHT collisions (_right)</button>`;
+    const btn = byId('autoSuffixFromConfigure');
+    if (btn) {
+      btn.onclick = () => {
+        state.review.right.forEach((c) => { if (c.selected && collisions.includes(c.outputName.trim())) c.outputName = `${c.outputName}_right`; });
+        renderReviewTables();
+        fillKeySelectors();
+        validateConfigureCollisions();
+      };
+    }
+    return { ok: false, collisions };
   };
 
   const buildInitialReview = () => {
@@ -160,8 +191,10 @@ export default function startConstructApp() {
   });
 
   byId('toStep2').onclick = () => { state.max = Math.max(state.max,2); buildInitialReview(); fillKeySelectors(); setStep(2); };
-  byId('toStep3').onclick = () => { state.max = Math.max(state.max,3); fillKeySelectors(); setStep(3); };
+  byId('toStep3').onclick = () => { state.max = Math.max(state.max,3); fillKeySelectors(); validateConfigureCollisions(); setStep(3); };
   byId('toStep4').onclick = async () => {
+    const cc = validateConfigureCollisions();
+    if (!cc.ok) return;
     try { const preview = await workerCall({ mode:'preview', leftFile:state.leftFile, rightFile:state.rightFile, options:collectOptions(), csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
       state.preview = preview; byId('previewStats').innerHTML = `<table><tbody><tr><th>Matched rows</th><td>${preview.matched}</td></tr><tr><th>Unmatched LEFT</th><td>${preview.unmatchedLeft}</td></tr><tr><th>Unmatched RIGHT</th><td>${preview.unmatchedRight}</td></tr><tr><th>Null/empty LEFT keys</th><td>${preview.emptyLeft}</td></tr><tr><th>Null/empty RIGHT keys</th><td>${preview.emptyRight}</td></tr><tr><th>LEFT duplicates dropped</th><td>${preview.leftDropped}</td></tr><tr><th>RIGHT duplicates dropped</th><td>${preview.rightDropped}</td></tr></tbody></table>`; byId('previewCols').textContent = (preview.sampleColumns||[]).join(', '); state.max = Math.max(state.max,4); setStep(4);
     } catch (err) { byId('previewStats').innerHTML = `<span class="error">${err.message}</span>`; }
@@ -178,6 +211,7 @@ export default function startConstructApp() {
   };
 
   ['left','right'].forEach(setupDrop);
+  setupReviewTabs();
   byId('leftCsvApply').onclick = () => { state.leftCsvOptions = { delimiter: byId('leftCsvDelimiter').value, hasHeader: byId('leftCsvHeader').checked }; loadSide('left', state.leftFile); state.review.left = []; };
   byId('rightCsvApply').onclick = () => { state.rightCsvOptions = { delimiter: byId('rightCsvDelimiter').value, hasHeader: byId('rightCsvHeader').checked }; loadSide('right', state.rightFile); state.review.right = []; };
   byId('backTo1').onclick = () => setStep(1); byId('backTo2').onclick = () => setStep(2); byId('backTo3').onclick = () => setStep(3); byId('backTo4').onclick = () => setStep(4);

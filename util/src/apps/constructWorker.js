@@ -206,7 +206,20 @@ const exportGeoParquet = async (geojson) => {
     worker.onmessage = (e) => {
       const { type, payload } = e.data || {};
       if (type === 'error') { worker.terminate(); reject(new Error(payload.message)); }
-      if (type === 'success') { worker.terminate(); resolve(new Uint8Array(payload.bytes)); }
+      if (type === 'success') {
+        worker.terminate();
+        if (payload?.blob instanceof Blob) {
+          payload.blob.arrayBuffer()
+            .then((buffer) => resolve(new Uint8Array(buffer)))
+            .catch((err) => reject(new Error(err?.message || 'Unable to read GeoParquet output blob.')));
+          return;
+        }
+        if (payload?.bytes) {
+          resolve(new Uint8Array(payload.bytes));
+          return;
+        }
+        reject(new Error('GeoParquet export returned no output bytes.'));
+      }
     };
     const file = new File([JSON.stringify(geojson)], 'joined.geojson', { type: 'application/geo+json' });
     worker.postMessage({ file, outputFormat: 'geoparquet' });

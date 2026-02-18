@@ -393,7 +393,10 @@ export default function startConstructApp() {
   };
 
   byId('buildBtn').onclick = async () => {
-    byId('constructStatus').textContent = 'Building...';
+    const btn = byId('buildBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner">&#9696;</span> Building\u2026';
+    byId('constructStatus').innerHTML = '<span class="spinner">&#9696;</span> Building\u2026';
     byId('saveBtn').disabled = true;
     state.exportCache = null;
     try {
@@ -401,6 +404,7 @@ export default function startConstructApp() {
       const outputFormat = byId('outFmt').value;
       const build = await workerCall({ mode:'build', leftFile:state.leftFile, rightFile:state.rightFile, options, csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
       renderBuildPreview(build);
+      byId('constructStatus').innerHTML = '<span class="spinner">&#9696;</span> Exporting\u2026';
       const exportPayload = await workerCall({ mode:'construct', leftFile:state.leftFile, rightFile:state.rightFile, options, outputFormat, csvOptions:{left:state.leftCsvOptions,right:state.rightCsvOptions} });
       state.exportCache = { format: outputFormat, result: exportPayload };
       const status = build.featureRows === 0
@@ -413,6 +417,9 @@ export default function startConstructApp() {
       state.built = false;
       state.exportCache = null;
       byId('constructStatus').textContent = err.message;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Build';
     }
   };
 

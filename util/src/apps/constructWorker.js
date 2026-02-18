@@ -201,7 +201,7 @@ const exportShpZip = async (geojson) => {
 };
 
 const exportGeoParquet = async (geojson) => {
-  const worker = new Worker(new URL('./converterExportWorker.js', self.location.href), { type: 'module' });
+  const worker = new Worker(new URL('./converterExportWorker.js', self.location.href));
   return await new Promise((resolve, reject) => {
     worker.onmessage = (e) => {
       const { type, payload } = e.data || {};

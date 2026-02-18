@@ -120,7 +120,7 @@ CSV parsing behavior
 - Expose CSV parse controls and update preview live so users can correct parsing before proceeding.
 
 Step 2: Review columns and types.
-- Always show both LEFT and RIGHT columns in side-by-side review panels.
+- Show both LEFT and RIGHT columns in a compact review UI (for example tabs) so large schemas remain usable.
 - Columns are selected by default; users can exclude columns.
 - Users can rename output columns, override target types, set mixed-type policy, and fallback values.
 - Type-review validation must pass before continue.

@@ -1,6 +1,7 @@
 import { triggerDownload } from '../export/download.js';
 
 const TYPE_OPTIONS = ['source', 'string', 'integer', 'float', 'boolean', 'date', 'datetime'];
+const resolvedType = (col) => (col.targetType === 'source' ? col.inferredType : col.targetType);
 const fmtTime = () => { const d = new Date(); const p = (n) => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; };
 
 export default function startConstructApp() {
@@ -69,27 +70,31 @@ export default function startConstructApp() {
     byId(`${side}Browse`).onclick = () => input.click();
   };
 
-  const columnRow = (side, col, idx) => {
+  const columnRow = (side, col, idx, showDateFormat) => {
     const target = col.targetType || 'source';
-    const options = TYPE_OPTIONS.map((t)=>`<option value="${t}" ${t===target?'selected':''}>${t}${t==='source' ? ` (${col.inferredType})` : ''}</option>`).join('');
+    const options = TYPE_OPTIONS.map((t)=>`<option value="${t}" ${t===target?'selected':''}>${t}</option>`).join('');
     const mixed = col.mixed ? '<span class="warn">mixed values</span>' : '';
+    const showFormatInput = showDateFormat && ['date', 'datetime'].includes(resolvedType(col));
     return `<tr>
       <td><input type="checkbox" data-side="${side}" data-idx="${idx}" data-k="selected" ${col.selected?'checked':''}></td>
-      <td>${col.sourceName}</td>
+      <td class="source-cell">${col.sourceName}</td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="outputName" value="${col.outputName}"></td>
       <td><select data-side="${side}" data-idx="${idx}" data-k="targetType">${options}</select></td>
       <td>${col.inferredType} ${mixed}</td>
       <td><select data-side="${side}" data-idx="${idx}" data-k="policy"><option value="string" ${col.policy==='string'?'selected':''}>string</option><option value="coerce" ${col.policy==='coerce'?'selected':''}>coerce</option></select></td>
       <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="fallback" value="${col.fallback ?? ''}" placeholder="null"></td>
-      <td><input type="text" data-side="${side}" data-idx="${idx}" data-k="format" value="${col.format ?? ''}" placeholder="auto"></td>
-      <td>${col.nonNullCount}/${col.totalCount}</td>
+      ${showDateFormat ? `<td>${showFormatInput ? `<input type="text" data-side="${side}" data-idx="${idx}" data-k="format" value="${col.format ?? ''}" placeholder="auto">` : ''}</td>` : ''}
+      <td>${col.nonNullCount}</td>
     </tr>`;
   };
 
   const renderReviewTables = () => {
     const render = (side) => {
-      const rows = state.review[side].map((c, i) => columnRow(side, c, i)).join('');
-      byId(`${side}Columns`).innerHTML = `<table><thead><tr><th>Use</th><th>Source</th><th>Output name</th><th>Type</th><th>Inferred</th><th>Mixed policy</th><th>Fallback</th><th>Date format</th><th>Filled</th></tr></thead><tbody>${rows}</tbody></table>`;
+      const cols = state.review[side];
+      const showDateFormat = cols.some((c) => ['date', 'datetime'].includes(resolvedType(c)));
+      const rows = cols.map((c, i) => columnRow(side, c, i, showDateFormat)).join('');
+      const total = side === 'left' ? (state.leftInfo?.rowCount ?? 0) : (state.rightInfo?.rowCount ?? 0);
+      byId(`${side}Columns`).innerHTML = `<div class="muted" style="margin:.25rem .25rem .5rem">Total rows: ${total}</div><table><thead><tr><th>Use</th><th class="source-cell">Source</th><th>Output name</th><th>Type</th><th>Inferred</th><th>Mixed policy</th><th>Fallback</th>${showDateFormat ? '<th>Date format</th>' : ''}<th>Non-empty</th></tr></thead><tbody>${rows}</tbody></table>`;
     };
     render('left'); render('right');
     document.querySelectorAll('[data-side][data-idx][data-k]').forEach((el)=>{
@@ -126,11 +131,9 @@ export default function startConstructApp() {
     const invalidName = [...state.review.left, ...state.review.right].filter((c)=>c.selected && !c.outputName.trim());
     if (invalidName.length) messages.push('All selected columns must have an output name.');
     const selectedAll = [...state.review.left.filter((c)=>c.selected), ...state.review.right.filter((c)=>c.selected)];
-    const dupes = selectedAll.map((c)=>c.outputName.trim()).filter((n,i,a)=>n && a.indexOf(n)!==i);
-    if (dupes.length) messages.push(`Duplicate output names: ${Array.from(new Set(dupes)).join(', ')}`);
     const unresolvedMixed = selectedAll.filter((c)=>c.mixed && !c.policy);
     if (unresolvedMixed.length) messages.push('Mixed-type columns require a policy.');
-    const dateMissing = selectedAll.filter((c)=>['date','datetime'].includes(c.targetType) && !c.format);
+    const dateMissing = selectedAll.filter((c)=>['date','datetime'].includes(resolvedType(c)) && !c.format);
     if (dateMissing.length) messages.push('Date/datetime columns require a format token or "auto".');
     const mismatchedKey = byId('leftKey')?.value && byId('rightKey')?.value && (state.review.left.find((c)=>c.sourceName===byId('leftKey').value)?.targetType !== state.review.right.find((c)=>c.sourceName===byId('rightKey').value)?.targetType);
     if (mismatchedKey) messages.push('Join key types differ between LEFT and RIGHT.');
@@ -165,7 +168,7 @@ export default function startConstructApp() {
   };
 
   const buildInitialReview = () => {
-    const init = (info) => (info.columnProfiles || []).map((p)=>({ selected:true, sourceName:p.name, outputName:p.name, inferredType:p.inferredType || 'string', sourceType:p.inferredType || 'string', targetType:'source', policy:p.mixed ? '' : 'coerce', fallback:'', format:'auto', mixed:p.mixed, nonNullCount:p.nonNullCount, totalCount:p.totalCount }));
+    const init = (info) => (info.columnProfiles || []).map((p)=>({ selected:true, sourceName:p.name, outputName:p.name, inferredType:p.inferredType || 'string', sourceType:p.inferredType || 'string', targetType:'source', policy:'string', fallback:'', format:'auto', mixed:p.mixed, nonNullCount:p.nonNullCount, totalCount:p.totalCount }));
     state.review.left = init(state.leftInfo); state.review.right = init(state.rightInfo); state.review.globalFallback = byId('globalFallback').value || 'null';
     renderReviewTables(); validateReview();
   };

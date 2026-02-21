@@ -46,6 +46,21 @@ npm run build:desktop
 npm run build:hosted
 ```
 
+## Run Desktop shell locally (Electron Milestone 1)
+
+From `viz/`:
+
+```bash
+npm run run:desktop
+```
+
+What this does:
+- builds VIZ in `desktop` mode
+- launches Electron with secure defaults (`contextIsolation`, `nodeIntegration=false`, sandboxed renderer)
+- exposes a minimal preload bridge as `window.vizDesktop` for project-folder/file operations
+
+This is a **run target** for local desktop testing (not installer packaging yet).
+
 ## Full-site local deploy testing (equivalent to current deploy-local flow)
 
 From repository root, use the deploy script with mode flag:
@@ -66,5 +81,5 @@ The local server starts at `http://localhost:3000`.
 
 ## Notes
 
-- `desktop` and `hosted` are currently scaffolding at the VIZ build/runtime-mode layer.
+- `desktop` includes an initial Electron shell run target (`npm run run:desktop`) for Milestone 1 testing; installer packaging is not included yet.
 - Browser behavior remains the baseline.

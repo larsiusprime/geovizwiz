@@ -108,3 +108,21 @@ npm run run:desktop
 
 `run:desktop` uses `npm exec electron ...` so it resolves the local Electron binary from `node_modules`.
 
+
+If you see these errors in Electron:
+
+```
+index-*.css Failed to load resource: net::ERR_FILE_NOT_FOUND
+index-*.js Failed to load resource: net::ERR_FILE_NOT_FOUND
+```
+
+that usually means desktop assets were built with the wrong base path. Rebuild in desktop mode:
+
+```bash
+cd viz
+npm run build:desktop
+npm run run:desktop
+```
+
+Desktop mode now builds with relative asset URLs so `file://` loading works.
+

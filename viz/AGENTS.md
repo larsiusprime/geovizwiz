@@ -1041,3 +1041,225 @@ The data they export looks like this:
 ## New Menus
 
 ### Data 
+
+---
+
+## VIZ Build Modes Architecture Decisions (2026-02)
+
+This section captures the current decisions for the three-tier VIZ architecture and replaces the accidental lowercase `viz/agents.md` draft.
+
+### Finalized decisions so far
+
+1. **Single repo/branch** for Browser, Desktop, and Hosted/Cloud.
+2. **Build mode checks** are the primary differentiation mechanism (`browser`, `desktop`, `hosted`).
+3. **Graceful degradation** is required: unsupported features are hidden/disabled by mode and never break flows.
+4. **Desktop + Hosted DB technology target: PostgreSQL + PostGIS** (shared technology strategy across upper tiers).
+5. **Project format**: folder-based project with:
+   - one project metadata file (`viz-project.json`),
+   - supporting dependent files in the same folder,
+   - separate data directories: `/data/raw` and `/data/derived`.
+6. **Distribution model** (no license gating):
+   - Browser = no-install lightweight/demo access,
+   - Desktop = single-user power workflow,
+   - Hosted/Cloud = office/team workflow.
+
+### Recommended hosted tenancy model (decision guidance)
+
+For municipal assessor office usage, start with a **single-tenant-per-office deployment** model (one org per deployment/database) and design internals to be **tenant-aware later**.
+
+Why this is the best starting point:
+- Simpler security and compliance review for government IT teams.
+- Easier permission modeling and incident boundaries.
+- Lower operational complexity for the first production rollout.
+- Still compatible with future multi-tenant refactor if needed.
+
+### Authentication/authorization clarification
+
+"Auth provider direction" means who verifies user identity and how roles/permissions are enforced.
+
+Recommended staged approach:
+- **Desktop:** no RBAC requirement (single-user local workflow).
+- **Hosted Phase 1 (later):** app-managed local accounts + role-based access control (RBAC).
+- **Hosted Phase 2:** enterprise identity integration (OIDC/SAML) for SSO with municipal IT.
+
+Role baseline to define early:
+- Viewer (read-only)
+- Editor (create/edit workspace changes)
+- Reviewer/Approver (can reconcile/commit to upstream)
+- Admin (user/role/system management)
+
+### Collaboration model clarification (non-Figma realtime)
+
+Adopt a **workspace + commit + reconcile** model:
+- Users pull from upstream into isolated workspaces.
+- Users make local edits in workspace branches/snapshots.
+- Users commit changes back to upstream via reconcile workflow.
+- Conflicts are resolved explicitly at commit/reconcile time.
+- Every commit/write is audited (who, when, what changed).
+
+Initial conflict policy:
+- `last-write-wins` may be allowed in low-risk fields,
+- but all overwrite events must be captured in audit history and reversible where possible.
+
+
+### Delivery priority (near-term)
+
+- **Now:** implement Browser + Desktop architecture and Desktop runtime enablement (Desktop first).
+- **Not now:** no Hosted runtime implementation yet.
+- **Still required now:** define Hosted-facing interfaces/contracts so Desktop choices do not block future Hosted rollout.
+
+### Browser persistence options (clarification)
+
+Two practical options:
+1. **Ephemeral browser mode**
+   - Data lives in memory while tab is open.
+   - User persists via manual import/export/download.
+   - Pros: simple, predictable privacy posture.
+   - Cons: less convenient, slower repeated workflows.
+2. **IndexedDB-assisted browser mode (optional cache)**
+   - Local cached state/assets between sessions.
+   - Pros: faster reopen/resume, better UX for large projects.
+   - Cons: cache management/versioning complexity.
+
+Recommended default now: **ephemeral-first**, with optional IndexedDB cache as a future opt-in once invalidation/versioning policy is defined.
+
+### Hosted offline clarification
+
+"Hosted offline" means whether hosted users can continue editing when disconnected from the server (for example, laptop on field network outage), then sync/reconcile later.
+
+This is independent from where hosted runs (intranet, datacenter, cloud VM, local server).
+
+Recommendation:
+- Hosted MVP: **online-required** for commits and collaborative state.
+- Later phase: optional offline workspace queue/sync if field operations require it.
+
+### Security posture clarification
+
+"Encryption at rest" means stored data is encrypted on disk (database/files).
+"Customer-managed keys (CMK)" means the customer controls encryption keys instead of provider-managed defaults.
+
+Practical default posture:
+- Desktop: OS-level disk encryption support + optional app-level encrypted local secrets.
+- Hosted: enable encryption at rest for DB/storage by default; TLS in transit always.
+- CMK: treat as a future enterprise requirement unless municipal procurement mandates it immediately.
+
+### Desktop data and storage model (confirmed)
+
+- Desktop uses **one Postgres/PostGIS database per project**.
+- Importing a data source creates **one physical table per imported data source**, using a sanitized source-name-derived table name.
+- Multiple in-app layers that reference the same data source must share that single table (no duplicate table copies).
+- Geometry is stored in standard PostGIS geometry columns with SRID/CRS preserved where available.
+- Import pipeline eagerly creates indexes for query performance on large datasets: geometry index (where geometry exists) and PK index (where a primary key exists); no broad auto-indexing on other fields by default.
+- By default, imported source files are retained under `/data/raw`.
+- Derived outputs/caches/materializations are stored under `/data/derived`.
+- Desktop should allow immediate use of imported data without requiring a tile-bake step.
+
+### Desktop map access path (phase plan)
+
+- **Phase 1 desktop behavior:** direct DB-backed query windows + server-side pagination/chunking.
+- **Later desktop enhancement:** optional vector tile server/materialization for faster large-scale map rendering.
+- Users are not forced to pre-bake vector tiles before they can work with newly imported data.
+
+### Project lifecycle semantics (clarified)
+
+- **Delete project behavior:** deleting a project folder should also remove its bound project database to prevent orphaned local DBs and storage bloat (with soft confirmation only).
+- **Migration behavior:** when opening a project, the app compares the `viz-project.json` schema/app version to current version and runs lightweight **forward-only** migrations automatically (with backup-safe migration steps). If migration cannot complete safely, opening is blocked with a clear error.
+- **Backups:** manual export only in initial desktop milestone.
+
+### Desktop configuration and secrets posture (recommended default)
+
+For Desktop v1, prefer:
+- OS-native app config directory for non-secret config,
+- OS credential/key store for secrets (DB password, service tokens),
+- env-var overrides for development/ops only.
+
+Rationale: this is more secure than plaintext `.env` files while still preserving controlled override paths for troubleshooting and CI packaging.
+
+### Implementation guardrails
+
+- Prefer explicit **mode checks** (`mode === 'browser' | 'desktop' | 'hosted'`) over fine-grained capability flags to keep behavior easy to reason about.
+- UI should only render tools/actions that are available in current mode.
+- Data formats should preserve unknown/high-tier metadata whenever feasible to maximize cross-tier compatibility.
+- Audit logging is a first-class requirement for Hosted/Cloud write operations.
+
+
+
+### Desktop implementation plan (minimal, unambiguous)
+
+#### Milestone 0 — Mode/build scaffolding (no behavior change in browser)
+1. Add a single runtime mode constant with allowed values: `browser | desktop | hosted`.
+2. Keep browser as default mode.
+3. Add explicit mode-based build scripts:
+   - `build:browser`
+   - `build:desktop`
+   - `build:hosted` (placeholder for packaging parity; no hosted runtime work yet)
+4. Ensure all new gating uses explicit mode checks only.
+
+#### Milestone 1 — Electron desktop shell foundation (Windows first)
+1. Add desktop app shell with secure defaults:
+   - `contextIsolation: true`
+   - `nodeIntegration: false`
+   - strict IPC allowlist
+   - navigation/window-open restrictions
+2. Implement preload bridge with minimal APIs:
+   - project folder selection/creation
+   - safe read/write within project root
+   - app config read access (non-secret)
+3. Keep renderer logic shared with browser code path wherever possible.
+
+#### Milestone 2 — Project structure contract + lifecycle
+1. Standardize project folder structure:
+   - `/viz-project.json`
+   - `/data/raw`
+   - `/data/derived`
+   - `/assets`
+   - `/logs`
+2. `viz-project.json` must include:
+   - `projectId`, `name`, `createdAt`, `updatedAt`
+   - `schemaVersion`
+   - `dbBinding` (project DB identifier, no secrets)
+   - `sources[]` with logical source metadata
+3. On delete project:
+   - show soft confirmation
+   - delete project folder
+   - drop bound project DB
+4. On open project:
+   - run forward-only schema migrations by version
+   - block open with explicit error if migration fails safely
+
+#### Milestone 3 — Bundled Postgres/PostGIS (one DB per project)
+1. Windows installer provisions app-specific Postgres + PostGIS runtime.
+2. App creates one DB per project using naming pattern `viz_<projectId>`.
+3. Store secrets in OS credential store; non-secret config in OS app config dir.
+4. Support env overrides for dev/ops only.
+
+#### Milestone 4 — Import pipeline v1 (large-data ready baseline)
+1. On import, copy original input into `/data/raw` by default.
+2. Create one physical table per imported data source.
+3. Table names use sanitized source-name-derived identifiers.
+4. If multiple in-app layers reference same data source, they point to same table.
+5. Preserve geometry with SRID/CRS where available.
+6. Build indexes automatically:
+   - geometry index (if geometry exists)
+   - PK index (if PK exists)
+   - no auto-indexes on non-key attributes by default
+
+#### Milestone 5 — Data access path v1
+1. Desktop map/data reads use DB-backed query windows + server-side pagination/chunking.
+2. Imported data is usable immediately without vector tile bake.
+3. Add performance telemetry/logging around query latency and pagination behavior.
+
+#### Milestone 6 — Deferred (explicitly not in initial implementation)
+1. Hosted runtime implementation.
+2. RBAC implementation (hosted only).
+3. Vector tile server/materialization pipeline.
+4. Automatic backup rotation (manual export only in v1).
+5. macOS/Linux installer and packaging (after Windows stabilization).
+
+#### Exit criteria for initial Desktop launch track
+- Browser build behavior unchanged.
+- Desktop build launches and can create/open/delete projects.
+- Each project gets its own Postgres/PostGIS DB.
+- Imports populate DB tables (one per source) and retain raw source files.
+- Large datasets can be browsed via paginated DB reads without requiring tile bake.
+- Core security posture is in place (secure Electron + OS secret storage).

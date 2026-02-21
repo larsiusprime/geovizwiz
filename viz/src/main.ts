@@ -142,7 +142,23 @@ import {
   createDataStore, renderDataStoreList,
 } from './layers';
 import { initMetadataModule } from './metadata.js';
+import { getRuntimeMode, isBrowserMode, isDesktopMode, isHostedMode } from './runtime-mode';
 (window as any).savedFiltersStore = S.savedFiltersStore;
+
+/* ---------------- Runtime Mode ----------------- */
+
+const runtimeMode = getRuntimeMode();
+console.info(`[viz] runtime mode: ${runtimeMode}`);
+if (isBrowserMode()) {
+  console.info('[viz] browser mode features enabled');
+} else if (isDesktopMode()) {
+  console.info('[viz] desktop mode features enabled');
+} else if (isHostedMode()) {
+  console.info('[viz] hosted mode features enabled');
+}
+if (typeof document !== 'undefined') {
+  document.documentElement.setAttribute('data-viz-runtime-mode', runtimeMode);
+}
 
 /* ---------------- Map Bootstrap ----------------- */
 

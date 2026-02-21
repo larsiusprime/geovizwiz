@@ -18,7 +18,7 @@ Install VIZ dependencies once:
 
 ```bash
 cd viz
-npm install
+npm install --include=dev
 ```
 
 ## Fast local app testing (VIZ only)
@@ -83,3 +83,28 @@ The local server starts at `http://localhost:3000`.
 
 - `desktop` includes an initial Electron shell run target (`npm run run:desktop`) for Milestone 1 testing; installer packaging is not included yet.
 - Browser behavior remains the baseline.
+
+
+### Troubleshooting (Windows)
+
+If you see:
+
+```
+'electron' is not recognized as an internal or external command
+```
+
+then local dev dependencies were not installed. Re-run:
+
+```bash
+cd viz
+npm install --include=dev
+```
+
+Then run again:
+
+```bash
+npm run run:desktop
+```
+
+`run:desktop` uses `npm exec electron ...` so it resolves the local Electron binary from `node_modules`.
+

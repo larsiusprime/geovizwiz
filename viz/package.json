@@ -18,6 +18,6 @@
     "build:browser": "vite build --mode browser",
     "build:desktop": "vite build --mode desktop",
     "build:hosted": "vite build --mode hosted",
-    "run:desktop": "npm run build:desktop && electron ./electron/main.cjs"
+    "run:desktop": "npm run build:desktop && npm exec electron ./electron/main.cjs"
   }
 }

@@ -13,6 +13,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview --host --port 4173"
+    "preview": "vite preview --host --port 4173",
+    "build:browser": "vite build --mode browser",
+    "build:desktop": "vite build --mode desktop",
+    "build:hosted": "vite build --mode hosted"
   }
 }

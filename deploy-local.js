@@ -20,6 +20,20 @@ const utilOut = path.join(siteOut, "util");
 
 const PORT = 3000;
 
+
+function parseVizMode(argv) {
+  const prefix = "--viz-mode=";
+  const modeArg = argv.find(arg => arg.startsWith(prefix));
+  const mode = modeArg ? modeArg.slice(prefix.length).trim().toLowerCase() : "browser";
+  const allowed = new Set(["browser", "desktop", "hosted"]);
+  if (!allowed.has(mode)) {
+    console.error(`Invalid --viz-mode value "${mode}". Use one of: browser, desktop, hosted.`);
+    process.exit(1);
+  }
+  return mode;
+}
+
+
 async function rmrf(p) {
   await fs.rm(p, { recursive: true, force: true });
 }
@@ -110,9 +124,11 @@ function startServer(rootDir) {
 
   // Build viz into local-deploy/site/viz
   // Ensure viz deps are installed once: cd viz && npm install
-  console.log("Building viz into:", vizOut);
-  run(npmCmd, ["run", "build", "--", "--outDir", vizOut, "--emptyOutDir"], vizSrc);
-  console.log("Viz build complete");
+  const vizMode = parseVizMode(process.argv.slice(2));
+  const vizBuildScript = `build:${vizMode}`;
+  console.log(`Building viz (${vizMode}) into:`, vizOut);
+  run(npmCmd, ["run", vizBuildScript, "--", "--outDir", vizOut, "--emptyOutDir"], vizSrc);
+  console.log(`Viz build complete (${vizMode})`);
 
   // Serve local-deploy/site
   console.log("Starting local server...");

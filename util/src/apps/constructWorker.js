@@ -8,6 +8,35 @@ const send = (type, payload) => self.postMessage({ type, payload });
 const debug = (message) => send('log', { message: `[Construct inspect] ${message}` });
 const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(value)));
 const sendProgress = (side, phase, percent, detail = '') => send('progress', { side, phase, percent: clampPercent(percent), detail });
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const withProgressPulse = async ({ side, phase, startPercent, endPercent, detail, estimatedMs = 30000, tickMs = 700 }, work) => {
+  let finished = false;
+  const startTs = Date.now();
+  sendProgress(side, phase, startPercent, detail);
+
+  const ticker = (async () => {
+    while (!finished) {
+      const elapsed = Date.now() - startTs;
+      const t = Math.min(0.97, elapsed / Math.max(estimatedMs, 1000));
+      const eased = 1 - ((1 - t) * (1 - t));
+      const pct = startPercent + ((endPercent - startPercent) * eased);
+      sendProgress(side, phase, pct, `${detail} (${Math.round(elapsed / 1000)}s)`);
+      await sleep(tickMs);
+    }
+  })();
+
+  try {
+    const result = await work();
+    finished = true;
+    await ticker;
+    sendProgress(side, phase, endPercent, `${detail} complete`);
+    return result;
+  } catch (err) {
+    finished = true;
+    await ticker;
+    throw err;
+  }
+};
 const slugify = (value) => String(value).normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
 let parquetModulePromise = null;
 let parquetInitialized = false;
@@ -342,17 +371,36 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
     sendProgress(side, 'geojson-parse', 45, 'Parsing GeoJSON');
     geojson = JSON.parse(textDecoder.decode(new Uint8Array(buffer)));
   } else {
-    sendProgress(side, 'gdal-open', 35, 'Opening dataset');
+    sendProgress(side, 'gdal-open', 15, 'Opening dataset');
     const gdal = await gdalPromise; let input = file;
     if (isZip) { const entries = readZipEntries(buffer); if (!entries) throw new Error('Not a supported format. This zip archive could not be read as a shapefile bundle.'); ensureShapefileParts(entries); input = toFilesFromZipEntries(entries); }
-    sendProgress(side, 'gdal-convert', 55, 'Converting to GeoJSON');
-    const { datasets, errors } = await gdal.open(input); if (!datasets?.length) throw new Error(errors?.[0] || 'Unable to open dataset'); const out = await gdal.ogr2ogr(datasets[0], ['-f','GeoJSON']); geojson = JSON.parse(textDecoder.decode(await gdal.getFileBytes(out)));
+    const { datasets, errors } = await gdal.open(input);
+    if (!datasets?.length) throw new Error(errors?.[0] || 'Unable to open dataset');
+    const conversionEstimateMs = Math.min(180000, Math.max(10000, Math.floor(((file.size || 0) / (1024 * 1024)) * 220)));
+    const geojsonText = await withProgressPulse(
+      {
+        side,
+        phase: 'gdal-convert',
+        startPercent: 25,
+        endPercent: 75,
+        detail: 'Converting to GeoJSON',
+        estimatedMs: conversionEstimateMs,
+        tickMs: 600
+      },
+      async () => {
+        const out = await gdal.ogr2ogr(datasets[0], ['-f','GeoJSON']);
+        const bytes = await gdal.getFileBytes(out);
+        return textDecoder.decode(bytes);
+      }
+    );
+    geojson = JSON.parse(geojsonText);
+    sendProgress(side, 'gdal-convert', 75, 'Converted to GeoJSON');
   }
   const features = geojson.features || [];
   const records = features.map((f,i)=>({ ...f.properties, __row:i, __geometry:f.geometry || null }));
   const fields = Array.from(new Set(records.flatMap((r)=>Object.keys(r).filter((k)=>!k.startsWith('__')))));
   debug(`Vector load summary for ${side}: features=${features.length}, records=${records.length}, fields=${fields.length}`);
-  sendProgress(side, 'profile', 75, 'Profiling columns');
+  sendProgress(side, 'profile', 82, 'Profiling columns');
   const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/${isGpkg ? 'gpkg' : isZip ? 'shpzip' : isGeoJson ? 'geojson' : 'dataset'}`) };
   enforceSideGeometryRules(side, info);
   sendProgress(side, 'done', 100, 'Load complete');

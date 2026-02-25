@@ -218,6 +218,7 @@ const decodeWkbGeometry = (wkb) => {
 };
 
 const loadGeoParquetRows = async (buffer, file, side) => {
+  const keepGeometry = side === 'left';
   debug(`GeoParquet: initializing parser for ${file.name || 'unknown'}`);
   sendProgress(side, 'parquet-init', 20, 'Initializing GeoParquet parser');
   const parquetModule = await ensureParquetModule();
@@ -232,6 +233,7 @@ const loadGeoParquetRows = async (buffer, file, side) => {
   if (!geoMetadata) throw new Error('This parquet file does not include GeoParquet metadata.');
   const geometryColumn = geoMetadata?.primary_column || 'geometry';
   const geometryEncoding = geoMetadata?.columns?.[geometryColumn]?.encoding;
+  const metadataGeometryTypes = geoMetadata?.columns?.[geometryColumn]?.geometry_types;
   debug(`GeoParquet metadata: primaryGeometry=${geometryColumn}, encoding=${geometryEncoding || 'unknown'}`);
   if (typeof geometryEncoding === 'string' && geometryEncoding.toUpperCase() !== 'WKB') {
     throw new Error(`GeoParquet geometry encoding "${geometryEncoding}" is not supported.`);
@@ -248,13 +250,17 @@ const loadGeoParquetRows = async (buffer, file, side) => {
   const fieldVectors = fields.map((name) => table.getChild(name));
   debug(`GeoParquet table ready: rows=${table.numRows}, nonGeometryFields=${fields.length}`);
   const records = [];
-  const geometryTypes = new Set();
+  const geometryTypes = new Set(Array.isArray(metadataGeometryTypes) ? metadataGeometryTypes : []);
   const progressEvery = Math.max(1, Math.floor(table.numRows / 40));
+  const rowExtractionStart = Date.now();
 
   for (let i = 0; i < table.numRows; i += 1) {
-    const geometry = decodeWkbGeometry(geometryVector.get(i));
-    if (geometry?.type) geometryTypes.add(geometry.type);
-    const row = { __row: i, __geometry: geometry || null };
+    let geometry = null;
+    if (keepGeometry) {
+      geometry = decodeWkbGeometry(geometryVector.get(i));
+      if (geometry?.type) geometryTypes.add(geometry.type);
+    }
+    const row = { __row: i, __geometry: keepGeometry ? (geometry || null) : null };
     fields.forEach((name, idx) => {
       const vector = fieldVectors[idx];
       row[name] = vector ? vector.get(i) : null;
@@ -265,11 +271,12 @@ const loadGeoParquetRows = async (buffer, file, side) => {
       sendProgress(side, 'parquet-rows', pct, `Decoded ${(i + 1).toLocaleString()} / ${table.numRows.toLocaleString()} rows`);
     }
   }
-  debug(`GeoParquet row extraction complete: rows=${records.length}, geometryTypes=${Array.from(geometryTypes).join(', ') || 'none'}`);
+  debug(`GeoParquet row extraction complete: rows=${records.length}, keptGeometry=${keepGeometry}, ms=${Date.now() - rowExtractionStart}, geometryTypes=${Array.from(geometryTypes).join(', ') || 'none'}`);
+  if (!keepGeometry) debug('RIGHT-side GeoParquet geometry decode skipped to reduce load time/memory; RIGHT join uses attributes only.');
 
   return {
     label: 'GeoParquet (.parquet/.geoparquet)',
-    hasGeometry: records.some((r) => Boolean(r.__geometry)),
+    hasGeometry: Boolean(geometryVector) && table.numRows > 0,
     rowCount: records.length,
     fields,
     records,
@@ -369,12 +376,16 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
   let geojson;
   if (isGeoJson) {
     sendProgress(side, 'geojson-parse', 45, 'Parsing GeoJSON');
+    const parseStart = Date.now();
     geojson = JSON.parse(textDecoder.decode(new Uint8Array(buffer)));
+    debug(`GeoJSON parse timing (${side}): ms=${Date.now() - parseStart}`);
   } else {
     sendProgress(side, 'gdal-open', 15, 'Opening dataset');
     const gdal = await gdalPromise; let input = file;
     if (isZip) { const entries = readZipEntries(buffer); if (!entries) throw new Error('Not a supported format. This zip archive could not be read as a shapefile bundle.'); ensureShapefileParts(entries); input = toFilesFromZipEntries(entries); }
+    const openStart = Date.now();
     const { datasets, errors } = await gdal.open(input);
+    debug(`GDAL open timing (${side}): ms=${Date.now() - openStart}, datasets=${datasets?.length || 0}`);
     if (!datasets?.length) throw new Error(errors?.[0] || 'Unable to open dataset');
     const conversionEstimateMs = Math.min(180000, Math.max(10000, Math.floor(((file.size || 0) / (1024 * 1024)) * 220)));
     const geojsonText = await withProgressPulse(
@@ -388,20 +399,40 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
         tickMs: 600
       },
       async () => {
+        const convertStart = Date.now();
         const out = await gdal.ogr2ogr(datasets[0], ['-f','GeoJSON']);
+        const convertMs = Date.now() - convertStart;
+        const readBytesStart = Date.now();
         const bytes = await gdal.getFileBytes(out);
-        return textDecoder.decode(bytes);
+        const readBytesMs = Date.now() - readBytesStart;
+        const decodeStart = Date.now();
+        const text = textDecoder.decode(bytes);
+        const decodeMs = Date.now() - decodeStart;
+        debug(`GDAL conversion timing (${side}): ogr2ogrMs=${convertMs}, getFileBytesMs=${readBytesMs}, decodeTextMs=${decodeMs}, geojsonBytes=${bytes?.length || 0}`);
+        return text;
       }
     );
+    const jsonParseStart = Date.now();
     geojson = JSON.parse(geojsonText);
+    debug(`GeoJSON parse timing (${side}): ms=${Date.now() - jsonParseStart}`);
     sendProgress(side, 'gdal-convert', 75, 'Converted to GeoJSON');
   }
   const features = geojson.features || [];
+  const hadGeometryBeforeStrip = features.some((f)=>Boolean(f.geometry));
+  const sourceGeometryTypes = Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean)));
+  if (side === 'right') {
+    for (let i = 0; i < features.length; i += 1) {
+      if (features[i]?.geometry !== undefined) features[i].geometry = null;
+    }
+    debug(`RIGHT-side geometry stripped before record mapping: rows=${features.length}`);
+  }
+  const recordBuildStart = Date.now();
   const records = features.map((f,i)=>({ ...f.properties, __row:i, __geometry:f.geometry || null }));
+  debug(`Record materialization timing (${side}): ms=${Date.now() - recordBuildStart}, rows=${records.length}`);
   const fields = Array.from(new Set(records.flatMap((r)=>Object.keys(r).filter((k)=>!k.startsWith('__')))));
   debug(`Vector load summary for ${side}: features=${features.length}, records=${records.length}, fields=${fields.length}`);
   sendProgress(side, 'profile', 82, 'Profiling columns');
-  const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/${isGpkg ? 'gpkg' : isZip ? 'shpzip' : isGeoJson ? 'geojson' : 'dataset'}`) };
+  const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:hadGeometryBeforeStrip, rowCount:records.length, fields, records, geometryTypes:sourceGeometryTypes, columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/${isGpkg ? 'gpkg' : isZip ? 'shpzip' : isGeoJson ? 'geojson' : 'dataset'}`) };
   enforceSideGeometryRules(side, info);
   sendProgress(side, 'done', 99, 'Load complete');
   return info;

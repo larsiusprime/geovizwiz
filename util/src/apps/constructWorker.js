@@ -6,6 +6,8 @@ const gdalPromise = self.initGdalJs({ path: GDAL_BASE, useWorker: false });
 const textDecoder = new TextDecoder('utf-8');
 const send = (type, payload) => self.postMessage({ type, payload });
 const debug = (message) => send('log', { message: `[Construct inspect] ${message}` });
+const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(value)));
+const sendProgress = (side, phase, percent, detail = '') => send('progress', { side, phase, percent: clampPercent(percent), detail });
 const slugify = (value) => String(value).normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
 let parquetModulePromise = null;
 let parquetInitialized = false;
@@ -186,13 +188,15 @@ const decodeWkbGeometry = (wkb) => {
   return parseWkbGeometry(view, 0).geometry;
 };
 
-const loadGeoParquetRows = async (buffer, file) => {
+const loadGeoParquetRows = async (buffer, file, side) => {
   debug(`GeoParquet: initializing parser for ${file.name || 'unknown'}`);
+  sendProgress(side, 'parquet-init', 20, 'Initializing GeoParquet parser');
   const parquetModule = await ensureParquetModule();
   const Arrow = self.Arrow;
   if (!Arrow) throw new Error('Arrow library failed to load.');
 
   const parquetFile = await parquetModule.ParquetFile.fromFile(file);
+  sendProgress(side, 'parquet-metadata', 30, 'Reading GeoParquet metadata');
   const metadata = parquetFile.metadata();
   const fileMetadata = metadata.fileMetadata();
   const geoMetadata = parseGeoMetadata(fileMetadata.keyValueMetadata());
@@ -207,6 +211,7 @@ const loadGeoParquetRows = async (buffer, file) => {
   const wasmTable = parquetModule.readParquet(new Uint8Array(buffer));
   const ipc = wasmTable.intoIPCStream();
   const table = Arrow.tableFromIPC(ipc);
+  sendProgress(side, 'parquet-table', 45, 'Reading table rows');
   const geometryVector = table.getChild(geometryColumn);
   if (!geometryVector) throw new Error(`GeoParquet geometry column "${geometryColumn}" was not found.`);
 
@@ -215,6 +220,7 @@ const loadGeoParquetRows = async (buffer, file) => {
   debug(`GeoParquet table ready: rows=${table.numRows}, nonGeometryFields=${fields.length}`);
   const records = [];
   const geometryTypes = new Set();
+  const progressEvery = Math.max(1, Math.floor(table.numRows / 40));
 
   for (let i = 0; i < table.numRows; i += 1) {
     const geometry = decodeWkbGeometry(geometryVector.get(i));
@@ -225,6 +231,10 @@ const loadGeoParquetRows = async (buffer, file) => {
       row[name] = vector ? vector.get(i) : null;
     });
     records.push(row);
+    if ((i + 1) % progressEvery === 0 || i + 1 === table.numRows) {
+      const pct = 45 + (((i + 1) / Math.max(table.numRows, 1)) * 45);
+      sendProgress(side, 'parquet-rows', pct, `Decoded ${(i + 1).toLocaleString()} / ${table.numRows.toLocaleString()} rows`);
+    }
   }
   debug(`GeoParquet row extraction complete: rows=${records.length}, geometryTypes=${Array.from(geometryTypes).join(', ') || 'none'}`);
 
@@ -301,35 +311,51 @@ const buildColumnProfilesSafe = (rows, fields, label) => {
 const loadAsFeatures = async (file, side, csvOptions = {}) => {
   const name = file.name?.toLowerCase() || '';
   debug(`loadAsFeatures(side=${side}) file=${file.name || 'unknown'} sizeBytes=${file.size || 0}`);
+  sendProgress(side, 'start', 2, 'Preparing file');
   if (name.endsWith('.csv')) {
+    sendProgress(side, 'csv-read', 20, 'Reading CSV text');
     const csv = parseCsvContent(await file.text(), csvOptions);
     const records = csv.rows;
     const fields = csv.header;
     debug(`CSV parsed for ${side}: rows=${records.length}, fields=${fields.length}, delimiter=${csv.delimiter}`);
-    return { label:'CSV (.csv)', hasGeometry:false, rowCount:records.length, fields, records, csv, columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/csv`) };
+    sendProgress(side, 'csv-profile', 70, 'Profiling columns');
+    const info = { label:'CSV (.csv)', hasGeometry:false, rowCount:records.length, fields, records, csv, columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/csv`) };
+    sendProgress(side, 'done', 100, 'Load complete');
+    return info;
   }
+  sendProgress(side, 'read-buffer', 10, 'Reading file bytes');
   const buffer = await file.arrayBuffer();
   debug(`Loaded ArrayBuffer for ${side}: bytes=${buffer.byteLength}`);
   const isZip = name.endsWith('.zip'); const isGeoJson = name.endsWith('.geojson') || name.endsWith('.json') || name.endsWith('.geo.json'); const isGpkg = name.endsWith('.gpkg'); const isParquet = name.endsWith('.parquet') || name.endsWith('.geoparquet');
   if (isParquet) {
     debug(`Detected GeoParquet extension for ${side}.`);
-    const info = await loadGeoParquetRows(buffer, file);
+    sendProgress(side, 'parquet', 15, 'Detected GeoParquet');
+    const info = await loadGeoParquetRows(buffer, file, side);
+    sendProgress(side, 'profile', 92, 'Finalizing GeoParquet profile');
     debug(`GeoParquet load summary for ${side}: rows=${info.rowCount}, fields=${info.fields.length}, geomTypes=${(info.geometryTypes || []).join(', ') || 'none'}`);
     enforceSideGeometryRules(side, info);
+    sendProgress(side, 'done', 100, 'Load complete');
     return info;
   }
   let geojson;
-  if (isGeoJson) geojson = JSON.parse(textDecoder.decode(new Uint8Array(buffer))); else {
+  if (isGeoJson) {
+    sendProgress(side, 'geojson-parse', 45, 'Parsing GeoJSON');
+    geojson = JSON.parse(textDecoder.decode(new Uint8Array(buffer)));
+  } else {
+    sendProgress(side, 'gdal-open', 35, 'Opening dataset');
     const gdal = await gdalPromise; let input = file;
     if (isZip) { const entries = readZipEntries(buffer); if (!entries) throw new Error('Not a supported format. This zip archive could not be read as a shapefile bundle.'); ensureShapefileParts(entries); input = toFilesFromZipEntries(entries); }
+    sendProgress(side, 'gdal-convert', 55, 'Converting to GeoJSON');
     const { datasets, errors } = await gdal.open(input); if (!datasets?.length) throw new Error(errors?.[0] || 'Unable to open dataset'); const out = await gdal.ogr2ogr(datasets[0], ['-f','GeoJSON']); geojson = JSON.parse(textDecoder.decode(await gdal.getFileBytes(out)));
   }
   const features = geojson.features || [];
   const records = features.map((f,i)=>({ ...f.properties, __row:i, __geometry:f.geometry || null }));
   const fields = Array.from(new Set(records.flatMap((r)=>Object.keys(r).filter((k)=>!k.startsWith('__')))));
   debug(`Vector load summary for ${side}: features=${features.length}, records=${records.length}, fields=${fields.length}`);
+  sendProgress(side, 'profile', 75, 'Profiling columns');
   const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/${isGpkg ? 'gpkg' : isZip ? 'shpzip' : isGeoJson ? 'geojson' : 'dataset'}`) };
   enforceSideGeometryRules(side, info);
+  sendProgress(side, 'done', 100, 'Load complete');
   return info;
 };
 

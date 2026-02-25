@@ -79,9 +79,24 @@ export default function startConstructApp() {
     const worker = new Worker(new URL('./constructWorker.js', import.meta.url));
     state.loading[side] = { worker };
     const csvOptions = side === 'left' ? state.leftCsvOptions : state.rightCsvOptions;
+    const setLoadProgress = (payload = {}) => {
+      const percent = Number.isFinite(payload.percent) ? Math.max(0, Math.min(100, Math.round(payload.percent))) : null;
+      const detail = payload.detail ? ` ${payload.detail}` : '';
+      if (percent === null) {
+        statusEl.innerHTML = `<span class="spinner">⟳</span> Loading...${detail}`;
+        return;
+      }
+      statusEl.innerHTML = `<span class="spinner">⟳</span> Loading ${percent}%${detail}<div style="margin-top:.35rem;width:220px;max-width:100%;height:6px;background:#e5e9f2;border-radius:999px;overflow:hidden"><div style="height:100%;width:${percent}%;background:var(--accent)"></div></div>`;
+    };
+
     worker.onmessage = (e) => {
       const { type, payload:p } = e.data || {};
       if (type === 'log') log(p.message);
+      if (type === 'progress') {
+        if (state.loading[side]?.worker !== worker) return;
+        if (p.side && p.side !== side) return;
+        setLoadProgress(p);
+      }
       if (type === 'error') {
         if (state.loading[side]?.worker !== worker) return;
         worker.terminate();

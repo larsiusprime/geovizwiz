@@ -3,7 +3,7 @@ import { makeArrowTable, tableToIPC } from '../parquet/arrowSchema.js';
 import { createGeoMetadata } from '../geo/geoparquetMeta.js';
 import * as parquetModule from '../../vendor/parquet-wasm/esm/parquet_wasm.js';
 
-await parquetModule.default(new URL('../../vendor/parquet-wasm/esm/parquet_wasm_bg.wasm', import.meta.url));
+let parquetReady = false;
 
 const MODEL_GROUPS = ['single_family', 'multi_family', 'commercial', 'industrial', 'mobile_home', 'agricultural'];
 
@@ -29,6 +29,30 @@ const textEncoder = new TextEncoder();
 const send = (type, payload) => self.postMessage({ type, payload });
 const log = (message) => send('log', { message });
 const progress = (message) => send('progress', { message });
+
+async function ensureParquetReady() {
+  if (parquetReady) return;
+  progress('Loading parquet encoder...');
+  await parquetModule.default(new URL('../../vendor/parquet-wasm/esm/parquet_wasm_bg.wasm', import.meta.url));
+  parquetReady = true;
+}
+
+function makeSeededRng(seedText) {
+  let h = 2166136261 >>> 0;
+  const src = String(seedText || 'synthetic-city');
+  for (let i = 0; i < src.length; i++) {
+    h ^= src.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  let state = h >>> 0;
+  return () => {
+    state ^= state << 13;
+    state ^= state >>> 17;
+    state ^= state << 5;
+    state >>>= 0;
+    return state / 4294967296;
+  };
+}
 
 const randPick = (rng, items) => items[Math.floor(rng() * items.length)];
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -202,7 +226,7 @@ function makeGeoFeature(row, includeGeometry = true) {
 }
 
 function generateSimulation(config) {
-  const rng = self.Math.seedrandom(config.seed);
+  const rng = makeSeededRng(config.seed);
   const parcelCount = config.parcelCount;
   const n = Math.ceil(Math.sqrt(parcelCount));
   const cellM = 70;
@@ -371,6 +395,7 @@ async function toGeoParquetBytes(rows) {
 }
 
 async function buildExportZip(payload) {
+  await ensureParquetReady();
   progress('Encoding universe.geoparquet...');
   const universeBytes = await toGeoParquetBytes(payload.universe);
   progress('Encoding sales.geoparquet...');

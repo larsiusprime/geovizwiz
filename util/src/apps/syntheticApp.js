@@ -98,13 +98,13 @@ export default function startSyntheticApp() {
     statusEl.textContent = 'Generating...';
     setBusy(true);
 
-    const worker = new Worker(new URL('./syntheticWorker.js', import.meta.url), { type: 'module' });
+    const worker = new Worker(new URL('./syntheticWorker.js', import.meta.url));
     state.worker = worker;
 
     worker.onmessage = (event) => {
       const { type, payload } = event.data || {};
       if (type === 'log') log(payload.message);
-      if (type === 'progress') statusEl.textContent = payload.message;
+      if (type === 'progress') { statusEl.textContent = payload.message; log(payload.message); }
       if (type === 'milestone') updateMap(payload.featureCollection);
       if (type === 'success') {
         state.result = payload;
@@ -127,6 +127,7 @@ export default function startSyntheticApp() {
     };
 
     worker.onerror = (err) => {
+      console.error('Synthetic worker error', err);
       statusEl.textContent = err.message || 'Worker failure.';
       setBusy(false);
       worker.terminate();
@@ -147,14 +148,16 @@ export default function startSyntheticApp() {
 
   exportBtn.onclick = () => {
     if (!state.result) return;
-    const worker = new Worker(new URL('./syntheticWorker.js', import.meta.url), { type: 'module' });
+    const worker = new Worker(new URL('./syntheticWorker.js', import.meta.url));
     statusEl.textContent = 'Building export ZIP...';
     exportBtn.disabled = true;
 
     worker.onmessage = async (event) => {
       const { type, payload } = event.data || {};
-      if (type === 'progress') statusEl.textContent = payload.message;
+      if (type === 'progress') { statusEl.textContent = payload.message; log(payload.message); }
       if (type === 'error') {
+        console.error('Synthetic export error', payload);
+        if (payload?.stack) log(payload.stack);
         statusEl.textContent = payload.message || 'Export failed.';
         exportBtn.disabled = false;
         worker.terminate();

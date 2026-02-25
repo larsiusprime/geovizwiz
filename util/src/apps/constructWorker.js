@@ -5,6 +5,7 @@ const GDAL_BASE = new URL('../../vendor/gdal/', self.location).toString();
 const gdalPromise = self.initGdalJs({ path: GDAL_BASE, useWorker: false });
 const textDecoder = new TextDecoder('utf-8');
 const send = (type, payload) => self.postMessage({ type, payload });
+const debug = (message) => send('log', { message: `[Construct inspect] ${message}` });
 const slugify = (value) => String(value).normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
 let parquetModulePromise = null;
 let parquetInitialized = false;
@@ -186,6 +187,7 @@ const decodeWkbGeometry = (wkb) => {
 };
 
 const loadGeoParquetRows = async (buffer, file) => {
+  debug(`GeoParquet: initializing parser for ${file.name || 'unknown'}`);
   const parquetModule = await ensureParquetModule();
   const Arrow = self.Arrow;
   if (!Arrow) throw new Error('Arrow library failed to load.');
@@ -197,6 +199,7 @@ const loadGeoParquetRows = async (buffer, file) => {
   if (!geoMetadata) throw new Error('This parquet file does not include GeoParquet metadata.');
   const geometryColumn = geoMetadata?.primary_column || 'geometry';
   const geometryEncoding = geoMetadata?.columns?.[geometryColumn]?.encoding;
+  debug(`GeoParquet metadata: primaryGeometry=${geometryColumn}, encoding=${geometryEncoding || 'unknown'}`);
   if (typeof geometryEncoding === 'string' && geometryEncoding.toUpperCase() !== 'WKB') {
     throw new Error(`GeoParquet geometry encoding "${geometryEncoding}" is not supported.`);
   }
@@ -209,6 +212,7 @@ const loadGeoParquetRows = async (buffer, file) => {
 
   const fields = table.schema.fields.map((field) => field.name).filter((name) => name !== geometryColumn);
   const fieldVectors = fields.map((name) => table.getChild(name));
+  debug(`GeoParquet table ready: rows=${table.numRows}, nonGeometryFields=${fields.length}`);
   const records = [];
   const geometryTypes = new Set();
 
@@ -222,6 +226,7 @@ const loadGeoParquetRows = async (buffer, file) => {
     });
     records.push(row);
   }
+  debug(`GeoParquet row extraction complete: rows=${records.length}, geometryTypes=${Array.from(geometryTypes).join(', ') || 'none'}`);
 
   return {
     label: 'GeoParquet (.parquet/.geoparquet)',
@@ -230,7 +235,7 @@ const loadGeoParquetRows = async (buffer, file) => {
     fields,
     records,
     geometryTypes: Array.from(geometryTypes),
-    columnProfiles: buildColumnProfiles(records, fields)
+    columnProfiles: buildColumnProfilesSafe(records, fields, 'geoparquet')
   };
 };
 
@@ -262,25 +267,54 @@ const buildColumnProfiles = (rows, fields) => fields.map((name) => {
   const inferredType = types.size === 0 ? 'string' : (types.has('string') ? 'string' : (types.has('datetime') ? 'datetime' : (types.has('date') ? 'date' : (types.has('float') ? 'float' : (types.has('integer') ? 'integer' : 'boolean')))));
   let min = null; let max = null;
   if (['integer','float','date','datetime'].includes(inferredType) && vals.length) {
-    const mapped = vals.map((v)=> inferredType === 'integer' || inferredType === 'float' ? Number(v) : Date.parse(v)).filter((v)=>Number.isFinite(v));
-    if (mapped.length) { min = Math.min(...mapped); max = Math.max(...mapped); }
+    let foundFinite = false;
+    for (let i = 0; i < vals.length; i += 1) {
+      const mapped = inferredType === 'integer' || inferredType === 'float' ? Number(vals[i]) : Date.parse(vals[i]);
+      if (!Number.isFinite(mapped)) continue;
+      if (!foundFinite) {
+        min = mapped;
+        max = mapped;
+        foundFinite = true;
+      } else {
+        if (mapped < min) min = mapped;
+        if (mapped > max) max = mapped;
+      }
+    }
   }
   const uniqueCount = new Set(vals.map((v)=>String(v))).size;
   return { name, inferredType, mixed, nonNullCount, totalCount, uniqueCount, min, max, sampleValues: vals.slice(0,5) };
 });
 
+const buildColumnProfilesSafe = (rows, fields, label) => {
+  const startedAt = Date.now();
+  debug(`Building column profiles for ${label}: rows=${rows.length}, fields=${fields.length}`);
+  try {
+    const profiles = buildColumnProfiles(rows, fields);
+    debug(`Finished column profiles for ${label} in ${Date.now() - startedAt}ms`);
+    return profiles;
+  } catch (err) {
+    debug(`Column profile failure for ${label}: ${err?.message || String(err)}`);
+    throw err;
+  }
+};
+
 const loadAsFeatures = async (file, side, csvOptions = {}) => {
   const name = file.name?.toLowerCase() || '';
+  debug(`loadAsFeatures(side=${side}) file=${file.name || 'unknown'} sizeBytes=${file.size || 0}`);
   if (name.endsWith('.csv')) {
     const csv = parseCsvContent(await file.text(), csvOptions);
     const records = csv.rows;
     const fields = csv.header;
-    return { label:'CSV (.csv)', hasGeometry:false, rowCount:records.length, fields, records, csv, columnProfiles: buildColumnProfiles(records, fields) };
+    debug(`CSV parsed for ${side}: rows=${records.length}, fields=${fields.length}, delimiter=${csv.delimiter}`);
+    return { label:'CSV (.csv)', hasGeometry:false, rowCount:records.length, fields, records, csv, columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/csv`) };
   }
   const buffer = await file.arrayBuffer();
+  debug(`Loaded ArrayBuffer for ${side}: bytes=${buffer.byteLength}`);
   const isZip = name.endsWith('.zip'); const isGeoJson = name.endsWith('.geojson') || name.endsWith('.json') || name.endsWith('.geo.json'); const isGpkg = name.endsWith('.gpkg'); const isParquet = name.endsWith('.parquet') || name.endsWith('.geoparquet');
   if (isParquet) {
+    debug(`Detected GeoParquet extension for ${side}.`);
     const info = await loadGeoParquetRows(buffer, file);
+    debug(`GeoParquet load summary for ${side}: rows=${info.rowCount}, fields=${info.fields.length}, geomTypes=${(info.geometryTypes || []).join(', ') || 'none'}`);
     enforceSideGeometryRules(side, info);
     return info;
   }
@@ -293,7 +327,8 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
   const features = geojson.features || [];
   const records = features.map((f,i)=>({ ...f.properties, __row:i, __geometry:f.geometry || null }));
   const fields = Array.from(new Set(records.flatMap((r)=>Object.keys(r).filter((k)=>!k.startsWith('__')))));
-  const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfiles(records, fields) };
+  debug(`Vector load summary for ${side}: features=${features.length}, records=${records.length}, fields=${fields.length}`);
+  const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/${isGpkg ? 'gpkg' : isZip ? 'shpzip' : isGeoJson ? 'geojson' : 'dataset'}`) };
   enforceSideGeometryRules(side, info);
   return info;
 };

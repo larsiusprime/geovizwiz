@@ -6,6 +6,8 @@ const gdalPromise = self.initGdalJs({ path: GDAL_BASE, useWorker: false });
 const textDecoder = new TextDecoder('utf-8');
 const send = (type, payload) => self.postMessage({ type, payload });
 const slugify = (value) => String(value).normalize('NFKD').replace(/[^\w\s-]/g, '').trim().replace(/[\s_-]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase();
+let parquetModulePromise = null;
+let parquetInitialized = false;
 
 const readZipEntries = (buffer) => { const sig = new Uint8Array(buffer.slice(0,4)); const isZip = sig[0]===0x50 && sig[1]===0x4b; if (!isZip || !self.fflate?.unzipSync) return null; try { return self.fflate.unzipSync(new Uint8Array(buffer)); } catch (_) { return null; } };
 const toFilesFromZipEntries = (entries) => Object.entries(entries || {}).map(([name, bytes]) => new File([bytes], name));
@@ -83,6 +85,162 @@ const parseCsvContent = (text, csv = {}) => {
   return { delimiter, hasHeader, header, rows, previewRows: rows.slice(0, 8) };
 };
 
+const ensureParquetModule = async () => {
+  if (!parquetModulePromise) {
+    parquetModulePromise = import('../../vendor/parquet-wasm/esm/parquet_wasm.js').then(async (mod) => {
+      if (!parquetInitialized) {
+        const wasmUrl = new URL('../../vendor/parquet-wasm/esm/parquet_wasm_bg.wasm', self.location.href);
+        const response = await fetch(wasmUrl);
+        const bytes = await response.arrayBuffer();
+        await mod.default(bytes);
+        parquetInitialized = true;
+      }
+      return mod;
+    });
+  }
+  return parquetModulePromise;
+};
+
+const parseGeoMetadata = (metadata) => {
+  if (!metadata || typeof metadata.get !== 'function') return null;
+  const geoValue = metadata.get('geo');
+  if (!geoValue || typeof geoValue !== 'string') return null;
+  try { return JSON.parse(geoValue); } catch (_) { return null; }
+};
+
+const parseWkbGeometry = (view, offset = 0) => {
+  const littleEndian = view.getUint8(offset) === 1;
+  offset += 1;
+  const rawType = view.getUint32(offset, littleEndian);
+  offset += 4;
+  const baseType = rawType % 1000;
+  const readPoint = () => {
+    const x = view.getFloat64(offset, littleEndian);
+    const y = view.getFloat64(offset + 8, littleEndian);
+    offset += 16;
+    return [x, y];
+  };
+
+  if (baseType === 1) return { geometry: { type: 'Point', coordinates: readPoint() }, offset };
+  if (baseType === 2) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const coords = [];
+    for (let i = 0; i < count; i += 1) coords.push(readPoint());
+    return { geometry: { type: 'LineString', coordinates: coords }, offset };
+  }
+  if (baseType === 3) {
+    const ringCount = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const rings = [];
+    for (let i = 0; i < ringCount; i += 1) {
+      const pointCount = view.getUint32(offset, littleEndian);
+      offset += 4;
+      const ring = [];
+      for (let j = 0; j < pointCount; j += 1) ring.push(readPoint());
+      rings.push(ring);
+    }
+    return { geometry: { type: 'Polygon', coordinates: rings }, offset };
+  }
+  if (baseType === 4) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const points = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = parseWkbGeometry(view, offset);
+      offset = result.offset;
+      if (result.geometry?.type === 'Point') points.push(result.geometry.coordinates);
+    }
+    return { geometry: { type: 'MultiPoint', coordinates: points }, offset };
+  }
+  if (baseType === 5) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const lines = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = parseWkbGeometry(view, offset);
+      offset = result.offset;
+      if (result.geometry?.type === 'LineString') lines.push(result.geometry.coordinates);
+    }
+    return { geometry: { type: 'MultiLineString', coordinates: lines }, offset };
+  }
+  if (baseType === 6) {
+    const count = view.getUint32(offset, littleEndian);
+    offset += 4;
+    const polygons = [];
+    for (let i = 0; i < count; i += 1) {
+      const result = parseWkbGeometry(view, offset);
+      offset = result.offset;
+      if (result.geometry?.type === 'Polygon') polygons.push(result.geometry.coordinates);
+    }
+    return { geometry: { type: 'MultiPolygon', coordinates: polygons }, offset };
+  }
+  throw new Error(`Unsupported WKB geometry type: ${baseType}`);
+};
+
+const decodeWkbGeometry = (wkb) => {
+  if (!wkb) return null;
+  const bytes = wkb instanceof Uint8Array ? wkb : new Uint8Array(wkb);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  return parseWkbGeometry(view, 0).geometry;
+};
+
+const loadGeoParquetRows = async (buffer, file) => {
+  const parquetModule = await ensureParquetModule();
+  const Arrow = self.Arrow;
+  if (!Arrow) throw new Error('Arrow library failed to load.');
+
+  const parquetFile = await parquetModule.ParquetFile.fromFile(file);
+  const metadata = parquetFile.metadata();
+  const fileMetadata = metadata.fileMetadata();
+  const geoMetadata = parseGeoMetadata(fileMetadata.keyValueMetadata());
+  if (!geoMetadata) throw new Error('This parquet file does not include GeoParquet metadata.');
+  const geometryColumn = geoMetadata?.primary_column || 'geometry';
+  const geometryEncoding = geoMetadata?.columns?.[geometryColumn]?.encoding;
+  if (typeof geometryEncoding === 'string' && geometryEncoding.toUpperCase() !== 'WKB') {
+    throw new Error(`GeoParquet geometry encoding "${geometryEncoding}" is not supported.`);
+  }
+
+  const wasmTable = parquetModule.readParquet(new Uint8Array(buffer));
+  const ipc = wasmTable.intoIPCStream();
+  const table = Arrow.tableFromIPC(ipc);
+  const geometryVector = table.getChild(geometryColumn);
+  if (!geometryVector) throw new Error(`GeoParquet geometry column "${geometryColumn}" was not found.`);
+
+  const fields = table.schema.fields.map((field) => field.name).filter((name) => name !== geometryColumn);
+  const fieldVectors = fields.map((name) => table.getChild(name));
+  const records = [];
+  const geometryTypes = new Set();
+
+  for (let i = 0; i < table.numRows; i += 1) {
+    const geometry = decodeWkbGeometry(geometryVector.get(i));
+    if (geometry?.type) geometryTypes.add(geometry.type);
+    const row = { __row: i, __geometry: geometry || null };
+    fields.forEach((name, idx) => {
+      const vector = fieldVectors[idx];
+      row[name] = vector ? vector.get(i) : null;
+    });
+    records.push(row);
+  }
+
+  return {
+    label: 'GeoParquet (.parquet/.geoparquet)',
+    hasGeometry: records.some((r) => Boolean(r.__geometry)),
+    rowCount: records.length,
+    fields,
+    records,
+    geometryTypes: Array.from(geometryTypes),
+    columnProfiles: buildColumnProfiles(records, fields)
+  };
+};
+
+const enforceSideGeometryRules = (side, info) => {
+  if (side !== 'left') return;
+  if (!info.hasGeometry) throw new Error('LEFT side must contain valid geometry.');
+  const invalid = (info.geometryTypes || []).filter((type) => !['Polygon', 'MultiPolygon'].includes(type));
+  if (invalid.length) throw new Error(`LEFT side geometry must be Polygon or MultiPolygon. Found: ${invalid.join(', ')}.`);
+};
+
 const inferScalarType = (value) => {
   if (value === null || value === undefined || value === '') return 'null';
   if (typeof value === 'boolean') return 'boolean';
@@ -121,7 +279,11 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
   }
   const buffer = await file.arrayBuffer();
   const isZip = name.endsWith('.zip'); const isGeoJson = name.endsWith('.geojson') || name.endsWith('.json') || name.endsWith('.geo.json'); const isGpkg = name.endsWith('.gpkg'); const isParquet = name.endsWith('.parquet') || name.endsWith('.geoparquet');
-  if (isParquet) throw new Error('GeoParquet input for Construct is not yet available in this build.');
+  if (isParquet) {
+    const info = await loadGeoParquetRows(buffer, file);
+    enforceSideGeometryRules(side, info);
+    return info;
+  }
   let geojson;
   if (isGeoJson) geojson = JSON.parse(textDecoder.decode(new Uint8Array(buffer))); else {
     const gdal = await gdalPromise; let input = file;
@@ -131,7 +293,9 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
   const features = geojson.features || [];
   const records = features.map((f,i)=>({ ...f.properties, __row:i, __geometry:f.geometry || null }));
   const fields = Array.from(new Set(records.flatMap((r)=>Object.keys(r).filter((k)=>!k.startsWith('__')))));
-  return { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfiles(records, fields) };
+  const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfiles(records, fields) };
+  enforceSideGeometryRules(side, info);
+  return info;
 };
 
 const parseBoolean = (v) => {

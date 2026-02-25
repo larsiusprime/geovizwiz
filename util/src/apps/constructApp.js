@@ -97,7 +97,10 @@ export default function startConstructApp() {
         const info = p;
         if (side === 'left') { state.leftFile = file; state.leftInfo = info; state.leftCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
         else { state.rightFile = file; state.rightInfo = info; state.rightCsvOptions = info.csv ? { delimiter: info.csv.delimiter, hasHeader: info.csv.hasHeader } : null; }
-        statusEl.textContent = `Loaded: ${info.label} (${info.rowCount} rows, ${info.hasGeometry ? 'with' : 'no'} geometry)`;
+        const geomSummary = info.hasGeometry
+          ? (info.geometryTypes?.length ? `with geometry (${info.geometryTypes.join(', ')})` : 'with geometry')
+          : 'no geometry';
+        statusEl.textContent = `Loaded: ${info.label} (${info.rowCount} rows, ${geomSummary})`;
         renderCsvPreview(side, info); checkStep1();
       }
     };

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Synthetic City Builder</title>
+  <link rel="stylesheet" href="/shared.css" />
+  <link rel="stylesheet" href="/util/vendor/maplibre/maplibre-gl.css" />
+  <style>
+    main { padding: 28px 20px 48px; }
+    .layout { display:grid; grid-template-columns: 360px 1fr; gap:1rem; }
+    .panel, .map-panel { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:1rem; }
+    .map-panel { min-height: 640px; display:flex; flex-direction:column; }
+    .map { height: 520px; border:1px solid var(--border); border-radius: 10px; }
+    .row { display:flex; gap:.55rem; align-items:center; margin:.45rem 0; }
+    .row label { min-width: 145px; font-size:.92rem; }
+    input, select { width:100%; padding:.45rem; border:1px solid var(--border); border-radius:8px; }
+    .actions { margin-top:.8rem; display:flex; flex-wrap:wrap; gap:.5rem; }
+    button { padding:.58rem .86rem; border-radius:8px; border:none; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
+    button[disabled] { opacity:.6; cursor:not-allowed; }
+    .button-secondary { background:#fff; color:var(--accent); border:1px solid var(--border); }
+    .muted { color:var(--muted); font-size:.9rem; }
+    .log { margin-top:.8rem; max-height:150px; overflow:auto; background:#0d1a2b; color:#dce6ff; border-radius:8px; padding:.65rem; font-family: ui-monospace, monospace; font-size:.82rem; white-space:pre-wrap; }
+    .metrics { display:grid; grid-template-columns: repeat(3, minmax(130px,1fr)); gap:.5rem; margin-top:.65rem; }
+    .metric { border:1px solid var(--border); border-radius:8px; padding:.45rem; background:#fff; }
+    .metric strong { display:block; font-size:1rem; }
+    @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .map-panel { min-height:unset; } }
+  </style>
+</head>
+<body>
+<header>
+  <div class="container header-row">
+    <a class="brand" href="/" aria-label="Put It On A Map home">
+      <img src="/images/logo.svg" alt="putitonamap logo" />
+      <div>PutItOnAMap.com</div>
+    </a>
+  </div>
+</header>
+<main class="container">
+  <h1>Synthetic City Builder (MVP)</h1>
+  <p class="muted">Generate a deterministic parcel universe + repeat sales, inspect on map, and export ZIP with universe/sales/sales_platonic/inflation/metadata.</p>
+  <div class="layout">
+    <section class="panel">
+      <h2>Scenario</h2>
+      <div class="row"><label>City name</label><input id="cityName" value="Chicago" /></div>
+      <div class="row"><label>Center latitude</label><input id="centerLat" type="number" step="0.0001" value="41.8781" /></div>
+      <div class="row"><label>Center longitude</label><input id="centerLon" type="number" step="0.0001" value="-87.6298" /></div>
+      <div class="row"><label>Seed</label><input id="seed" value="synthetic-city-001" /></div>
+      <div class="row"><label>Parcels</label><input id="parcelCount" type="number" min="100" max="10000" step="100" value="5000" /></div>
+      <div class="row"><label>Repaint interval</label><input id="repaintYears" type="number" min="1" max="10" value="5" /></div>
+      <div class="row"><label>Invalid sales %</label><input id="invalidPct" type="number" min="0" max="100" step="1" value="8" /></div>
+
+      <h3>Annual sale probability by model_group</h3>
+      <div class="row"><label>Single family</label><input id="p_single_family" type="number" min="0" max="1" step="0.01" value="0.06" /></div>
+      <div class="row"><label>Multi family</label><input id="p_multi_family" type="number" min="0" max="1" step="0.01" value="0.08" /></div>
+      <div class="row"><label>Commercial</label><input id="p_commercial" type="number" min="0" max="1" step="0.01" value="0.05" /></div>
+      <div class="row"><label>Industrial</label><input id="p_industrial" type="number" min="0" max="1" step="0.01" value="0.04" /></div>
+      <div class="row"><label>Mobile home</label><input id="p_mobile_home" type="number" min="0" max="1" step="0.01" value="0.07" /></div>
+      <div class="row"><label>Agricultural</label><input id="p_agricultural" type="number" min="0" max="1" step="0.01" value="0.03" /></div>
+
+      <div class="actions">
+        <button id="generateBtn" type="button">Generate city</button>
+        <button id="cancelBtn" class="button-secondary" type="button" disabled>Cancel</button>
+        <button id="exportBtn" type="button" disabled>Export ZIP</button>
+      </div>
+      <div id="status" class="muted" style="margin-top:.55rem;">Ready.</div>
+      <div id="log" class="log"></div>
+    </section>
+
+    <section class="map-panel">
+      <h2>Map preview</h2>
+      <div id="map" class="map"></div>
+      <div class="metrics">
+        <div class="metric"><span class="muted">Parcels</span><strong id="mParcels">0</strong></div>
+        <div class="metric"><span class="muted">Sales</span><strong id="mSales">0</strong></div>
+        <div class="metric"><span class="muted">CRS</span><strong id="mCrs">—</strong></div>
+      </div>
+    </section>
+  </div>
+</main>
+<script src="/util/vendor/maplibre/maplibre-gl.js"></script>
+<script src="/util/vendor/seedrandom/seedrandom.min.js"></script>
+<script type="module">
+  import startSyntheticApp from '/util/src/apps/syntheticApp.js';
+  startSyntheticApp();
+</script>
+</body>
+</html>

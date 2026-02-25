@@ -62,6 +62,7 @@ export default function startConstructApp() {
   const cancelLoad = (side) => {
     const active = state.loading[side];
     if (active?.worker) {
+      if (active.progressTicker) clearInterval(active.progressTicker);
       active.worker.terminate();
       state.loading[side] = null;
       byId(`${side}Status`).textContent = 'Load canceled.';
@@ -79,9 +80,33 @@ export default function startConstructApp() {
     const worker = new Worker(new URL('./constructWorker.js', import.meta.url));
     state.loading[side] = { worker };
     const csvOptions = side === 'left' ? state.leftCsvOptions : state.rightCsvOptions;
+    const clearProgressTicker = () => {
+      const active = state.loading[side];
+      if (active?.progressTicker) {
+        clearInterval(active.progressTicker);
+        active.progressTicker = null;
+      }
+    };
+
+    const startProgressTicker = (phase, detail = '') => {
+      clearProgressTicker();
+      if (phase !== 'gdal-convert') return;
+      const active = state.loading[side];
+      if (!active || active.worker !== worker) return;
+      const baseDetail = detail.replace(/\s*\(\d+s\)\s*$/, '').trim() || 'Converting to GeoJSON';
+      const startedAt = Date.now();
+      active.progressTicker = setInterval(() => {
+        if (state.loading[side]?.worker !== worker) return;
+        const secs = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+        const current = statusEl.innerHTML;
+        statusEl.innerHTML = current.replace(/\s*\(\d+s\)(?=<)/, ` (${secs}s)`).replace(/Converting to GeoJSON(?:\s*\(\d+s\))?/, `${baseDetail} (${secs}s)`);
+      }, 1000);
+    };
+
     const setLoadProgress = (payload = {}) => {
       const percent = Number.isFinite(payload.percent) ? Math.max(0, Math.min(100, Math.round(payload.percent))) : null;
       const detail = payload.detail ? ` ${payload.detail}` : '';
+      startProgressTicker(payload.phase, payload.detail || '');
       if (percent === null) {
         statusEl.innerHTML = `<span class="spinner">⟳</span> Loading...${detail}`;
         return;
@@ -101,12 +126,14 @@ export default function startConstructApp() {
         if (state.loading[side]?.worker !== worker) return;
         worker.terminate();
         state.loading[side] = null;
+        clearProgressTicker();
         cancelBtn.classList.add('hidden');
         statusEl.textContent = p.message;
       }
       if (type === 'success') {
         if (state.loading[side]?.worker !== worker) return;
         worker.terminate();
+        clearProgressTicker();
         state.loading[side] = null;
         cancelBtn.classList.add('hidden');
         const info = p;
@@ -122,6 +149,7 @@ export default function startConstructApp() {
     worker.onerror = (e) => {
       if (state.loading[side]?.worker !== worker) return;
       worker.terminate();
+      clearProgressTicker();
       state.loading[side] = null;
       cancelBtn.classList.add('hidden');
       statusEl.textContent = e.message || 'Worker failure';

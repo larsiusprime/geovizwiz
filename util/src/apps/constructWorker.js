@@ -6,7 +6,7 @@ const gdalPromise = self.initGdalJs({ path: GDAL_BASE, useWorker: false });
 const textDecoder = new TextDecoder('utf-8');
 const send = (type, payload) => self.postMessage({ type, payload });
 const debug = (message) => send('log', { message: `[Construct inspect] ${message}` });
-const clampPercent = (value) => Math.max(0, Math.min(100, Math.round(value)));
+const clampPercent = (value) => Math.max(0, Math.min(99, Math.round(value)));
 const sendProgress = (side, phase, percent, detail = '') => send('progress', { side, phase, percent: clampPercent(percent), detail });
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const withProgressPulse = async ({ side, phase, startPercent, endPercent, detail, estimatedMs = 30000, tickMs = 700 }, work) => {
@@ -29,7 +29,7 @@ const withProgressPulse = async ({ side, phase, startPercent, endPercent, detail
     const result = await work();
     finished = true;
     await ticker;
-    sendProgress(side, phase, endPercent, `${detail} complete`);
+    sendProgress(side, phase, Math.min(endPercent, 99), `${detail} complete`);
     return result;
   } catch (err) {
     finished = true;
@@ -349,7 +349,7 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
     debug(`CSV parsed for ${side}: rows=${records.length}, fields=${fields.length}, delimiter=${csv.delimiter}`);
     sendProgress(side, 'csv-profile', 70, 'Profiling columns');
     const info = { label:'CSV (.csv)', hasGeometry:false, rowCount:records.length, fields, records, csv, columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/csv`) };
-    sendProgress(side, 'done', 100, 'Load complete');
+    sendProgress(side, 'done', 99, 'Load complete');
     return info;
   }
   sendProgress(side, 'read-buffer', 10, 'Reading file bytes');
@@ -363,7 +363,7 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
     sendProgress(side, 'profile', 92, 'Finalizing GeoParquet profile');
     debug(`GeoParquet load summary for ${side}: rows=${info.rowCount}, fields=${info.fields.length}, geomTypes=${(info.geometryTypes || []).join(', ') || 'none'}`);
     enforceSideGeometryRules(side, info);
-    sendProgress(side, 'done', 100, 'Load complete');
+    sendProgress(side, 'done', 99, 'Load complete');
     return info;
   }
   let geojson;
@@ -403,7 +403,7 @@ const loadAsFeatures = async (file, side, csvOptions = {}) => {
   sendProgress(side, 'profile', 82, 'Profiling columns');
   const info = { label:isZip?'ESRI Shapefile (.shp.zip)':isGeoJson?'GeoJSON (.geojson)':isGpkg?'GeoPackage (.gpkg)':'Dataset', hasGeometry:features.some((f)=>Boolean(f.geometry)), rowCount:records.length, fields, records, geometryTypes:Array.from(new Set(features.map((f)=>f.geometry?.type).filter(Boolean))), columnProfiles: buildColumnProfilesSafe(records, fields, `${side}/${isGpkg ? 'gpkg' : isZip ? 'shpzip' : isGeoJson ? 'geojson' : 'dataset'}`) };
   enforceSideGeometryRules(side, info);
-  sendProgress(side, 'done', 100, 'Load complete');
+  sendProgress(side, 'done', 99, 'Load complete');
   return info;
 };
 

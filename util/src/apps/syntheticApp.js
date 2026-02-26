@@ -9,6 +9,7 @@ export default function startSyntheticApp() {
   const mParcels = byId('mParcels');
   const mSales = byId('mSales');
   const mCrs = byId('mCrs');
+  const mRoads = byId('mRoads');
   const generateBtn = byId('generateBtn');
   const cancelBtn = byId('cancelBtn');
   const exportBtn = byId('exportBtn');
@@ -45,6 +46,8 @@ export default function startSyntheticApp() {
       }
     });
     map.addLayer({ id: 'parcels-line', type: 'line', source: 'parcels', paint: { 'line-color': '#334155', 'line-width': 0.4 } });
+    map.addSource('roads', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    map.addLayer({ id: 'roads-line', type: 'line', source: 'roads', paint: { 'line-color': '#111827', 'line-width': ['interpolate', ['linear'], ['get','width_m'], 2.5, 0.5, 6, 1.5, 15, 2.8, 50, 5.5], 'line-opacity': 0.85 } });
   });
 
   const log = (msg) => {
@@ -112,6 +115,9 @@ export default function startSyntheticApp() {
         mParcels.textContent = String(payload.universeCount || 0);
         mSales.textContent = String(payload.salesCount || 0);
         mCrs.textContent = payload.crs || 'EPSG:4326';
+        mRoads.textContent = String(payload.roadsCount || 0);
+        const roadSrc = map.getSource('roads');
+        if (roadSrc) roadSrc.setData({ type: 'FeatureCollection', features: (payload.roads || []).slice(0, 5000).map((r) => ({ type:'Feature', geometry:r.geometry, properties:r })) });
         updateMap(payload.preview || { type: 'FeatureCollection', features: [] });
         exportBtn.disabled = false;
         setBusy(false);

@@ -21,7 +21,7 @@
     .button-secondary { background:#fff; color:var(--accent); border:1px solid var(--border); }
     .muted { color:var(--muted); font-size:.9rem; }
     .log { margin-top:.8rem; max-height:150px; overflow:auto; background:#0d1a2b; color:#dce6ff; border-radius:8px; padding:.65rem; font-family: ui-monospace, monospace; font-size:.82rem; white-space:pre-wrap; }
-    .metrics { display:grid; grid-template-columns: repeat(3, minmax(130px,1fr)); gap:.5rem; margin-top:.65rem; }
+    .metrics { display:grid; grid-template-columns: repeat(4, minmax(120px,1fr)); gap:.5rem; margin-top:.65rem; }
     .metric { border:1px solid var(--border); border-radius:8px; padding:.45rem; background:#fff; }
     .metric strong { display:block; font-size:1rem; }
     @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } .map-panel { min-height:unset; } }
@@ -73,6 +73,7 @@
       <div class="metrics">
         <div class="metric"><span class="muted">Parcels</span><strong id="mParcels">0</strong></div>
         <div class="metric"><span class="muted">Sales</span><strong id="mSales">0</strong></div>
+        <div class="metric"><span class="muted">Roads</span><strong id="mRoads">0</strong></div>
         <div class="metric"><span class="muted">CRS</span><strong id="mCrs">—</strong></div>
       </div>
     </section>

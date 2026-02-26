@@ -298,3 +298,24 @@ Never draw disconnected random attributes. Derive features in coherent dependenc
 
 ## MVP readiness
 Planning scope is now sufficiently unambiguous to begin implementation of the `util/synthetic` app skeleton and simulation pipeline.
+
+
+## Network-first generation update (approved)
+- Internal city mechanics now use a 100m x 100m buildable block envelope with 10m road buffers between blocks.
+- Road widths:
+  - local: 2.5m
+  - arterial: 6m
+  - beltway: 15m
+  - highway: 50m
+- Initial paved city is 20x20 blocks centered on origin.
+- CBD is a fixed 6x6 core centered in the city.
+- Arterials occur every 4 grid lines.
+- Neighborhoods are dynamically filled as contiguous 2-8 block regions and may split blocks when needed.
+- Strict zoning-to-model-group allowed sets are enforced, with weighted probabilities inside each allowed set.
+- Growth uses probabilistic frontier paving under a yearly budget that grows over time.
+- Development threshold is absolute but grows slower than inflation.
+- Roads are exported as `roads.geoparquet` with fields including class, width, and paving year.
+- Naming:
+  - grid-aligned non-major roads: numbered avenues/streets
+  - highways/beltways: generic major-road names
+  - interior/service roads: deterministic fruit/vegetable names

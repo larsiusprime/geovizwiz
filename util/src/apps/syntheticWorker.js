@@ -259,11 +259,20 @@ function buildRoadsAndBlocks(config, rng) {
   addRoad(roads, { orientation: 'v', fixed: beltMin.xMin - ROAD_BUFFER_M / 2, start: beltMin.yMin - ROAD_BUFFER_M / 2, end: beltMax.yMax + ROAD_BUFFER_M / 2, road_class: 'beltway', width_m: BELTWAY_WIDTH_M, year_paved: 1940, name: 'West Beltway' });
   addRoad(roads, { orientation: 'v', fixed: beltMax.xMax + ROAD_BUFFER_M / 2, start: beltMin.yMin - ROAD_BUFFER_M / 2, end: beltMax.yMax + ROAD_BUFFER_M / 2, road_class: 'beltway', width_m: BELTWAY_WIDTH_M, year_paved: 1940, name: 'East Beltway' });
 
-  const highwayOffset = beltMax.xMax + ROAD_BUFFER_M / 2;
-  const highwayOffsetY = beltMax.yMax + ROAD_BUFFER_M / 2;
+  // Highways connect at beltway side midpoints and do not pass through the city core.
+  const beltTopY = beltMax.yMax + ROAD_BUFFER_M / 2;
+  const beltBottomY = beltMin.yMin - ROAD_BUFFER_M / 2;
+  const beltLeftX = beltMin.xMin - ROAD_BUFFER_M / 2;
+  const beltRightX = beltMax.xMax + ROAD_BUFFER_M / 2;
   const ext = 80 * GRID_PITCH_M;
-  addRoad(roads, { orientation: 'v', fixed: highwayOffset, start: -ext, end: ext, road_class: 'highway', width_m: HIGHWAY_WIDTH_M, year_paved: 1940, name: 'N/S Highway' });
-  addRoad(roads, { orientation: 'h', fixed: highwayOffsetY, start: -ext, end: ext, road_class: 'highway', width_m: HIGHWAY_WIDTH_M, year_paved: 1940, name: 'E/W Highway' });
+
+  // N/S highway: two segments touching top and bottom beltway midpoints.
+  addRoad(roads, { orientation: 'v', fixed: 0, start: beltTopY, end: ext, road_class: 'highway', width_m: HIGHWAY_WIDTH_M, year_paved: 1940, name: 'N/S Highway' });
+  addRoad(roads, { orientation: 'v', fixed: 0, start: -ext, end: beltBottomY, road_class: 'highway', width_m: HIGHWAY_WIDTH_M, year_paved: 1940, name: 'N/S Highway' });
+
+  // E/W highway: two segments touching west and east beltway midpoints.
+  addRoad(roads, { orientation: 'h', fixed: 0, start: -ext, end: beltLeftX, road_class: 'highway', width_m: HIGHWAY_WIDTH_M, year_paved: 1940, name: 'E/W Highway' });
+  addRoad(roads, { orientation: 'h', fixed: 0, start: beltRightX, end: ext, road_class: 'highway', width_m: HIGHWAY_WIDTH_M, year_paved: 1940, name: 'E/W Highway' });
 
   for (let year = 1941; year <= endYear; year++) {
     const budget = Math.max(0, Math.round(FRONTIER_BUDGET_INITIAL * Math.pow(1 + FRONTIER_BUDGET_GROWTH, year - 1940)));

@@ -31,7 +31,14 @@ jobs:
 
       - name: Install app deps (viz/)
         working-directory: viz
-        run: npm ci
+        run: |
+          npm ci --include=dev --include=optional
+          # npm optional-deps can be skipped intermittently in CI; explicitly ensure Rollup native binary.
+          npm install --no-save --include=optional @rollup/rollup-linux-x64-gnu
+
+      - name: Verify Rollup native optional dependency (Linux)
+        working-directory: viz
+        run: node -e "require('@rollup/rollup-linux-x64-gnu')"
 
       - name: Build app (viz/)
         working-directory: viz

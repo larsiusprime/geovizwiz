@@ -14,10 +14,17 @@ Mode is selected via `VITE_VIZ_BUILD_MODE` through Vite mode env files:
 
 ## Prerequisite
 
-Install VIZ dependencies once:
+Install VIZ browser/hosted build dependencies once:
 
 ```bash
 cd viz
+npm install --include=dev
+```
+
+Install Desktop shell dependencies only when you need desktop mode:
+
+```bash
+cd viz/desktop
 npm install --include=dev
 ```
 
@@ -83,6 +90,7 @@ The local server starts at `http://localhost:3000`.
 
 - `desktop` includes an initial Electron shell run target (`npm run run:desktop`) for Milestone 1 testing; installer packaging is not included yet.
 - Browser behavior remains the baseline.
+- GitHub Pages deployment uses `viz/dist` output only, so `viz/desktop` and `viz/hosted` source folders are not published.
 
 
 ### Troubleshooting (Windows)
@@ -93,20 +101,20 @@ If you see:
 'electron' is not recognized as an internal or external command
 ```
 
-then local dev dependencies were not installed. Re-run:
+then desktop-shell dependencies were not installed. Re-run:
 
 ```bash
-cd viz
+cd viz/desktop
 npm install --include=dev
 ```
 
-Then run again:
+Then run again from `viz/`:
 
 ```bash
 npm run run:desktop
 ```
 
-`run:desktop` uses `npm exec electron ...` so it resolves the local Electron binary from `node_modules`.
+`run:desktop` executes Electron from `viz/desktop/node_modules`, keeping Electron dependencies isolated from browser/hosted builds.
 
 
 If you see these errors in Electron:

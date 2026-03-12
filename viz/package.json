@@ -8,8 +8,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.2",
-    "vite": "^7.1.3",
-    "electron": "^33.2.1"
+    "vite": "^7.1.3"
   },
   "scripts": {
     "dev": "vite",
@@ -18,6 +17,6 @@
     "build:browser": "vite build --mode browser",
     "build:desktop": "vite build --mode desktop",
     "build:hosted": "vite build --mode hosted",
-    "run:desktop": "npm run build:desktop && npm exec electron ./electron/main.cjs"
+    "run:desktop": "npm run build:desktop && npm run --prefix desktop run"
   }
 }

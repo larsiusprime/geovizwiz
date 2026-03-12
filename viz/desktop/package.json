@@ -1,0 +1,11 @@
+{
+  "name": "viz-desktop-shell",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "run": "npm exec electron ./electron/main.cjs"
+  },
+  "devDependencies": {
+    "electron": "^33.2.1"
+  }
+}

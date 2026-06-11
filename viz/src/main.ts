@@ -284,6 +284,7 @@ import {
 } from './layers';
 import { initMetadataModule } from './metadata.js';
 import { getRuntimeMode, isBrowserMode, isDesktopMode, isHostedMode } from './runtime-mode';
+import { initDesktop } from './desktop-bootstrap.js';
 (window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Runtime Mode ----------------- */
@@ -321,6 +322,24 @@ S.map = new maplibregl.Map({
 S.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 S.map.on('load', () => {
   initScatterplotMapLayers();
+  // Desktop mode: show the project picker and stream geometry from the project
+  // DB. Gated so the browser build is entirely unaffected.
+  if (isDesktopMode()) {
+    void initDesktop({
+      revealUI,
+      onSourceLoaded: (fields: string[]) => {
+        populateFieldDropdownFromList(fields);
+        S.currentField = null;
+        S.currentFieldType = null;
+        fieldSelect.value = '';
+        refreshStatisticsPanel();
+        refreshScatterPanel();
+        refreshLandSchedulePanel();
+        refreshTimeAdjustmentPanel();
+        renderSettingsDataSourcesSection();
+      }
+    });
+  }
 });
 
 

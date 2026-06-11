@@ -1,11 +1,30 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 const desktopApi = {
+  // --- Legacy folder/file helpers (Milestone 1) ---
   selectProjectFolder: () => ipcRenderer.invoke('desktop:selectProjectFolder'),
   createProjectFolder: (parentDir, projectFolderName) => ipcRenderer.invoke('desktop:createProjectFolder', parentDir, projectFolderName),
   readTextFile: (relativePath) => ipcRenderer.invoke('desktop:readTextFile', relativePath),
   writeTextFile: (relativePath, content) => ipcRenderer.invoke('desktop:writeTextFile', relativePath, content),
-  getAppConfig: () => ipcRenderer.invoke('desktop:getAppConfig')
+  getAppConfig: () => ipcRenderer.invoke('desktop:getAppConfig'),
+
+  // --- Project lifecycle (Milestone 2) ---
+  pickParentDir: () => ipcRenderer.invoke('desktop:pickParentDir'),
+  project: {
+    create: (parentDir, name) => ipcRenderer.invoke('desktop:project:create', parentDir, name),
+    open: (projectRoot) => ipcRenderer.invoke('desktop:project:open', projectRoot),
+    delete: (projectRoot) => ipcRenderer.invoke('desktop:project:delete', projectRoot),
+    current: () => ipcRenderer.invoke('desktop:project:current'),
+    saveAppState: (appBlock) => ipcRenderer.invoke('desktop:project:saveAppState', appBlock)
+  },
+
+  // --- Import + database (Milestones 4, 5) ---
+  pickSourceFile: () => ipcRenderer.invoke('desktop:pickSourceFile'),
+  db: {
+    importSource: (opts) => ipcRenderer.invoke('desktop:db:importSource', opts),
+    query: (sql, params) => ipcRenderer.invoke('desktop:db:query', sql, params),
+    exec: (sql, params) => ipcRenderer.invoke('desktop:db:exec', sql, params)
+  }
 };
 
 contextBridge.exposeInMainWorld('vizDesktop', desktopApi);

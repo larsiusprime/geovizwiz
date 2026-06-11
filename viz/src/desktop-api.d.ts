@@ -1,8 +1,35 @@
 export {};
 
+/** A logical data source recorded in viz-project.json. */
+export interface ProjectSourceRecord {
+  id: string;
+  name: string;
+  table: string;
+  rawFile: string;
+  parcelIdField: string | null;
+  hasGeometry: boolean;
+  srid: string | null;
+  featureCount: number;
+  columns: Array<{ name: string; type: string }>;
+  importedAt: string;
+}
+
+/** viz-project.json contents. */
+export interface ProjectMeta {
+  projectId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  schemaVersion: number;
+  dbBinding: string;
+  sources: ProjectSourceRecord[];
+  app: unknown | null;
+}
+
 declare global {
   interface Window {
     vizDesktop?: {
+      // Legacy folder/file helpers
       selectProjectFolder: () => Promise<{ canceled: boolean; projectRoot?: string }>;
       createProjectFolder: (parentDir: string, projectFolderName: string) => Promise<{ projectRoot: string }>;
       readTextFile: (relativePath: string) => Promise<{ content: string }>;
@@ -13,6 +40,28 @@ declare global {
         userDataDir: string;
         projectRoot: string | null;
       }>;
+
+      // Project lifecycle
+      pickParentDir: () => Promise<{ canceled: boolean; parentDir?: string }>;
+      project: {
+        create: (parentDir: string, name: string) => Promise<{ projectRoot: string; meta: ProjectMeta }>;
+        open: (projectRoot?: string) => Promise<{ canceled?: boolean; projectRoot?: string; meta?: ProjectMeta }>;
+        delete: (projectRoot?: string) => Promise<{ ok: boolean }>;
+        current: () => Promise<{ projectRoot: string | null; meta: ProjectMeta | null }>;
+        saveAppState: (appBlock: unknown) => Promise<{ ok: boolean }>;
+      };
+
+      // Import + database
+      pickSourceFile: () => Promise<{ canceled: boolean; sourcePath?: string }>;
+      db: {
+        importSource: (opts: {
+          sourcePath: string;
+          sourceName?: string;
+          parcelIdField?: string | null;
+        }) => Promise<ProjectSourceRecord>;
+        query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
+        exec: (sql: string, params?: unknown[]) => Promise<{ ok: boolean }>;
+      };
     };
   }
 }

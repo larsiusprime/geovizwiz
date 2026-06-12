@@ -6,8 +6,7 @@ import type {
   TimeAdjustmentGranularity,
   TimeAdjustmentMethod,
 } from './types';
-import JSZip from 'jszip';
-import * as XLSX from 'xlsx';
+import { downloadCsvZip, downloadXlsx } from './utils.export';
 
 const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
@@ -1132,17 +1131,10 @@ async function exportCsvZip(entry: TimeAdjustmentEntry) {
   const mainCsv = `${data.header},start_indexed,end_indexed,correction_factor\n${data.mainRows.map((r) => `${r.period},${r.startIndexed.toFixed(6)},${r.endIndexed.toFixed(6)},${r.correctionFactor.toFixed(6)}`).join('\n')}`;
   const dailyCsv = `Day,start_indexed,end_indexed,correction_factor\n${data.dailyRows.map((r) => `${r.period},${r.startIndexed.toFixed(6)},${r.endIndexed.toFixed(6)},${r.correctionFactor.toFixed(6)}`).join('\n')}`;
 
-  // Create zip
-  const zip = new JSZip();
-  zip.file(`${baseFilename}.csv`, mainCsv);
-  zip.file(`${baseFilename}_daily.csv`, dailyCsv);
-
-  const blob = await zip.generateAsync({ type: 'blob' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `${baseFilename}.zip`;
-  a.click();
-  URL.revokeObjectURL(a.href);
+  await downloadCsvZip(`${baseFilename}.zip`, [
+    { name: `${baseFilename}.csv`, content: mainCsv },
+    { name: `${baseFilename}_daily.csv`, content: dailyCsv },
+  ]);
 }
 
 function exportExcel(entry: TimeAdjustmentEntry) {
@@ -1154,21 +1146,13 @@ function exportExcel(entry: TimeAdjustmentEntry) {
 
   const baseFilename = buildExportFilename(entry);
 
-  // Create workbook
-  const wb = XLSX.utils.book_new();
-
-  // Period sheet
   const mainData = [[data.header, 'start_indexed', 'end_indexed', 'correction_factor'], ...data.mainRows.map((r) => [r.period, r.startIndexed, r.endIndexed, r.correctionFactor])];
-  const mainSheet = XLSX.utils.aoa_to_sheet(mainData);
-  XLSX.utils.book_append_sheet(wb, mainSheet, 'Period');
-
-  // Daily sheet
   const dailyData = [['Day', 'start_indexed', 'end_indexed', 'correction_factor'], ...data.dailyRows.map((r) => [r.period, r.startIndexed, r.endIndexed, r.correctionFactor])];
-  const dailySheet = XLSX.utils.aoa_to_sheet(dailyData);
-  XLSX.utils.book_append_sheet(wb, dailySheet, 'Daily');
 
-  // Download
-  XLSX.writeFile(wb, `${baseFilename}.xlsx`);
+  downloadXlsx(`${baseFilename}.xlsx`, [
+    { name: 'Period', aoa: mainData },
+    { name: 'Daily', aoa: dailyData },
+  ]);
 }
 
 function render() {

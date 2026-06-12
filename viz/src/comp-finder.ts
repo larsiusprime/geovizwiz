@@ -1,5 +1,4 @@
 import maplibregl from 'maplibre-gl';
-import * as XLSX from 'xlsx';
 import PIN_SVG from './svg/pin.svg?raw';
 
 import { S } from './state';
@@ -7,6 +6,7 @@ import type { DataStore, LayerState } from './types';
 import { bbox } from './utils.geo';
 import { fmt, numOrNull } from './utils.number';
 import { el, makeButton } from './utils.dom';
+import { downloadText, rowsToCsv, downloadXlsx } from './utils.export';
 import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map-viewport';
 
 type Criterion = {
@@ -1115,33 +1115,16 @@ function buildExportRows() {
   return rows;
 }
 
-function downloadBlob(blob: Blob, filename: string) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
 function exportCsv() {
   const rows = buildExportRows();
   if (!rows.length) return;
-  const headers = Object.keys(rows[0]);
-  const csv = [
-    headers.join(','),
-    ...rows.map((row) => headers.map((header) => JSON.stringify(row[header] ?? '')).join(',')),
-  ].join('\n');
-  downloadBlob(new Blob([csv], { type: 'text/csv' }), 'comp_finder_comps.csv');
+  downloadText(rowsToCsv(rows), 'comp_finder_comps.csv');
 }
 
 function exportExcel() {
   const rows = buildExportRows();
   if (!rows.length) return;
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.json_to_sheet(rows);
-  XLSX.utils.book_append_sheet(wb, ws, 'comps');
-  XLSX.writeFile(wb, 'comp_finder_comps.xlsx');
+  downloadXlsx('comp_finder_comps.xlsx', [{ name: 'comps', json: rows }]);
 }
 
 function refreshDataSources() {

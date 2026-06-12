@@ -600,7 +600,6 @@ const btnCancelAddLayer = document.getElementById('btnCancelAddLayer') as HTMLBu
 
 // Settings menu Data Sources section elements
 const settingsDataSourcesToggle = document.getElementById('settingsDataSourcesToggle') as HTMLDivElement;
-const settingsDataSourcesChevron = document.getElementById('settingsDataSourcesChevron') as HTMLSpanElement;
 const settingsDataSourcesList = document.getElementById('settingsDataSourcesList') as HTMLDivElement;
 const confirmDeleteDataSourceOverlay = document.getElementById('confirmDeleteDataSourceOverlay') as HTMLDivElement;
 const confirmDeleteDataSourceText = document.getElementById('confirmDeleteDataSourceText') as HTMLDivElement;
@@ -1556,7 +1555,8 @@ function setSettingsDataSourcesCollapsed(collapsed: boolean) {
   S.isSettingsDataSourcesCollapsed = collapsed;
   settingsDataSourcesList.style.display = collapsed ? 'none' : 'grid';
   settingsDataSourcesToggle.classList.toggle('is-collapsed', collapsed);
-  settingsDataSourcesChevron.textContent = '▼';
+  // Arrow rotation is handled by CSS (.settings-data-sources-header.is-collapsed .toggle);
+  // do not swap textContent (per AGENTS.md collapsible-section convention).
   refreshWindowMinHeight(settingsControlsEl);
 }
 

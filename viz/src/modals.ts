@@ -1362,3 +1362,81 @@ export function closeAddLayerModal() {
   if (!addLayerOverlay) return;
   addLayerOverlay.classList.remove('show');
 }
+
+/* ------------------------------------------------------------------ */
+/*  Generic confirmation dialog                                        */
+/* ------------------------------------------------------------------ */
+
+export type ConfirmOptions = {
+  title?: string;
+  message: string;
+  confirmText?: string;
+  cancelText?: string;
+  /** Add a `danger` class to the confirm button for destructive actions. */
+  danger?: boolean;
+};
+
+/**
+ * Promise-based replacement for window.confirm().
+ *
+ * Renders the app's standard .overlay/.modal chrome and resolves to
+ * true (confirmed) or false (cancelled / dismissed via Cancel, Esc, or
+ * backdrop click). Self-contained: builds and tears down its own DOM,
+ * so it needs no wiring through initModalElements.
+ */
+export function showConfirm(opts: ConfirmOptions): Promise<boolean> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'overlay show';
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.maxWidth = '420px';
+
+    if (opts.title) {
+      const h3 = document.createElement('h3');
+      h3.textContent = opts.title;
+      modal.appendChild(h3);
+    }
+
+    const msg = document.createElement('div');
+    msg.className = 'muted';
+    msg.style.whiteSpace = 'pre-wrap';
+    msg.textContent = opts.message;
+    modal.appendChild(msg);
+
+    const footer = document.createElement('div');
+    footer.className = 'footer';
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.textContent = opts.cancelText ?? 'Cancel';
+    const confirmBtn = document.createElement('button');
+    confirmBtn.type = 'button';
+    confirmBtn.textContent = opts.confirmText ?? 'OK';
+    if (opts.danger) confirmBtn.classList.add('danger');
+    footer.append(cancelBtn, confirmBtn);
+    modal.appendChild(footer);
+
+    overlay.appendChild(modal);
+    document.body.appendChild(overlay);
+
+    const cleanup = (result: boolean) => {
+      document.removeEventListener('keydown', onKey, true);
+      overlay.remove();
+      resolve(result);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); cleanup(false); }
+      else if (e.key === 'Enter') { e.preventDefault(); cleanup(true); }
+    };
+
+    cancelBtn.addEventListener('click', () => cleanup(false));
+    confirmBtn.addEventListener('click', () => cleanup(true));
+    overlay.addEventListener('mousedown', (e) => {
+      if (e.target === overlay) cleanup(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+
+    confirmBtn.focus();
+  });
+}

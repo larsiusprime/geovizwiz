@@ -6,6 +6,7 @@ import maplibregl from 'maplibre-gl';
 import { S } from './state';
 import { getSelectionFilterActiveCount, matchesSelectionFilters } from './filters';
 import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
+import { showConfirm } from './modals';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initSelection)               */
@@ -539,7 +540,7 @@ function setSelectionSaveLoadStatus(msg: string, isError = false) {
   _selectionSaveLoadStatus.style.display = msg ? 'block' : 'none';
 }
 
-function saveCurrentSelection(name: string): boolean | void {
+async function saveCurrentSelection(name: string): Promise<boolean | void> {
   const trimmedName = name.trim();
   if (!trimmedName) return false;
 
@@ -550,7 +551,12 @@ function saveCurrentSelection(name: string): boolean | void {
   }
 
   if (S.savedSelectionsStore.has(trimmedName)) {
-    if (!window.confirm(`Selection "${trimmedName}" already exists. Overwrite?`)) return false;
+    const overwrite = await showConfirm({
+      title: 'Overwrite selection?',
+      message: `Selection "${trimmedName}" already exists. Overwrite it?`,
+      confirmText: 'Overwrite',
+    });
+    if (!overwrite) return false;
   }
 
   // Build keys for selected parcels and check for partial-duplicate warnings
@@ -593,8 +599,12 @@ function saveCurrentSelection(name: string): boolean | void {
     if (partialWarnings.length > maxShow) {
       msg += `\n...and ${partialWarnings.length - maxShow} more.`;
     }
-    msg += '\n\nSave anyway?';
-    if (!window.confirm(msg)) return false;
+    const proceed = await showConfirm({
+      title: 'Save selection anyway?',
+      message: msg,
+      confirmText: 'Save anyway',
+    });
+    if (!proceed) return false;
   }
 
   // Deduplicate: store unique keys only (since loading selects all matches)
@@ -1196,24 +1206,6 @@ function updateParcelsInArea(
 }
 
 /* ------------------------------------------------------------------ */
-/*  Bounding-box selection (thin wrappers)                            */
-/* ------------------------------------------------------------------ */
-
-export function selectParcelsInBoundingBox(bbox: [number, number, number, number]) {
-  updateParcelsInArea(
-    (feature) => featureIntersectsBbox(feature, bbox),
-    true
-  );
-}
-
-export function unselectParcelsInBoundingBox(bbox: [number, number, number, number]) {
-  updateParcelsInArea(
-    (feature) => featureIntersectsBbox(feature, bbox),
-    false
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /*  Polygon selection (thin wrappers with broad-phase filtering)      */
 /* ------------------------------------------------------------------ */
 
@@ -1329,44 +1321,40 @@ export function handleRectangleMouseUp(e: MouseEvent) {
     const canvas = S.map.getCanvas();
     const rect = canvas.getBoundingClientRect();
 
-    const mapStartPoint = new maplibregl.Point(
-      S.rectangleStartPoint.x - rect.left,
-      S.rectangleStartPoint.y - rect.top
-    );
-    const mapCurrentPoint = new maplibregl.Point(
-      currentViewportPoint.x - rect.left,
-      currentViewportPoint.y - rect.top
-    );
-
-    const topLeft = S.map.unproject([mapStartPoint.x, mapStartPoint.y]);
-    const bottomRight = S.map.unproject([mapCurrentPoint.x, mapCurrentPoint.y]);
-
-    const bbox: [number, number, number, number] = [
-      Math.min(topLeft.lng, bottomRight.lng),
-      Math.min(topLeft.lat, bottomRight.lat),
-      Math.max(topLeft.lng, bottomRight.lng),
-      Math.max(topLeft.lat, bottomRight.lat)
+    // Build the rectangle's four screen corners, then unproject each to ground
+    // coordinates and select via the polygon path. Using all four corners (not
+    // just the two diagonal ones) keeps the result correct when the map has a
+    // non-zero bearing or pitch: the screen rectangle maps to a skewed
+    // quadrilateral on the ground, so a 2-corner axis-aligned bbox would only
+    // catch a diagonal sliver. Routing through selectParcelsInPolygon reuses
+    // the same ground-accurate hit-testing that lasso/polygon selection use.
+    const startX = S.rectangleStartPoint.x;
+    const startY = S.rectangleStartPoint.y;
+    const endX = currentViewportPoint.x;
+    const endY = currentViewportPoint.y;
+    const screenCorners: Array<[number, number]> = [
+      [startX, startY],
+      [endX, startY],
+      [endX, endY],
+      [startX, endY],
+      [startX, startY], // close the ring
     ];
+    const polygon = screenCorners.map(([cx, cy]) => {
+      const ll = S.map.unproject([cx - rect.left, cy - rect.top]);
+      return [ll.lng, ll.lat];
+    });
 
-    const viewportLeft = Math.min(S.rectangleStartPoint.x, currentViewportPoint.x);
-    const viewportTop = Math.min(S.rectangleStartPoint.y, currentViewportPoint.y);
     const mode = S.isRectangleUnselecting ? 'Unselect' : 'Select';
-    console.log(`Rectangle ${mode} Coordinates:`);
-    console.log('Viewport space:', { left: viewportLeft, top: viewportTop, width: viewportWidth, height: viewportHeight });
-    console.log('Map coordinates (bbox):', bbox);
-    console.log('Top-left:', { lng: topLeft.lng, lat: topLeft.lat });
-    console.log('Bottom-right:', { lng: bottomRight.lng, lat: bottomRight.lat });
+    console.log(`Rectangle ${mode} polygon:`, polygon);
 
     if (S.isRectangleUnselecting) {
-      unselectParcelsInBoundingBox(bbox);
+      unselectParcelsInPolygon(polygon);
     } else {
       const isSelectOnlyMode = !e.shiftKey && !e.altKey;
       if (isSelectOnlyMode) {
         clearAllSelections();
-        selectParcelsInBoundingBox(bbox);
-      } else {
-        selectParcelsInBoundingBox(bbox);
       }
+      selectParcelsInPolygon(polygon);
     }
   }
 

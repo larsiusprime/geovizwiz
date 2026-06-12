@@ -12,6 +12,7 @@ import {
   REFERENCE_FILTER_OPERATORS
 } from './state';
 import { numOrNull } from './utils.number';
+import { showConfirm } from './modals';
 import { updateFiltersPanelLayout } from './windows';
 import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
 import type {
@@ -48,9 +49,7 @@ export function initFilterElements(els: {
   filtersSaveLoadWidget = createSaveLoadWidget({
     label: 'filter',
     idPrefix: 'filters',
-    onSave: (name) => {
-      saveCurrentFilters(name);
-    },
+    onSave: (name) => saveCurrentFilters(name),
     onLoad: (name) => {
       applySavedFilter(name);
     },
@@ -331,11 +330,15 @@ export function updateSavedFiltersUIState() {
   filtersSaveLoadWidget?.update();
 }
 
-export function saveCurrentFilters(name: string): boolean | void {
+export async function saveCurrentFilters(name: string): Promise<boolean | void> {
   const trimmedName = name.trim();
   if (!trimmedName) return false;
   if (S.savedFiltersStore.has(trimmedName)) {
-    const overwrite = window.confirm('You already have a filter with this name. Overwrite? Yes/Cancel');
+    const overwrite = await showConfirm({
+      title: 'Overwrite filter?',
+      message: `You already have a filter named "${trimmedName}". Overwrite it?`,
+      confirmText: 'Overwrite',
+    });
     if (!overwrite) return false;
   }
   S.savedFiltersStore.set(trimmedName, {

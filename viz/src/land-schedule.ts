@@ -16,6 +16,7 @@ import type {
   LandScheduleUnit,
   LandScheduleValueMode
 } from './types';
+import { showConfirm } from './modals';
 
 const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: string }> = [
   { value: 'sqft', label: 'area (sqft)', header: 'sqft' },
@@ -480,8 +481,13 @@ function renderActiveTable(entry: LandScheduleEntry) {
   deleteBtn.className = 'land-table-delete';
   deleteBtn.textContent = '❌';
   deleteBtn.title = 'Delete table';
-  deleteBtn.addEventListener('click', () => {
-    const confirmed = window.confirm('Delete this table?');
+  deleteBtn.addEventListener('click', async () => {
+    const confirmed = await showConfirm({
+      title: 'Delete table?',
+      message: `Delete table "${activeTable.name || 'Untitled table'}"? This cannot be undone.`,
+      confirmText: 'Delete',
+      danger: true,
+    });
     if (!confirmed) return;
     entry.tables = entry.tables.filter(table => table.id !== activeTable.id);
     if (entry.activeTableId === activeTable.id) {

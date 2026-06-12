@@ -16,7 +16,7 @@ export type SaveLoadWidgetConfig = {
   /** CSS id prefix so multiple widgets on the page get unique ids */
   idPrefix: string;
   /** Called when the user confirms a save.  Return false to cancel. */
-  onSave: (name: string) => boolean | void;
+  onSave: (name: string) => boolean | void | Promise<boolean | void>;
   /** Called when the user picks an entry from the load dropdown. */
   onLoad: (name: string) => void;
   /** Return the list of saved entry names (dropdown options). */
@@ -174,10 +174,10 @@ export function createSaveLoadWidget(config: SaveLoadWidgetConfig): SaveLoadWidg
 
   nameInput.addEventListener('input', () => update());
 
-  confirmBtn.addEventListener('click', () => {
+  confirmBtn.addEventListener('click', async () => {
     const name = nameInput.value.trim();
     if (!name) return;
-    const result = config.onSave(name);
+    const result = await config.onSave(name);
     if (result === false) return;
     nameInput.value = '';
     update();

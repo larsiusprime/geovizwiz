@@ -6,6 +6,7 @@ import { S } from './state';
 import type { DataStore, LayerState } from './types';
 import { bbox } from './utils.geo';
 import { fmt, numOrNull } from './utils.number';
+import { el, makeButton } from './utils.dom';
 import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map-viewport';
 
 type Criterion = {
@@ -594,42 +595,34 @@ function renderPager() {
   currentPage = Math.min(Math.max(currentPage, 1), total);
   els.pager.innerHTML = '';
 
-  const prev = document.createElement('button');
-  prev.className = 'comp-finder-page-btn';
-  prev.textContent = '◀';
-  prev.disabled = currentPage <= 1;
-  prev.addEventListener('click', () => {
-    currentPage = Math.max(1, currentPage - 1);
-    renderCompsTable();
+  const prev = el('button', {
+    className: 'comp-finder-page-btn',
+    text: '◀',
+    on: { click: () => { currentPage = Math.max(1, currentPage - 1); renderCompsTable(); } },
   });
+  prev.disabled = currentPage <= 1;
   els.pager.appendChild(prev);
 
   getPageTokens(total, currentPage).forEach((token) => {
     if (token === '...') {
-      const span = document.createElement('span');
-      span.textContent = '…';
-      els.pager.appendChild(span);
+      els.pager.appendChild(el('span', { text: '…' }));
       return;
     }
-    const btn = document.createElement('button');
-    btn.className = 'comp-finder-page-btn';
-    if (token === currentPage) btn.classList.add('is-active');
-    btn.textContent = String(token);
-    btn.addEventListener('click', () => {
-      currentPage = token;
-      renderCompsTable();
+    const btn = el('button', {
+      className: 'comp-finder-page-btn',
+      text: String(token),
+      on: { click: () => { currentPage = token; renderCompsTable(); } },
     });
+    if (token === currentPage) btn.classList.add('is-active');
     els.pager.appendChild(btn);
   });
 
-  const next = document.createElement('button');
-  next.className = 'comp-finder-page-btn';
-  next.textContent = '▶';
-  next.disabled = currentPage >= total;
-  next.addEventListener('click', () => {
-    currentPage = Math.min(total, currentPage + 1);
-    renderCompsTable();
+  const next = el('button', {
+    className: 'comp-finder-page-btn',
+    text: '▶',
+    on: { click: () => { currentPage = Math.min(total, currentPage + 1); renderCompsTable(); } },
   });
+  next.disabled = currentPage >= total;
   els.pager.appendChild(next);
 }
 
@@ -640,20 +633,22 @@ function getDeltaClass(delta: { sign?: 'positive' | 'negative' | 'neutral' | 'er
 }
 
 function renderSortableRowLabel(label: string, fieldKey: string): HTMLElement {
-  const button = document.createElement('span');
-  button.className = 'comp-finder-sort-label';
   const arrow = sortField === fieldKey ? (sortDirection === 'asc' ? '▾' : '▴') : '';
-  button.textContent = arrow ? `${label} ${arrow}` : label;
-  button.addEventListener('click', () => {
-    if (sortField === fieldKey) {
-      sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortField = fieldKey;
-      sortDirection = 'asc';
-    }
-    renderCompsTable();
+  return el('span', {
+    className: 'comp-finder-sort-label',
+    text: arrow ? `${label} ${arrow}` : label,
+    on: {
+      click: () => {
+        if (sortField === fieldKey) {
+          sortDirection = sortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+          sortField = fieldKey;
+          sortDirection = 'asc';
+        }
+        renderCompsTable();
+      },
+    },
   });
-  return button;
 }
 
 function bounceCompMarker(comp: CompRow) {
@@ -739,27 +734,26 @@ function centerOnComp(comp: CompRow) {
 }
 
 function buildCompColumnButton(label: string, comp: CompRow, options?: { isHeader?: boolean; titlePrefix?: string }) {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'comp-finder-comp-column-button';
-  if (options?.isHeader) button.classList.add('is-header');
-  button.textContent = label;
   const titlePrefix = options?.titlePrefix ?? 'Center map on';
-  button.title = `${titlePrefix} ${comp.parcelId || 'comp parcel'}`;
-  button.setAttribute('aria-label', `${titlePrefix} ${comp.parcelId || 'comp parcel'}`);
-  button.addEventListener('click', () => centerOnComp(comp));
+  const label2 = `${titlePrefix} ${comp.parcelId || 'comp parcel'}`;
+  const button = makeButton(label, {
+    className: 'comp-finder-comp-column-button',
+    title: label2,
+    attrs: { 'aria-label': label2 },
+    on: { click: () => centerOnComp(comp) },
+  });
+  if (options?.isHeader) button.classList.add('is-header');
   return button;
 }
 
 function buildSubjectColumnButton(label = 'Subject') {
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'comp-finder-comp-column-button is-header';
-  button.textContent = label;
-  button.title = `Center map on ${subject?.parcelId || 'subject parcel'}`;
-  button.setAttribute('aria-label', `Center map on ${subject?.parcelId || 'subject parcel'}`);
-  button.addEventListener('click', () => centerOnSubject());
-  return button;
+  const title = `Center map on ${subject?.parcelId || 'subject parcel'}`;
+  return makeButton(label, {
+    className: 'comp-finder-comp-column-button is-header',
+    title,
+    attrs: { 'aria-label': title },
+    on: { click: () => centerOnSubject() },
+  });
 }
 
 function renderCompsTable() {

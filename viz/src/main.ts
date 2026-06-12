@@ -8,6 +8,236 @@ import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 import PIN_SVG_RAW from './svg/pin.svg?raw';
 import { createCollapseToggle, escapeHtml, isTextInputElement } from './utils.dom';
 import { EYE_ICON_OPEN, EYE_ICON_CLOSED, PIN_ICON, PIN_ICON_TILTED } from './icons';
+import {
+  fileInput,
+  fieldSelect,
+  rampSelect,
+  enable3DCheckbox,
+  extrusionOptions,
+  multInput,
+  unitsSelect,
+  hexOptions,
+  hexResRow,
+  enableHexCheckbox,
+  hexResInput,
+  hexResReadout,
+  enable3DRow,
+  threeDSection,
+  threeDSectionContent,
+  threeDSectionToggle,
+  layerList,
+  addLayerFromStoreButton,
+  settingsOtherActions,
+  opacityInput,
+  opacityOut,
+  colorRampOptions,
+  colorScalingOptions,
+  opacityOptions,
+  paintDividerNumeric,
+  paintDividerCategorical,
+  paintDividerRamp,
+  paintDividerScaling,
+  btnZoomTo,
+  appEl,
+  pinnedPanelsEl,
+  controlsEl,
+  settingsContent,
+  settingsControlsEl,
+  settingsMenuContent,
+  paintSectionToggle,
+  paintSectionContent,
+  statisticsControlsEl,
+  statisticsContent,
+  statsSubjectSection,
+  statsLayerName,
+  scatterplotControlsEl,
+  scatterplotContent,
+  scatterLayerName,
+  scatterSubjectSection,
+  scatterXFieldSelect,
+  scatterYFieldSelect,
+  scatterXMinInput,
+  scatterXMaxInput,
+  scatterYMinInput,
+  scatterYMaxInput,
+  scatterResetExtentsButton,
+  scatterColorByFieldSelect,
+  scatterSelectionControls,
+  scatterZoomToSelectionButton,
+  scatterClearSelectionButton,
+  scatterPlot,
+  scatterPlotEmpty,
+  filtersControlsEl,
+  filtersContent,
+  filtersListEl,
+  filtersInvertToggle,
+  addFilterButton,
+  filtersSavedContainer,
+  btnPinLayers,
+  btnPinSettings,
+  btnPinFilters,
+  btnPinStatistics,
+  btnPinScatterplot,
+  btnPinLandSchedule,
+  btnPinTimeAdjustment,
+  btnPinLegend,
+  statsFieldSelect,
+  statsNormModeSelect,
+  statsDetails,
+  statsNumericBlock,
+  statsCategoricalBlock,
+  statisticsSection,
+  statsParcelCount,
+  statsMedian,
+  statsMean,
+  statsStdDev,
+  statsCod,
+  statsPercentiles,
+  statsHistogram,
+  statsCategoricalParcelCount,
+  statsCategoricalUniqueCount,
+  statsCategoricalModalValue,
+  statsCategoricalValues,
+  statsOverflowMinPct,
+  statsOverflowMaxPct,
+  statsLayerToggle,
+  statsLayerBody,
+  statsFieldToggle,
+  statsSummaryToggle,
+  statsSummaryBody,
+  statsPercentilesToggle,
+  statsPercentilesBody,
+  statsHistogramToggle,
+  statsHistogramBody,
+  landScheduleControlsEl,
+  timeAdjustmentControlsEl,
+  timeAdjustmentContent,
+  landScheduleContent,
+  landScheduleTableSelect,
+  landScheduleTableSelectRow,
+  landScheduleAddTableButton,
+  landScheduleTableContainer,
+  landScheduleTablesSection,
+  landScheduleTablesToggle,
+  landScheduleTablesContent,
+  landScheduleCurveSection,
+  landScheduleCurveToggle,
+  landScheduleCurveContent,
+  landScheduleCurveChart,
+  landScheduleAdjustmentsSection,
+  landScheduleAdjustmentsToggle,
+  landScheduleAdjustmentsContent,
+  landScheduleAdjustmentsContainer,
+  landScheduleAddAdjustmentButton,
+  timeAdjustmentTrendToggle,
+  timeAdjustmentTrendBody,
+  timeAdjustmentFiltersToggle,
+  timeAdjustmentFiltersBody,
+  compFinderCriteriaToggle,
+  compFinderCriteriaBody,
+  compFinderCompsToggle,
+  compFinderCompsBody,
+  btnMinimizeLayers,
+  btnMinimizeSettingsMenu,
+  btnMinimizeStatistics,
+  btnMinimizeScatterplot,
+  btnMinimizeFilters,
+  btnMinimizeLandSchedule,
+  btnMinimizeTimeAdjustment,
+  btnMinimizeCompFinder,
+  btnMinimizeInspect,
+  btnMinimizeWrite,
+  floatingLegend,
+  btnMinimizeLegend,
+  legendTitle,
+  legendContent,
+  compFinderControlsEl,
+  compFinderContent,
+  btnPinCompFinder,
+  inspectControlsEl,
+  inspectContent,
+  btnPinInspect,
+  export3DControlsEl,
+  export3DContent,
+  btnPinExport3D,
+  btnMinimizeExport3D,
+  btnExport3D,
+  writeControlsEl,
+  writeContent,
+  btnPinWrite,
+  writeDataSource,
+  writeApplyTo,
+  writeSelectionCount,
+  writeFieldSelect,
+  writeNewFieldNameRow,
+  writeNewFieldTypeRow,
+  writeNewFieldName,
+  writeNewFieldType,
+  writeEditMode,
+  writeConstantSection,
+  writeEquationSection,
+  writeSubmit,
+  writeCancel,
+  writeSpinner,
+  writeError,
+  writeStatus,
+  compFinderDataSourceSelect,
+  compFinderUseDistance,
+  compFinderDistanceInput,
+  compFinderDistanceUnits,
+  compFinderUseSelection,
+  compFinderCriteriaThresholdError,
+  compFinderCriteriaWidgets,
+  compFinderCriteriaTableBody,
+  compFinderAddCriterion,
+  compFinderRefresh,
+  compFinderDirtyIndicator,
+  compFinderNoCompsIndicator,
+  compFinderSpinner,
+  compFinderResultsRow,
+  compFinderResultsSummary,
+  compFinderPager,
+  compFinderEmptyState,
+  compFinderCriteriaSection,
+  compFinderCompsSection,
+  compFinderCriteriaCompsDivider,
+  compFinderCompsTableHead,
+  compFinderCompsTableBody,
+  compFinderCompsTableContainer,
+  compFinderAddFieldSelect,
+  compFinderAddFieldButton,
+  compFinderAddFieldRow,
+  compFinderZoomButton,
+  compFinderExportCsv,
+  compFinderExportExcel,
+  addLayerOverlay,
+  progressBar,
+  progressMsg,
+  dataStoreList,
+  btnBrowseDataSource,
+  btnCancelAddLayer,
+  settingsDataSourcesToggle,
+  settingsDataSourcesList,
+  confirmDeleteDataSourceOverlay,
+  confirmDeleteDataSourceText,
+  btnCancelDeleteDataSource,
+  btnConfirmDeleteDataSource,
+  colorCont,
+  colorQuant,
+  colorModeSelect,
+  normModeSelect,
+  fieldVisualizeToggle,
+  fieldVisualizeBody,
+  colorOptions,
+  colorPicker,
+  btnCancelColorPicker,
+  btnConfirmColorPicker,
+  numericModalOverlay,
+  categoricalModalOverlay,
+  sizeOverlay,
+  loadingOverlay,
+  progressEl,
+} from './dom-refs';
 
 // Local imports
 import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
@@ -297,34 +527,6 @@ function getMapPoint(e: MouseEvent): maplibregl.Point {
 /* ---------------- UI elements ---------------- */
 
 
-const fileInput = document.getElementById('file') as HTMLInputElement;
-const fieldSelect = document.getElementById('field') as HTMLSelectElement;
-const rampSelect = document.getElementById('ramp') as HTMLSelectElement;
-const enable3DCheckbox = document.getElementById('enable3D') as HTMLInputElement;
-const extrusionOptions = document.getElementById('extrusionOptions') as HTMLFieldSetElement;
-const multInput = document.getElementById('mult') as HTMLInputElement;
-const unitsSelect = document.getElementById('units') as HTMLSelectElement;
-const hexOptions = document.getElementById('hexOptions') as HTMLFieldSetElement;
-const hexResRow = document.getElementById('hexResRow') as HTMLDivElement;
-const enableHexCheckbox = document.getElementById('enableHex') as HTMLInputElement;
-const hexResInput = document.getElementById('hexRes') as HTMLInputElement;
-const hexResReadout = document.getElementById('hexResReadout') as HTMLOutputElement;
-const enable3DRow = document.getElementById('enable3DRow') as HTMLDivElement;
-const threeDSection = document.getElementById('threeDSection') as HTMLDivElement;
-const threeDSectionContent = document.getElementById('threeDSectionContent') as HTMLDivElement;
-const threeDSectionToggle = document.getElementById('threeDSectionToggle') as HTMLButtonElement;
-const layerList = document.getElementById('layerList') as HTMLDivElement;
-const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
-const settingsOtherActions = document.getElementById('settingsOtherActions') as HTMLDivElement;
-const opacityInput = document.getElementById('opacity') as HTMLInputElement;
-const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
-const colorRampOptions = document.getElementById('colorRampOptions') as HTMLFieldSetElement;
-const colorScalingOptions = document.getElementById('colorScalingOptions') as HTMLFieldSetElement | null;
-const opacityOptions = document.getElementById('opacityOptions') as HTMLFieldSetElement;
-const paintDividerNumeric = document.getElementById('paintDividerNumeric') as HTMLDivElement;
-const paintDividerCategorical = document.getElementById('paintDividerCategorical') as HTMLDivElement;
-const paintDividerRamp = document.getElementById('paintDividerRamp') as HTMLDivElement;
-const paintDividerScaling = document.getElementById('paintDividerScaling') as HTMLDivElement | null;
 // Camera view buttons
 const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[data-view]'));
 (document.getElementById('btn-persp') as HTMLButtonElement)?.addEventListener('click', () => setPerspective());
@@ -332,7 +534,6 @@ const viewButtons = Array.from(document.querySelectorAll<HTMLButtonElement>('[da
 viewButtons.forEach(btn => btn.onclick = () => setView(btn.dataset.view!));
 
 // Zoom to data button
-const btnZoomTo = document.getElementById('btn-zoomto') as HTMLButtonElement;
 btnZoomTo.onclick = () => { if (S.currentGeoJSON) fitToData(S.currentGeoJSON); };
 if (addLayerFromStoreButton) {
   addLayerFromStoreButton.addEventListener('click', () => {
@@ -341,49 +542,6 @@ if (addLayerFromStoreButton) {
 }
 
 // Window elements
-const appEl = document.getElementById('app') as HTMLDivElement;
-const pinnedPanelsEl = document.getElementById('pinnedPanels') as HTMLDivElement;
-const controlsEl = document.getElementById('controls') as HTMLDivElement;
-const settingsContent = document.getElementById('settingsContent') as HTMLDivElement;
-const settingsControlsEl = document.getElementById('settingsControls') as HTMLDivElement;
-const settingsMenuContent = document.getElementById('settingsMenuContent') as HTMLDivElement;
-const paintSectionToggle = document.getElementById('paintSectionToggle') as HTMLButtonElement;
-const paintSectionContent = document.getElementById('paintSectionContent') as HTMLDivElement;
-const statisticsControlsEl = document.getElementById('statisticsControls') as HTMLDivElement;
-const statisticsContent = document.getElementById('statisticsContent') as HTMLDivElement;
-const statsSubjectSection = document.getElementById('statsSubjectSection') as HTMLDivElement;
-const statsLayerName = document.getElementById('statsLayerName') as HTMLSelectElement;
-const scatterplotControlsEl = document.getElementById('scatterplotControls') as HTMLDivElement;
-const scatterplotContent = document.getElementById('scatterplotContent') as HTMLDivElement;
-const scatterLayerName = document.getElementById('scatterLayerName') as HTMLSelectElement;
-const scatterSubjectSection = document.getElementById('scatterSubjectSection') as HTMLDivElement;
-const scatterXFieldSelect = document.getElementById('scatterXField') as HTMLSelectElement;
-const scatterYFieldSelect = document.getElementById('scatterYField') as HTMLSelectElement;
-const scatterXMinInput = document.getElementById('scatterXMin') as HTMLInputElement;
-const scatterXMaxInput = document.getElementById('scatterXMax') as HTMLInputElement;
-const scatterYMinInput = document.getElementById('scatterYMin') as HTMLInputElement;
-const scatterYMaxInput = document.getElementById('scatterYMax') as HTMLInputElement;
-const scatterResetExtentsButton = document.getElementById('scatterResetExtents') as HTMLButtonElement;
-const scatterColorByFieldSelect = document.getElementById('scatterColorByField') as HTMLSelectElement;
-const scatterSelectionControls = document.getElementById('scatterSelectionControls') as HTMLDivElement;
-const scatterZoomToSelectionButton = document.getElementById('scatterZoomToSelection') as HTMLButtonElement;
-const scatterClearSelectionButton = document.getElementById('scatterClearSelection') as HTMLButtonElement;
-const scatterPlot = document.getElementById('scatterPlot') as HTMLDivElement;
-const scatterPlotEmpty = document.getElementById('scatterPlotEmpty') as HTMLDivElement;
-const filtersControlsEl = document.getElementById('filtersControls') as HTMLDivElement;
-const filtersContent = document.getElementById('filtersContent') as HTMLDivElement;
-const filtersListEl = document.getElementById('filtersList') as HTMLDivElement;
-const filtersInvertToggle = document.getElementById('filtersInvertToggle') as HTMLInputElement;
-const addFilterButton = document.getElementById('addFilterButton') as HTMLButtonElement;
-const filtersSavedContainer = document.getElementById('filtersSavedContainer') as HTMLDivElement;
-const btnPinLayers = document.getElementById('btnPinLayers') as HTMLButtonElement;
-const btnPinSettings = document.getElementById('btnPinSettings') as HTMLButtonElement;
-const btnPinFilters = document.getElementById('btnPinFilters') as HTMLButtonElement;
-const btnPinStatistics = document.getElementById('btnPinStatistics') as HTMLButtonElement;
-const btnPinScatterplot = document.getElementById('btnPinScatterplot') as HTMLButtonElement;
-const btnPinLandSchedule = document.getElementById('btnPinLandSchedule') as HTMLButtonElement;
-const btnPinTimeAdjustment = document.getElementById('btnPinTimeAdjustment') as HTMLButtonElement;
-const btnPinLegend = document.getElementById('btnPinLegend') as HTMLButtonElement;
 
 const statsSubjectControls = buildSubjectSelector(statsSubjectSection, { title: null });
 const scatterSubjectControls = buildSubjectSelector(scatterSubjectSection, { title: null });
@@ -397,62 +555,6 @@ const scatterSubjectButtons = scatterSubjectControls.buttons;
 const scatterCategoryFieldSelect = scatterSubjectControls.categoryFieldSelect;
 const scatterCategoryValueSelect = scatterSubjectControls.categoryValueSelect;
 const scatterSelectOnMapButton = scatterSubjectControls.selectOnMapButton;
-const statsFieldSelect = document.getElementById('statsField') as HTMLSelectElement;
-const statsNormModeSelect = document.getElementById('statsNormModeSelect') as HTMLSelectElement | null;
-const statsDetails = document.getElementById('statsDetails') as HTMLDivElement;
-const statsNumericBlock = document.getElementById('statsNumericBlock') as HTMLDivElement;
-const statsCategoricalBlock = document.getElementById('statsCategoricalBlock') as HTMLDivElement;
-const statisticsSection = document.getElementById('statisticsSection') as HTMLDivElement;
-const statsParcelCount = document.getElementById('statsParcelCount') as HTMLSpanElement;
-const statsMedian = document.getElementById('statsMedian') as HTMLSpanElement;
-const statsMean = document.getElementById('statsMean') as HTMLSpanElement;
-const statsStdDev = document.getElementById('statsStdDev') as HTMLSpanElement;
-const statsCod = document.getElementById('statsCod') as HTMLSpanElement;
-const statsPercentiles = document.getElementById('statsPercentiles') as HTMLTableSectionElement;
-const statsHistogram = document.getElementById('statsHistogram') as HTMLDivElement;
-const statsCategoricalParcelCount = document.getElementById('statsCategoricalParcelCount') as HTMLSpanElement;
-const statsCategoricalUniqueCount = document.getElementById('statsCategoricalUniqueCount') as HTMLSpanElement;
-const statsCategoricalModalValue = document.getElementById('statsCategoricalModalValue') as HTMLSpanElement;
-const statsCategoricalValues = document.getElementById('statsCategoricalValues') as HTMLTableSectionElement;
-const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
-const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
-const statsLayerToggle = document.getElementById('statsLayerToggle') as HTMLButtonElement;
-const statsLayerBody = document.getElementById('statsLayerBody') as HTMLDivElement;
-const statsFieldToggle = document.getElementById('statsFieldToggle') as HTMLButtonElement;
-const statsSummaryToggle = document.getElementById('statsSummaryToggle') as HTMLButtonElement;
-const statsSummaryBody = document.getElementById('statsSummaryBody') as HTMLDivElement;
-const statsPercentilesToggle = document.getElementById('statsPercentilesToggle') as HTMLButtonElement;
-const statsPercentilesBody = document.getElementById('statsPercentilesBody') as HTMLDivElement;
-const statsHistogramToggle = document.getElementById('statsHistogramToggle') as HTMLButtonElement;
-const statsHistogramBody = document.getElementById('statsHistogramBody') as HTMLDivElement;
-const landScheduleControlsEl = document.getElementById('landScheduleControls') as HTMLDivElement;
-const timeAdjustmentControlsEl = document.getElementById('timeAdjustmentControls') as HTMLDivElement;
-const timeAdjustmentContent = document.getElementById('timeAdjustmentContent') as HTMLDivElement;
-const landScheduleContent = document.getElementById('landScheduleContent') as HTMLDivElement;
-const landScheduleTableSelect = document.getElementById('landScheduleTableSelect') as HTMLSelectElement;
-const landScheduleTableSelectRow = document.getElementById('landScheduleTableSelectRow') as HTMLDivElement;
-const landScheduleAddTableButton = document.getElementById('landScheduleAddTable') as HTMLButtonElement;
-const landScheduleTableContainer = document.getElementById('landScheduleTableContainer') as HTMLDivElement;
-const landScheduleTablesSection = document.getElementById('landScheduleTablesSection') as HTMLDivElement;
-const landScheduleTablesToggle = document.getElementById('landScheduleTablesToggle') as HTMLButtonElement;
-const landScheduleTablesContent = document.getElementById('landScheduleTablesContent') as HTMLDivElement;
-const landScheduleCurveSection = document.getElementById('landScheduleCurveSection') as HTMLDivElement;
-const landScheduleCurveToggle = document.getElementById('landScheduleCurveToggle') as HTMLButtonElement;
-const landScheduleCurveContent = document.getElementById('landScheduleCurveContent') as HTMLDivElement;
-const landScheduleCurveChart = document.getElementById('landScheduleCurveChart') as HTMLDivElement;
-const landScheduleAdjustmentsSection = document.getElementById('landScheduleAdjustmentsSection') as HTMLDivElement;
-const landScheduleAdjustmentsToggle = document.getElementById('landScheduleAdjustmentsToggle') as HTMLButtonElement;
-const landScheduleAdjustmentsContent = document.getElementById('landScheduleAdjustmentsContent') as HTMLDivElement;
-const landScheduleAdjustmentsContainer = document.getElementById('landScheduleAdjustmentsContainer') as HTMLDivElement;
-const landScheduleAddAdjustmentButton = document.getElementById('landScheduleAddAdjustment') as HTMLButtonElement;
-const timeAdjustmentTrendToggle = document.getElementById('timeAdjustmentTrendToggle') as HTMLButtonElement;
-const timeAdjustmentTrendBody = document.getElementById('timeAdjustmentTrendBody') as HTMLDivElement;
-const timeAdjustmentFiltersToggle = document.getElementById('timeAdjustmentFiltersToggle') as HTMLButtonElement;
-const timeAdjustmentFiltersBody = document.getElementById('timeAdjustmentFiltersBody') as HTMLDivElement;
-const compFinderCriteriaToggle = document.getElementById('compFinderCriteriaToggle') as HTMLButtonElement;
-const compFinderCriteriaBody = document.getElementById('compFinderCriteriaBody') as HTMLDivElement;
-const compFinderCompsToggle = document.getElementById('compFinderCompsToggle') as HTMLButtonElement;
-const compFinderCompsBody = document.getElementById('compFinderCompsBody') as HTMLDivElement;
 
 
 function setEyeButtonIcon(button: HTMLButtonElement, isHidden: boolean) {
@@ -492,119 +594,17 @@ if (settingsOtherActions) {
 } else {
   settingsMenuContent.prepend(btnQuality);
 }
-const btnMinimizeLayers = document.getElementById('btnMinimizeLayers') as HTMLButtonElement;
-const btnMinimizeSettingsMenu = document.getElementById('btnMinimizeSettingsMenu') as HTMLButtonElement;
-const btnMinimizeStatistics = document.getElementById('btnMinimizeStatistics') as HTMLButtonElement;
-const btnMinimizeScatterplot = document.getElementById('btnMinimizeScatterplot') as HTMLButtonElement;
-const btnMinimizeFilters = document.getElementById('btnMinimizeFilters') as HTMLButtonElement;
-const btnMinimizeLandSchedule = document.getElementById('btnMinimizeLandSchedule') as HTMLButtonElement;
-const btnMinimizeTimeAdjustment = document.getElementById('btnMinimizeTimeAdjustment') as HTMLButtonElement;
-const btnMinimizeCompFinder = document.getElementById('btnMinimizeCompFinder') as HTMLButtonElement;
-const btnMinimizeInspect = document.getElementById('btnMinimizeInspect') as HTMLButtonElement;
-const btnMinimizeWrite = document.getElementById('btnMinimizeWrite') as HTMLButtonElement;
 
 // Floating legend elements
-const floatingLegend = document.getElementById('floatingLegend') as HTMLDivElement;
-const btnMinimizeLegend = document.getElementById('btnMinimizeLegend') as HTMLButtonElement;
-const legendTitle = document.getElementById('legendTitle') as HTMLDivElement;
-const legendContent = document.getElementById('legendContent') as HTMLDivElement;
 
-const compFinderControlsEl = document.getElementById('compFinderControls') as HTMLDivElement;
-const compFinderContent = document.getElementById('compFinderContent') as HTMLDivElement;
-const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButtonElement;
-const inspectControlsEl = document.getElementById('inspectControls') as HTMLDivElement;
-const inspectContent = document.getElementById('inspectContent') as HTMLDivElement;
-const btnPinInspect = document.getElementById('btnPinInspect') as HTMLButtonElement;
-const export3DControlsEl = document.getElementById('export3DControls') as HTMLDivElement;
-const export3DContent = document.getElementById('export3DContent') as HTMLDivElement;
-const btnPinExport3D = document.getElementById('btnPinExport3D') as HTMLButtonElement;
-const btnMinimizeExport3D = document.getElementById('btnMinimizeExport3D') as HTMLButtonElement;
-const btnExport3D = document.getElementById('btnExport3D') as HTMLButtonElement;
-const writeControlsEl = document.getElementById('writeControls') as HTMLDivElement;
-const writeContent = document.getElementById('writeContent') as HTMLDivElement;
-const btnPinWrite = document.getElementById('btnPinWrite') as HTMLButtonElement;
-const writeDataSource = document.getElementById('writeDataSource') as HTMLSelectElement;
-const writeApplyTo = document.getElementById('writeApplyTo') as HTMLSelectElement;
-const writeSelectionCount = document.getElementById('writeSelectionCount') as HTMLSpanElement;
-const writeFieldSelect = document.getElementById('writeFieldSelect') as HTMLSelectElement;
-const writeNewFieldNameRow = document.getElementById('writeNewFieldNameRow') as HTMLDivElement;
-const writeNewFieldTypeRow = document.getElementById('writeNewFieldTypeRow') as HTMLDivElement;
-const writeNewFieldName = document.getElementById('writeNewFieldName') as HTMLInputElement;
-const writeNewFieldType = document.getElementById('writeNewFieldType') as HTMLSelectElement;
-const writeEditMode = document.getElementById('writeEditMode') as HTMLSelectElement;
-const writeConstantSection = document.getElementById('writeConstantSection') as HTMLDivElement;
-const writeEquationSection = document.getElementById('writeEquationSection') as HTMLDivElement;
-const writeSubmit = document.getElementById('writeSubmit') as HTMLButtonElement;
-const writeCancel = document.getElementById('writeCancel') as HTMLButtonElement;
-const writeSpinner = document.getElementById('writeSpinner') as HTMLSpanElement;
-const writeError = document.getElementById('writeError') as HTMLDivElement;
-const writeStatus = document.getElementById('writeStatus') as HTMLDivElement;
-const compFinderDataSourceSelect = document.getElementById('compFinderDataSource') as HTMLSelectElement;
-const compFinderUseDistance = document.getElementById('compFinderUseDistance') as HTMLInputElement;
-const compFinderDistanceInput = document.getElementById('compFinderDistance') as HTMLInputElement;
-const compFinderDistanceUnits = document.getElementById('compFinderDistanceUnits') as HTMLSelectElement;
-const compFinderUseSelection = document.getElementById('compFinderUseSelection') as HTMLInputElement;
-const compFinderCriteriaThresholdError = document.getElementById('compFinderCriteriaThresholdError') as HTMLDivElement;
-const compFinderCriteriaWidgets = document.getElementById('compFinderCriteriaWidgets') as HTMLDivElement;
-const compFinderCriteriaTableBody = document.getElementById('compFinderCriteriaTableBody') as HTMLTableSectionElement;
-const compFinderAddCriterion = document.getElementById('compFinderAddCriterion') as HTMLButtonElement;
-const compFinderRefresh = document.getElementById('compFinderRefresh') as HTMLButtonElement;
-const compFinderDirtyIndicator = document.getElementById('compFinderDirtyIndicator') as HTMLSpanElement;
-const compFinderNoCompsIndicator = document.getElementById('compFinderNoCompsIndicator') as HTMLSpanElement;
-const compFinderSpinner = document.getElementById('compFinderSpinner') as HTMLDivElement;
-const compFinderResultsRow = document.getElementById('compFinderResultsRow') as HTMLDivElement;
-const compFinderResultsSummary = document.getElementById('compFinderResultsSummary') as HTMLSpanElement;
-const compFinderPager = document.getElementById('compFinderPager') as HTMLDivElement;
-const compFinderEmptyState = document.getElementById('compFinderEmptyState') as HTMLDivElement;
-const compFinderCriteriaSection = document.getElementById('compFinderCriteriaSection') as HTMLDivElement;
-const compFinderCompsSection = document.getElementById('compFinderCompsSection') as HTMLDivElement;
-const compFinderCriteriaCompsDivider = document.getElementById('compFinderCriteriaCompsDivider') as HTMLDivElement;
-const compFinderCompsTableHead = document.getElementById('compFinderCompsTableHead') as HTMLTableSectionElement;
-const compFinderCompsTableBody = document.getElementById('compFinderCompsTableBody') as HTMLTableSectionElement;
-const compFinderCompsTableContainer = document.getElementById('compFinderCompsTableContainer') as HTMLDivElement;
-const compFinderAddFieldSelect = document.getElementById('compFinderAddFieldSelect') as HTMLSelectElement;
-const compFinderAddFieldButton = document.getElementById('compFinderAddFieldButton') as HTMLButtonElement;
-const compFinderAddFieldRow = document.getElementById('compFinderAddFieldRow') as HTMLDivElement;
-const compFinderZoomButton = document.getElementById('compFinderZoomTo') as HTMLButtonElement;
-const compFinderExportCsv = document.getElementById('compFinderExportCsv') as HTMLButtonElement;
-const compFinderExportExcel = document.getElementById('compFinderExportExcel') as HTMLButtonElement;
 
-// Modal overlays (managed by modals.ts via initModalElements)
-const numericModalOverlay = document.getElementById('numericModalOverlay')!;
-const categoricalModalOverlay = document.getElementById('categoricalModalOverlay')!;
-const sizeOverlay = document.getElementById('sizeOverlay')!;
-const addLayerOverlay = document.getElementById('addLayerOverlay') as HTMLDivElement;
-const loadingOverlay = document.getElementById('loadingOverlay')!;
 
-const progressEl = document.getElementById('progress')!;
-const progressBar = document.getElementById('progressBar') as HTMLDivElement;
-const progressMsg = document.getElementById('progressMsg') as HTMLDivElement;
-
-const dataStoreList = document.getElementById('dataStoreList') as HTMLDivElement;
-const btnBrowseDataSource = document.getElementById('btnBrowseDataSource') as HTMLButtonElement;
-const btnCancelAddLayer = document.getElementById('btnCancelAddLayer') as HTMLButtonElement;
 
 // Settings menu Data Sources section elements
-const settingsDataSourcesToggle = document.getElementById('settingsDataSourcesToggle') as HTMLDivElement;
-const settingsDataSourcesList = document.getElementById('settingsDataSourcesList') as HTMLDivElement;
-const confirmDeleteDataSourceOverlay = document.getElementById('confirmDeleteDataSourceOverlay') as HTMLDivElement;
-const confirmDeleteDataSourceText = document.getElementById('confirmDeleteDataSourceText') as HTMLDivElement;
-const btnCancelDeleteDataSource = document.getElementById('btnCancelDeleteDataSource') as HTMLButtonElement;
-const btnConfirmDeleteDataSource = document.getElementById('btnConfirmDeleteDataSource') as HTMLButtonElement;
 
 // Color scaling radios
-const colorCont = document.getElementById('color-cont') as HTMLInputElement | null;
-const colorQuant = document.getElementById('color-quant') as HTMLInputElement | null;
-const colorModeSelect = document.getElementById('colorModeSelect') as HTMLSelectElement | null;
-const normModeSelect = document.getElementById('normModeSelect') as HTMLSelectElement | null;
-const fieldVisualizeToggle = document.getElementById('fieldVisualizeToggle') as HTMLButtonElement;
-const fieldVisualizeBody = document.getElementById('fieldVisualizeBody') as HTMLDivElement;
 
 // Color picker elements
-const colorOptions = document.getElementById('colorOptions') as HTMLDivElement;
-const colorPicker = document.getElementById('colorPicker') as HTMLInputElement;
-const btnCancelColorPicker = document.getElementById('btnCancelColorPicker') as HTMLButtonElement;
-const btnConfirmColorPicker = document.getElementById('btnConfirmColorPicker') as HTMLButtonElement;
 
 const setPaintSectionCollapsed = createCollapseToggle({
   contentEl: paintSectionContent,

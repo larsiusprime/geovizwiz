@@ -1081,8 +1081,9 @@ aggregated into H3 cells:
 **Mesh export** (`mesh/`). Build + serialize run in a worker (`mesh/mesh.worker.ts`,
 `mesh.client.ts`):
 - `heightfield-mesh.ts` builds a **rectangular base slab** (`0 → baseThickness` over the
-  bbox) plus **per-occupied-hex relief columns** (`0 → top`). Empty areas are just the
-  flat slab top ("fill to base", always — there is no holes/omit option). Relief maps the
+  bbox) plus **per-occupied-hex relief columns** (`baseThickness → top`, sitting ON the
+  slab — NOT `0 → top`, which would imprint the hex grid onto the flat bottom). Empty
+  areas are just the flat slab top ("fill to base", always — no holes/omit option). Relief maps the
   metric so the max = max height (raw-max scaling — outlier-sensitive; see learnings).
 - `mesh-export.ts` writes binary STL + OBJ; download via the Blob + `<a download>` pattern.
 - Progress + cancel surface on the Export button (it toggles to **Cancel** during a build).

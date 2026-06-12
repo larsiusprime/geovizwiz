@@ -112,7 +112,11 @@ export function buildHexHeightfieldMesh(
     pushTri(b01, b00, t00, [-1, 0, 0]); pushTri(b01, t00, t01, [-1, 0, 0]);  // x = 0
   }
 
-  // --- relief columns for occupied hexes (0 → top), sitting within the slab ---
+  // --- relief columns for occupied hexes (baseThickness → top), sitting ON the slab ---
+  // Columns start at the slab top (zb), not z=0, so the model's bottom plane is just
+  // the slab's flat rectangle. (If they ran to z=0 they'd imprint every hex's bottom
+  // face + wall onto the underside — the "points and lines" artifact.) The coincident
+  // contact faces at z=zb are internal and slicer-handled.
   let maxZ = zb;
   const total = occupied.size;
   let processed = 0;
@@ -134,9 +138,9 @@ export function buildHexHeightfieldMesh(
     for (const [x, y] of xy) { cx += x; cy += y; }
     cx /= N; cy /= N;
 
-    // fresh vertices for this prism's top and bottom rings
+    // fresh vertices for this prism's top and bottom rings (bottom rests on the slab top)
     const top = xy.map(([x, y]) => addV(x, y, topZ));
-    const bot = xy.map(([x, y]) => addV(x, y, 0));
+    const bot = xy.map(([x, y]) => addV(x, y, zb));
 
     // top fan (normal up), bottom fan (normal down)
     for (let k = 1; k < N - 1; k++) pushTri(top[0], top[k], top[k + 1], [0, 0, 1]);

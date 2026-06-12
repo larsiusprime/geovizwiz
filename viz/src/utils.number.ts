@@ -3,6 +3,17 @@ export function numOrNull(v: any): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * Strict numeric parse: accepts only a plain integer/decimal string
+ * (optionally signed), rejecting anything else. Returns null on failure.
+ */
+export function parseStrictNumber(value: string): number | null {
+  const trimmed = value.trim();
+  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : null;
+}
+
 export function fmt(n: any, digits = 2): string {
   const x = Number(n);
   if (!Number.isFinite(x)) return String(n ?? '—');

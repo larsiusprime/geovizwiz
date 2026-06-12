@@ -6,14 +6,14 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 import PIN_SVG_RAW from './svg/pin.svg?raw';
-import { createCollapseToggle } from './utils.dom';
+import { createCollapseToggle, escapeHtml, isTextInputElement } from './utils.dom';
 import { EYE_ICON_OPEN, EYE_ICON_CLOSED, PIN_ICON, PIN_ICON_TILTED } from './icons';
 
 // Local imports
 import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
 import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
-import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
+import { numOrNull, fmt, percentile, quantileBreaks, parseStrictNumber } from './utils.number';
 import type {
   BasemapMode,
   NumericFilterOperator, CategoricalFilterOperator,
@@ -1969,34 +1969,6 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, pa
   minimizeInspect();
 }
 
-function isTextInputElement(element: Element | null): boolean {
-  if (!element) return false;
-  if (element instanceof HTMLInputElement) {
-    const nonTextTypes = new Set([
-      'button',
-      'checkbox',
-      'color',
-      'date',
-      'file',
-      'hidden',
-      'image',
-      'radio',
-      'range',
-      'reset',
-      'submit'
-    ]);
-    if (nonTextTypes.has(element.type)) return false;
-    if (element.disabled || element.readOnly) return false;
-    return true;
-  }
-  if (element instanceof HTMLTextAreaElement) {
-    if (element.disabled || element.readOnly) return false;
-    return true;
-  }
-  if (element instanceof HTMLSelectElement) return false;
-  return (element as HTMLElement).isContentEditable;
-}
-
 function addPopupSearchFunctionality() {
   setTimeout(() => {
     const popupElement = isInspectPinned() ? inspectContent : S.activePopup?.getElement();
@@ -2052,15 +2024,6 @@ function addPopupSearchFunctionality() {
       }
     }
   }, 0);
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 function getPopupFieldType(field: string): 'numeric' | 'categorical' {
@@ -2336,13 +2299,6 @@ function refreshWriteUI() {
   if (currentMode === 'constant') renderWriteConstantUI();
   if (currentMode === 'equation') renderWriteEquationUI();
   updateWriteSelectionCount();
-}
-
-function parseStrictNumber(value: string): number | null {
-  const trimmed = value.trim();
-  if (!/^-?\d+(\.\d+)?$/.test(trimmed)) return null;
-  const n = Number(trimmed);
-  return Number.isFinite(n) ? n : null;
 }
 
 function getOperandValue(operand: WriteOperand, props: Record<string, any>) {

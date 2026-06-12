@@ -64,6 +64,45 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
+/** Escape a string for safe interpolation into HTML. */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** True if the element is an editable text input/textarea/contenteditable. */
+export function isTextInputElement(element: Element | null): boolean {
+  if (!element) return false;
+  if (element instanceof HTMLInputElement) {
+    const nonTextTypes = new Set([
+      'button',
+      'checkbox',
+      'color',
+      'date',
+      'file',
+      'hidden',
+      'image',
+      'radio',
+      'range',
+      'reset',
+      'submit'
+    ]);
+    if (nonTextTypes.has(element.type)) return false;
+    if (element.disabled || element.readOnly) return false;
+    return true;
+  }
+  if (element instanceof HTMLTextAreaElement) {
+    if (element.disabled || element.readOnly) return false;
+    return true;
+  }
+  if (element instanceof HTMLSelectElement) return false;
+  return (element as HTMLElement).isContentEditable;
+}
+
 export interface CollapseToggleOptions {
   /** Section body element that is shown/hidden. */
   contentEl: HTMLElement;

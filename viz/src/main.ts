@@ -296,10 +296,10 @@ import {
   ensureFloatingWindowVisible,
   type WindowManager
 } from './windows';
+import { featureIntersectsBbox } from './selection-geometry';
 import {
   initSelection, initSelectionElements,
   handleRectangleMouseDown, handleRectangleMouseMove, handleRectangleMouseUp,
-  featureIntersectsBbox,
   applyCategorySelection, applyRangeSelection,
   getParcelId, findFeatureByParcelId,
   addParcelToSelection, removeParcelFromSelection, clearAllSelections,

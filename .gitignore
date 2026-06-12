@@ -7,3 +7,5 @@ geoconverter/lib/
 local-deploy/*
 
 util/util.zip
+
+files/

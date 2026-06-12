@@ -6,7 +6,7 @@
  * init callbacks so that this module has no direct imports from
  * main.ts.
  */
-import { S } from './state';
+import { S, PRIMARY_COLOR } from './state';
 import { SOURCE_ID, LAYER_ID, ERROR_LAYER_ID } from './config';
 import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
@@ -338,7 +338,7 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     normalizationMode: 'asis',
     colorMode: 'quantiles',
     categoricalColorMode: 'random',
-    singleColorValue: '#3b82f6',
+    singleColorValue: PRIMARY_COLOR,
     ramp: _rampSelect?.value ?? 'Magma',
     colorDomain: null,
     colorBreaks: null,

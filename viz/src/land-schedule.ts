@@ -3,7 +3,7 @@
  *
  * Manages land schedule tables and adjustments.
  */
-import { S } from './state';
+import { S, PRIMARY_COLOR } from './state';
 import { setFiltersContext, cloneFilters, invalidateFiltersContextIf } from './filters';
 import type {
   FilterRule,
@@ -254,7 +254,7 @@ function updateLandScheduleCurve(table: LandScheduleTable | null) {
     y: yValues,
     mode: 'lines+markers',
     type: 'scatter',
-    line: { color: '#3b82f6' },
+    line: { color: PRIMARY_COLOR },
     marker: { size: 6, color: '#1f2937' },
     hovertemplate: 'x: %{x}<br>y: %{y}<extra></extra>',
   };

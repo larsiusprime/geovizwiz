@@ -14,6 +14,12 @@ import type {
 } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 
+/**
+ * Brand primary color, used where colors are set from TS (not CSS).
+ * Keep in sync with --color-primary in app.css.
+ */
+export const PRIMARY_COLOR = '#3b82f6';
+
 export const S = {
   // --- Map ---
   map: null! as maplibregl.Map,
@@ -40,7 +46,7 @@ export const S = {
   normalizationMode: 'asis' as 'asis' | 'perLand' | 'perBuilding',
   colorMode: 'quantiles' as ColorMode,
   categoricalColorMode: 'random' as CategoricalColorMode,
-  singleColorValue: '#3b82f6',
+  singleColorValue: PRIMARY_COLOR as string,
   colorDomain: null as { lo: number; hi: number; label: string } | null,
   colorBreaks: null as number[] | null,
   is3DMode: false,

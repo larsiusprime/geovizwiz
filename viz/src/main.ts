@@ -3110,7 +3110,7 @@ document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]'
       // Show/hide color ramp widget based on categorical color mode
       const rampContainer = rampSelect.parentElement?.parentElement;
       if (rampContainer) {
-        rampContainer.style.display = (S.categoricalColorMode === 'colorRamp' || S.currentFieldType !== 'categorical') ? 'block' : 'none';
+        rampContainer.style.display = (S.categoricalColorMode === 'colorRamp' || S.currentFieldType !== 'categorical') ? '' : 'none';
       }
       
       scheduleUpdate('applyOnly', /*refreshLegend*/ true);

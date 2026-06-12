@@ -4,12 +4,14 @@
  * marks the current job stale (its result is dropped) and tells the worker.
  */
 import type { HexCellInput, HeightfieldOptions } from './heightfield-mesh';
+import type { MeshReport } from './validate-mesh';
 
 export interface MeshExportResult {
   stl?: ArrayBuffer;
   obj?: string;
   triangleCount: number;
   dims: { x: number; y: number; z: number };
+  report: MeshReport;
 }
 
 export interface MeshExportCallbacks {

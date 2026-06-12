@@ -119,7 +119,19 @@ function doExport(): void {
         const saved: string[] = [];
         if (res.stl) { download(new Blob([res.stl], { type: 'model/stl' }), `${base}.stl`); saved.push(`${base}.stl`); }
         if (res.obj) { download(new Blob([res.obj], { type: 'model/obj' }), `${base}.obj`); saved.push(`${base}.obj`); }
-        setStatus(`Saved ${saved.join(', ')} · ${res.triangleCount.toLocaleString()} triangles`);
+
+        const r = res.report;
+        let verdict: string;
+        if (r.isSolid) {
+          verdict = '✓ watertight manifold solid';
+        } else if (r.boundaryEdges === 0) {
+          // No holes — the printability-critical property. Non-manifold edges are
+          // internal coincident walls that slicers union away.
+          verdict = `✓ closed, no holes · ${r.nonManifoldEdges.toLocaleString()} internal non-manifold edges (slicer-handled)`;
+        } else {
+          verdict = `⚠ ${r.boundaryEdges.toLocaleString()} open edges (holes) · ${r.nonManifoldEdges.toLocaleString()} non-manifold — may need repair`;
+        }
+        setStatus(`Saved ${saved.join(', ')} · ${res.triangleCount.toLocaleString()} tris · ${verdict}`);
       },
       onError: (msg) => {
         exporting = false;

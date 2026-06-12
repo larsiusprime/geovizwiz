@@ -7,6 +7,7 @@
  */
 import { buildHexHeightfieldMesh, type HexCellInput, type HeightfieldOptions } from './heightfield-mesh';
 import { meshToBinarySTL, meshToOBJ } from './mesh-export';
+import { validateMesh } from './validate-mesh';
 
 interface BuildMsg {
   type: 'build';
@@ -34,7 +35,8 @@ ctx.onmessage = (e: MessageEvent<InMsg>) => {
     if (activeJobId !== jobId) return; // superseded / canceled
 
     ctx.postMessage({ type: 'progress', jobId, fraction: 0.95 });
-    const out: any = { type: 'result', jobId, triangleCount: mesh.triangleCount, dims: mesh.dims };
+    const report = validateMesh(mesh);
+    const out: any = { type: 'result', jobId, triangleCount: mesh.triangleCount, dims: mesh.dims, report };
     const transfer: Transferable[] = [];
     if (formats.stl) { const buf = meshToBinarySTL(mesh); out.stl = buf; transfer.push(buf); }
     if (formats.obj) { out.obj = meshToOBJ(mesh); }

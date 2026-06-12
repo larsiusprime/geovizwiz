@@ -75,6 +75,7 @@ let _scheduleScatterPlotRefresh: () => void;
 let _getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
 let _clearLegendVisibility: () => void;
 let _hideFiltersPanel: () => void;
+let _onFiltersChanged: () => void = () => {};
 
 type FiltersContext =
   | { type: 'layer' }
@@ -129,6 +130,7 @@ export function initFilterCallbacks(cbs: {
   getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId: string } | null;
   clearLegendVisibility: () => void;
   hideFiltersPanel: () => void;
+  onFiltersChanged?: () => void;
 }) {
   _persistCurrentLayerState = cbs.persistCurrentLayerState;
   _renderLayerList = cbs.renderLayerList;
@@ -137,6 +139,7 @@ export function initFilterCallbacks(cbs: {
   _getCurrentLayerIds = cbs.getCurrentLayerIds;
   _clearLegendVisibility = cbs.clearLegendVisibility;
   _hideFiltersPanel = cbs.hideFiltersPanel;
+  _onFiltersChanged = cbs.onFiltersChanged ?? (() => {});
 }
 
 /* ------------------------------------------------------------------ */
@@ -668,6 +671,14 @@ export function applyMapFilters() {
   if (filtersContext.type === 'landSchedule') return;
   const ids = _getCurrentLayerIds();
   if (!ids) return;
+  // In hex mode the layer renders hex features (no parcel fields); a parcel-field
+  // filter would hide every hexagon. Filtering is instead baked into the hex
+  // aggregation (only visible parcels are aggregated — see hex-layer), so clear
+  // any layer filter here.
+  if (S.hexMode && S.hexGeoJSON) {
+    S.map.setFilter(ids.layerId, null);
+    return;
+  }
   const expressions: any[] = ['all'];
   const legendExpr = buildLegendVisibilityFilter();
   if (legendExpr) expressions.push(legendExpr);
@@ -1043,6 +1054,20 @@ export function matchesCurrentActiveFilters(feature: GeoJSON.Feature): boolean {
   return matchesActiveFilters(feature);
 }
 
+/**
+ * Whether a parcel is visible under the current filter rules — mirrors the map
+ * filter built by `buildFilterModeExpression` (filterMode show/hide + invert).
+ * Used to aggregate only visible parcels into the hex summary (WYSIWYG).
+ */
+export function isParcelVisibleUnderFilters(feature: GeoJSON.Feature): boolean {
+  if (S.filterMode === 'none') return true;
+  const activeFilters = getActiveFilters();
+  if (!activeFilters.length) return true;
+  const base = activeFilters.every((f) => matchesFilterRule(feature, f));
+  const modeMatch = S.filterMode === 'hide' ? !base : base;
+  return S.filterInvert ? !modeMatch : modeMatch;
+}
+
 export function setSelectionFiltersContext(layerId: string, layerName: string) {
   setFiltersContext({ type: 'selection', layerId, layerName });
 }
@@ -1094,4 +1119,5 @@ export function applyActiveFilterAction() {
   applyMapFilters();
   updateFiltersUIState();
   _renderLayerList();
+  _onFiltersChanged(); // rebuild the hex summary from the now-visible parcels (if in hex mode)
 }

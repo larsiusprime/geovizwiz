@@ -118,6 +118,8 @@ import {
   setPerspective, setOrtho, setView,
   getMultiplierValue, getUnitFactor, getOpacityValue,
 } from './rendering';
+import { startHexUpdateIfActive, cancelHexUpdate, getCommittedHexState } from './hex-layer';
+import { initExport3DMenu, refreshExport3DMenu } from './export-3d';
 import {
   addLandScheduleAdjustment,
   addLandScheduleTable,
@@ -300,6 +302,15 @@ const enable3DCheckbox = document.getElementById('enable3D') as HTMLInputElement
 const extrusionOptions = document.getElementById('extrusionOptions') as HTMLFieldSetElement;
 const multInput = document.getElementById('mult') as HTMLInputElement;
 const unitsSelect = document.getElementById('units') as HTMLSelectElement;
+const hexOptions = document.getElementById('hexOptions') as HTMLFieldSetElement;
+const hexResRow = document.getElementById('hexResRow') as HTMLDivElement;
+const enableHexCheckbox = document.getElementById('enableHex') as HTMLInputElement;
+const hexResInput = document.getElementById('hexRes') as HTMLInputElement;
+const hexResReadout = document.getElementById('hexResReadout') as HTMLOutputElement;
+const enable3DRow = document.getElementById('enable3DRow') as HTMLDivElement;
+const threeDSection = document.getElementById('threeDSection') as HTMLDivElement;
+const threeDSectionContent = document.getElementById('threeDSectionContent') as HTMLDivElement;
+const threeDSectionToggle = document.getElementById('threeDSectionToggle') as HTMLButtonElement;
 const layerList = document.getElementById('layerList') as HTMLDivElement;
 const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as HTMLButtonElement;
 const settingsOtherActions = document.getElementById('settingsOtherActions') as HTMLDivElement;
@@ -518,6 +529,11 @@ const btnPinCompFinder = document.getElementById('btnPinCompFinder') as HTMLButt
 const inspectControlsEl = document.getElementById('inspectControls') as HTMLDivElement;
 const inspectContent = document.getElementById('inspectContent') as HTMLDivElement;
 const btnPinInspect = document.getElementById('btnPinInspect') as HTMLButtonElement;
+const export3DControlsEl = document.getElementById('export3DControls') as HTMLDivElement;
+const export3DContent = document.getElementById('export3DContent') as HTMLDivElement;
+const btnPinExport3D = document.getElementById('btnPinExport3D') as HTMLButtonElement;
+const btnMinimizeExport3D = document.getElementById('btnMinimizeExport3D') as HTMLButtonElement;
+const btnExport3D = document.getElementById('btnExport3D') as HTMLButtonElement;
 const writeControlsEl = document.getElementById('writeControls') as HTMLDivElement;
 const writeContent = document.getElementById('writeContent') as HTMLDivElement;
 const btnPinWrite = document.getElementById('btnPinWrite') as HTMLButtonElement;
@@ -616,6 +632,21 @@ const setPaintSectionCollapsed = (collapsed: boolean) => {
 setPaintSectionCollapsed(S.isPaintCollapsed);
 paintSectionToggle.addEventListener('click', () => {
   setPaintSectionCollapsed(!S.isPaintCollapsed);
+});
+
+// "3D" section: collapsible like Paint (independent of the Enable 3D toggle,
+// which controls whether the section is shown at all — see update3DUI).
+const setThreeDSectionCollapsed = (collapsed: boolean) => {
+  S.is3DSectionCollapsed = collapsed;
+  threeDSectionContent.style.display = collapsed ? 'none' : 'grid';
+  threeDSectionToggle.classList.toggle('is-collapsed', collapsed);
+  threeDSectionToggle.title = collapsed ? 'Expand 3D' : 'Collapse 3D';
+  refreshWindowMinHeight(controlsEl);
+};
+
+setThreeDSectionCollapsed(S.is3DSectionCollapsed);
+threeDSectionToggle.addEventListener('click', () => {
+  setThreeDSectionCollapsed(!S.is3DSectionCollapsed);
 });
 
 const setFieldVisualizeCollapsed = (collapsed: boolean) => {
@@ -914,6 +945,15 @@ const writeWin = createWindowManager({
   },
 });
 
+const export3DWin = createWindowManager({
+  getMinimized: () => S.isExport3DMinimized,
+  setMinimized: (v) => { S.isExport3DMinimized = v; },
+  contentEl: export3DContent,
+  controlsEl: export3DControlsEl,
+  contentDisplay: 'block',
+  onShow: () => { refreshExport3DMenu(); },
+});
+
 // Convenience aliases matching the old function names
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
@@ -995,6 +1035,7 @@ initWindowDocking({
   btnPinScatterplot,
   btnPinCompFinder,
   btnPinInspect,
+  btnPinExport3D,
   btnPinWrite,
   btnPinLandSchedule,
   btnPinTimeAdjustment,
@@ -1007,6 +1048,7 @@ registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
 registerDockableWindow(compFinderControlsEl, btnPinCompFinder);
 registerDockableWindow(inspectControlsEl, btnPinInspect);
+registerDockableWindow(export3DControlsEl, btnPinExport3D);
 registerDockableWindow(writeControlsEl, btnPinWrite);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
 registerDockableWindow(timeAdjustmentControlsEl, btnPinTimeAdjustment);
@@ -1018,6 +1060,7 @@ enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
 enableWindowResizing(compFinderControlsEl);
 enableWindowResizing(inspectControlsEl);
+enableWindowResizing(export3DControlsEl);
 enableWindowResizing(writeControlsEl);
 enableWindowResizing(landScheduleControlsEl);
 enableWindowResizing(timeAdjustmentControlsEl);
@@ -1039,6 +1082,8 @@ initFilterCallbacks({
   getCurrentLayerIds,
   clearLegendVisibility,
   hideFiltersPanel: minimizeFilters,
+  // When filters change in hex mode, re-aggregate from the now-visible parcels.
+  onFiltersChanged: () => { if (S.hexMode) startHexUpdateIfActive(); },
 });
 
 // Wire DOM elements and callbacks into the rendering module
@@ -1049,6 +1094,10 @@ initRenderingElements({
   multInput,
   unitsSelect,
   extrusionOptions,
+  hexOptions,
+  hexResRow,
+  threeDSection,
+  enable3DRow,
   colorRampOptions,
   colorScalingOptions,
   opacityOptions,
@@ -1354,6 +1403,9 @@ initLayerElements({
   colorModeSelect,
   colorPicker,
   enable3DCheckbox: enable3DCheckbox,
+  enableHexCheckbox,
+  hexResInput,
+  hexResReadout,
   filtersInvertToggle,
 });
 initLayerCallbacks({
@@ -2895,13 +2947,16 @@ function computeAndSetGoodExtrusionDefaults() {
   
   // Use existing function to choose best unit and multiplier
   const { unit, multiplier } = chooseBestMetricUnitForMultiplier(p99);
-  
+  // Show 3 decimals so the field stays compact (the raw value can run to ~15
+  // digits). Guard tiny values so they don't round away to 0.
+  const mult = Number(multiplier.toFixed(3)) || Number(multiplier.toPrecision(3));
+
   // Set the values
-  multInput.value = String(multiplier);
+  multInput.value = String(mult);
   unitsSelect.value = unit;
-  
+
   // Cache the settings
-  S.cachedExtrusionSettings = { multiplier, unit };
+  S.cachedExtrusionSettings = { multiplier: mult, unit };
 }
 
 /* ---------------- Events ---------------- */
@@ -3514,6 +3569,7 @@ makeDraggable(scatterplotControlsEl);
 makeDraggable(filtersControlsEl);
 makeDraggable(compFinderControlsEl);
 makeDraggable(inspectControlsEl);
+makeDraggable(export3DControlsEl);
 makeDraggable(writeControlsEl);
 makeDraggable(landScheduleControlsEl);
 makeDraggable(timeAdjustmentControlsEl);
@@ -3618,8 +3674,9 @@ fieldSelect.addEventListener('change', () => {
   if (S.map.getLayer('markup-layer')) S.map.removeLayer('markup-layer');
   if (S.map.getLayer('markup-layer-outline')) S.map.removeLayer('markup-layer-outline');
   if (S.map.getSource('markup-source')) S.map.removeSource('markup-source');
-  
-  scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+
+  // Rebuild hexes for the new field (async), or restore parcels + recompute.
+  if (!startHexUpdateIfActive()) scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
   persistCurrentLayerState();
   renderLayerList();
 });
@@ -3631,7 +3688,8 @@ document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r 
     // Clear cached extrusion settings when normalization mode changes
     S.cachedExtrusionSettings = null;
     if (!S.currentGeoJSON || !S.currentField) return;
-    scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    // Re-aggregate (e.g. value/acre vs as-is) for the new mode, or recompute parcels.
+    if (!startHexUpdateIfActive()) scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
     persistCurrentLayerState();
   });
 });
@@ -3650,9 +3708,74 @@ enable3DCheckbox.addEventListener('change', () => {
     unitsSelect.value = S.cachedExtrusionSettings.unit;
   }
   
-  // Apply the current visualization
+  // Apply the current visualization. In hex mode this kicks off an async build
+  // (rendered when it completes); otherwise render parcels immediately.
   if (S.currentGeoJSON && S.currentField) {
-    applyExtrusion();
+    if (!startHexUpdateIfActive()) applyExtrusion();
+  }
+  persistCurrentLayerState();
+});
+
+// Hexagon-summary toggle: switch between per-parcel extrusion and an H3 hex summary.
+enableHexCheckbox.addEventListener('change', () => {
+  S.hexMode = enableHexCheckbox.checked;
+  update3DUI(); // shows/hides the resolution slider row
+  if (S.currentGeoJSON && S.currentField) {
+    // Turning hex on starts an async build; turning it off restores parcels now.
+    if (!startHexUpdateIfActive()) scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+  }
+  persistCurrentLayerState();
+});
+
+// H3 resolution slider: live readout immediately; the worker client debounces
+// and supersedes, so we can fire on every input tick.
+hexResInput.addEventListener('input', () => {
+  const res = Number(hexResInput.value);
+  S.hexResolution = res;
+  if (hexResReadout) hexResReadout.value = String(res);
+  if (S.hexMode && S.currentGeoJSON && S.currentField) startHexUpdateIfActive();
+  persistCurrentLayerState();
+});
+
+// "Export 3D Object File" button → open its floating menu (invoked only here).
+initExport3DMenu();
+btnExport3D.addEventListener('click', () => export3DWin.show());
+btnMinimizeExport3D.addEventListener('click', () => export3DWin.minimize());
+
+// Cancel button on the hex progress bar: abort the in-flight build and revert
+// all controls to the settings that were active before the operation started
+// (i.e. the config matching the view still on screen, kept via keep-last-good).
+document.getElementById('hexProgressCancel')?.addEventListener('click', () => {
+  cancelHexUpdate();
+  const snap = getCommittedHexState();
+  if (snap && S.hexGeoJSON) {
+    // Revert to the previously-committed hex config (those hexes are still shown).
+    S.hexMode = snap.hexMode;
+    S.hexResolution = snap.hexResolution;
+    S.currentField = snap.currentField;
+    S.currentFieldType = snap.currentFieldType;
+    S.normalizationMode = snap.normalizationMode;
+    S.is3DMode = snap.is3DMode;
+
+    enableHexCheckbox.checked = snap.hexMode;
+    enable3DCheckbox.checked = snap.is3DMode;
+    hexResInput.value = String(snap.hexResolution);
+    if (hexResReadout) hexResReadout.value = String(snap.hexResolution);
+    fieldSelect.value = snap.currentField ?? '';
+    const normRadio = document.querySelector(
+      `input[name="normMode"][value="${snap.normalizationMode}"]`,
+    ) as HTMLInputElement | null;
+    if (normRadio) normRadio.checked = true;
+    if (normModeSelect) normModeSelect.value = snap.normalizationMode;
+
+    update3DUI();
+    if (S.currentGeoJSON && S.currentField) applyExtrusion();
+  } else {
+    // No committed hexes (first build) — revert to parcels.
+    S.hexMode = false;
+    enableHexCheckbox.checked = false;
+    update3DUI();
+    if (S.currentGeoJSON && S.currentField) applyExtrusion();
   }
   persistCurrentLayerState();
 });

@@ -22,6 +22,64 @@ Locked decisions:
 Language: HTML/CSS/TypeScript
 Map Engine: MapLibre
 
+# Code Architecture & Conventions
+
+> Reflects the 2026-06 code-quality refactor. Plain TypeScript + MapLibre, no framework. `main.ts` bootstraps and orchestrates; feature logic lives in per-feature modules under `src/`.
+
+## Module map
+- `main.ts` — entry/bootstrap + orchestration (wires DOM refs and callbacks into the feature modules). Still large; being incrementally slimmed.
+- `dom-refs.ts` — every static `document.getElementById` element handle, exported. **Import element refs from here; don't re-query in feature modules.** (Looked up at module load — safe because `main.ts` is a deferred ES module, so the DOM is parsed first.)
+- `state.ts` — the shared mutable singleton `S` (app state) plus `PRIMARY_COLOR`.
+- `icons.ts` — SVG icon URL constants (`FILTER_ICON`, `PIN_ICON`, `EYE_ICON_*`, `CHART_ICON`, …). **Import icons from here.**
+- Feature modules: `layers.ts`, `rendering.ts`, `legend.ts`, `filters.ts`, `selection.ts`, `statistics.ts`, `scatterplot.ts`, `land-schedule.ts`, `time-adjustment.ts`, `comp-finder.ts`, `modals.ts`, `windows.ts`, `toolbar.ts`, `metadata.ts`, `map-viewport.ts`, `save-load-widget.ts`.
+- Extracted pure / low-coupling helpers:
+  - `rendering-helpers.ts` — pure color/expression/numeric helpers (random color, step/interpolate color expressions, numeric-field detection, normalized values & stats).
+  - `selection-geometry.ts` — pure hit-test geometry (point-in-polygon, bbox/polygon intersection, polygon bbox).
+- Shared utilities:
+  - `utils.dom.ts` — DOM/UI helpers (see below).
+  - `utils.number.ts` — `fmt`, `numOrNull`, `parseStrictNumber`, `percentile`, `quantileBreaks`.
+  - `utils.export.ts` — CSV / Excel / zip export. **`xlsx` and `jszip` are imported only here.**
+  - `utils.geo.ts`, `utils.sanitize.ts`.
+- `app.css` — **all** application CSS (linked from `index.html`, bundled by Vite): design tokens, window chrome, marching-ants selection styles, etc.
+- H3 hex aggregation: `hex-layer.ts` + `h3/*` (web worker). 3D export: `export-3d.ts`.
+
+## Shared helpers — use these, don't hand-roll
+`utils.dom.ts`:
+- `el(tag, opts?, children?)` — element factory (className/text/html/title/type/value/attrs/dataset/style/on/children). **Prefer over raw `document.createElement` in new code.**
+- `byId<T>(id)` — typed `getElementById`; `makeButton(text, opts?)`, `makeOption(label, value?, selected?)`, `makeFieldCheckbox(...)`, `divider()`.
+- `createCollapseToggle(opts)` — builds a section collapse/expand setter (state + show/hide + `.is-collapsed` arrow rotation + title + refresh). **Use for all collapsible sections.**
+- `createConditionsButton(label, opts?)` / `conditionsButtonHtml(label)` — the filter / "conditions…" button (filter icon + label).
+- `escapeHtml(s)`, `isTextInputElement(el)`.
+
+`modals.ts`:
+- `showConfirm({title, message, confirmText?, cancelText?, danger?})` → `Promise<boolean>`. **Use instead of `window.confirm`** (it's async — `await` it).
+
+`utils.export.ts`:
+- `downloadText`, `rowsToCsv`, `downloadCsvZip`, `downloadXlsx`, `downloadBlob`.
+
+## Conventions
+- **Element refs:** import from `dom-refs.ts`.
+- **Element creation:** use `el()` / `makeButton()` / etc.
+- **Collapsible sections:** `createCollapseToggle()`. The arrow rotates via the `.is-collapsed` CSS class — never swap `▶`/`▼` via `textContent`.
+- **Confirm dialogs:** `showConfirm()`, not `window.confirm`.
+- **CSV / Excel export:** `utils.export.ts`.
+- **Icons:** `icons.ts`.
+- **Colors:** in CSS use design tokens (`var(--color-primary)`, `--color-border`, `--color-text`, `--color-danger`, …); in TS use `PRIMARY_COLOR`. Don't hardcode the brand hex.
+- **Styling:** add CSS to `app.css` using the existing classes/tokens. Don't reintroduce an inline `<style>` block, and use the chrome classes (`.viz-window`, `.window-header`, `.window-min-btn`) instead of per-element `style="…"`.
+
+## Build & verify
+- `npm run dev` for local; `npm run build` for the bundle. **Vite/esbuild does NOT type-check.**
+- Type-check separately with `npx tsc --noEmit`. The repo has a known pre-existing error baseline (~103 as of 2026-06) — treat any **increase** as a regression you introduced; don't try to drive it to zero in unrelated work.
+- Always eyeball the changed surfaces in `npm run dev` before considering a change done.
+
+## Known coupling & gotchas (refactor in progress)
+- `S` (state.ts) is a flat mutable singleton mutated across ~22 modules.
+- Modules are wired via **callback-injection seams** (`let _cb = () => {}` set in `initXxxCallbacks`) to avoid circular imports.
+- `main.ts` is still the large orchestrator/bootstrap.
+- **Normalization** (per-area denominator) is now `<select>` dropdowns (`normModeSelect`, `statsNormModeSelect`); the old hidden radio groups were removed. **colorMode** (color scaling) still uses a dropdown↔hidden-legacy-radio indirection (`colorModeSelect` ↔ `colorModeLegacyRadios`).
+- TS does not narrow imported `const … | null` inside closures (unlike local consts), so always-present elements in `dom-refs.ts` are typed non-null on purpose.
+- See `REFACTOR.md` for the in-progress decomposition roadmap.
+
 # Metadata
 The user can load in metadata, or construct it within the app. This metadata defines certain key pieces of information that the app needs to do its work.
 
@@ -413,12 +471,12 @@ This button is greyed out if the subject layer is not currently selected in the 
 Use CSS rotation for collapse toggle arrows, not dynamic text content. This provides smooth transitions and consistent behavior across the app.
 
 HTML structure:
-- Button with class `land-schedule-collapse-toggle`
+- Toggle button with a collapse-arrow class (e.g. `land-schedule-collapse-toggle`)
 - Content text: `▼` (always down arrow in the HTML)
 - Initial state: add `is-collapsed` class if starting collapsed
-- Body element: use `is-hidden` class when collapsed, or toggle `display: none/grid` via JavaScript
+- Body element shown/hidden by the factory (`display`, or the `is-hidden` class)
 
-CSS (already defined in index.html):
+CSS (in `app.css`):
 ```css
 .land-schedule-collapse-toggle.is-collapsed {
   transform: rotate(-90deg);
@@ -426,18 +484,19 @@ CSS (already defined in index.html):
 }
 ```
 
-JavaScript pattern (in main.ts):
+JavaScript pattern — use `createCollapseToggle()` from `utils.dom.ts`; do **not** hand-roll the setter:
 ```typescript
-const setMyCollapsibleCollapsed = (collapsed: boolean) => {
-  S.isMyCollapsibleCollapsed = collapsed;
-  myBody.style.display = collapsed ? 'none' : 'grid';
-  myToggle.classList.toggle('is-collapsed', collapsed);
-  myToggle.title = collapsed ? 'Expand Section' : 'Collapse Section';
-  refreshWindowMinHeight(myPanel);
-};
+const setMySectionCollapsed = createCollapseToggle({
+  contentEl: myBody,
+  toggleEl: myToggle,
+  label: 'My Section',                       // → "Expand/Collapse My Section" title
+  display: 'grid',                           // 'grid' | 'block' | 'class' (toggles .is-hidden)
+  setState: (c) => { S.isMySectionCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(myPanel),
+});
 ```
 
-Do NOT use dynamic `textContent` switching between `▶` and `▼`. The CSS transform handles the visual rotation.
+Do NOT use dynamic `textContent` switching between `▶` and `▼` — the `.is-collapsed` CSS transform handles the visual rotation.
 
 
 ### Layers

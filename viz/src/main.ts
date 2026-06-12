@@ -6,6 +6,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 import PIN_SVG_RAW from './svg/pin.svg?raw';
+import { createCollapseToggle } from './utils.dom';
 
 // Local imports
 import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
@@ -620,13 +621,13 @@ const colorPicker = document.getElementById('colorPicker') as HTMLInputElement;
 const btnCancelColorPicker = document.getElementById('btnCancelColorPicker') as HTMLButtonElement;
 const btnConfirmColorPicker = document.getElementById('btnConfirmColorPicker') as HTMLButtonElement;
 
-const setPaintSectionCollapsed = (collapsed: boolean) => {
-  S.isPaintCollapsed = collapsed;
-  paintSectionContent.style.display = collapsed ? 'none' : 'grid';
-  paintSectionToggle.classList.toggle('is-collapsed', collapsed);
-  paintSectionToggle.title = collapsed ? 'Expand Paint' : 'Collapse Paint';
-  refreshWindowMinHeight(controlsEl);
-};
+const setPaintSectionCollapsed = createCollapseToggle({
+  contentEl: paintSectionContent,
+  toggleEl: paintSectionToggle,
+  label: 'Paint',
+  setState: (c) => { S.isPaintCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(controlsEl),
+});
 
 setPaintSectionCollapsed(S.isPaintCollapsed);
 paintSectionToggle.addEventListener('click', () => {
@@ -635,70 +636,73 @@ paintSectionToggle.addEventListener('click', () => {
 
 // "3D" section: collapsible like Paint (independent of the Enable 3D toggle,
 // which controls whether the section is shown at all — see update3DUI).
-const setThreeDSectionCollapsed = (collapsed: boolean) => {
-  S.is3DSectionCollapsed = collapsed;
-  threeDSectionContent.style.display = collapsed ? 'none' : 'grid';
-  threeDSectionToggle.classList.toggle('is-collapsed', collapsed);
-  threeDSectionToggle.title = collapsed ? 'Expand 3D' : 'Collapse 3D';
-  refreshWindowMinHeight(controlsEl);
-};
+const setThreeDSectionCollapsed = createCollapseToggle({
+  contentEl: threeDSectionContent,
+  toggleEl: threeDSectionToggle,
+  label: '3D',
+  setState: (c) => { S.is3DSectionCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(controlsEl),
+});
 
 setThreeDSectionCollapsed(S.is3DSectionCollapsed);
 threeDSectionToggle.addEventListener('click', () => {
   setThreeDSectionCollapsed(!S.is3DSectionCollapsed);
 });
 
-const setFieldVisualizeCollapsed = (collapsed: boolean) => {
-  fieldVisualizeBody.style.display = collapsed ? 'none' : 'grid';
-  fieldVisualizeToggle.classList.toggle('is-collapsed', collapsed);
-  fieldVisualizeToggle.title = collapsed ? 'Expand Field to visualize' : 'Collapse Field to visualize';
-  refreshWindowMinHeight(controlsEl);
-};
+const setFieldVisualizeCollapsed = createCollapseToggle({
+  contentEl: fieldVisualizeBody,
+  toggleEl: fieldVisualizeToggle,
+  label: 'Field to visualize',
+  refresh: () => refreshWindowMinHeight(controlsEl),
+});
 
 setFieldVisualizeCollapsed(false);
 fieldVisualizeToggle.addEventListener('click', () => {
   setFieldVisualizeCollapsed(fieldVisualizeBody.style.display !== 'none');
 });
 
-const setStatsLayerCollapsed = (collapsed: boolean) => {
-  S.isStatsLayerCollapsed = collapsed;
-  statsLayerBody.style.display = collapsed ? 'none' : 'grid';
-  statsLayerToggle.classList.toggle('is-collapsed', collapsed);
-  statsLayerToggle.title = collapsed ? 'Expand Layer' : 'Collapse Layer';
-  refreshWindowMinHeight(statisticsControlsEl);
-};
+const setStatsLayerCollapsed = createCollapseToggle({
+  contentEl: statsLayerBody,
+  toggleEl: statsLayerToggle,
+  label: 'Layer',
+  setState: (c) => { S.isStatsLayerCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(statisticsControlsEl),
+});
 
-const setStatsFieldCollapsed = (collapsed: boolean) => {
-  S.isStatsFieldCollapsed = collapsed;
-  statisticsSection.style.display = collapsed ? 'none' : 'grid';
-  statsFieldToggle.classList.toggle('is-collapsed', collapsed);
-  statsFieldToggle.title = collapsed ? 'Expand Field' : 'Collapse Field';
-  refreshWindowMinHeight(statisticsControlsEl);
-};
+const setStatsFieldCollapsed = createCollapseToggle({
+  contentEl: statisticsSection,
+  toggleEl: statsFieldToggle,
+  label: 'Field',
+  setState: (c) => { S.isStatsFieldCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(statisticsControlsEl),
+});
 
-const setStatsSummaryCollapsed = (collapsed: boolean) => {
-  S.isStatsSummaryCollapsed = collapsed;
-  statsSummaryBody.style.display = collapsed ? 'none' : 'block';
-  statsSummaryToggle.classList.toggle('is-collapsed', collapsed);
-  statsSummaryToggle.title = collapsed ? 'Expand Statistics' : 'Collapse Statistics';
-  refreshWindowMinHeight(statisticsControlsEl);
-};
+const setStatsSummaryCollapsed = createCollapseToggle({
+  contentEl: statsSummaryBody,
+  toggleEl: statsSummaryToggle,
+  label: 'Statistics',
+  display: 'block',
+  setState: (c) => { S.isStatsSummaryCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(statisticsControlsEl),
+});
 
-const setStatsPercentilesCollapsed = (collapsed: boolean) => {
-  S.isStatsPercentilesCollapsed = collapsed;
-  statsPercentilesBody.style.display = collapsed ? 'none' : 'block';
-  statsPercentilesToggle.classList.toggle('is-collapsed', collapsed);
-  statsPercentilesToggle.title = collapsed ? 'Expand Percentiles' : 'Collapse Percentiles';
-  refreshWindowMinHeight(statisticsControlsEl);
-};
+const setStatsPercentilesCollapsed = createCollapseToggle({
+  contentEl: statsPercentilesBody,
+  toggleEl: statsPercentilesToggle,
+  label: 'Percentiles',
+  display: 'block',
+  setState: (c) => { S.isStatsPercentilesCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(statisticsControlsEl),
+});
 
-const setStatsHistogramCollapsed = (collapsed: boolean) => {
-  S.isStatsHistogramCollapsed = collapsed;
-  statsHistogramBody.style.display = collapsed ? 'none' : 'block';
-  statsHistogramToggle.classList.toggle('is-collapsed', collapsed);
-  statsHistogramToggle.title = collapsed ? 'Expand Histogram' : 'Collapse Histogram';
-  refreshWindowMinHeight(statisticsControlsEl);
-};
+const setStatsHistogramCollapsed = createCollapseToggle({
+  contentEl: statsHistogramBody,
+  toggleEl: statsHistogramToggle,
+  label: 'Histogram',
+  display: 'block',
+  setState: (c) => { S.isStatsHistogramCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(statisticsControlsEl),
+});
 
 setStatsLayerCollapsed(S.isStatsLayerCollapsed);
 setStatsFieldCollapsed(S.isStatsFieldCollapsed);
@@ -726,30 +730,30 @@ statsHistogramToggle.addEventListener('click', () => {
   setStatsHistogramCollapsed(!S.isStatsHistogramCollapsed);
 });
 
-const setLandScheduleTablesCollapsed = (collapsed: boolean) => {
-  S.isLandScheduleTablesCollapsed = collapsed;
-  landScheduleTablesContent.style.display = collapsed ? 'none' : 'grid';
-  landScheduleTablesToggle.classList.toggle('is-collapsed', collapsed);
-  landScheduleTablesToggle.title = collapsed ? 'Expand Land tables' : 'Collapse Land tables';
-  refreshWindowMinHeight(landScheduleControlsEl);
-};
+const setLandScheduleTablesCollapsed = createCollapseToggle({
+  contentEl: landScheduleTablesContent,
+  toggleEl: landScheduleTablesToggle,
+  label: 'Land tables',
+  setState: (c) => { S.isLandScheduleTablesCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(landScheduleControlsEl),
+});
 
-const setLandScheduleCurveCollapsed = (collapsed: boolean) => {
-  S.isLandScheduleCurveCollapsed = collapsed;
-  landScheduleCurveContent.style.display = collapsed ? 'none' : 'block';
-  landScheduleCurveToggle.classList.toggle('is-collapsed', collapsed);
-  landScheduleCurveToggle.title = collapsed ? 'Expand Curve' : 'Collapse Curve';
-  refreshWindowMinHeight(landScheduleControlsEl);
-};
+const setLandScheduleCurveCollapsed = createCollapseToggle({
+  contentEl: landScheduleCurveContent,
+  toggleEl: landScheduleCurveToggle,
+  label: 'Curve',
+  display: 'block',
+  setState: (c) => { S.isLandScheduleCurveCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(landScheduleControlsEl),
+});
 
-const setLandScheduleAdjustmentsCollapsed = (collapsed: boolean) => {
-  S.isLandScheduleAdjustmentsCollapsed = collapsed;
-  landScheduleAdjustmentsContent.style.display = collapsed ? 'none' : 'grid';
-  landScheduleAdjustmentsToggle.classList.toggle('is-collapsed', collapsed);
-  landScheduleAdjustmentsToggle.title = collapsed ? 'Expand Adjustments' : 'Collapse Adjustments';
-  refreshWindowMinWidth(landScheduleControlsEl);
-  refreshWindowMinHeight(landScheduleControlsEl);
-};
+const setLandScheduleAdjustmentsCollapsed = createCollapseToggle({
+  contentEl: landScheduleAdjustmentsContent,
+  toggleEl: landScheduleAdjustmentsToggle,
+  label: 'Adjustments',
+  setState: (c) => { S.isLandScheduleAdjustmentsCollapsed = c; },
+  refresh: () => { refreshWindowMinWidth(landScheduleControlsEl); refreshWindowMinHeight(landScheduleControlsEl); },
+});
 
 setLandScheduleTablesCollapsed(S.isLandScheduleTablesCollapsed);
 setLandScheduleCurveCollapsed(S.isLandScheduleCurveCollapsed);
@@ -768,21 +772,23 @@ landScheduleAdjustmentsToggle.addEventListener('click', () => {
 });
 
 // Time Adjustment collapse toggles
-const setTimeAdjustmentTrendCollapsed = (collapsed: boolean) => {
-  S.isTimeAdjustmentTrendCollapsed = collapsed;
-  timeAdjustmentTrendBody.classList.toggle('is-hidden', collapsed);
-  timeAdjustmentTrendToggle.classList.toggle('is-collapsed', collapsed);
-  timeAdjustmentTrendToggle.title = collapsed ? 'Expand Trend' : 'Collapse Trend';
-  refreshWindowMinHeight(timeAdjustmentControlsEl);
-};
+const setTimeAdjustmentTrendCollapsed = createCollapseToggle({
+  contentEl: timeAdjustmentTrendBody,
+  toggleEl: timeAdjustmentTrendToggle,
+  label: 'Trend',
+  display: 'class',
+  setState: (c) => { S.isTimeAdjustmentTrendCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(timeAdjustmentControlsEl),
+});
 
-const setTimeAdjustmentFiltersCollapsed = (collapsed: boolean) => {
-  S.isTimeAdjustmentFiltersCollapsed = collapsed;
-  timeAdjustmentFiltersBody.classList.toggle('is-hidden', collapsed);
-  timeAdjustmentFiltersToggle.classList.toggle('is-collapsed', collapsed);
-  timeAdjustmentFiltersToggle.title = collapsed ? 'Expand Filters' : 'Collapse Filters';
-  refreshWindowMinHeight(timeAdjustmentControlsEl);
-};
+const setTimeAdjustmentFiltersCollapsed = createCollapseToggle({
+  contentEl: timeAdjustmentFiltersBody,
+  toggleEl: timeAdjustmentFiltersToggle,
+  label: 'Filters',
+  display: 'class',
+  setState: (c) => { S.isTimeAdjustmentFiltersCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(timeAdjustmentControlsEl),
+});
 
 setTimeAdjustmentTrendCollapsed(S.isTimeAdjustmentTrendCollapsed);
 setTimeAdjustmentFiltersCollapsed(S.isTimeAdjustmentFiltersCollapsed);
@@ -795,21 +801,21 @@ timeAdjustmentFiltersToggle.addEventListener('click', () => {
   setTimeAdjustmentFiltersCollapsed(!S.isTimeAdjustmentFiltersCollapsed);
 });
 
-const setCompFinderCriteriaCollapsed = (collapsed: boolean) => {
-  S.isCompFinderCriteriaCollapsed = collapsed;
-  compFinderCriteriaBody.style.display = collapsed ? 'none' : 'grid';
-  compFinderCriteriaToggle.classList.toggle('is-collapsed', collapsed);
-  compFinderCriteriaToggle.title = collapsed ? 'Expand Criteria' : 'Collapse Criteria';
-  refreshWindowMinHeight(compFinderControlsEl);
-};
+const setCompFinderCriteriaCollapsed = createCollapseToggle({
+  contentEl: compFinderCriteriaBody,
+  toggleEl: compFinderCriteriaToggle,
+  label: 'Criteria',
+  setState: (c) => { S.isCompFinderCriteriaCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(compFinderControlsEl),
+});
 
-const setCompFinderCompsCollapsed = (collapsed: boolean) => {
-  S.isCompFinderCompsCollapsed = collapsed;
-  compFinderCompsBody.style.display = collapsed ? 'none' : 'grid';
-  compFinderCompsToggle.classList.toggle('is-collapsed', collapsed);
-  compFinderCompsToggle.title = collapsed ? 'Expand Comps' : 'Collapse Comps';
-  refreshWindowMinHeight(compFinderControlsEl);
-};
+const setCompFinderCompsCollapsed = createCollapseToggle({
+  contentEl: compFinderCompsBody,
+  toggleEl: compFinderCompsToggle,
+  label: 'Comps',
+  setState: (c) => { S.isCompFinderCompsCollapsed = c; },
+  refresh: () => refreshWindowMinHeight(compFinderControlsEl),
+});
 
 setCompFinderCriteriaCollapsed(S.isCompFinderCriteriaCollapsed);
 setCompFinderCompsCollapsed(S.isCompFinderCompsCollapsed);

@@ -62,6 +62,48 @@ export function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
 }
 
+export interface CollapseToggleOptions {
+  /** Section body element that is shown/hidden. */
+  contentEl: HTMLElement;
+  /** Header toggle element that receives the .is-collapsed class (CSS rotates the arrow). */
+  toggleEl: HTMLElement;
+  /**
+   * Reveal mechanism for the expanded state:
+   *   'grid' | 'block' -> sets contentEl.style.display
+   *   'class'          -> toggles the 'is-hidden' class instead
+   * Defaults to 'grid'.
+   */
+  display?: 'grid' | 'block' | 'class';
+  /** When provided, sets toggleEl.title to "Expand <label>" / "Collapse <label>". */
+  label?: string;
+  /** Persist the collapsed flag (e.g. into S). */
+  setState?: (collapsed: boolean) => void;
+  /** Run after the DOM updates (e.g. refresh a window's min-height). */
+  refresh?: () => void;
+}
+
+/**
+ * Build a section collapse/expand setter. Centralizes the repeated
+ * "persist flag, hide/show body, rotate arrow via .is-collapsed, retitle, refresh"
+ * pattern shared by every collapsible panel section.
+ */
+export function createCollapseToggle(opts: CollapseToggleOptions): (collapsed: boolean) => void {
+  const display = opts.display ?? 'grid';
+  return (collapsed: boolean) => {
+    opts.setState?.(collapsed);
+    if (display === 'class') {
+      opts.contentEl.classList.toggle('is-hidden', collapsed);
+    } else {
+      opts.contentEl.style.display = collapsed ? 'none' : display;
+    }
+    opts.toggleEl.classList.toggle('is-collapsed', collapsed);
+    if (opts.label !== undefined) {
+      opts.toggleEl.title = collapsed ? `Expand ${opts.label}` : `Collapse ${opts.label}`;
+    }
+    opts.refresh?.();
+  };
+}
+
 /** Convenience wrapper for el('button', { type: 'button', ... }). */
 export function makeButton(text: string, opts: ElOptions = {}): HTMLButtonElement {
   return el('button', { type: 'button', text, ...opts });

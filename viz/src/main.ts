@@ -1456,6 +1456,7 @@ function installWelcome() {
   minimizeLayers();
   minimizeSettingsMenu();
   minimizeFilters();
+  minimizeLegend();
 
   S.welcomeEl = document.createElement('div');
   S.welcomeEl.id = 'welcomeOverlay';
@@ -1479,9 +1480,14 @@ function installWelcome() {
   card.append(row);
   S.welcomeEl.append(card);
   document.body.append(S.welcomeEl);
+
+  // Initial panel state is now established (Layers/Settings/Filters minimized,
+  // welcome shown) — reveal the UI, ending the app-loading guard.
+  document.body.classList.remove('app-loading');
 }
 
 export function revealUI() {
+  document.body.classList.remove('app-loading');
   if (S.welcomeEl) { S.welcomeEl.remove(); S.welcomeEl = null; }
   showLayers();
   minimizeSettingsMenu();

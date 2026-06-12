@@ -79,6 +79,13 @@
       align-content: start;
     }
 
+    /* Avoid a flash of empty panels before main.ts establishes their initial
+       state. Body starts with .app-loading (set in index.html); main.ts clears
+       it once panels have been minimized / the welcome overlay is shown. */
+    body.app-loading .viz-window {
+      display: none !important;
+    }
+
     .window-header {
       align-self: start;
       display: flex;

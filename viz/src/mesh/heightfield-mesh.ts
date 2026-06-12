@@ -30,7 +30,15 @@ export interface HeightfieldOptions {
 
 export interface HexCellInput { h3: string; metric: number; }
 
-export function buildHexHeightfieldMesh(cells: HexCellInput[], opts: HeightfieldOptions): IndexedMesh {
+export interface BuildHooks {
+  onProgress?: (fraction: number) => void;
+}
+
+export function buildHexHeightfieldMesh(
+  cells: HexCellInput[],
+  opts: HeightfieldOptions,
+  hooks?: BuildHooks,
+): IndexedMesh {
   const empty: IndexedMesh = {
     positions: new Float32Array(0), indices: new Uint32Array(0),
     vertexCount: 0, triangleCount: 0, dims: { x: 0, y: 0, z: 0 },
@@ -106,7 +114,10 @@ export function buildHexHeightfieldMesh(cells: HexCellInput[], opts: Heightfield
 
   // --- relief columns for occupied hexes (0 → top), sitting within the slab ---
   let maxZ = zb;
+  const total = occupied.size;
+  let processed = 0;
   for (const [h3, metric] of occupied) {
+    if ((processed++ & 2047) === 0) hooks?.onProgress?.(processed / total);
     const topZ = zb + reliefOf(metric);
     if (topZ <= zb + 1e-4) continue; // no relief → the flat slab already covers it
     if (topZ > maxZ) maxZ = topZ;

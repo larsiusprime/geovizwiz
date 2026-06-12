@@ -8,8 +8,8 @@
  */
 import { S } from './state';
 import { bbox } from './utils.geo';
-import { buildHexHeightfieldMesh, type HexCellInput } from './mesh/heightfield-mesh';
-import { meshToBinarySTL, meshToOBJ } from './mesh/mesh-export';
+import type { HexCellInput } from './mesh/heightfield-mesh';
+import { requestMeshExport, cancelMeshExport } from './mesh/mesh.client';
 
 const byId = (id: string) => document.getElementById(id);
 
@@ -43,7 +43,17 @@ export function initExport3DMenu(): void {
   wireCollapse('expSourceToggle', 'expSourceBody', 'Source');
   wireCollapse('expSizeToggle', 'expSizeBody', 'Size');
   wireCollapse('expOutputToggle', 'expOutputBody', 'Output');
-  byId('btnDoExport3D')?.addEventListener('click', doExport);
+  byId('btnDoExport3D')?.addEventListener('click', () => {
+    if (exporting) cancelExport();
+    else doExport();
+  });
+}
+
+let exporting = false;
+
+function setExportButtonLabel(label: string): void {
+  const btn = byId('btnDoExport3D');
+  if (btn) btn.textContent = label;
 }
 
 function setStatus(msg: string, isError = false): void {
@@ -67,6 +77,13 @@ function download(blob: Blob, filename: string): void {
   URL.revokeObjectURL(url);
 }
 
+function cancelExport(): void {
+  cancelMeshExport();
+  exporting = false;
+  setExportButtonLabel('Export');
+  setStatus('Export canceled.');
+}
+
 function doExport(): void {
   const fc = S.hexGeoJSON;
   if (!fc || fc.features.length === 0) { setStatus('No hexagon layer to export.', true); return; }
@@ -75,32 +92,43 @@ function doExport(): void {
   const wantObj = (byId('expFmtObj') as HTMLInputElement | null)?.checked ?? false;
   if (!wantStl && !wantObj) { setStatus('Select at least one format (STL or OBJ).', true); return; }
 
-  setStatus('Building mesh…');
-  // Defer one frame so the status paints before the synchronous build.
-  requestAnimationFrame(() => {
-    try {
-      const cells: HexCellInput[] = fc.features.map((f) => ({
-        h3: (f.properties as any)?.h3 as string,
-        metric: Number((f.properties as any)?.hexMetric),
-      }));
-      const mesh = buildHexHeightfieldMesh(cells, {
-        footprintMm: numInput('expFootprint', 180),
-        maxHeightMm: numInput('expMaxHeight', 30),
-        baseThicknessMm: numInput('expBaseThickness', 2),
-      });
-      if (mesh.triangleCount === 0) { setStatus('Mesh was empty — nothing to export.', true); return; }
+  const cells: HexCellInput[] = fc.features.map((f) => ({
+    h3: (f.properties as any)?.h3 as string,
+    metric: Number((f.properties as any)?.hexMetric),
+  }));
+  const base = exportBaseName();
 
-      const base = exportBaseName();
-      const saved: string[] = [];
-      if (wantStl) { download(new Blob([meshToBinarySTL(mesh)], { type: 'model/stl' }), `${base}.stl`); saved.push(`${base}.stl`); }
-      if (wantObj) { download(new Blob([meshToOBJ(mesh)], { type: 'model/obj' }), `${base}.obj`); saved.push(`${base}.obj`); }
+  exporting = true;
+  setExportButtonLabel('Cancel');
+  setStatus('Building mesh… 0%');
 
-      setStatus(`Saved ${saved.join(', ')} · ${mesh.triangleCount.toLocaleString()} triangles`);
-    } catch (err) {
-      console.error('[export3d] export failed', err);
-      setStatus('Export failed — see console.', true);
-    }
-  });
+  requestMeshExport(
+    cells,
+    {
+      footprintMm: numInput('expFootprint', 180),
+      maxHeightMm: numInput('expMaxHeight', 30),
+      baseThicknessMm: numInput('expBaseThickness', 2),
+    },
+    { stl: wantStl, obj: wantObj },
+    {
+      onProgress: (f) => setStatus(`Building mesh… ${Math.round(f * 100)}%`),
+      onResult: (res) => {
+        exporting = false;
+        setExportButtonLabel('Export');
+        if (res.triangleCount === 0) { setStatus('Mesh was empty — nothing to export.', true); return; }
+        const saved: string[] = [];
+        if (res.stl) { download(new Blob([res.stl], { type: 'model/stl' }), `${base}.stl`); saved.push(`${base}.stl`); }
+        if (res.obj) { download(new Blob([res.obj], { type: 'model/obj' }), `${base}.obj`); saved.push(`${base}.obj`); }
+        setStatus(`Saved ${saved.join(', ')} · ${res.triangleCount.toLocaleString()} triangles`);
+      },
+      onError: (msg) => {
+        exporting = false;
+        setExportButtonLabel('Export');
+        console.error('[export3d] export failed', msg);
+        setStatus('Export failed — see console.', true);
+      },
+    },
+  );
 }
 
 /** Refresh source line, gating, and the output readout. Call when the menu opens. */

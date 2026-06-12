@@ -36,6 +36,10 @@ let _opacityInput: HTMLInputElement = null!;
 let _multInput: HTMLInputElement = null!;
 let _unitsSelect: HTMLSelectElement = null!;
 let _extrusionOptions: HTMLFieldSetElement = null!;
+let _hexOptions: HTMLFieldSetElement | null = null;
+let _hexResRow: HTMLElement | null = null;
+let _threeDSection: HTMLElement | null = null;   // the collapsible "3D" section
+let _enable3DRow: HTMLElement | null = null;      // the "Enable 3D" checkbox row
 let _colorRampOptions: HTMLFieldSetElement | null = null;
 let _colorScalingOptions: HTMLFieldSetElement | null = null;
 let _opacityOptions: HTMLFieldSetElement | null = null;
@@ -52,6 +56,10 @@ export type RenderingElements = {
   multInput: HTMLInputElement;
   unitsSelect: HTMLSelectElement;
   extrusionOptions: HTMLFieldSetElement;
+  hexOptions: HTMLFieldSetElement | null;
+  hexResRow: HTMLElement | null;
+  threeDSection: HTMLElement | null;
+  enable3DRow: HTMLElement | null;
   colorRampOptions: HTMLFieldSetElement | null;
   colorScalingOptions: HTMLFieldSetElement | null;
   opacityOptions: HTMLFieldSetElement | null;
@@ -69,6 +77,10 @@ export function initRenderingElements(els: RenderingElements) {
   _multInput = els.multInput;
   _unitsSelect = els.unitsSelect;
   _extrusionOptions = els.extrusionOptions;
+  _hexOptions = els.hexOptions;
+  _hexResRow = els.hexResRow;
+  _threeDSection = els.threeDSection;
+  _enable3DRow = els.enable3DRow;
   _colorRampOptions = els.colorRampOptions;
   _colorScalingOptions = els.colorScalingOptions;
   _opacityOptions = els.opacityOptions;
@@ -196,6 +208,12 @@ export function updateErrorLayer() {
   const layer = _getCurrentLayer();
   if (!layer || !S.map.getSource(layer.sourceId)) return;
   ensureErrorLayer(layer);
+
+  // Hex summary features have no land/building size field — never flag them.
+  if (S.hexMode && S.hexGeoJSON) {
+    S.map.setFilter(layer.errorLayerId, ['==', ['literal', 1], 2]);
+    return;
+  }
 
   let filter: any = ['==', ['literal', 1], 2]; // matches nothing by default
 
@@ -397,6 +415,9 @@ export function addExtrusionLayer(layer: LayerState) {
 /* ================================================================== */
 
 export function buildValueExpression(): Expression {
+  // Hex summary: the value/acre (or sum) is already baked into `hexMetric`.
+  if (S.hexMode && S.hexGeoJSON) return ['to-number', ['get', 'hexMetric']] as any;
+
   if (!S.currentField) return ['literal', 0] as any;
   const base: Expression = ['to-number', ['get', S.currentField]] as any;
 
@@ -947,8 +968,15 @@ export function computeAndApplyAutoMultiplier(
 ) {
   if (!S.currentGeoJSON || !S.currentField) return;
 
+  // In hex mode the displayed metric is the precomputed `hexMetric` (the ratio
+  // is already baked in), so scale/breaks/stats come from the hex values as-is.
+  const useHex = S.hexMode && !!S.hexGeoJSON;
+  const srcFc = useHex ? S.hexGeoJSON! : S.currentGeoJSON;
+  const srcField = useHex ? 'hexMetric' : S.currentField;
+  const srcMode: 'asis' | 'perLand' | 'perBuilding' = useHex ? 'asis' : S.normalizationMode;
+
   // values for the CURRENT normalization mode
-  const vals = getNumericValuesNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
+  const vals = getNumericValuesNormalized(srcFc, srcField, srcMode);
   const pVal = percentile(vals, p);
   if (!Number.isFinite(pVal) || pVal <= 0) return;
 
@@ -989,10 +1017,11 @@ export function computeAndApplyAutoMultiplier(
   }
 
   _unitsSelect.value = unitKey;
-  _multInput.value = String(multiplier);
+  // Show 3 decimals to keep the input compact (guard tiny values from rounding to 0).
+  _multInput.value = String(Number(multiplier.toFixed(3)) || Number(multiplier.toPrecision(3)));
 
   // stats for legend fallback
-  S.currentStats = computeStatsNormalized(S.currentGeoJSON, S.currentField, S.normalizationMode);
+  S.currentStats = computeStatsNormalized(srcFc, srcField, srcMode);
 
   console.debug('autoScale', {
     mode: S.normalizationMode,
@@ -1030,11 +1059,14 @@ export function setView(which: string) {
 /* ================================================================== */
 
 export function update3DUI() {
-  if (S.currentFieldType === 'numeric') {
-    _extrusionOptions.style.display = S.is3DMode ? 'grid' : 'none';
-  } else {
-    _extrusionOptions.style.display = 'none';
-  }
+  const numeric = S.currentFieldType === 'numeric';
+  const show3D = numeric && S.is3DMode;
+  // "Enable 3D" checkbox only makes sense for numeric fields.
+  if (_enable3DRow) _enable3DRow.style.display = numeric ? 'block' : 'none';
+  // The whole "3D" section appears only once 3D is enabled (numeric field).
+  if (_threeDSection) _threeDSection.style.display = show3D ? 'block' : 'none';
+  // Resolution control is revealed only when Hexagons is on.
+  if (_hexResRow) _hexResRow.style.display = (show3D && S.hexMode) ? 'flex' : 'none';
 }
 
 export function updateFieldTypeUI() {
@@ -1054,7 +1086,7 @@ export function updateFieldTypeUI() {
     if (_paintDividerCategorical) _paintDividerCategorical.style.display = 'none';
     if (_paintDividerRamp) _paintDividerRamp.style.display = 'none';
     if (_paintDividerScaling) _paintDividerScaling.style.display = 'none';
-    _extrusionOptions.style.display = 'none';
+    update3DUI(); // hides the Enable 3D row + 3D section (no field)
     if (fieldTypeReadout) fieldTypeReadout.textContent = 'Field type: —';
   } else {
     const showNumericOptions = S.currentFieldType === 'numeric';
@@ -1078,7 +1110,7 @@ export function updateFieldTypeUI() {
       if (numericOptions) numericOptions.style.display = 'none';
       if (categoricalOptions) categoricalOptions.style.display = 'grid';
       if (_colorOptions) _colorOptions.style.display = 'none';
-      _extrusionOptions.style.display = 'none';
+      update3DUI(); // hides the Enable 3D row + 3D section (categorical field)
 
       // Show/hide color options based on selected mode
       if (_colorOptions) {

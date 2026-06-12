@@ -46,6 +46,11 @@ export const S = {
   is3DMode: false,
   cachedExtrusionSettings: null as { multiplier: number; unit: string } | null,
 
+  // --- Hexagon summary (H3) for 3D-print prep ---
+  hexMode: false,            // when true (and 3D), render an H3 hex summary instead of parcels
+  hexResolution: 8,          // H3 resolution (slider 5..11)
+  hexGeoJSON: null as GeoJSON.FeatureCollection | null, // computed hex layer (null = showing parcels)
+
   // --- Staged loading ---
   lastFile: null as File | null,
   lastAsyncBuffer: null as AsyncBuffer | null,
@@ -98,6 +103,7 @@ export const S = {
   isSettingsMenuMinimized: false,
   isSettingsDataSourcesCollapsed: false,
   isPaintCollapsed: false,
+  is3DSectionCollapsed: false,
   isLegendVisible: true,
   isLegendMinimized: false,
   isStatisticsMinimized: true,
@@ -113,6 +119,7 @@ export const S = {
   isCompFinderMinimized: true,
   isInspectMinimized: true,
   isWriteMinimized: true,
+  isExport3DMinimized: true,
   isCompFinderSubjectCollapsed: false,
   isCompFinderCriteriaCollapsed: false,
   isCompFinderCompsCollapsed: false,

@@ -38,6 +38,9 @@ let _colorQuant: HTMLInputElement | null;
 let _colorModeSelect: HTMLSelectElement | null = null;
 let _colorPicker: HTMLInputElement;
 let _enable3DCheckbox: HTMLInputElement;
+let _enableHexCheckbox: HTMLInputElement | null = null;
+let _hexResInput: HTMLInputElement | null = null;
+let _hexResReadout: HTMLOutputElement | null = null;
 let _filtersInvertToggle: HTMLInputElement;
 
 export function initLayerElements(els: {
@@ -56,6 +59,9 @@ export function initLayerElements(els: {
   colorModeSelect?: HTMLSelectElement | null;
   colorPicker: HTMLInputElement;
   enable3DCheckbox: HTMLInputElement;
+  enableHexCheckbox?: HTMLInputElement | null;
+  hexResInput?: HTMLInputElement | null;
+  hexResReadout?: HTMLOutputElement | null;
   filtersInvertToggle: HTMLInputElement;
 }) {
   _layerList = els.layerList;
@@ -73,6 +79,9 @@ export function initLayerElements(els: {
   _colorModeSelect = els.colorModeSelect ?? null;
   _colorPicker = els.colorPicker;
   _enable3DCheckbox = els.enable3DCheckbox;
+  _enableHexCheckbox = els.enableHexCheckbox ?? null;
+  _hexResInput = els.hexResInput ?? null;
+  _hexResReadout = els.hexResReadout ?? null;
   _filtersInvertToggle = els.filtersInvertToggle;
 }
 
@@ -349,6 +358,8 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     customColors: new Map(),
     opacity: parseFloat(_opacityInput.value),
     is3DMode: false,
+    hexMode: false,
+    hexResolution: 8,
     filters: [],
     filterMode: 'none',
     filterActionMode: 'none',
@@ -387,6 +398,8 @@ export function persistCurrentLayerState() {
   layer.customColors = S.customColors;
   layer.opacity = parseFloat(_opacityInput.value);
   layer.is3DMode = S.is3DMode;
+  layer.hexMode = S.hexMode;
+  layer.hexResolution = S.hexResolution;
   layer.filters = cloneFilters(S.filters);
   layer.filterMode = S.filterMode;
   layer.filterActionMode = S.filterActionMode;
@@ -422,6 +435,8 @@ export function applyLayerState(layer: LayerState) {
   _opacityInput.value = String(layer.opacity);
   if (_opacityOut) _opacityOut.value = Number(layer.opacity).toFixed(2);
   S.is3DMode = layer.is3DMode;
+  S.hexMode = layer.hexMode ?? false;
+  S.hexResolution = layer.hexResolution ?? 8;
   S.filters = cloneFilters(layer.filters ?? []);
   S.parcelPatchMap = layer.parcelPatchMap ?? new Map();
   S.filterMode = layer.filterMode ?? 'none';
@@ -518,6 +533,9 @@ export function applyLayerState(layer: LayerState) {
   }
 
   _enable3DCheckbox.checked = S.is3DMode;
+  if (_enableHexCheckbox) _enableHexCheckbox.checked = S.hexMode;
+  if (_hexResInput) _hexResInput.value = String(S.hexResolution);
+  if (_hexResReadout) _hexResReadout.value = String(S.hexResolution);
   updateCurrentLayerDetails();
   _updateFieldTypeUI();
   _update3DUI();

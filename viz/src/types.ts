@@ -176,6 +176,8 @@ export type LayerState = {
   customColors: Map<string, string>;
   opacity: number;
   is3DMode: boolean;
+  hexMode: boolean;
+  hexResolution: number;
   filters: FilterRule[];
   filterMode: FilterMode;
   filterActionMode: FilterActionMode;

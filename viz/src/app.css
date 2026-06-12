@@ -1294,9 +1294,10 @@
     }
 
     .time-adjustment-y-max-slider {
-      -webkit-appearance: slider-vertical;
-      appearance: slider-vertical;
-      writing-mode: bt-lr;
+      /* Vertical, bottom-to-top range input. The old `appearance: slider-vertical`
+         was removed in Chrome 121; `writing-mode: vertical-lr` + `direction: rtl`
+         is the current cross-browser standard (Chrome 121+, FF 121+, Safari 17.4+). */
+      writing-mode: vertical-lr;
       direction: rtl;
       margin-top: 4px;
       width: 20px;

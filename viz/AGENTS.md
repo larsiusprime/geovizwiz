@@ -1042,6 +1042,100 @@ The data they export looks like this:
 
 ### Data 
 
+### 3D Print Prep (hexagonization + export)
+
+Turns a layer's 3D view into a physical, 3D-printable model. Two parts: **hexagon
+summarization** (simplify parcels into an H3 hex surface) and **mesh export** (STL/OBJ).
+
+**UI.** Lives in the layer panel's collapsible **"3D" section**, revealed by the
+**Enable 3D** checkbox at the bottom of the Paint section (numeric fields only). The
+section holds the Extrusion multiplier + Units controls, a **Hexagons** toggle + a
+**Resolution** slider (H3 resolution, shown only when Hexagons is on), and an
+**Export 3D Object File** button. That button opens the floating **Export 3D Object
+File** menu — a standard pinnable/dockable window opened ONLY from this button (never
+the toolbar). The Export menu has collapsible Source / Size / Output sections:
+Footprint (mm, longest side), Max height (mm), Base thickness (mm), STL/OBJ checkboxes,
+a live Output readout (model dims + triangle/file estimates), and an Export button that
+builds, downloads, and reports a manifold self-check verdict.
+
+**Hexagonization** (`hex-layer.ts`, `h3/`). When Hexagons is on (in 3D), parcels are
+aggregated into H3 cells:
+- **value/acre is computed correctly** by accumulating Σ(field) and Σ(area) per hex and
+  dividing once at the end (reducer `ratio` for perLand/perBuilding, `sum` for as-is).
+  Never average per-parcel ratios.
+- **Large parcels are distributed** across every hex they cover (`polygonToCells`, even
+  split) so "parcel deserts" tile continuously; sub-hex parcels assign by centroid.
+- Output is a GeoJSON FeatureCollection of hex polygons with `{ h3, hexMetric }` that
+  flows through the **same** extrusion/color render path (no forked renderer): in hex
+  mode `buildValueExpression` returns `hexMetric` and `computeAndApplyAutoMultiplier`
+  scales off the hex values.
+- Runs in a Vite **module Web Worker** (`h3/h3-aggregate.worker.ts`) with resident
+  geometry (sent once per dataset), debounce + supersede + cancel, and a determinate
+  progress bar (`#hexProgress`). Keep-last-good: the previous view stays on screen until
+  the new result lands; canceling restores the last committed settings.
+- **Filter-aware (WYSIWYG):** only parcels visible under the current filters are
+  aggregated (`isParcelVisibleUnderFilters` in `filters.ts`), so filtering the data
+  filters the hexes. This is also how the user controls outliers (e.g. drop near-zero-
+  area parcels that blow up value/acre).
+
+**Mesh export** (`mesh/`). Build + serialize run in a worker (`mesh/mesh.worker.ts`,
+`mesh.client.ts`):
+- `heightfield-mesh.ts` builds a **rectangular base slab** (`0 → baseThickness` over the
+  bbox) plus **per-occupied-hex relief columns** (`0 → top`). Empty areas are just the
+  flat slab top ("fill to base", always — there is no holes/omit option). Relief maps the
+  metric so the max = max height (raw-max scaling — outlier-sensitive; see learnings).
+- `mesh-export.ts` writes binary STL + OBJ; download via the Blob + `<a download>` pattern.
+- Progress + cancel surface on the Export button (it toggles to **Cancel** during a build).
+
+**Verification.** Every export runs `mesh/validate-mesh.ts` (merges coincident vertices,
+then counts open/boundary edges, non-manifold edges, checks winding + signed volume →
+`isSolid`) and shows the verdict in the menu. `tools/verify-stl.py` (trimesh) is the
+independent strict cross-check; **PrusaSlicer is the practical ground truth**.
+
+#### Learnings / gotchas (3D print)
+- **"Print-ready" has two bars.** Strict 2-manifold (trimesh `is_volume` / our `isSolid`)
+  vs practical sliceability (PrusaSlicer, far more lenient). The per-hex-prism mesh is
+  **closed (0 open edges = no holes) but non-manifold** (adjacent hexes' back-to-back
+  walls → edges shared by 4 faces). It slices clean in PrusaSlicer with no warnings.
+  **0 open edges is the metric that matters for printing; non-manifold edges are
+  slicer-handled.**
+- **Edge-parity validation must MERGE vertices first.** A per-prism edge-parity check
+  (vertices not welded across cells) falsely reports "watertight" because each prism is
+  closed on its own. You must merge coincident vertices (as a slicer/trimesh does) before
+  counting edges; only then do shared/non-manifold edges appear. `validate-mesh.ts` does
+  this — trust it, not a raw per-triangle parity count.
+- **h3-js throws on degenerate rings.** `polygonToCells` raises `E_FAILED` (code 1) on
+  zero-area slivers / duplicate points (common in real parcels). Wrap per parcel and fall
+  back to centroid; never let one bad parcel abort the whole aggregation.
+- **Filters apply a MapLibre `setFilter` on the render layer.** In hex mode that layer
+  shows hex features (only `h3`/`hexMetric`), so a parcel-field filter would hide every
+  hexagon. `applyMapFilters` clears the filter in hex mode; filtering is baked into the
+  aggregation instead (see filter-aware above).
+- **Height scaling is outlier-sensitive.** Export uses raw-max relief scaling, so a single
+  extreme hex (e.g. value/acre from a ~0.03 sqft parcel) flattens everything into one
+  needle while the rest go ~flat. The on-screen 3D view avoids this by anchoring the 99th
+  percentile to the height cap. Current mitigation: **filter the outlier parcels (WYSIWYG)**.
+  A user-facing outlier/percentile clamp in the export was discussed but **deferred** (the
+  filter fix gives the user direct control).
+- **DEFERRED — true single welded manifold.** Would replace the prism soup with one
+  watertight 2-manifold (`isSolid: true`, fewer triangles, smaller files). Hard because of
+  the **hex-corner T-junction problem**: vertical wall edges between 3 differing-height
+  hexes don't pair up unless split at every height present at that corner. Not needed for
+  printing. If revisited, gate success on `validate-mesh.ts` `isSolid` / `verify-stl.py`,
+  NOT a per-prism parity check, and consider a CSG lib (manifold-3d) vs hand-rolled.
+
+#### Dev / build notes (viz)
+- Build with `npm run build` (or `npm run dev`) in `viz/`. The build is Vite/esbuild and
+  **does not gate on `tsc`** — `npx tsc --noEmit` reports many pre-existing errors; that's
+  expected. Only worry about errors in files you touched.
+- To unit-test pure modules (e.g. `h3-aggregate`, `heightfield-mesh`, `validate-mesh`)
+  offline, bundle with esbuild as **CJS** and run under node:
+  `npx esbuild file.ts --bundle --format=cjs --platform=node --outfile=t.cjs && node t.cjs`.
+  Use `--format=cjs` (not esm): h3-js's wasm shim references `__dirname` and breaks under
+  ESM in node. (In the browser, Vite bundles it fine for both main thread and workers.)
+- `deploy-local.js` failing with `EADDRINUSE :::3000` means a previous local server is
+  still running — kill the stale `node deploy-local.js` process holding port 3000.
+
 ---
 
 ## VIZ Build Modes Architecture Decisions (2026-02)

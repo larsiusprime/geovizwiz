@@ -89,19 +89,6 @@ let btnSizeBack: HTMLButtonElement;
 let btnSizeSkip: HTMLButtonElement;
 let btnSizeOk: HTMLButtonElement;
 
-// Normalization elements (paint panel)
-let normLand: HTMLInputElement;
-let normBldg: HTMLInputElement;
-let normLandUnitEl: HTMLElement;
-let normBldgUnitEl: HTMLElement;
-
-// Normalization elements (stats panel)
-let statsNormAsIs: HTMLInputElement;
-let statsNormLand: HTMLInputElement;
-let statsNormBldg: HTMLInputElement;
-let statsNormLandUnitEl: HTMLElement;
-let statsNormBldgUnitEl: HTMLElement;
-
 export function initModalElements(els: {
   numericModalOverlay: HTMLElement;
   categoricalModalOverlay: HTMLElement;
@@ -148,15 +135,6 @@ export function initModalElements(els: {
   btnSizeBack: HTMLButtonElement;
   btnSizeSkip: HTMLButtonElement;
   btnSizeOk: HTMLButtonElement;
-  normLand: HTMLInputElement;
-  normBldg: HTMLInputElement;
-  normLandUnitEl: HTMLElement;
-  normBldgUnitEl: HTMLElement;
-  statsNormAsIs: HTMLInputElement;
-  statsNormLand: HTMLInputElement;
-  statsNormBldg: HTMLInputElement;
-  statsNormLandUnitEl: HTMLElement;
-  statsNormBldgUnitEl: HTMLElement;
 }) {
   numericModalOverlay = els.numericModalOverlay;
   categoricalModalOverlay = els.categoricalModalOverlay;
@@ -203,15 +181,6 @@ export function initModalElements(els: {
   btnSizeBack = els.btnSizeBack;
   btnSizeSkip = els.btnSizeSkip;
   btnSizeOk = els.btnSizeOk;
-  normLand = els.normLand;
-  normBldg = els.normBldg;
-  normLandUnitEl = els.normLandUnitEl;
-  normBldgUnitEl = els.normBldgUnitEl;
-  statsNormAsIs = els.statsNormAsIs;
-  statsNormLand = els.statsNormLand;
-  statsNormBldg = els.statsNormBldg;
-  statsNormLandUnitEl = els.statsNormLandUnitEl;
-  statsNormBldgUnitEl = els.statsNormBldgUnitEl;
 }
 
 /* ------------------------------------------------------------------ */
@@ -787,21 +756,11 @@ export function setSizeState(
     }
   }
 
-  // enable/disable normalization radios
-  normLand.disabled = !S.landSizeField;
-  normBldg.disabled = !S.bldgSizeField;
-  normLandUnitEl.textContent = S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)';
-  normBldgUnitEl.textContent = S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)';
-
-  statsNormLand.disabled = !S.landSizeField;
-  statsNormBldg.disabled = !S.bldgSizeField;
-  statsNormLandUnitEl.textContent = S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)';
-  statsNormBldgUnitEl.textContent = S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)';
-
-  const normModeSelect = document.getElementById('normModeSelect') as HTMLSelectElement | null;
-  if (normModeSelect) {
-    const perLandOption = normModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
-    const perBuildingOption = normModeSelect.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
+  // Update the normalization dropdowns' availability + unit labels (Paint + Statistics).
+  const syncNormOptions = (sel: HTMLSelectElement | null) => {
+    if (!sel) return;
+    const perLandOption = sel.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
+    const perBuildingOption = sel.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
     if (perLandOption) {
       perLandOption.disabled = !S.landSizeField;
       perLandOption.textContent = `…per land size ${S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)'}`;
@@ -810,18 +769,15 @@ export function setSizeState(
       perBuildingOption.disabled = !S.bldgSizeField;
       perBuildingOption.textContent = `…per building size ${S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)'}`;
     }
-  }
+  };
+  syncNormOptions(document.getElementById('normModeSelect') as HTMLSelectElement | null);
+  const statsNormModeSelect = document.getElementById('statsNormModeSelect') as HTMLSelectElement | null;
+  syncNormOptions(statsNormModeSelect);
 
-  if (S.statsNormalizationMode === 'perLand' && !S.landSizeField) {
-    S.statsNormalizationMode = 'asis';
-    statsNormAsIs.checked = true;
-  }
-  if (S.statsNormalizationMode === 'perBuilding' && !S.bldgSizeField) {
-    S.statsNormalizationMode = 'asis';
-    statsNormAsIs.checked = true;
-  }
-
-
+  // Reset stats normalization to as-is if its size field is no longer available.
+  if (S.statsNormalizationMode === 'perLand' && !S.landSizeField) S.statsNormalizationMode = 'asis';
+  if (S.statsNormalizationMode === 'perBuilding' && !S.bldgSizeField) S.statsNormalizationMode = 'asis';
+  if (statsNormModeSelect) statsNormModeSelect.value = S.statsNormalizationMode;
 }
 
 /* ------------------------------------------------------------------ */

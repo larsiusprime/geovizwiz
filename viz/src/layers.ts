@@ -29,9 +29,6 @@ let _fieldSelect: HTMLSelectElement;
 let _rampSelect: HTMLSelectElement;
 let _opacityInput: HTMLInputElement;
 let _opacityOut: HTMLOutputElement;
-let _normAsIs: HTMLInputElement;
-let _normLand: HTMLInputElement;
-let _normBldg: HTMLInputElement;
 let _normModeSelect: HTMLSelectElement | null = null;
 let _colorCont: HTMLInputElement | null;
 let _colorQuant: HTMLInputElement | null;
@@ -50,9 +47,6 @@ export function initLayerElements(els: {
   rampSelect: HTMLSelectElement;
   opacityInput: HTMLInputElement;
   opacityOut: HTMLOutputElement;
-  normAsIs: HTMLInputElement;
-  normLand: HTMLInputElement;
-  normBldg: HTMLInputElement;
   normModeSelect?: HTMLSelectElement | null;
   colorCont: HTMLInputElement | null;
   colorQuant: HTMLInputElement | null;
@@ -70,9 +64,6 @@ export function initLayerElements(els: {
   _rampSelect = els.rampSelect;
   _opacityInput = els.opacityInput;
   _opacityOut = els.opacityOut;
-  _normAsIs = els.normAsIs;
-  _normLand = els.normLand;
-  _normBldg = els.normBldg;
   _normModeSelect = els.normModeSelect ?? null;
   _colorCont = els.colorCont;
   _colorQuant = els.colorQuant;
@@ -493,11 +484,6 @@ export function applyLayerState(layer: LayerState) {
     }
   }
 
-  if (_normAsIs && _normLand && _normBldg) {
-    _normAsIs.checked = S.normalizationMode === 'asis';
-    _normLand.checked = S.normalizationMode === 'perLand';
-    _normBldg.checked = S.normalizationMode === 'perBuilding';
-  }
   if (_normModeSelect) {
     const landUnit = S.landSizeField ? (S.landSizeUnitLabel ?? '(unit)') : '(unit)';
     const bldgUnit = S.bldgSizeField ? (S.bldgSizeUnitLabel ?? '(unit)') : '(unit)';

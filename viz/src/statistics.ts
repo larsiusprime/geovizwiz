@@ -241,7 +241,6 @@ let statsNormModeSelect: HTMLSelectElement | null = null;
 let statsDetails: HTMLDivElement;
 let statsNumericBlock: HTMLDivElement;
 let statsCategoricalBlock: HTMLDivElement;
-let statsNormalizationControls: HTMLDivElement;
 let statisticsSection: HTMLDivElement;
 let statsParcelCount: HTMLSpanElement;
 let statsMedian: HTMLSpanElement;
@@ -254,11 +253,6 @@ let statsCategoricalParcelCount: HTMLSpanElement;
 let statsCategoricalUniqueCount: HTMLSpanElement;
 let statsCategoricalModalValue: HTMLSpanElement;
 let statsCategoricalValues: HTMLTableSectionElement;
-let statsNormAsIs: HTMLInputElement;
-let statsNormLand: HTMLInputElement;
-let statsNormBldg: HTMLInputElement;
-let statsNormLandUnitEl: HTMLElement;
-let statsNormBldgUnitEl: HTMLElement;
 let statsOverflowMinPct: HTMLInputElement;
 let statsOverflowMaxPct: HTMLInputElement;
 
@@ -270,7 +264,6 @@ export function initStatisticsElements(els: {
   statsDetails: HTMLDivElement;
   statsNumericBlock: HTMLDivElement;
   statsCategoricalBlock: HTMLDivElement;
-  statsNormalizationControls: HTMLDivElement;
   statisticsSection: HTMLDivElement;
   statsParcelCount: HTMLSpanElement;
   statsMedian: HTMLSpanElement;
@@ -283,11 +276,6 @@ export function initStatisticsElements(els: {
   statsCategoricalUniqueCount: HTMLSpanElement;
   statsCategoricalModalValue: HTMLSpanElement;
   statsCategoricalValues: HTMLTableSectionElement;
-  statsNormAsIs: HTMLInputElement;
-  statsNormLand: HTMLInputElement;
-  statsNormBldg: HTMLInputElement;
-  statsNormLandUnitEl: HTMLElement;
-  statsNormBldgUnitEl: HTMLElement;
   statsOverflowMinPct: HTMLInputElement;
   statsOverflowMaxPct: HTMLInputElement;
 }) {
@@ -300,7 +288,6 @@ export function initStatisticsElements(els: {
   statsDetails = els.statsDetails;
   statsNumericBlock = els.statsNumericBlock;
   statsCategoricalBlock = els.statsCategoricalBlock;
-  statsNormalizationControls = els.statsNormalizationControls;
   statisticsSection = els.statisticsSection;
   statsParcelCount = els.statsParcelCount;
   statsMedian = els.statsMedian;
@@ -313,11 +300,6 @@ export function initStatisticsElements(els: {
   statsCategoricalUniqueCount = els.statsCategoricalUniqueCount;
   statsCategoricalModalValue = els.statsCategoricalModalValue;
   statsCategoricalValues = els.statsCategoricalValues;
-  statsNormAsIs = els.statsNormAsIs;
-  statsNormLand = els.statsNormLand;
-  statsNormBldg = els.statsNormBldg;
-  statsNormLandUnitEl = els.statsNormLandUnitEl;
-  statsNormBldgUnitEl = els.statsNormBldgUnitEl;
   statsOverflowMinPct = els.statsOverflowMinPct;
   statsOverflowMaxPct = els.statsOverflowMaxPct;
 }
@@ -599,19 +581,9 @@ export function getStatsNormalizationContext() {
 
 export function updateStatisticsNormalizationControls() {
   const context = getStatsNormalizationContext();
-  statsNormLand.disabled = !context.landField;
-  statsNormBldg.disabled = !context.bldgField;
-  statsNormLandUnitEl.textContent = context.landField ? (context.landUnit ?? '(unit)') : '(unit)';
-  statsNormBldgUnitEl.textContent = context.bldgField ? (context.bldgUnit ?? '(unit)') : '(unit)';
 
-  if (S.statsNormalizationMode === 'perLand' && !context.landField) {
-    S.statsNormalizationMode = 'asis';
-    statsNormAsIs.checked = true;
-  }
-  if (S.statsNormalizationMode === 'perBuilding' && !context.bldgField) {
-    S.statsNormalizationMode = 'asis';
-    statsNormAsIs.checked = true;
-  }
+  if (S.statsNormalizationMode === 'perLand' && !context.landField) S.statsNormalizationMode = 'asis';
+  if (S.statsNormalizationMode === 'perBuilding' && !context.bldgField) S.statsNormalizationMode = 'asis';
 
   if (statsNormModeSelect) {
     const perLandOption = statsNormModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
@@ -864,13 +836,11 @@ export function updateStatisticsSectionVisibility() {
   if (!S.statsFieldType) {
     statsNumericBlock.style.display = 'none';
     statsCategoricalBlock.style.display = 'none';
-    statsNormalizationControls.style.display = 'none';
     return;
   }
   const isNumeric = S.statsFieldType === 'numeric';
   statsNumericBlock.style.display = isNumeric ? 'grid' : 'none';
   statsCategoricalBlock.style.display = isNumeric ? 'none' : 'grid';
-  statsNormalizationControls.style.display = 'none';
   updateStatisticsNormalizationControls();
 }
 

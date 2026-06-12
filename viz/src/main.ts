@@ -317,11 +317,6 @@ const addLayerFromStoreButton = document.getElementById('addLayerFromStore') as 
 const settingsOtherActions = document.getElementById('settingsOtherActions') as HTMLDivElement;
 const opacityInput = document.getElementById('opacity') as HTMLInputElement;
 const opacityOut = document.getElementById('opacityVal') as HTMLOutputElement
-const normAsIs = document.getElementById('norm-asis') as HTMLInputElement;
-const normLand = document.getElementById('norm-land') as HTMLInputElement;
-const normBldg = document.getElementById('norm-bldg') as HTMLInputElement;
-const normLandUnitEl = document.getElementById('normLandUnit') as HTMLElement;
-const normBldgUnitEl = document.getElementById('normBldgUnit') as HTMLElement;
 const colorRampOptions = document.getElementById('colorRampOptions') as HTMLFieldSetElement;
 const colorScalingOptions = document.getElementById('colorScalingOptions') as HTMLFieldSetElement | null;
 const opacityOptions = document.getElementById('opacityOptions') as HTMLFieldSetElement;
@@ -406,7 +401,6 @@ const statsNormModeSelect = document.getElementById('statsNormModeSelect') as HT
 const statsDetails = document.getElementById('statsDetails') as HTMLDivElement;
 const statsNumericBlock = document.getElementById('statsNumericBlock') as HTMLDivElement;
 const statsCategoricalBlock = document.getElementById('statsCategoricalBlock') as HTMLDivElement;
-const statsNormalizationControls = document.getElementById('statsNormalizationControls') as HTMLDivElement;
 const statisticsSection = document.getElementById('statisticsSection') as HTMLDivElement;
 const statsParcelCount = document.getElementById('statsParcelCount') as HTMLSpanElement;
 const statsMedian = document.getElementById('statsMedian') as HTMLSpanElement;
@@ -419,11 +413,6 @@ const statsCategoricalParcelCount = document.getElementById('statsCategoricalPar
 const statsCategoricalUniqueCount = document.getElementById('statsCategoricalUniqueCount') as HTMLSpanElement;
 const statsCategoricalModalValue = document.getElementById('statsCategoricalModalValue') as HTMLSpanElement;
 const statsCategoricalValues = document.getElementById('statsCategoricalValues') as HTMLTableSectionElement;
-const statsNormAsIs = document.getElementById('stats-norm-asis') as HTMLInputElement;
-const statsNormLand = document.getElementById('stats-norm-land') as HTMLInputElement;
-const statsNormBldg = document.getElementById('stats-norm-bldg') as HTMLInputElement;
-const statsNormLandUnitEl = document.getElementById('statsNormLandUnit') as HTMLElement;
-const statsNormBldgUnitEl = document.getElementById('statsNormBldgUnit') as HTMLElement;
 const statsOverflowMinPct = document.getElementById('statsOverflowMinPct') as HTMLInputElement;
 const statsOverflowMaxPct = document.getElementById('statsOverflowMaxPct') as HTMLInputElement;
 const statsLayerToggle = document.getElementById('statsLayerToggle') as HTMLButtonElement;
@@ -1219,15 +1208,6 @@ initModalElements({
   btnSizeBack: document.getElementById('btnSizeBack') as HTMLButtonElement,
   btnSizeSkip: document.getElementById('btnSizeSkip') as HTMLButtonElement,
   btnSizeOk: document.getElementById('btnSizeOk') as HTMLButtonElement,
-  normLand,
-  normBldg,
-  normLandUnitEl,
-  normBldgUnitEl,
-  statsNormAsIs,
-  statsNormLand,
-  statsNormBldg,
-  statsNormLandUnitEl,
-  statsNormBldgUnitEl,
 });
 initModalCallbacks({
   clearData,
@@ -1245,7 +1225,6 @@ initStatisticsElements({
   statsDetails,
   statsNumericBlock,
   statsCategoricalBlock,
-  statsNormalizationControls,
   statisticsSection,
   statsParcelCount,
   statsMedian,
@@ -1258,11 +1237,6 @@ initStatisticsElements({
   statsCategoricalUniqueCount,
   statsCategoricalModalValue,
   statsCategoricalValues,
-  statsNormAsIs,
-  statsNormLand,
-  statsNormBldg,
-  statsNormLandUnitEl,
-  statsNormBldgUnitEl,
   statsOverflowMinPct,
   statsOverflowMaxPct,
 });
@@ -1399,9 +1373,6 @@ initLayerElements({
   rampSelect,
   opacityInput,
   opacityOut,
-  normAsIs,
-  normLand,
-  normBldg,
   normModeSelect,
   colorCont,
   colorQuant,
@@ -3160,11 +3131,13 @@ if (normModeSelect) {
       return;
     }
 
-    const target = next === 'perLand'
-      ? normLand
-      : (next === 'perBuilding' ? normBldg : normAsIs);
-    target.checked = true;
-    target.dispatchEvent(new Event('change', { bubbles: true }));
+    S.normalizationMode = next;
+    // Clear cached extrusion settings when normalization mode changes
+    S.cachedExtrusionSettings = null;
+    if (!S.currentGeoJSON || !S.currentField) return;
+    // Re-aggregate (e.g. value/acre vs as-is) for the new mode, or recompute parcels.
+    if (!startHexUpdateIfActive()) scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+    persistCurrentLayerState();
   });
 }
 
@@ -3447,17 +3420,18 @@ statsFieldSelect.addEventListener('change', () => {
 if (statsNormModeSelect) {
   statsNormModeSelect.addEventListener('change', () => {
     const next = statsNormModeSelect.value as 'asis' | 'perLand' | 'perBuilding';
-    if (next === 'perLand' && statsNormLand.disabled) {
+    const perLandOpt = statsNormModeSelect.querySelector('option[value="perLand"]') as HTMLOptionElement | null;
+    const perBldgOpt = statsNormModeSelect.querySelector('option[value="perBuilding"]') as HTMLOptionElement | null;
+    if (next === 'perLand' && perLandOpt?.disabled) {
       statsNormModeSelect.value = S.statsNormalizationMode;
       return;
     }
-    if (next === 'perBuilding' && statsNormBldg.disabled) {
+    if (next === 'perBuilding' && perBldgOpt?.disabled) {
       statsNormModeSelect.value = S.statsNormalizationMode;
       return;
     }
-    const target = next === 'perLand' ? statsNormLand : (next === 'perBuilding' ? statsNormBldg : statsNormAsIs);
-    target.checked = true;
-    target.dispatchEvent(new Event('change', { bubbles: true }));
+    S.statsNormalizationMode = next;
+    updateStatisticsResults();
   });
 }
 
@@ -3495,15 +3469,6 @@ scatterZoomToSelectionButton.addEventListener('click', () => {
 
 scatterClearSelectionButton.addEventListener('click', () => {
   clearScatterSelection();
-});
-
-document.querySelectorAll<HTMLInputElement>('input[name="statsNormMode"]').forEach(radio => {
-  radio.addEventListener('change', () => {
-    S.statsNormalizationMode = (document.querySelector('input[name="statsNormMode"]:checked') as HTMLInputElement)
-      ?.value as 'asis' | 'perLand' | 'perBuilding';
-    if (statsNormModeSelect) statsNormModeSelect.value = S.statsNormalizationMode;
-    updateStatisticsResults();
-  });
 });
 
 function clampOverflowPercent(minValue: number, maxValue: number) {
@@ -3693,19 +3658,6 @@ fieldSelect.addEventListener('change', () => {
   renderLayerList();
 });
 
-document.querySelectorAll<HTMLInputElement>('input[name="normMode"]').forEach(r => {
-  r.addEventListener('change', () => {
-    S.normalizationMode = (document.querySelector('input[name="normMode"]:checked') as HTMLInputElement)?.value as any;
-    if (normModeSelect) normModeSelect.value = S.normalizationMode;
-    // Clear cached extrusion settings when normalization mode changes
-    S.cachedExtrusionSettings = null;
-    if (!S.currentGeoJSON || !S.currentField) return;
-    // Re-aggregate (e.g. value/acre vs as-is) for the new mode, or recompute parcels.
-    if (!startHexUpdateIfActive()) scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
-    persistCurrentLayerState();
-  });
-});
-
 // 3D checkbox event listener
 enable3DCheckbox.addEventListener('change', () => {
   S.is3DMode = enable3DCheckbox.checked;
@@ -3774,10 +3726,6 @@ document.getElementById('hexProgressCancel')?.addEventListener('click', () => {
     hexResInput.value = String(snap.hexResolution);
     if (hexResReadout) hexResReadout.value = String(snap.hexResolution);
     fieldSelect.value = snap.currentField ?? '';
-    const normRadio = document.querySelector(
-      `input[name="normMode"][value="${snap.normalizationMode}"]`,
-    ) as HTMLInputElement | null;
-    if (normRadio) normRadio.checked = true;
     if (normModeSelect) normModeSelect.value = snap.normalizationMode;
 
     update3DUI();

@@ -1,3 +1,5 @@
+import { FILTER_ICON } from './icons';
+
 type ElChild = Node | string | null | undefined | false;
 
 export interface ElOptions {
@@ -114,6 +116,24 @@ export function makeOption(label: string, value?: string, selected = false): HTM
   const o = new Option(label, value ?? label);
   o.selected = selected;
   return o;
+}
+
+/** Inner HTML for a "conditions" / filter button: filter icon + label. */
+export function conditionsButtonHtml(label: string): string {
+  return `<img src="${FILTER_ICON}" alt="Filters" /> ${label}`;
+}
+
+/** Create a conditions/filter button (filter icon + label). */
+export function createConditionsButton(
+  label: string,
+  opts: { className?: string; title?: string } = {},
+): HTMLButtonElement {
+  return el('button', {
+    type: 'button',
+    className: opts.className ?? '',
+    title: opts.title ?? 'Conditions',
+    html: conditionsButtonHtml(label),
+  });
 }
 
 export function makeFieldCheckbox(name: string, checked: boolean, fieldType: 'numeric' | 'categorical' = 'numeric', locked = false) {

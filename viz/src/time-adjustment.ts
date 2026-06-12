@@ -7,8 +7,8 @@ import type {
   TimeAdjustmentMethod,
 } from './types';
 import { downloadCsvZip, downloadXlsx } from './utils.export';
-
-const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
+import { FILTER_ICON } from './icons';
+import { conditionsButtonHtml } from './utils.dom';
 
 type Elements = {
   panel: HTMLDivElement;
@@ -508,7 +508,7 @@ function populateSelect(select: HTMLSelectElement, fields: string[], placeholder
 
 function updateConditionsButton(button: HTMLButtonElement, filters: FilterRule[]) {
   const activeCount = filters.filter((filter) => filter.active).length;
-  button.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> conditions${activeCount ? ` (${activeCount})` : ''}`;
+  button.innerHTML = conditionsButtonHtml(`conditions${activeCount ? ` (${activeCount})` : ''}`);
   button.classList.toggle('is-active', activeCount > 0);
 }
 

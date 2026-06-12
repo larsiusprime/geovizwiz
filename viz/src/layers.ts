@@ -12,8 +12,8 @@ import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 import { cloneFilters, setFiltersContext, isFilterComplete } from './filters';
 import { refreshLandSchedulePanel } from './land-schedule';
+import { FILTER_ICON } from './icons';
 
-const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 const CHART_ICON = new URL('./svg/chart.svg', import.meta.url).href;
 const SCATTER_ICON = new URL('./svg/scatter.svg', import.meta.url).href;
 const STREET_ICON = new URL('./svg/streets.svg', import.meta.url).href;

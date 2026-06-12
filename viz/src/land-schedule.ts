@@ -17,6 +17,7 @@ import type {
   LandScheduleValueMode
 } from './types';
 import { showConfirm } from './modals';
+import { createConditionsButton } from './utils.dom';
 
 const UNIT_OPTIONS: Array<{ value: LandScheduleUnit; label: string; header: string }> = [
   { value: 'sqft', label: 'area (sqft)', header: 'sqft' },
@@ -46,8 +47,6 @@ const FRONTAGE_UNITS = [
   { value: 'front-foot', label: 'foot' },
   { value: 'front-meter', label: 'meter' },
 ] as const;
-
-const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initLandScheduleElements)     */
@@ -452,11 +451,7 @@ function renderActiveTable(entry: LandScheduleEntry) {
   });
   
 
-  const filterButton = document.createElement('button');
-  filterButton.type = 'button';
-  filterButton.className = 'land-table-filter';
-  filterButton.title = 'Conditions';
-  filterButton.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions...`;
+  const filterButton = createConditionsButton('Conditions...', { className: 'land-table-filter' });
   landScheduleFilterButton = filterButton;
   updateLandScheduleFilterButtonState(activeTable);
   const landScheduleContextKey = `table:${activeTable.id}`;
@@ -622,11 +617,7 @@ function renderLandScheduleAdjustments(entry: LandScheduleEntry) {
       adjustment.name = nameInput.value;
     });
     
-    const conditionsBtn = document.createElement('button');
-    conditionsBtn.type = 'button';
-    conditionsBtn.className = 'land-table-filter';
-    conditionsBtn.title = 'Conditions';
-    conditionsBtn.innerHTML = `<img src="${FILTER_ICON}" alt="Filters" /> Conditions`;
+    const conditionsBtn = createConditionsButton('Conditions', { className: 'land-table-filter' });
     updateAdjustmentFilterButtonState(conditionsBtn, adjustment);
     const adjustmentContextKey = `adj:${adjustment.id}`;
     conditionsBtn.addEventListener('click', () => {

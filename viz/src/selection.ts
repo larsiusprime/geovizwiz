@@ -7,6 +7,7 @@ import { S } from './state';
 import { getSelectionFilterActiveCount, matchesSelectionFilters } from './filters';
 import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
 import { showConfirm } from './modals';
+import { FILTER_ICON } from './icons';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initSelection)               */
@@ -29,7 +30,6 @@ let _selectionKeySelect: HTMLSelectElement | null = null;
 
 const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
 const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
-const FILTER_ICON = new URL('./svg/filters.svg', import.meta.url).href;
 const RESIZE_ICON = new URL('./svg/expand.svg', import.meta.url).href;
 
 export interface SelectionCallbacks {

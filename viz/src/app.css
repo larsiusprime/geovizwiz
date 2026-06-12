@@ -81,6 +81,14 @@
 
     .window-header {
       align-self: start;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid #eee;
+      background: rgba(248, 248, 248, 0.8);
+      border-radius: 12px 12px 0 0;
+      cursor: move;
     }
 
     .viz-window.is-pinned {
@@ -107,7 +115,8 @@
       gap: 4px;
     }
 
-    .window-pin {
+    .window-pin,
+    .window-min-btn {
       border: none;
       background: none;
       cursor: pointer;
@@ -221,8 +230,13 @@
 
     #controls .window-header .window-pin,
     #controls .window-header .window-pin-collapse,
+    #controls .window-header .window-min-btn,
     #settingsControls .window-header .window-pin,
-    #settingsControls .window-header .window-pin-collapse {
+    #settingsControls .window-header .window-pin-collapse,
+    #settingsControls .window-header .window-min-btn,
+    #filtersControls .window-header .window-pin,
+    #filtersControls .window-header .window-pin-collapse,
+    #filtersControls .window-header .window-min-btn {
       border: none;
       background: none;
       padding: 2px;
@@ -231,8 +245,13 @@
 
     #controls .window-header .window-pin:hover,
     #controls .window-header .window-pin-collapse:hover,
+    #controls .window-header .window-min-btn:hover,
     #settingsControls .window-header .window-pin:hover,
-    #settingsControls .window-header .window-pin-collapse:hover {
+    #settingsControls .window-header .window-pin-collapse:hover,
+    #settingsControls .window-header .window-min-btn:hover,
+    #filtersControls .window-header .window-pin:hover,
+    #filtersControls .window-header .window-pin-collapse:hover,
+    #filtersControls .window-header .window-min-btn:hover {
       background: none;
       border: none;
     }

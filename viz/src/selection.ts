@@ -755,16 +755,7 @@ function createSelectionControlsPanel() {
   S.selectionControlsPanel.dataset.minWidth = '240';
 
   S.selectionControlsPanel.innerHTML = `
-    <div class="window-header" style="
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
-      border-bottom: 1px solid #eee;
-      background: rgba(248, 248, 248, 0.8);
-      border-radius: 8px 8px 0 0;
-      cursor: move;
-    ">
+    <div class="window-header" style="border-radius: 8px 8px 0 0;">
       <div style="font-weight: 600; font-size: 13px;">Selection Controls</div>
       <div class="window-actions">
         <button id="btnPinSelectionControls" class="window-pin" type="button" title="Pin" aria-pressed="false">

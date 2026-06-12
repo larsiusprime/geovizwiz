@@ -93,13 +93,13 @@
 
 
       <div id="controls" class="viz-window" style="position: absolute; top: 10px; left: 80px; width: min(calc(92vw - 80px), 420px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
-      <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+      <div class="window-header">
         <div style="font-weight: 600; font-size: 13px;">Layers</div>
         <div class="window-actions">
           <button id="btnPinLayers" class="window-pin" type="button" title="Pin" aria-pressed="false">
             <img alt="Pin menu" />
           </button>
-          <button id="btnMinimizeLayers" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+          <button id="btnMinimizeLayers" class="window-min-btn" title="Close">
             ❌
 		  </button>
         </div>
@@ -282,13 +282,13 @@
 
   <!-- Export 3D Object File menu (opened only from the 3D section's button) -->
   <div id="export3DControls" class="viz-window" style="position: absolute; top: 10px; left: 700px; width: min(calc(92vw - 80px), 420px); min-width: 300px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Export 3D Object File</div>
       <div class="window-actions">
         <button id="btnPinExport3D" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeExport3D" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeExport3D" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -365,13 +365,13 @@
   </div>
 
   <div id="settingsControls" class="viz-window" style="position: absolute; top: 10px; left: 520px; width: min(calc(92vw - 80px), 400px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: grid; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Settings</div>
       <div class="window-actions">
         <button id="btnPinSettings" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeSettingsMenu" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeSettingsMenu" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -416,13 +416,13 @@
   </div>
 
   <div id="filtersControls" class="viz-window" style="position: absolute; top: 10px; left: 860px; width: min(calc(92vw - 80px), 360px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Filters</div>
       <div class="window-actions">
         <button id="btnPinFilters" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeFilters" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeFilters" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -449,13 +449,13 @@
   </div>
 
   <div id="statisticsControls" class="viz-window" style="position: absolute; top: 10px; left: 900px; min-width: 360px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Statistics</div>
       <div class="window-actions">
         <button id="btnPinStatistics" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeStatistics" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeStatistics" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -587,13 +587,13 @@
   </div>
 
   <div id="scatterplotControls" class="viz-window" style="position: absolute; top: 10px; left: 900px; width: min(calc(92vw - 80px), 520px); min-width: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Scatterplot</div>
       <div class="window-actions">
         <button id="btnPinScatterplot" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeScatterplot" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeScatterplot" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -674,13 +674,13 @@
   </div>
 
   <div id="compFinderControls" class="viz-window" style="position: absolute; top: 10px; left: 740px; width: min(calc(92vw - 80px), 520px); min-width: 360px; min-height: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Comp Finder</div>
       <div class="window-actions">
         <button id="btnPinCompFinder" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeCompFinder" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeCompFinder" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -783,13 +783,13 @@
   </div>
 
   <div id="inspectControls" class="viz-window" style="position: absolute; top: 10px; left: 640px; width: min(calc(92vw - 80px), 460px); min-width: 340px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Inspect</div>
       <div class="window-actions">
         <button id="btnPinInspect" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeInspect" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeInspect" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -802,13 +802,13 @@
   </div>
 
   <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 520px); min-width: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Adjustment Schedule</div>
       <div class="window-actions">
         <button id="btnPinLandSchedule" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeLandSchedule" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeLandSchedule" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -859,13 +859,13 @@
   </div>
 
   <div id="writeControls" class="viz-window" style="position: absolute; top: 10px; left: 1120px; width: min(calc(92vw - 80px), 520px); min-width: 420px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Write</div>
       <div class="window-actions">
         <button id="btnPinWrite" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeWrite" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeWrite" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -932,13 +932,13 @@
   </div>
 
   <div id="timeAdjustmentControls" class="viz-window" style="position: absolute; top: 10px; left: 1380px; width: min(calc(92vw - 80px), 560px); min-width: 540px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
-    <div class="window-header" style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-bottom: 1px solid #eee; background: rgba(248, 248, 248, 0.8); border-radius: 12px 12px 0 0; cursor: move;">
+    <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Time Adjustment</div>
       <div class="window-actions">
         <button id="btnPinTimeAdjustment" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeTimeAdjustment" style="border: none; background: none; cursor: pointer; font-size: 14px; color: #666; padding: 2px; width: 20px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center;" title="Close">
+        <button id="btnMinimizeTimeAdjustment" class="window-min-btn" title="Close">
           ❌
         </button>
       </div>
@@ -1255,35 +1255,13 @@
     backdrop-filter: blur(4px);
     cursor: move;
   ">
-    <div class="window-header" style="
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 8px 12px;
-      border-bottom: 1px solid #eee;
-      background: rgba(248, 248, 248, 0.8);
-      border-radius: 8px 8px 0 0;
-      cursor: move;
-    ">
+    <div class="window-header" style="justify-content: flex-start; border-radius: 8px 8px 0 0;">
       <div style="font-weight: 600; font-size: 13px; flex: 1; text-align: center;" id="legendTitle">Legend</div>
       <div class="window-actions">
         <button id="btnPinLegend" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />
         </button>
-        <button id="btnMinimizeLegend" style="
-          border: none;
-          background: none;
-          cursor: pointer;
-          font-size: 14px;
-          color: #666;
-          padding: 2px;
-          width: 20px;
-          height: 20px;
-          border-radius: 3px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        " title="Close">
+        <button id="btnMinimizeLegend" class="window-min-btn" title="Close">
           ❌
 	    </button>
       </div>

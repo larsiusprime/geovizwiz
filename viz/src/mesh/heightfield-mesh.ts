@@ -12,7 +12,7 @@
  * Heights map the metric so the tallest hex prints at `maxHeightMm` above the
  * base; horizontal extent is scaled so the longest side equals `footprintMm`.
  */
-import { cellToBoundary, polygonToCells, getResolution } from 'h3-js';
+import { cellToBoundary } from 'h3-js';
 
 export interface IndexedMesh {
   positions: Float32Array; // xyz triplets, mm, Z up
@@ -45,7 +45,6 @@ export function buildHexHeightfieldMesh(cells: HexCellInput[], opts: Heightfield
     if (c.metric > maxMetric) maxMetric = c.metric;
   }
   if (occupied.size === 0) return empty;
-  const res = getResolution(occupied.keys().next().value as string);
 
   // --- bbox of occupied cell boundaries ---
   let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
@@ -55,12 +54,6 @@ export function buildHexHeightfieldMesh(cells: HexCellInput[], opts: Heightfield
       if (lat < minLat) minLat = lat; if (lat > maxLat) maxLat = lat;
     }
   }
-
-  // --- fill the bounding rectangle, then add occupied (fill-to-base) ---
-  const bboxPoly = [[[minLng, minLat], [maxLng, minLat], [maxLng, maxLat], [minLng, maxLat], [minLng, minLat]]];
-  const allCells = new Set<string>();
-  try { for (const c of polygonToCells(bboxPoly as any, res, true) as string[]) allCells.add(c); } catch { /* ignore */ }
-  for (const h3 of occupied.keys()) allCells.add(h3);
 
   // --- local equirectangular projection → mm, scaled so longest side = footprint ---
   const lat0 = (minLat + maxLat) / 2;
@@ -74,7 +67,6 @@ export function buildHexHeightfieldMesh(cells: HexCellInput[], opts: Heightfield
 
   // --- heights ---
   const reliefOf = (metric: number) => (maxMetric > 0 ? (Math.max(0, metric) / maxMetric) * opts.maxHeightMm : 0);
-  const topZOf = (h3: string) => opts.baseThicknessMm + (occupied.has(h3) ? reliefOf(occupied.get(h3)!) : 0);
 
   // --- mesh accumulators (per-cell vertices: no cross-cell welding) ---
   const positions: number[] = [];
@@ -97,9 +89,26 @@ export function buildHexHeightfieldMesh(cells: HexCellInput[], opts: Heightfield
     else indices.push(i0, i1, i2);
   };
 
-  let maxZ = 0;
-  for (const h3 of allCells) {
-    const topZ = topZOf(h3);
+  // --- rectangular base slab (0 → baseThickness) over the bounding box ---
+  // A single clean rectangle instead of tiling the bbox with hexes (which left a
+  // jagged perimeter and far more triangles). Empty areas are this flat slab top.
+  const X = widthM * scale, Y = heightM * scale, zb = opts.baseThicknessMm;
+  {
+    const b00 = addV(0, 0, 0), b10 = addV(X, 0, 0), b11 = addV(X, Y, 0), b01 = addV(0, Y, 0);
+    const t00 = addV(0, 0, zb), t10 = addV(X, 0, zb), t11 = addV(X, Y, zb), t01 = addV(0, Y, zb);
+    pushTri(t00, t10, t11, [0, 0, 1]); pushTri(t00, t11, t01, [0, 0, 1]);    // top
+    pushTri(b00, b10, b11, [0, 0, -1]); pushTri(b00, b11, b01, [0, 0, -1]);  // bottom
+    pushTri(b00, b10, t10, [0, -1, 0]); pushTri(b00, t10, t00, [0, -1, 0]);  // y = 0
+    pushTri(b10, b11, t11, [1, 0, 0]); pushTri(b10, t11, t10, [1, 0, 0]);    // x = X
+    pushTri(b11, b01, t01, [0, 1, 0]); pushTri(b11, t01, t11, [0, 1, 0]);    // y = Y
+    pushTri(b01, b00, t00, [-1, 0, 0]); pushTri(b01, t00, t01, [-1, 0, 0]);  // x = 0
+  }
+
+  // --- relief columns for occupied hexes (0 → top), sitting within the slab ---
+  let maxZ = zb;
+  for (const [h3, metric] of occupied) {
+    const topZ = zb + reliefOf(metric);
+    if (topZ <= zb + 1e-4) continue; // no relief → the flat slab already covers it
     if (topZ > maxZ) maxZ = topZ;
 
     const bnd = cellToBoundary(h3, true) as number[][];

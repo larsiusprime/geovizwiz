@@ -12,12 +12,7 @@ import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
 import { cloneFilters, setFiltersContext, isFilterComplete } from './filters';
 import { refreshLandSchedulePanel } from './land-schedule';
-import { FILTER_ICON } from './icons';
-
-const CHART_ICON = new URL('./svg/chart.svg', import.meta.url).href;
-const SCATTER_ICON = new URL('./svg/scatter.svg', import.meta.url).href;
-const STREET_ICON = new URL('./svg/streets.svg', import.meta.url).href;
-const SATELLITE_ICON = new URL('./svg/globe.svg', import.meta.url).href;
+import { FILTER_ICON, CHART_ICON, SCATTER_ICON, STREET_ICON, SATELLITE_ICON } from './icons';
 
 /* ------------------------------------------------------------------ */
 /*  DOM element references (set once via initLayerElements)            */

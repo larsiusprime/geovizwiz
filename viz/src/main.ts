@@ -7,6 +7,7 @@ import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 import PIN_SVG_RAW from './svg/pin.svg?raw';
 import { createCollapseToggle } from './utils.dom';
+import { EYE_ICON_OPEN, EYE_ICON_CLOSED, PIN_ICON, PIN_ICON_TILTED } from './icons';
 
 // Local imports
 import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
@@ -453,11 +454,6 @@ const compFinderCriteriaBody = document.getElementById('compFinderCriteriaBody')
 const compFinderCompsToggle = document.getElementById('compFinderCompsToggle') as HTMLButtonElement;
 const compFinderCompsBody = document.getElementById('compFinderCompsBody') as HTMLDivElement;
 
-const EYE_ICON_OPEN = new URL('./svg/eye.svg', import.meta.url).href;
-const EYE_ICON_CLOSED = new URL('./svg/eye_closed.svg', import.meta.url).href;
-const PENCIL_ICON = new URL('./svg/pencil.svg', import.meta.url).href;
-const PIN_ICON = new URL('./svg/thumbtack.svg', import.meta.url).href;
-const PIN_ICON_TILTED = new URL('./svg/thumbtack-tilted.svg', import.meta.url).href;
 
 function setEyeButtonIcon(button: HTMLButtonElement, isHidden: boolean) {
   const img = button.querySelector('img');

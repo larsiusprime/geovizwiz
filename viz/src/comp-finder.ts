@@ -10,6 +10,38 @@ import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map
 import {
   makeDistanceCircleFeature, getFeatureCenter, isValidLngLat, distanceMeters, getPageTokens, getDeltaClass, buildDelta,
 } from './comp-finder-helpers';
+import {
+  compFinderControlsEl,
+  compFinderDataSourceSelect,
+  compFinderUseDistance,
+  compFinderDistanceInput,
+  compFinderDistanceUnits,
+  compFinderUseSelection,
+  compFinderCriteriaThresholdError,
+  compFinderCriteriaWidgets,
+  compFinderCriteriaTableBody,
+  compFinderAddCriterion,
+  compFinderRefresh,
+  compFinderDirtyIndicator,
+  compFinderNoCompsIndicator,
+  compFinderSpinner,
+  compFinderResultsRow,
+  compFinderResultsSummary,
+  compFinderPager,
+  compFinderEmptyState,
+  compFinderCriteriaSection,
+  compFinderCompsSection,
+  compFinderCriteriaCompsDivider,
+  compFinderCompsTableHead,
+  compFinderCompsTableBody,
+  compFinderCompsTableContainer,
+  compFinderAddFieldSelect,
+  compFinderAddFieldButton,
+  compFinderAddFieldRow,
+  compFinderZoomButton,
+  compFinderExportCsv,
+  compFinderExportExcel,
+} from './dom-refs';
 
 type Criterion = {
   id: string;
@@ -64,7 +96,38 @@ type Callbacks = {
   showCompFinderMenu: () => void;
 };
 
-let els: Elements;
+const els: Elements = {
+  panel: compFinderControlsEl,
+  dataSourceSelect: compFinderDataSourceSelect,
+  distanceEnabledInput: compFinderUseDistance,
+  distanceInput: compFinderDistanceInput,
+  distanceUnitsSelect: compFinderDistanceUnits,
+  selectionEnabledInput: compFinderUseSelection,
+  thresholdError: compFinderCriteriaThresholdError,
+  criteriaWidgets: compFinderCriteriaWidgets,
+  criteriaTableBody: compFinderCriteriaTableBody,
+  addCriterionButton: compFinderAddCriterion,
+  refreshButton: compFinderRefresh,
+  dirtyIndicator: compFinderDirtyIndicator,
+  noCompsIndicator: compFinderNoCompsIndicator,
+  spinner: compFinderSpinner,
+  resultsRow: compFinderResultsRow,
+  resultsSummary: compFinderResultsSummary,
+  pager: compFinderPager,
+  emptyState: compFinderEmptyState,
+  criteriaSection: compFinderCriteriaSection,
+  compsSection: compFinderCompsSection,
+  criteriaCompsDivider: compFinderCriteriaCompsDivider,
+  compsTableHead: compFinderCompsTableHead,
+  compsTableBody: compFinderCompsTableBody,
+  compsTableContainer: compFinderCompsTableContainer,
+  addFieldSelect: compFinderAddFieldSelect,
+  addFieldButton: compFinderAddFieldButton,
+  addFieldRow: compFinderAddFieldRow,
+  zoomButton: compFinderZoomButton,
+  exportCsvButton: compFinderExportCsv,
+  exportExcelButton: compFinderExportExcel,
+};
 let callbacks: Callbacks;
 
 let subject: {
@@ -1217,9 +1280,7 @@ export function setCompFinderMenuVisible(visible: boolean) {
   updateMapArtifacts();
 }
 
-export function initCompFinderElements(elements: Elements) {
-  els = elements;
-
+export function initCompFinderElements() {
   els.dataSourceSelect.addEventListener('change', () => {
     syncCriteriaFields();
     renderCriteriaTable();

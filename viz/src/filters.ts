@@ -25,27 +25,22 @@ const FILTER_REFERENCE_FIELD = '__named_filter__';
 const FILTER_REFERENCE_LABEL = 'Named filter...';
 
 /* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initFilterElements)          */
+/*  DOM element references — imported directly from dom-refs.          */
 /* ------------------------------------------------------------------ */
 
-let filtersListEl: HTMLDivElement;
-let filtersInvertToggle: HTMLInputElement;
-let addFilterButton: HTMLButtonElement;
-let filtersContextLine: HTMLDivElement;
+import {
+  filtersListEl,
+  filtersInvertToggle,
+  addFilterButton,
+  filtersContextLine,
+  filtersSavedContainer,
+} from './dom-refs';
+
 let filtersSaveLoadWidget: SaveLoadWidgetHandle | null = null;
 
-export function initFilterElements(els: {
-  filtersListEl: HTMLDivElement;
-  filtersInvertToggle: HTMLInputElement;
-  addFilterButton: HTMLButtonElement;
-  filtersSavedContainer: HTMLDivElement;
-  filtersContextLine: HTMLDivElement;
-}) {
-  filtersListEl = els.filtersListEl;
-  filtersInvertToggle = els.filtersInvertToggle;
-  addFilterButton = els.addFilterButton;
-  filtersContextLine = els.filtersContextLine;
-
+// Builds the save/load widget and primes the context line. Called once from
+// main.ts during startup (refs themselves come from dom-refs, above).
+export function initFilterElements() {
   filtersSaveLoadWidget = createSaveLoadWidget({
     label: 'filter',
     idPrefix: 'filters',
@@ -58,7 +53,7 @@ export function initFilterElements(els: {
     canLoad: () => S.savedFiltersStore.size > 0,
     getMatchName: () => getMatchingSavedFilterName(),
   });
-  els.filtersSavedContainer.appendChild(filtersSaveLoadWidget.element);
+  filtersSavedContainer.appendChild(filtersSaveLoadWidget.element);
 
   updateFiltersContextLine();
 }

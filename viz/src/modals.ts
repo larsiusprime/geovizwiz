@@ -1243,7 +1243,7 @@ export type ConfirmOptions = {
  * Renders the app's standard .overlay/.modal chrome and resolves to
  * true (confirmed) or false (cancelled / dismissed via Cancel, Esc, or
  * backdrop click). Self-contained: builds and tears down its own DOM,
- * so it needs no wiring through initModalElements.
+ * so it needs no DOM refs from dom-refs.
  */
 export function showConfirm(opts: ConfirmOptions): Promise<boolean> {
   return new Promise((resolve) => {

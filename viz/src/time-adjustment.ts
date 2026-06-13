@@ -9,10 +9,44 @@ import type {
 import { downloadCsvZip, downloadXlsx } from './utils.export';
 import { FILTER_ICON } from './icons';
 import { conditionsButtonHtml } from './utils.dom';
+import {
+  timeAdjustmentControlsEl,
+  timeAdjustmentDataSource,
+  timeAdjustmentStart,
+  timeAdjustmentValuation,
+  timeAdjustmentTrendToggle,
+  timeAdjustmentTrendBody,
+  timeAdjustmentSampleCount,
+  timeAdjustmentGroupBy,
+  timeAdjustmentChartGroup,
+  timeAdjustmentGranularity,
+  timeAdjustmentMethod,
+  timeAdjustmentChartMode,
+  timeAdjustmentChart,
+  timeAdjustmentYAxisControl,
+  timeAdjustmentYMaxInput,
+  timeAdjustmentYMaxSlider,
+  timeAdjustmentSpinner,
+  timeAdjustmentChartMessage,
+  timeAdjustmentExportCsv,
+  timeAdjustmentExportExcel,
+  timeAdjustmentFiltersToggle,
+  timeAdjustmentFiltersBody,
+  timeAdjustmentIncludeBtn,
+  timeAdjustmentExcludeBtn,
+  timeAdjustmentPriceLow,
+  timeAdjustmentPriceHigh,
+  timeAdjustmentSizeLow,
+  timeAdjustmentSizeHigh,
+  timeAdjustmentRatioLow,
+  timeAdjustmentRatioHigh,
+  timeAdjustmentMinSample,
+  timeAdjustmentSizeHeader,
+  timeAdjustmentRatioHeader,
+} from './dom-refs';
 
 type Elements = {
   panel: HTMLDivElement;
-  showFiltersPanel: () => void;
   dataSourceSelect: HTMLSelectElement;
   // Date range inputs
   startInput: HTMLInputElement;
@@ -60,7 +94,43 @@ type SalePoint = {
 
 type GroupedPoints = Array<{ key: string; values: number[]; dates: Date[] }>;
 
-let els: Elements;
+const els: Elements = {
+  panel: timeAdjustmentControlsEl,
+  dataSourceSelect: timeAdjustmentDataSource,
+  startInput: timeAdjustmentStart,
+  valuationInput: timeAdjustmentValuation,
+  trendToggle: timeAdjustmentTrendToggle,
+  trendBody: timeAdjustmentTrendBody,
+  sampleCount: timeAdjustmentSampleCount,
+  groupBySelect: timeAdjustmentGroupBy,
+  chartGroupSelect: timeAdjustmentChartGroup,
+  granularitySelect: timeAdjustmentGranularity,
+  methodSelect: timeAdjustmentMethod,
+  chartModeSelect: timeAdjustmentChartMode,
+  chart: timeAdjustmentChart,
+  yAxisControl: timeAdjustmentYAxisControl,
+  yMaxInput: timeAdjustmentYMaxInput,
+  yMaxSlider: timeAdjustmentYMaxSlider,
+  spinner: timeAdjustmentSpinner,
+  chartMessage: timeAdjustmentChartMessage,
+  exportCsvButton: timeAdjustmentExportCsv,
+  exportExcelButton: timeAdjustmentExportExcel,
+  filtersToggle: timeAdjustmentFiltersToggle,
+  filtersBody: timeAdjustmentFiltersBody,
+  includeButton: timeAdjustmentIncludeBtn,
+  excludeButton: timeAdjustmentExcludeBtn,
+  priceLowInput: timeAdjustmentPriceLow,
+  priceHighInput: timeAdjustmentPriceHigh,
+  sizeLowInput: timeAdjustmentSizeLow,
+  sizeHighInput: timeAdjustmentSizeHigh,
+  ratioLowInput: timeAdjustmentRatioLow,
+  ratioHighInput: timeAdjustmentRatioHigh,
+  minSampleInput: timeAdjustmentMinSample,
+  sizeHeader: timeAdjustmentSizeHeader,
+  ratioHeader: timeAdjustmentRatioHeader,
+};
+// Injected once via initTimeAdjustmentElements (cross-module callback, not a DOM ref).
+let _showFiltersPanel: () => void = () => {};
 let pendingTrendTimer: number | null = null;
 let chartMode: 'improved' | 'vacant' = 'improved';
 let chartGroupValue: string = ''; // empty string means "(All)"
@@ -969,7 +1039,7 @@ function bindFilterButton(button: HTMLButtonElement, key: string, label: string,
       label,
       key,
     });
-    els.showFiltersPanel();
+    _showFiltersPanel();
   });
 }
 
@@ -1158,8 +1228,8 @@ function render() {
   scheduleTrendRender();
 }
 
-export function initTimeAdjustmentElements(elements: Elements) {
-  els = elements;
+export function initTimeAdjustmentElements(showFiltersPanel: () => void) {
+  _showFiltersPanel = showFiltersPanel;
 
   // Note: Collapse toggle event listeners are handled in main.ts for consistency
 

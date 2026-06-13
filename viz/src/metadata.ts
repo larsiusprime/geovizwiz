@@ -253,7 +253,7 @@ export async function loadProjectFile(file: File) {
     });
 
     // Identify missing files
-    expectedFiles.forEach((ds, filename) => {
+    expectedFiles.forEach((_ds, filename) => {
       if (!existingStores.has(filename)) {
         missingFiles.push(filename);
       }

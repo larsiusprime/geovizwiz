@@ -11,7 +11,7 @@
 
 import { S } from './state';
 import { makeFieldCheckbox, divider } from './utils.dom';
-import type { LayerState, DataStore } from './types';
+import type { LayerState } from './types';
 
 /* ------------------------------------------------------------------ */
 /*  Constants                                                          */

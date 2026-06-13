@@ -1,6 +1,6 @@
 # VIZ refactor roadmap
 
-Living tracker for the code-quality refactor of the VIZ app. Working cadence: **scope → one small bite → `npm run build` + `npx tsc --noEmit` (baseline ~103, treat increases as regressions) → eyeball in `npm run dev` → commit.** Each bite is behavior-preserving unless explicitly a bugfix.
+Living tracker for the code-quality refactor of the VIZ app. Working cadence: **scope → one small bite → `npm run build` + `npm run typecheck:gate` (ratcheting tsc baseline) → eyeball in `npm run dev` → commit.** Each bite is behavior-preserving unless explicitly a bugfix.
 
 ## Done (2026-06)
 
@@ -17,7 +17,7 @@ Living tracker for the code-quality refactor of the VIZ app. Working cadence: **
 **Bugs fixed along the way (pre-existing/latent):** rectangle selection under non-zero map pitch/bearing; vertical slider browser-compat (`appearance: slider-vertical` removed in Chrome 121); flash of empty panels + lingering legend on load; legacy normalization-radio indirection torn out (now plain `<select>`s); numeric-paint ramp-row state-leak.
 
 ## Lessons learned (apply these to remaining work)
-1. **Verify with build + a steady tsc count + a per-bite eyeball.** `npm run build` (esbuild) does not type-check; `npx tsc --noEmit` is the real check, and the repo carries a ~103-error baseline — watch the delta, not the absolute.
+1. **Verify with build + the tsc gate + a per-bite eyeball.** `npm run build` (esbuild) does not type-check; `npm run typecheck:gate` is the real check (ratcheting baseline in `scripts/typecheck-gate.cjs`) — watch the delta, not the absolute.
 2. **God-modules don't split cleanly where module-local mutable `let` state + callback seams are shared.** Clean, low-risk extractions are *pure* or *S-only* helpers (geometry, color/expression primitives). Deeper splits (tool handlers, panel builders) need the shared state hoisted into an object — real churn, medium risk; only worth it for maximal decomposition.
 3. **Prefer verbatim / script-assisted moves** for big mechanical extractions (dom-refs, rendering-helpers, marching-ants) so the diff is reviewable and the compiler proves completeness.
 4. **TS narrows local `const | null` inside closures but not imported ones** — always-present elements in `dom-refs.ts` are typed non-null.

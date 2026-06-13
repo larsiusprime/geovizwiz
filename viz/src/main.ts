@@ -1,7 +1,6 @@
 // Imports
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
-import type { Expression } from 'maplibre-gl';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
@@ -13,10 +12,8 @@ import {
   fieldSelect,
   rampSelect,
   enable3DCheckbox,
-  extrusionOptions,
   multInput,
   unitsSelect,
-  hexOptions,
   hexResRow,
   enableHexCheckbox,
   hexResInput,
@@ -240,15 +237,13 @@ import {
 } from './dom-refs';
 
 // Local imports
-import { OSM_STYLE, SATELLITE_STYLE, HEIGHT_CAP_METERS, HEIGHT_PCTL, COLOR_RAMPS, UNIT_TO_METERS } from './config';
-import { coerceScalar, sanitizeFeatureInPlace, sanitizeFeaturesInPlace, fileToAsyncBuffer, } from './utils.sanitize';
-import { roundGeometryInPlace, trimPropertiesInPlace, bbox } from './utils.geo';
-import { numOrNull, fmt, percentile, quantileBreaks, parseStrictNumber } from './utils.number';
+import { OSM_STYLE, SATELLITE_STYLE, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { sanitizeFeaturesInPlace, fileToAsyncBuffer } from './utils.sanitize';
+import { roundGeometryInPlace, trimPropertiesInPlace } from './utils.geo';
+import { fmt, parseStrictNumber } from './utils.number';
 import type {
   BasemapMode,
-  NumericFilterOperator, CategoricalFilterOperator,
   ParcelFieldPatch,
-  QualityMode, UpdateMode, MetricUnitKey,
   SubjectMode,
 } from './types';
 import {
@@ -294,18 +289,12 @@ import {
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
   ensureFloatingWindowVisible,
-  type WindowManager
 } from './windows';
-import { featureIntersectsBbox } from './selection-geometry';
 import {
   initSelection, initSelectionElements,
-  handleRectangleMouseDown, handleRectangleMouseMove, handleRectangleMouseUp,
-  applyCategorySelection, applyRangeSelection,
   getParcelId, findFeatureByParcelId,
-  addParcelToSelection, removeParcelFromSelection, clearAllSelections,
+  addParcelToSelection, clearAllSelections,
   updateSelectionControls,
-  handleLassoMouseDown, handleLassoMouseMove, handleLassoMouseUp,
-  handlePolygonMouseDown, handlePolygonMouseMove, handlePolygonDoubleClick,
 } from './selection';
 import {
   initLegendElements, initLegendCallbacks,
@@ -316,7 +305,6 @@ import {
 } from './legend';
 import {
   initModalElements, initModalCallbacks,
-  openNumericFieldChooserModal, openCategoricalFieldChooserModal,
   openSizeModal, openAddLayerModal, closeAddLayerModal,
   setSizeState,
 } from './modals';
@@ -336,19 +324,15 @@ import {
   addOrUpdateSource,
   initRenderingElements, initRenderingCallbacks,
   applyGrayRendering, applyExtrusion,
-  generatePseudoRandomColor,
   buildCategoricalColorPairs, buildCategoricalColorExpression,
   buildNumericColorRanges, buildNumericColorExpression,
   buildValueExpression,
   fitToData, setQuality,
   scheduleUpdate, chooseBestMetricUnitForMultiplier,
-  populateFieldDropdownFromList, detectNumericFieldsFromFeatures,
-  getNumericValuesNormalized, computeStatsNormalized,
-  makeStepColorExpression, computeAndApplyAutoMultiplier,
-  makeColorExpressionFromExpr,
+  populateFieldDropdownFromList,
+  getNumericValuesNormalized,
   update3DUI, updateFieldTypeUI,
   setPerspective, setOrtho, setView,
-  getMultiplierValue, getUnitFactor, getOpacityValue,
 } from './rendering';
 import { startHexUpdateIfActive, cancelHexUpdate, getCommittedHexState } from './hex-layer';
 import { initExport3DMenu, refreshExport3DMenu } from './export-3d';
@@ -503,20 +487,6 @@ function setBasemapMode(mode: BasemapMode) {
 
 /* ---------------- Helper Functions ---------------- */
 
-// Helper function to get viewport coordinates for visual elements
-function getViewportPoint(e: MouseEvent): maplibregl.Point {
-  return new maplibregl.Point(e.clientX, e.clientY);
-}
-
-// Helper function to convert viewport coordinates to map container coordinates
-function getMapPoint(e: MouseEvent): maplibregl.Point {
-  const canvas = S.map.getCanvas();
-  const rect = canvas.getBoundingClientRect();
-  return new maplibregl.Point(
-    e.clientX - rect.left,
-    e.clientY - rect.top
-  );
-}
 
 /* ---------------- Pan Tool (see ./toolbar.ts) ---------------- */
 
@@ -948,7 +918,6 @@ const export3DWin = createWindowManager({
 const minimizeLayers = layersWin.minimize;
 const showLayers = layersWin.show;
 const minimizeSettingsMenu = settingsMenuWin.minimize;
-const showSettingsMenu = settingsMenuWin.show;
 const toggleSettingsMenu = settingsMenuWin.toggle;
 const minimizeLegend = legendWin.minimize;
 const showLegend = legendWin.show;
@@ -959,7 +928,6 @@ const showScatterplot = scatterplotWin.show;
 const minimizeFilters = filtersWin.minimize;
 const showFilters = filtersWin.show;
 const minimizeLandSchedule = landScheduleWin.minimize;
-const showLandSchedule = landScheduleWin.show;
 const toggleLandSchedule = landScheduleWin.toggle;
 const minimizeTimeAdjustment = timeAdjustmentWin.minimize;
 const toggleTimeAdjustment = timeAdjustmentWin.toggle;
@@ -1083,8 +1051,6 @@ initRenderingElements({
   opacityInput,
   multInput,
   unitsSelect,
-  extrusionOptions,
-  hexOptions,
   hexResRow,
   threeDSection,
   enable3DRow,
@@ -1103,7 +1069,6 @@ initRenderingCallbacks({
   setLayerVisibility,
   setCurrentLayer,
   showRenderingToast,
-  hideRenderingToast,
   awaitFirstRenderedFeature,
   showPopup,
   buildPopupHTML,
@@ -1221,7 +1186,6 @@ initStatisticsElements({
   statsDetails,
   statsNumericBlock,
   statsCategoricalBlock,
-  statisticsSection,
   statsParcelCount,
   statsMedian,
   statsMean,
@@ -2645,7 +2609,7 @@ function addPopupEditFunctionality(parcelId: string) {
       return normalizeFieldValue(fieldType, feature?.properties?.[field]);
     };
 
-    const acceptInputValue = (row: HTMLTableRowElement, field: string, fieldType: 'numeric' | 'categorical', input: HTMLInputElement) => {
+    const acceptInputValue = (row: HTMLTableRowElement, _field: string, fieldType: 'numeric' | 'categorical', input: HTMLInputElement) => {
       const currentValue = row.dataset.lastValidValue ?? input.value;
       if (fieldType === 'numeric') {
         const trimmed = input.value.trim();

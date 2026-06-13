@@ -33,6 +33,10 @@ jobs:
         working-directory: viz
         run: npm ci
 
+      - name: Type-check gate (viz/)
+        working-directory: viz
+        run: npm run typecheck:gate
+
       - name: Build app (viz/)
         working-directory: viz
         run: npm run build

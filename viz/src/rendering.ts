@@ -10,9 +10,8 @@ import type { LayerState, QualityMode, UpdateMode, MetricUnitKey } from './types
 import {
   COLOR_RAMPS, UNIT_TO_METERS,
   HEIGHT_CAP_METERS, HEIGHT_PCTL,
-  SOURCE_ID, LAYER_ID, ERROR_LAYER_ID,
 } from './config';
-import { numOrNull, fmt, percentile, quantileBreaks } from './utils.number';
+import { numOrNull, percentile, quantileBreaks } from './utils.number';
 import { bbox } from './utils.geo';
 import { applyMapFilters } from './filters';
 import {
@@ -42,8 +41,6 @@ let _rampSelect: HTMLSelectElement = null!;
 let _opacityInput: HTMLInputElement = null!;
 let _multInput: HTMLInputElement = null!;
 let _unitsSelect: HTMLSelectElement = null!;
-let _extrusionOptions: HTMLFieldSetElement = null!;
-let _hexOptions: HTMLFieldSetElement | null = null;
 let _hexResRow: HTMLElement | null = null;
 let _threeDSection: HTMLElement | null = null;   // the collapsible "3D" section
 let _enable3DRow: HTMLElement | null = null;      // the "Enable 3D" checkbox row
@@ -62,8 +59,6 @@ export type RenderingElements = {
   opacityInput: HTMLInputElement;
   multInput: HTMLInputElement;
   unitsSelect: HTMLSelectElement;
-  extrusionOptions: HTMLFieldSetElement;
-  hexOptions: HTMLFieldSetElement | null;
   hexResRow: HTMLElement | null;
   threeDSection: HTMLElement | null;
   enable3DRow: HTMLElement | null;
@@ -83,8 +78,6 @@ export function initRenderingElements(els: RenderingElements) {
   _opacityInput = els.opacityInput;
   _multInput = els.multInput;
   _unitsSelect = els.unitsSelect;
-  _extrusionOptions = els.extrusionOptions;
-  _hexOptions = els.hexOptions;
   _hexResRow = els.hexResRow;
   _threeDSection = els.threeDSection;
   _enable3DRow = els.enable3DRow;
@@ -107,7 +100,6 @@ let _getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId
 let _setLayerVisibility: (layer: LayerState, visible: boolean) => void = () => {};
 let _setCurrentLayer: (id: string) => void = () => {};
 let _showRenderingToast: (msg?: string) => void = () => {};
-let _hideRenderingToast: () => void = () => {};
 let _awaitFirstRenderedFeature: (layerId: string) => void = () => {};
 let _showPopup: (props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) => void = () => {};
 let _buildPopupHTML: (props: Record<string, any>, parcelId: string) => string = () => '';
@@ -131,7 +123,6 @@ export type RenderingCallbacks = {
   setLayerVisibility: (layer: LayerState, visible: boolean) => void;
   setCurrentLayer: (id: string) => void;
   showRenderingToast: (msg?: string) => void;
-  hideRenderingToast: () => void;
   awaitFirstRenderedFeature: (layerId: string) => void;
   showPopup: (props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) => void;
   buildPopupHTML: (props: Record<string, any>, parcelId: string) => string;
@@ -151,7 +142,6 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   _setLayerVisibility = cb.setLayerVisibility;
   _setCurrentLayer = cb.setCurrentLayer;
   _showRenderingToast = cb.showRenderingToast;
-  _hideRenderingToast = cb.hideRenderingToast;
   _awaitFirstRenderedFeature = cb.awaitFirstRenderedFeature;
   _showPopup = cb.showPopup;
   _buildPopupHTML = cb.buildPopupHTML;
@@ -342,7 +332,7 @@ export function addExtrusionLayer(layer: LayerState) {
   });
 
   // Right-click to close popup
-  S.map.on('contextmenu', layer.layerId, (e) => {
+  S.map.on('contextmenu', layer.layerId, () => {
     if (S.activePopup) {
       S.activePopup.remove();
       S.activePopup = null;

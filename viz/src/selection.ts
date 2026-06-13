@@ -1063,8 +1063,6 @@ let isLassoSelecting = false;
 let isLassoUnselecting = false;
 let lassoPoints: maplibregl.Point[] = [];
 let lassoElement: HTMLDivElement | null = null;
-let lassoSVG: SVGElement | null = null;
-let lassoPath: SVGPathElement | null = null;
 
 export function createLassoElement(): HTMLDivElement {
   const lasso = document.createElement('div');
@@ -1243,8 +1241,6 @@ let isPolygonSelecting = false;
 let isPolygonUnselecting = false;
 let polygonPoints: maplibregl.Point[] = [];
 let polygonElement: HTMLDivElement | null = null;
-let polygonSVG: SVGElement | null = null;
-let polygonPath: SVGPathElement | null = null;
 let polygonStartPoint: maplibregl.Point | null = null;
 let isPolygonClosing = false;
 let polygonSelectionMode: 'select-only' | 'add' | 'remove' = 'select-only';
@@ -1482,13 +1478,9 @@ export function initSelectionElements() {
 
   // Lasso element
   lassoElement = createLassoElement();
-  lassoSVG = lassoElement.querySelector('svg') as SVGElement;
-  lassoPath = lassoElement.querySelector('.lasso-path') as SVGPathElement;
 
   // Polygon element
   polygonElement = createPolygonElement();
-  polygonSVG = polygonElement.querySelector('svg') as SVGElement;
-  polygonPath = polygonElement.querySelector('.polygon-path') as SVGPathElement;
 
   // Document-level mouse-up listeners for catching releases outside the map
   document.addEventListener('mouseup', handleRectangleMouseUp);

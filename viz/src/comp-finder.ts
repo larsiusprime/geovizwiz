@@ -3,11 +3,13 @@ import PIN_SVG from './svg/pin.svg?raw';
 
 import { S } from './state';
 import type { DataStore, LayerState } from './types';
-import { bbox } from './utils.geo';
 import { fmt, numOrNull } from './utils.number';
 import { el, makeButton } from './utils.dom';
 import { downloadText, rowsToCsv, downloadXlsx } from './utils.export';
 import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map-viewport';
+import {
+  makeDistanceCircleFeature, getFeatureCenter, isValidLngLat, distanceMeters, getPageTokens, getDeltaClass, buildDelta,
+} from './comp-finder-helpers';
 
 type Criterion = {
   id: string;
@@ -77,12 +79,9 @@ let subject: {
 let criteria: Criterion[] = [];
 let extraFields: Array<{ field: string; type: 'numeric' | 'categorical' }> = [];
 let comps: CompRow[] = [];
-let criteriaDirty = false;
 let compMarkers = new Map<string, maplibregl.Marker>();
 let subjectMarker: maplibregl.Marker | null = null;
-let isToolActive = false;
 let isMenuVisible = false;
-let isFinding = false;
 let currentPage = 1;
 let sortField: string | null = null;
 let sortDirection: 'asc' | 'desc' = 'asc';
@@ -106,33 +105,7 @@ function compDebug(message: string, payload?: Record<string, unknown>) {
 
 
 
-function destinationPoint(center: [number, number], bearingDeg: number, distanceMeters: number): [number, number] {
-  const R = 6371008.8;
-  const brng = (bearingDeg * Math.PI) / 180;
-  const lat1 = (center[1] * Math.PI) / 180;
-  const lon1 = (center[0] * Math.PI) / 180;
-  const dByR = distanceMeters / R;
-  const sinLat1 = Math.sin(lat1);
-  const cosLat1 = Math.cos(lat1);
-  const sinD = Math.sin(dByR);
-  const cosD = Math.cos(dByR);
-  const lat2 = Math.asin(sinLat1 * cosD + cosLat1 * sinD * Math.cos(brng));
-  const lon2 = lon1 + Math.atan2(Math.sin(brng) * sinD * cosLat1, cosD - sinLat1 * Math.sin(lat2));
-  return [((lon2 * 180) / Math.PI + 540) % 360 - 180, (lat2 * 180) / Math.PI];
-}
 
-function makeDistanceCircleFeature(center: [number, number], radiusMeters: number): GeoJSON.Feature {
-  const coordinates: [number, number][] = [];
-  const steps = 96;
-  for (let i = 0; i <= steps; i += 1) {
-    coordinates.push(destinationPoint(center, (i / steps) * 360, radiusMeters));
-  }
-  return {
-    type: 'Feature',
-    properties: {},
-    geometry: { type: 'Polygon', coordinates: [coordinates] },
-  };
-}
 
 function clearDistanceOverlay() {
   if (S.map.getLayer(COMP_DISTANCE_OUTLINE_WHITE_ID)) S.map.removeLayer(COMP_DISTANCE_OUTLINE_WHITE_ID);
@@ -214,13 +187,11 @@ function ensureMarker(elClass: string): HTMLDivElement {
 }
 
 function setFinding(next: boolean) {
-  isFinding = next;
   els.spinner.style.display = next ? 'inline-block' : 'none';
   els.refreshButton.disabled = next;
 }
 
 function setCriteriaDirty(dirty: boolean) {
-  criteriaDirty = dirty;
   els.compsTableContainer.classList.toggle('is-dirty', dirty);
   els.dirtyIndicator.style.display = dirty && comps.length > 0 ? 'inline' : 'none';
   updateRefreshButtonLabel();
@@ -290,34 +261,8 @@ function updateCompMarkers() {
   }
 }
 
-function getFeatureCenter(feature: GeoJSON.Feature): [number, number] | null {
-  if (!feature.geometry) return null;
-  const bounds = bbox({ type: 'FeatureCollection', features: [feature] });
-  if (!bounds) return null;
-  const [minLng, minLat, maxLng, maxLat] = bounds;
-  return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
-}
 
-function isValidLngLat(coord: [number, number] | null | undefined): coord is [number, number] {
-  return Boolean(coord)
-    && Number.isFinite(coord[0])
-    && Number.isFinite(coord[1])
-    && Math.abs(coord[0]) <= 180
-    && Math.abs(coord[1]) <= 90;
-}
 
-function distanceMeters(a: [number, number], b: [number, number]): number {
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const R = 6371000;
-  const dLat = toRad(b[1] - a[1]);
-  const dLng = toRad(b[0] - a[0]);
-  const lat1 = toRad(a[1]);
-  const lat2 = toRad(b[1]);
-  const sinLat = Math.sin(dLat / 2);
-  const sinLng = Math.sin(dLng / 2);
-  const h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLng * sinLng;
-  return 2 * R * Math.asin(Math.sqrt(h));
-}
 
 function getDistanceLimitMeters(): number | null {
   const distanceValue = numOrNull(els.distanceInput.value);
@@ -583,12 +528,6 @@ function getVisibleComps(): CompRow[] {
   return sorted.slice(start, start + COMPS_PER_PAGE);
 }
 
-function getPageTokens(total: number, page: number): Array<number | '...'> {
-  if (total <= 5) return Array.from({ length: total }, (_, idx) => idx + 1);
-  if (page <= 2) return [1, 2, 3, 4, '...', total];
-  if (page >= total - 1) return [1, '...', total - 3, total - 2, total - 1, total];
-  return [1, '...', page - 1, page, page + 1, '...', total];
-}
 
 function renderPager() {
   const total = totalPages();
@@ -626,11 +565,6 @@ function renderPager() {
   els.pager.appendChild(next);
 }
 
-function getDeltaClass(delta: { sign?: 'positive' | 'negative' | 'neutral' | 'error' }) {
-  if (delta.sign === 'positive') return 'comp-finder-delta-positive';
-  if (delta.sign === 'negative') return 'comp-finder-delta-negative';
-  return '';
-}
 
 function renderSortableRowLabel(label: string, fieldKey: string): HTMLElement {
   const arrow = sortField === fieldKey ? (sortDirection === 'asc' ? '▾' : '▴') : '';
@@ -907,22 +841,6 @@ function passesCriteria(feature: GeoJSON.Feature): boolean {
   return true;
 }
 
-function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'categorical') {
-  if (type === 'numeric') {
-    const compVal = numOrNull(value);
-    const subjVal = numOrNull(subjectValue);
-    if (compVal === null || subjVal === null) return { text: 'ERROR', error: 'Missing numeric value', sign: 'error' as const };
-    const delta = compVal - subjVal;
-    if (delta === 0) return { text: '=', sign: 'neutral' as const };
-    const sign = delta > 0 ? '+' : '';
-    return { text: `${sign}${fmt(delta)}`, sign: delta > 0 ? 'positive' as const : 'negative' as const };
-  }
-  if (value === null || value === undefined || subjectValue === null || subjectValue === undefined) {
-    return { text: 'ERROR', error: 'Missing categorical value', sign: 'error' as const };
-  }
-  if (String(value) === String(subjectValue)) return { text: '=', sign: 'neutral' as const };
-  return { text: String(value), sign: 'negative' as const };
-}
 
 
 function expandPanelForCompsIfNeeded() {
@@ -1278,8 +1196,8 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
   updateMapArtifacts();
 }
 
-export function setCompFinderToolActive(active: boolean) {
-  isToolActive = active;
+export function setCompFinderToolActive(_active: boolean) {
+  // Reserved hook: comp-finder tool activation currently needs no side effects.
 }
 
 export function setCompFinderMenuVisible(visible: boolean) {

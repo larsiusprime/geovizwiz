@@ -241,7 +241,6 @@ let statsNormModeSelect: HTMLSelectElement | null = null;
 let statsDetails: HTMLDivElement;
 let statsNumericBlock: HTMLDivElement;
 let statsCategoricalBlock: HTMLDivElement;
-let statisticsSection: HTMLDivElement;
 let statsParcelCount: HTMLSpanElement;
 let statsMedian: HTMLSpanElement;
 let statsMean: HTMLSpanElement;
@@ -264,7 +263,6 @@ export function initStatisticsElements(els: {
   statsDetails: HTMLDivElement;
   statsNumericBlock: HTMLDivElement;
   statsCategoricalBlock: HTMLDivElement;
-  statisticsSection: HTMLDivElement;
   statsParcelCount: HTMLSpanElement;
   statsMedian: HTMLSpanElement;
   statsMean: HTMLSpanElement;
@@ -288,7 +286,6 @@ export function initStatisticsElements(els: {
   statsDetails = els.statsDetails;
   statsNumericBlock = els.statsNumericBlock;
   statsCategoricalBlock = els.statsCategoricalBlock;
-  statisticsSection = els.statisticsSection;
   statsParcelCount = els.statsParcelCount;
   statsMedian = els.statsMedian;
   statsMean = els.statsMean;
@@ -606,7 +603,7 @@ export function getStatsSubjectSelection(
   categoryValueIndices: string[],
   categoryValueMap: Array<{ label: string; value: unknown }>
 ): GeoJSON.Feature[] {
-  const { layer, layerGeoJSON, dataGeoJSON } = getStatsSourceContext();
+  const { layer, layerGeoJSON } = getStatsSourceContext();
   if (!layer) return [];
   if (!layerGeoJSON && (mode === 'all' || mode === 'visible' || mode === 'selected')) {
     return [];

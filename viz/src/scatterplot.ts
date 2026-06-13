@@ -540,7 +540,7 @@ function attachScatterPlotEvents() {
 function getScatterSubjectSelection(
   layer: LayerState,
   layerGeoJSON: GeoJSON.FeatureCollection | null,
-  dataGeoJSON: GeoJSON.FeatureCollection | null,
+  _dataGeoJSON: GeoJSON.FeatureCollection | null,
   mode: SubjectMode,
   categoryField: string | null,
   categoryValueIndices: string[],

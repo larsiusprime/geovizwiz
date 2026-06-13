@@ -69,7 +69,7 @@ Map Engine: MapLibre
 
 ## Build & verify
 - `npm run dev` for local; `npm run build` for the bundle. **Vite/esbuild does NOT type-check.**
-- Type-check separately with `npx tsc --noEmit`. The repo has a known pre-existing error baseline (~103 as of 2026-06) — treat any **increase** as a regression you introduced; don't try to drive it to zero in unrelated work.
+- Type-check with `npm run typecheck` (`tsc --noEmit`). The repo has a pre-existing error backlog being burned down (track G2 in `REFACTOR.md`); `npm run typecheck:gate` enforces a ratcheting baseline (`BASELINE` in `scripts/typecheck-gate.cjs`, also run in CI). Treat any **increase** over the current baseline as a regression you introduced.
 - Always eyeball the changed surfaces in `npm run dev` before considering a change done.
 
 ## Known coupling & gotchas (refactor in progress)

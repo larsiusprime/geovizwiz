@@ -25,8 +25,6 @@ let _rampSelect: HTMLSelectElement;
 let _opacityInput: HTMLInputElement;
 let _opacityOut: HTMLOutputElement;
 let _normModeSelect: HTMLSelectElement | null = null;
-let _colorCont: HTMLInputElement | null;
-let _colorQuant: HTMLInputElement | null;
 let _colorModeSelect: HTMLSelectElement | null = null;
 let _colorPicker: HTMLInputElement;
 let _enable3DCheckbox: HTMLInputElement;
@@ -43,8 +41,6 @@ export function initLayerElements(els: {
   opacityInput: HTMLInputElement;
   opacityOut: HTMLOutputElement;
   normModeSelect?: HTMLSelectElement | null;
-  colorCont: HTMLInputElement | null;
-  colorQuant: HTMLInputElement | null;
   colorModeSelect?: HTMLSelectElement | null;
   colorPicker: HTMLInputElement;
   enable3DCheckbox: HTMLInputElement;
@@ -60,8 +56,6 @@ export function initLayerElements(els: {
   _opacityInput = els.opacityInput;
   _opacityOut = els.opacityOut;
   _normModeSelect = els.normModeSelect ?? null;
-  _colorCont = els.colorCont;
-  _colorQuant = els.colorQuant;
   _colorModeSelect = els.colorModeSelect ?? null;
   _colorPicker = els.colorPicker;
   _enable3DCheckbox = els.enable3DCheckbox;
@@ -495,10 +489,6 @@ export function applyLayerState(layer: LayerState) {
     _normModeSelect.value = S.normalizationMode;
   }
 
-  if (_colorCont && _colorQuant) {
-    _colorCont.checked = S.colorMode === 'continuous';
-    _colorQuant.checked = S.colorMode === 'quantiles';
-  }
   if (_colorModeSelect) _colorModeSelect.value = S.colorMode;
 
   document.querySelectorAll<HTMLInputElement>('input[name="categoricalColorMode"]').forEach(radio => {

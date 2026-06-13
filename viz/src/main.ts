@@ -219,8 +219,6 @@ import {
   confirmDeleteDataSourceText,
   btnCancelDeleteDataSource,
   btnConfirmDeleteDataSource,
-  colorCont,
-  colorQuant,
   colorModeSelect,
   normModeSelect,
   fieldVisualizeToggle,
@@ -1334,8 +1332,6 @@ initLayerElements({
   opacityInput,
   opacityOut,
   normModeSelect,
-  colorCont,
-  colorQuant,
   colorModeSelect,
   colorPicker,
   enable3DCheckbox: enable3DCheckbox,
@@ -3010,28 +3006,15 @@ fileInput.addEventListener('change', async () => {
   }
 });
 
-// Only recompute after data is loaded
-[colorCont, colorQuant].forEach(el =>
-  el?.addEventListener('change', () => {
-    if (!S.currentGeoJSON) return;
-    const val = (document.querySelector('input[name="colorMode"]:checked') as HTMLInputElement)?.value;
-    if (val === 'continuous' || val === 'quantiles') {
-      S.colorMode = val;
-      if (colorModeSelect) colorModeSelect.value = S.colorMode;
-      scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
-      persistCurrentLayerState();
-    }
-  })
-);
-
+// Scaling mode (continuous/quantiles). Only recompute after data is loaded.
 if (colorModeSelect) {
   colorModeSelect.addEventListener('change', () => {
     if (!S.currentGeoJSON) return;
     const next = colorModeSelect.value;
-    const target = next === 'continuous' ? colorCont : colorQuant;
-    if (target) {
-      target.checked = true;
-      target.dispatchEvent(new Event('change', { bubbles: true }));
+    if (next === 'continuous' || next === 'quantiles') {
+      S.colorMode = next;
+      scheduleUpdate('recomputeAndAutoScale', /*refreshLegend*/ true);
+      persistCurrentLayerState();
     }
   });
 }

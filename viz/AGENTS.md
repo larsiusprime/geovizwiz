@@ -76,7 +76,7 @@ Map Engine: MapLibre
 - `S` (state.ts) is a flat mutable singleton mutated across ~22 modules.
 - Modules are wired via **callback-injection seams** (`let _cb = () => {}` set in `initXxxCallbacks`) to avoid circular imports.
 - `main.ts` is still the large orchestrator/bootstrap.
-- **Normalization** (per-area denominator) is now `<select>` dropdowns (`normModeSelect`, `statsNormModeSelect`); the old hidden radio groups were removed. **colorMode** (color scaling) still uses a dropdown↔hidden-legacy-radio indirection (`colorModeSelect` ↔ `colorModeLegacyRadios`).
+- **Normalization** (per-area denominator) and **colorMode** (color scaling, continuous/quantiles) are both plain `<select>` dropdowns now (`normModeSelect`, `statsNormModeSelect`, `colorModeSelect`) — the source of truth, with their `change` listeners writing state directly. The old hidden radio groups (`colorModeLegacyRadios` etc.) were removed.
 - TS does not narrow imported `const … | null` inside closures (unlike local consts), so always-present elements in `dom-refs.ts` are typed non-null on purpose.
 - See `REFACTOR.md` for the in-progress decomposition roadmap.
 

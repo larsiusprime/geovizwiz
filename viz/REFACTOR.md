@@ -31,7 +31,7 @@ Ordered by value-for-risk. Earlier items are the recommended path; later ones ar
 ### High value, low–medium risk
 - **G1 — tsc type-check gate.** ✅ Done. `npm run typecheck` (`tsc --noEmit`) + `npm run typecheck:gate` (ratcheting `BASELINE` in `scripts/typecheck-gate.cjs`), wired into `pages.yml` before the build.
 - **C3a — comp-finder pure helpers.** ✅ Done → `comp-finder-helpers.ts` (distance math, distance-circle geometry, pagination tokens, delta formatting).
-- **R1 — finish the colorMode legacy-radio teardown.** Collapse the `colorModeSelect` ↔ `colorModeLegacyRadios` (continuous/quantiles) indirection the same way normalization was done; remove the hidden radios. *(Risk: low–medium; verify numeric color scaling + save/load of a layer's color mode.)*
+- **R1 — colorMode legacy-radio teardown.** ✅ Done. `colorModeSelect` (continuous/quantiles) is now the source of truth — its `change` listener writes `S.colorMode` directly, recomputes + auto-scales + refreshes the legend, and persists. Removed the hidden `colorModeLegacyRadios` block, the `colorCont`/`colorQuant` dom-refs, and all `_colorCont`/`_colorQuant` plumbing in `layers.ts`/`main.ts`.
 
 ### Medium value, medium risk
 - **E1 — feature-owned init (the real `main.ts` slimmer).** Now unlocked by B: have each feature module import its refs directly from `dom-refs.ts` and self-wire, removing the giant `initXxxElements(...)` / `initXxxCallbacks(...)` plumbing from `main.ts`. **One feature module per bite** (start with a small one, e.g. `scatterplot` or `legend`). Must preserve init **order**. Biggest reduction of `main.ts` bulk. *(Risk: medium-high; eyeball the migrated panel + anything that calls into it.)*
@@ -42,10 +42,10 @@ Ordered by value-for-risk. Earlier items are the recommended path; later ones ar
 - **C1c–C1e — finish selection.ts split** (save/load → `selection-saveload.ts`; tool handlers → `selection-tools.ts`; panel builder → `selection-panel.ts`). Needs a shared `selection-state.ts` (callback seams + mutable state as an object). Medium risk, modest gain — the clean wins are already done.
 - **C3b — split comp-finder UI/export** beyond the pure helpers (same state-hoisting friction as C1).
 - **E2 — event bus** replacing the ~134 callback-injection seams. Highest risk; the seams work today. Only after E1, and only if the coupling becomes a real pain.
-- **G2 — burn down the tsc baseline.** 🔄 In progress: **103 → 39** (all 64 unused-symbol errors removed; gate baseline ratcheted to 39). Remaining 39 are substantive: TS2552 (1, a real `ReferenceError`), TS2339 (6, missing props incl. the `WRITE` hotkey), TS2345 (11) / TS2322 (4) / TS2538 (4) type mismatches, TS18047/18048/18049 (13) possibly-null. Fix real bugs first, then possibly-null case-by-case (real guard vs. assertion — no blind `!`). Lower `BASELINE` per bite.
+- **G2 — burn down the tsc baseline.** ✅ Done: **103 → 0**. Bite 1 removed 64 unused-symbol errors; bite 2 fixed the real bugs (TS2552 `ReferenceError`, TS2339 missing props incl. `WRITE` hotkey); bite 3 cleared the remaining 29 (closure narrowing-loss → local-const capture; genuine-null bail guards in `windows.ts`/`time-adjustment.ts`; `props[field ?? '']` for null-index; widened `updateRowTooltip` params; `metadata.ts` projectName hoist + reduce accumulator type). Gate `BASELINE` is now **0** — any type error fails CI.
 
 ## Known deferred issues
 - **Selection tools behave erratically over hex-summary layers.** Rectangle/lasso/polygon selection gives strange/incorrect results when the map is in hex (H3 summary) mode. Deferred — there's no well-defined expected behavior for "selecting hexagons" yet; revisit once that UX is specified. (Per-parcel selection is unaffected.)
 
 ## Suggested next session
-Done: G1, C3a, G2 bite 1 (unused). Next: **G2 bite 2** (real bugs — TS2552 / TS2339), then the possibly-null / type-mismatch pass, then **R1** (colorMode teardown) and **E1** (feature-owned init, one module at a time). Treat D and the deferred C/E items as opt-in.
+Done: G1, C3a, G2 (full tsc burndown 103 → 0, gate strict at 0), R1 (colorMode teardown). Next: **E1** (feature-owned init, one module at a time — biggest `main.ts` reduction) and optionally **D1** (`S.ui` namespacing). Treat D2–D4 and the deferred C/E items as opt-in.

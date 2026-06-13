@@ -1270,6 +1270,12 @@
       min-width: 0;
     }
 
+    /* Hidden until the first Plotly render has sized to the container, so the
+       default-width draw doesn't flash outside the panel before snapping in. */
+    .time-adjustment-chart.is-loading {
+      visibility: hidden;
+    }
+
     .time-adjustment-y-axis-control {
       position: absolute;
       left: 8px;

@@ -930,7 +930,13 @@ function renderChart() {
     staticPlot: false, // false to allow hover
   };
 
-  plotly.react(els.chart, traces, layout, config);
+  // Reveal only after the render has sized to the container AND the resize
+  // relayout has fully painted — the line settles first but the sales-dot
+  // markers reposition a beat later, so reveal on the next frame after resize
+  // to avoid flashing any component outside the panel.
+  Promise.resolve(plotly.react(els.chart, traces, layout, config))
+    .then(() => plotly.Plots.resize(els.chart))
+    .then(() => requestAnimationFrame(() => els.chart.classList.remove('is-loading')));
 }
 
 function scheduleTrendRender() {
@@ -1285,7 +1291,7 @@ export function initTimeAdjustmentElements(elements: Elements) {
     yMaxInputTimer = window.setTimeout(() => {
       yMaxInputTimer = null;
       applyDisplayedYMax(parsed, true, false);
-    }, 250);
+    }, 1000);
   });
   els.yMaxInput.addEventListener('change', () => {
     if (yMaxInputTimer !== null) {
@@ -1314,6 +1320,10 @@ export function initTimeAdjustmentElements(elements: Elements) {
 }
 
 export function refreshTimeAdjustmentPanel() {
+  // Re-arm the hide each time the panel is shown: the container only gets its
+  // real width once visible, so keep the chart hidden until the post-show
+  // render has resized to fit (otherwise a stale, mis-sized draw flashes).
+  els.chart.classList.add('is-loading');
   // Auto-trigger "Plot trend" on first load if there's valid data
   if (!hasAutoTriggeredTrend) {
     const entry = currentEntry();

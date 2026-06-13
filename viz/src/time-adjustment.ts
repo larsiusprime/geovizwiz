@@ -69,6 +69,7 @@ let naturalYMin = 0;
 let naturalYMax = 100;
 let displayedYMax: number | null = null;
 let hasCustomYMax = false;
+let yMaxInputTimer: number | null = null;
 
 
 
@@ -160,11 +161,14 @@ function syncYAxisControls() {
   els.yMaxInput.disabled = disabled;
 }
 
-function applyDisplayedYMax(raw: number, rerender = true) {
+function applyDisplayedYMax(raw: number, rerender = true, syncControls = true) {
   const next = clamp(raw, naturalYMin, naturalYMax);
   displayedYMax = Number.isFinite(next) ? next : naturalYMax;
   hasCustomYMax = true;
-  syncYAxisControls();
+  // syncControls rewrites the slider + input field to the clamped value. Skip it
+  // for live keystrokes so the user can finish typing (e.g. "300" with a min of
+  // 17) without the field snapping back; the field settles on 'change' instead.
+  if (syncControls) syncYAxisControls();
   if (rerender) renderChart();
 }
 
@@ -1265,19 +1269,32 @@ export function initTimeAdjustmentElements(elements: Elements) {
     scheduleTrendRender();
   });
 
-  const onYAxisInput = (value: string) => {
-    const parsed = parseYAxisValue(value);
+  // Slider drags are always in-range, so sync controls immediately.
+  els.yMaxSlider.addEventListener('input', () => {
+    const parsed = parseYAxisValue(els.yMaxSlider.value);
     if (parsed === null || !Number.isFinite(parsed)) return;
     applyDisplayedYMax(parsed);
-  };
+  });
 
-  els.yMaxSlider.addEventListener('input', () => onYAxisInput(els.yMaxSlider.value));
-  els.yMaxInput.addEventListener('input', () => onYAxisInput(els.yMaxInput.value));
+  // Text field: preview the chart live (debounced) but leave the field text
+  // alone while typing, then clamp + settle the field on blur/Enter.
+  els.yMaxInput.addEventListener('input', () => {
+    const parsed = parseYAxisValue(els.yMaxInput.value);
+    if (parsed === null || !Number.isFinite(parsed)) return;
+    if (yMaxInputTimer !== null) window.clearTimeout(yMaxInputTimer);
+    yMaxInputTimer = window.setTimeout(() => {
+      yMaxInputTimer = null;
+      applyDisplayedYMax(parsed, true, false);
+    }, 250);
+  });
   els.yMaxInput.addEventListener('change', () => {
+    if (yMaxInputTimer !== null) {
+      window.clearTimeout(yMaxInputTimer);
+      yMaxInputTimer = null;
+    }
     const parsed = parseYAxisValue(els.yMaxInput.value);
     const fallback = displayedYMax ?? naturalYMax;
-    applyDisplayedYMax(parsed !== null && Number.isFinite(parsed) ? parsed : fallback, false);
-    syncYAxisControls();
+    applyDisplayedYMax(parsed !== null && Number.isFinite(parsed) ? parsed : fallback);
   });
 
   els.exportCsvButton.addEventListener('click', () => {

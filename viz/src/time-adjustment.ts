@@ -70,9 +70,6 @@ let naturalYMax = 100;
 let displayedYMax: number | null = null;
 let hasCustomYMax = false;
 
-function uid(prefix: string) {
-  return `${prefix}_${Math.random().toString(36).slice(2, 9)}`;
-}
 
 
 function getEligibleTimeAdjustmentStores() {
@@ -104,40 +101,6 @@ function getSelectedTimeAdjustmentStore() {
 
 function currentGeoJSONForTimeAdjustment(): GeoJSON.FeatureCollection | null {
   return getSelectedTimeAdjustmentStore()?.geojson ?? null;
-}
-
-function ensureDefaultEntry() {
-  const hasDefault = S.timeAdjustmentEntries.some((entry) => entry.isDefault);
-  if (!hasDefault) {
-    const defaultEntry: TimeAdjustmentEntry = {
-      id: uid('taf'),
-      name: 'Default',
-      isDefault: true,
-      startDate: null,
-      valuationDate: null,
-      dateField: 'sale_date',
-      displayMode: 'improved',
-      groupByField: null,
-      granularity: 'month',
-      method: 'median',
-      minSample: 5,
-      outlierPriceLow: null,
-      outlierPriceHigh: null,
-      outlierSizeLow: null,
-      outlierSizeHigh: null,
-      outlierRatioLow: null,
-      outlierRatioHigh: null,
-      includeFilters: [],
-      includeFilterInvert: false,
-      excludeFilters: [],
-      excludeFilterInvert: false,
-      trendVisible: false,
-    };
-    S.timeAdjustmentEntries.unshift(defaultEntry);
-    if (!S.currentTimeAdjustmentEntryId) {
-      S.currentTimeAdjustmentEntryId = defaultEntry.id;
-    }
-  }
 }
 
 function getPlotly(): any | null {
@@ -394,9 +357,8 @@ function ensureDefaults(entry: TimeAdjustmentEntry) {
   entry.excludeFilterInvert = entry.excludeFilterInvert ?? false;
 }
 
-function currentEntry(): TimeAdjustmentEntry | null {
-  if (!S.currentTimeAdjustmentEntryId) return null;
-  return S.timeAdjustmentEntries.find((entry) => entry.id === S.currentTimeAdjustmentEntryId) ?? null;
+function currentEntry(): TimeAdjustmentEntry {
+  return S.timeAdjustmentConfig;
 }
 
 function matchesRule(props: Record<string, any>, filter: FilterRule): boolean {
@@ -1188,9 +1150,6 @@ function render() {
 
 export function initTimeAdjustmentElements(elements: Elements) {
   els = elements;
-
-  // Ensure a default entry exists and is selected
-  ensureDefaultEntry();
 
   // Note: Collapse toggle event listeners are handled in main.ts for consistency
 

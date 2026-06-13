@@ -110,11 +110,12 @@ let _updateCursor: () => void = () => {};
 let _isTextInputElement: (el: Element | null) => boolean = () => false;
 let _activateTool: (tool: string) => void = () => {};
 let _setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void = () => {};
-let _hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string } = {
+let _hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string; WRITE: string } = {
   PAN: 'h',
   SELECT: 'v',
   INFO: 'i',
   COMP_FINDER: 'c',
+  WRITE: 'w',
 };
 
 export type RenderingCallbacks = {
@@ -133,7 +134,7 @@ export type RenderingCallbacks = {
   isTextInputElement: (el: Element | null) => boolean;
   activateTool: (tool: string) => void;
   setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void;
-  hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string };
+  hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string; WRITE: string };
 };
 
 export function initRenderingCallbacks(cb: RenderingCallbacks) {

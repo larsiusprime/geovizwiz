@@ -29,8 +29,8 @@ Living tracker for the code-quality refactor of the VIZ app. Working cadence: **
 Ordered by value-for-risk. Earlier items are the recommended path; later ones are optional/deferred.
 
 ### High value, low–medium risk
-- **G1 — tsc type-check gate.** Add an `npm run typecheck` (`tsc --noEmit`) and wire it into CI / the build script so the ~103 baseline can't silently grow. Tiny, locks in everything above. *(Risk: none.)*
-- **C3a — comp-finder pure helpers.** Scope `comp-finder.ts` (1,356 lines): extract the pure criteria-evaluation/comparison/distance helpers (the comp-matching math) → `comp-finder-criteria.ts`, mirroring `selection-geometry.ts`. Leave the state-coupled UI builders. *(Risk: low; verify comp finding/refresh + exports.)*
+- **G1 — tsc type-check gate.** ✅ Done. `npm run typecheck` (`tsc --noEmit`) + `npm run typecheck:gate` (ratcheting `BASELINE` in `scripts/typecheck-gate.cjs`), wired into `pages.yml` before the build.
+- **C3a — comp-finder pure helpers.** ✅ Done → `comp-finder-helpers.ts` (distance math, distance-circle geometry, pagination tokens, delta formatting).
 - **R1 — finish the colorMode legacy-radio teardown.** Collapse the `colorModeSelect` ↔ `colorModeLegacyRadios` (continuous/quantiles) indirection the same way normalization was done; remove the hidden radios. *(Risk: low–medium; verify numeric color scaling + save/load of a layer's color mode.)*
 
 ### Medium value, medium risk
@@ -42,7 +42,10 @@ Ordered by value-for-risk. Earlier items are the recommended path; later ones ar
 - **C1c–C1e — finish selection.ts split** (save/load → `selection-saveload.ts`; tool handlers → `selection-tools.ts`; panel builder → `selection-panel.ts`). Needs a shared `selection-state.ts` (callback seams + mutable state as an object). Medium risk, modest gain — the clean wins are already done.
 - **C3b — split comp-finder UI/export** beyond the pure helpers (same state-hoisting friction as C1).
 - **E2 — event bus** replacing the ~134 callback-injection seams. Highest risk; the seams work today. Only after E1, and only if the coupling becomes a real pain.
-- **G2 — burn down the ~103 tsc baseline** (mostly `possibly null`, unused locals). Incremental quality; do opportunistically.
+- **G2 — burn down the tsc baseline.** 🔄 In progress: **103 → 39** (all 64 unused-symbol errors removed; gate baseline ratcheted to 39). Remaining 39 are substantive: TS2552 (1, a real `ReferenceError`), TS2339 (6, missing props incl. the `WRITE` hotkey), TS2345 (11) / TS2322 (4) / TS2538 (4) type mismatches, TS18047/18048/18049 (13) possibly-null. Fix real bugs first, then possibly-null case-by-case (real guard vs. assertion — no blind `!`). Lower `BASELINE` per bite.
+
+## Known deferred issues
+- **Selection tools behave erratically over hex-summary layers.** Rectangle/lasso/polygon selection gives strange/incorrect results when the map is in hex (H3 summary) mode. Deferred — there's no well-defined expected behavior for "selecting hexagons" yet; revisit once that UX is specified. (Per-parcel selection is unaffected.)
 
 ## Suggested next session
-**G1** (type-check gate, trivial) → **C3a** (comp-finder pure helpers) → **R1** (colorMode teardown) → then **E1** one module at a time. Treat D and the deferred C/E items as opt-in.
+Done: G1, C3a, G2 bite 1 (unused). Next: **G2 bite 2** (real bugs — TS2552 / TS2339), then the possibly-null / type-mismatch pass, then **R1** (colorMode teardown) and **E1** (feature-owned init, one module at a time). Treat D and the deferred C/E items as opt-in.

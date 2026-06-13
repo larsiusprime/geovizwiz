@@ -309,6 +309,7 @@ function getFeatureCenter(feature: GeoJSON.Feature): [number, number] | null {
     const coords = geometry.coordinates as [number, number];
     return [coords[0], coords[1]];
   }
+  if (geometry.type === 'GeometryCollection') return null;
 
   let minLng = Infinity;
   let minLat = Infinity;

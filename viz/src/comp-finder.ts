@@ -785,7 +785,7 @@ function renderCompsTable() {
         extraFields = extraFields.filter((item) => item.field !== entry.field);
         setCriteriaDirty(true);
         renderCompsTable();
-        updateAddFieldOptions();
+        renderAddFieldOptions();
       });
       removeTd.appendChild(removeButton);
     }

@@ -102,10 +102,9 @@ export type TimeAdjustmentGranularity = 'year' | 'peak' | 'quarter' | 'month';
 export type TimeAdjustmentMethod = 'median' | 'mean' | 'regression';
 export type TimeAdjustmentDisplayMode = 'improved' | 'vacant';
 
+// The live time-adjustment config for the currently-selected data source.
+// (Time adjustment is compute-and-export only; there are no saved/named entries.)
 export type TimeAdjustmentEntry = {
-  id: string;
-  name: string;
-  isDefault?: boolean;
   startDate: string | null;
   valuationDate: string | null;
   dateField: string;

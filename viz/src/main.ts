@@ -1570,7 +1570,8 @@ function removeDataSourceAndDerivedArtifacts(storeId: string) {
   const affectedLayerIds = S.layerOrder.filter(layerId => S.layers.get(layerId)?.dataStoreId === storeId);
   affectedLayerIds.forEach(layerId => removeLayer(layerId));
 
-  S.timeAdjustmentEntries = S.timeAdjustmentEntries.filter(entry => entry.dataSourceId !== storeId);
+  // Time adjustment keeps a single live config (no per-source saved entries), so
+  // there's nothing to prune here beyond resetting the active source below.
   if (S.timeAdjustmentSettings.dataSourceId === storeId) {
     S.timeAdjustmentSettings.dataSourceId = '';
     S.timeAdjustmentSettings.salePriceField = '';

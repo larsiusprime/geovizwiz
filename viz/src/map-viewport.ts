@@ -404,11 +404,14 @@ export function fitBoundsInVisibleMapArea(
       });
 
       const fallbackCenter = fallbackCamera?.center;
+      const fallbackLngLat = fallbackCenter ? maplibregl.LngLat.convert(fallbackCenter) : null;
       const fallbackZoom = fallbackCamera?.zoom;
-      const isFallbackValid = Boolean(fallbackCenter)
-        && Number.isFinite(fallbackCenter.lng)
-        && Number.isFinite(fallbackCenter.lat)
-        && Number.isFinite(fallbackZoom);
+      const isFallbackValid = Boolean(
+        fallbackLngLat
+        && Number.isFinite(fallbackLngLat.lng)
+        && Number.isFinite(fallbackLngLat.lat)
+        && Number.isFinite(fallbackZoom),
+      );
 
       if (!isFallbackValid) {
         console.error('[map-viewport] fallback camera invalid', { fallbackCamera, padding, sw, ne });

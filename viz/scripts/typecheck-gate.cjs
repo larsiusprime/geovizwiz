@@ -12,7 +12,7 @@
  */
 const { execSync } = require('child_process');
 
-const BASELINE = 39;
+const BASELINE = 29;
 
 let output = '';
 try {

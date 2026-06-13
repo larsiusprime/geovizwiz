@@ -940,8 +940,9 @@ export function renderFiltersList() {
         });
 
         if (Array.isArray(filter.value)) {
+          const selectedValues = filter.value;
           Array.from(valueSelect.options).forEach(option => {
-            option.selected = filter.value.includes(option.value);
+            option.selected = selectedValues.includes(option.value);
           });
         } else if (typeof filter.value === 'string') {
           valueSelect.value = filter.value;

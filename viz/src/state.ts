@@ -175,8 +175,28 @@ export const S = {
   isUpdatingLandScheduleUI: false,
 
   // --- Time adjustment ---
-  timeAdjustmentEntries: [] as TimeAdjustmentEntry[],
-  currentTimeAdjustmentEntryId: null as string | null,
+  // Single live config for the currently-selected data source (no saved entries).
+  timeAdjustmentConfig: {
+    startDate: null,
+    valuationDate: null,
+    dateField: 'sale_date',
+    displayMode: 'improved',
+    groupByField: null,
+    granularity: 'month',
+    method: 'median',
+    minSample: 5,
+    outlierPriceLow: null,
+    outlierPriceHigh: null,
+    outlierSizeLow: null,
+    outlierSizeHigh: null,
+    outlierRatioLow: null,
+    outlierRatioHigh: null,
+    includeFilters: [],
+    includeFilterInvert: false,
+    excludeFilters: [],
+    excludeFilterInvert: false,
+    trendVisible: false,
+  } as TimeAdjustmentEntry,
   timeAdjustmentSettings: {
     dataSourceId: '',
     salePriceField: '',

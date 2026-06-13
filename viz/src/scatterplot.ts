@@ -369,7 +369,7 @@ function setScatterPinSourceData(sourceId: string, features: GeoJSON.Feature[]) 
 }
 
 function updateScatterPinSources() {
-  if (S.isScatterplotMinimized) {
+  if (S.ui.isScatterplotMinimized) {
     setScatterPinSourceData(SCATTER_SELECTED_SOURCE_ID, []);
     setScatterPinSourceData(SCATTER_HOVER_SOURCE_ID, []);
     return;
@@ -711,7 +711,7 @@ export function scheduleScatterPlotRefresh() {
   }
   S.scatterPlotRefreshTimer = window.setTimeout(() => {
     S.scatterPlotRefreshTimer = null;
-    if (S.isScatterplotMinimized) return;
+    if (S.ui.isScatterplotMinimized) return;
     updateScatterPlot();
   }, 250);
 }

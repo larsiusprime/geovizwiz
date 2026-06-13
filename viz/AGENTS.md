@@ -69,11 +69,12 @@ Map Engine: MapLibre
 
 ## Build & verify
 - `npm run dev` for local; `npm run build` for the bundle. **Vite/esbuild does NOT type-check.**
-- Type-check with `npm run typecheck` (`tsc --noEmit`). The repo has a pre-existing error backlog being burned down (track G2 in `REFACTOR.md`); `npm run typecheck:gate` enforces a ratcheting baseline (`BASELINE` in `scripts/typecheck-gate.cjs`, also run in CI). Treat any **increase** over the current baseline as a regression you introduced.
+- Type-check with `npm run typecheck` (`tsc --noEmit`). `npm run typecheck:gate` enforces the baseline (`BASELINE` in `scripts/typecheck-gate.cjs`, also run in CI). The historical backlog is fully burned down, so **BASELINE is 0**: any type error is a regression and fails CI.
+- `npm test` runs the **Vitest** unit suite (`vitest run`; `npm run test:watch` to watch). Tests live next to their module as `src/*.test.ts` and cover the **pure helper modules** (`utils.number`, `utils.geo`, `selection-geometry`, `comp-finder-helpers`) — stateless functions, no DOM/MapLibre. When you add or change a pure helper, add/extend its test. (DOM/MapLibre-coupled code is not unit-tested; verify it by eyeball.) Both the gate and the tests run in CI before build.
 - Always eyeball the changed surfaces in `npm run dev` before considering a change done.
 
 ## Known coupling & gotchas (refactor in progress)
-- `S` (state.ts) is a flat mutable singleton mutated across ~22 modules.
+- `S` (state.ts) is a flat mutable singleton mutated across ~22 modules. The window/section UI flags (minimized/collapsed/legend-visible) are grouped under **`S.ui`** (e.g. `S.ui.isLayersMinimized`); the rest of `S` is still flat.
 - Modules are wired via **callback-injection seams** (`let _cb = () => {}` set in `initXxxCallbacks`) to avoid circular imports.
 - `main.ts` is still the large orchestrator/bootstrap.
 - **Normalization** (per-area denominator) and **colorMode** (color scaling, continuous/quantiles) are both plain `<select>` dropdowns now (`normModeSelect`, `statsNormModeSelect`, `colorModeSelect`) — the source of truth, with their `change` listeners writing state directly. The old hidden radio groups (`colorModeLegacyRadios` etc.) were removed.

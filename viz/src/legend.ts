@@ -70,7 +70,7 @@ export function initLegendCallbacks(cb: LegendCallbacks) {
 /* ------------------------------------------------------------------ */
 
 export function hideFloatingLegend() {
-  S.isLegendVisible = false;
+  S.ui.isLegendVisible = false;
   floatingLegend.style.display = 'none';
 }
 
@@ -101,7 +101,7 @@ export function clearLegendVisibility() {
 }
 
 export function updateFloatingLegend() {
-  if (!S.isLegendVisible || !S.currentGeoJSON) return;
+  if (!S.ui.isLegendVisible || !S.currentGeoJSON) return;
 
   // Clear previous content
   legendContent.replaceChildren();

@@ -296,7 +296,7 @@ export function handleSubmenuButtonClick(mode: string) {
 // Update toolbar button states based on window visibility
 export function updateToolbarButtonStates() {
   // Settings button state
-  if (S.isLayersMinimized) {
+  if (S.ui.isLayersMinimized) {
     layersToolButton.classList.add('inactive');
     layersToolButton.classList.remove('active');
   } else {
@@ -304,7 +304,7 @@ export function updateToolbarButtonStates() {
     layersToolButton.classList.add('active');
   }
 
-  if (S.isSettingsMenuMinimized) {
+  if (S.ui.isSettingsMenuMinimized) {
     settingsToolButton.classList.add('inactive');
     settingsToolButton.classList.remove('active');
   } else {
@@ -313,7 +313,7 @@ export function updateToolbarButtonStates() {
   }
 
   // Legend button state
-  if (S.isLegendMinimized) {
+  if (S.ui.isLegendMinimized) {
     legendToolButton.classList.add('inactive');
     legendToolButton.classList.remove('active');
   } else {
@@ -321,7 +321,7 @@ export function updateToolbarButtonStates() {
     legendToolButton.classList.add('active');
   }
 
-  if (S.isLandScheduleMinimized) {
+  if (S.ui.isLandScheduleMinimized) {
     landScheduleToolButton.classList.add('inactive');
     landScheduleToolButton.classList.remove('active');
   } else {
@@ -329,7 +329,7 @@ export function updateToolbarButtonStates() {
     landScheduleToolButton.classList.add('active');
   }
 
-  if (S.isTimeAdjustmentMinimized) {
+  if (S.ui.isTimeAdjustmentMinimized) {
     timeAdjustmentToolButton.classList.add('inactive');
     timeAdjustmentToolButton.classList.remove('active');
   } else {
@@ -337,7 +337,7 @@ export function updateToolbarButtonStates() {
     timeAdjustmentToolButton.classList.add('active');
   }
 
-  if (S.isWriteMinimized) {
+  if (S.ui.isWriteMinimized) {
     writeToolButton.classList.add('inactive');
     writeToolButton.classList.remove('active');
   } else {
@@ -412,7 +412,7 @@ export function initializeToolbar() {
   layersToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
-    if (S.isLayersMinimized) {
+    if (S.ui.isLayersMinimized) {
       _showLayers();
     } else {
       _minimizeLayers();
@@ -471,7 +471,7 @@ export function initializeToolbar() {
 
     if (S.isWriteToolActive) {
       _toggleWriteMenu();
-      if (S.isWriteMinimized) {
+      if (S.ui.isWriteMinimized) {
         activateTool('select');
       }
     } else {
@@ -483,7 +483,7 @@ export function initializeToolbar() {
   legendToolButton.addEventListener('click', (e) => {
     e.stopPropagation();
     closeAllSubmenus();
-    if (S.isLegendMinimized) {
+    if (S.ui.isLegendMinimized) {
       _showLegend();
     } else {
       _minimizeLegend();

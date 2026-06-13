@@ -37,6 +37,10 @@ jobs:
         working-directory: viz
         run: npm run typecheck:gate
 
+      - name: Unit tests (viz/)
+        working-directory: viz
+        run: npm test
+
       - name: Build app (viz/)
         working-directory: viz
         run: npm run build

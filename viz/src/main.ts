@@ -506,13 +506,13 @@ const setPaintSectionCollapsed = createCollapseToggle({
   contentEl: paintSectionContent,
   toggleEl: paintSectionToggle,
   label: 'Paint',
-  setState: (c) => { S.isPaintCollapsed = c; },
+  setState: (c) => { S.ui.isPaintCollapsed = c; },
   refresh: () => refreshWindowMinHeight(controlsEl),
 });
 
-setPaintSectionCollapsed(S.isPaintCollapsed);
+setPaintSectionCollapsed(S.ui.isPaintCollapsed);
 paintSectionToggle.addEventListener('click', () => {
-  setPaintSectionCollapsed(!S.isPaintCollapsed);
+  setPaintSectionCollapsed(!S.ui.isPaintCollapsed);
 });
 
 // "3D" section: collapsible like Paint (independent of the Enable 3D toggle,
@@ -521,13 +521,13 @@ const setThreeDSectionCollapsed = createCollapseToggle({
   contentEl: threeDSectionContent,
   toggleEl: threeDSectionToggle,
   label: '3D',
-  setState: (c) => { S.is3DSectionCollapsed = c; },
+  setState: (c) => { S.ui.is3DSectionCollapsed = c; },
   refresh: () => refreshWindowMinHeight(controlsEl),
 });
 
-setThreeDSectionCollapsed(S.is3DSectionCollapsed);
+setThreeDSectionCollapsed(S.ui.is3DSectionCollapsed);
 threeDSectionToggle.addEventListener('click', () => {
-  setThreeDSectionCollapsed(!S.is3DSectionCollapsed);
+  setThreeDSectionCollapsed(!S.ui.is3DSectionCollapsed);
 });
 
 const setFieldVisualizeCollapsed = createCollapseToggle({
@@ -546,7 +546,7 @@ const setStatsLayerCollapsed = createCollapseToggle({
   contentEl: statsLayerBody,
   toggleEl: statsLayerToggle,
   label: 'Layer',
-  setState: (c) => { S.isStatsLayerCollapsed = c; },
+  setState: (c) => { S.ui.isStatsLayerCollapsed = c; },
   refresh: () => refreshWindowMinHeight(statisticsControlsEl),
 });
 
@@ -554,7 +554,7 @@ const setStatsFieldCollapsed = createCollapseToggle({
   contentEl: statisticsSection,
   toggleEl: statsFieldToggle,
   label: 'Field',
-  setState: (c) => { S.isStatsFieldCollapsed = c; },
+  setState: (c) => { S.ui.isStatsFieldCollapsed = c; },
   refresh: () => refreshWindowMinHeight(statisticsControlsEl),
 });
 
@@ -563,7 +563,7 @@ const setStatsSummaryCollapsed = createCollapseToggle({
   toggleEl: statsSummaryToggle,
   label: 'Statistics',
   display: 'block',
-  setState: (c) => { S.isStatsSummaryCollapsed = c; },
+  setState: (c) => { S.ui.isStatsSummaryCollapsed = c; },
   refresh: () => refreshWindowMinHeight(statisticsControlsEl),
 });
 
@@ -572,7 +572,7 @@ const setStatsPercentilesCollapsed = createCollapseToggle({
   toggleEl: statsPercentilesToggle,
   label: 'Percentiles',
   display: 'block',
-  setState: (c) => { S.isStatsPercentilesCollapsed = c; },
+  setState: (c) => { S.ui.isStatsPercentilesCollapsed = c; },
   refresh: () => refreshWindowMinHeight(statisticsControlsEl),
 });
 
@@ -581,41 +581,41 @@ const setStatsHistogramCollapsed = createCollapseToggle({
   toggleEl: statsHistogramToggle,
   label: 'Histogram',
   display: 'block',
-  setState: (c) => { S.isStatsHistogramCollapsed = c; },
+  setState: (c) => { S.ui.isStatsHistogramCollapsed = c; },
   refresh: () => refreshWindowMinHeight(statisticsControlsEl),
 });
 
-setStatsLayerCollapsed(S.isStatsLayerCollapsed);
-setStatsFieldCollapsed(S.isStatsFieldCollapsed);
-setStatsSummaryCollapsed(S.isStatsSummaryCollapsed);
-setStatsPercentilesCollapsed(S.isStatsPercentilesCollapsed);
-setStatsHistogramCollapsed(S.isStatsHistogramCollapsed);
+setStatsLayerCollapsed(S.ui.isStatsLayerCollapsed);
+setStatsFieldCollapsed(S.ui.isStatsFieldCollapsed);
+setStatsSummaryCollapsed(S.ui.isStatsSummaryCollapsed);
+setStatsPercentilesCollapsed(S.ui.isStatsPercentilesCollapsed);
+setStatsHistogramCollapsed(S.ui.isStatsHistogramCollapsed);
 
 statsLayerToggle.addEventListener('click', () => {
-  setStatsLayerCollapsed(!S.isStatsLayerCollapsed);
+  setStatsLayerCollapsed(!S.ui.isStatsLayerCollapsed);
 });
 
 statsFieldToggle.addEventListener('click', () => {
-  setStatsFieldCollapsed(!S.isStatsFieldCollapsed);
+  setStatsFieldCollapsed(!S.ui.isStatsFieldCollapsed);
 });
 
 statsSummaryToggle.addEventListener('click', () => {
-  setStatsSummaryCollapsed(!S.isStatsSummaryCollapsed);
+  setStatsSummaryCollapsed(!S.ui.isStatsSummaryCollapsed);
 });
 
 statsPercentilesToggle.addEventListener('click', () => {
-  setStatsPercentilesCollapsed(!S.isStatsPercentilesCollapsed);
+  setStatsPercentilesCollapsed(!S.ui.isStatsPercentilesCollapsed);
 });
 
 statsHistogramToggle.addEventListener('click', () => {
-  setStatsHistogramCollapsed(!S.isStatsHistogramCollapsed);
+  setStatsHistogramCollapsed(!S.ui.isStatsHistogramCollapsed);
 });
 
 const setLandScheduleTablesCollapsed = createCollapseToggle({
   contentEl: landScheduleTablesContent,
   toggleEl: landScheduleTablesToggle,
   label: 'Land tables',
-  setState: (c) => { S.isLandScheduleTablesCollapsed = c; },
+  setState: (c) => { S.ui.isLandScheduleTablesCollapsed = c; },
   refresh: () => refreshWindowMinHeight(landScheduleControlsEl),
 });
 
@@ -624,7 +624,7 @@ const setLandScheduleCurveCollapsed = createCollapseToggle({
   toggleEl: landScheduleCurveToggle,
   label: 'Curve',
   display: 'block',
-  setState: (c) => { S.isLandScheduleCurveCollapsed = c; },
+  setState: (c) => { S.ui.isLandScheduleCurveCollapsed = c; },
   refresh: () => refreshWindowMinHeight(landScheduleControlsEl),
 });
 
@@ -632,24 +632,24 @@ const setLandScheduleAdjustmentsCollapsed = createCollapseToggle({
   contentEl: landScheduleAdjustmentsContent,
   toggleEl: landScheduleAdjustmentsToggle,
   label: 'Adjustments',
-  setState: (c) => { S.isLandScheduleAdjustmentsCollapsed = c; },
+  setState: (c) => { S.ui.isLandScheduleAdjustmentsCollapsed = c; },
   refresh: () => { refreshWindowMinWidth(landScheduleControlsEl); refreshWindowMinHeight(landScheduleControlsEl); },
 });
 
-setLandScheduleTablesCollapsed(S.isLandScheduleTablesCollapsed);
-setLandScheduleCurveCollapsed(S.isLandScheduleCurveCollapsed);
-setLandScheduleAdjustmentsCollapsed(S.isLandScheduleAdjustmentsCollapsed);
+setLandScheduleTablesCollapsed(S.ui.isLandScheduleTablesCollapsed);
+setLandScheduleCurveCollapsed(S.ui.isLandScheduleCurveCollapsed);
+setLandScheduleAdjustmentsCollapsed(S.ui.isLandScheduleAdjustmentsCollapsed);
 
 landScheduleTablesToggle.addEventListener('click', () => {
-  setLandScheduleTablesCollapsed(!S.isLandScheduleTablesCollapsed);
+  setLandScheduleTablesCollapsed(!S.ui.isLandScheduleTablesCollapsed);
 });
 
 landScheduleCurveToggle.addEventListener('click', () => {
-  setLandScheduleCurveCollapsed(!S.isLandScheduleCurveCollapsed);
+  setLandScheduleCurveCollapsed(!S.ui.isLandScheduleCurveCollapsed);
 });
 
 landScheduleAdjustmentsToggle.addEventListener('click', () => {
-  setLandScheduleAdjustmentsCollapsed(!S.isLandScheduleAdjustmentsCollapsed);
+  setLandScheduleAdjustmentsCollapsed(!S.ui.isLandScheduleAdjustmentsCollapsed);
 });
 
 // Time Adjustment collapse toggles
@@ -658,7 +658,7 @@ const setTimeAdjustmentTrendCollapsed = createCollapseToggle({
   toggleEl: timeAdjustmentTrendToggle,
   label: 'Trend',
   display: 'class',
-  setState: (c) => { S.isTimeAdjustmentTrendCollapsed = c; },
+  setState: (c) => { S.ui.isTimeAdjustmentTrendCollapsed = c; },
   refresh: () => refreshWindowMinHeight(timeAdjustmentControlsEl),
 });
 
@@ -667,26 +667,26 @@ const setTimeAdjustmentFiltersCollapsed = createCollapseToggle({
   toggleEl: timeAdjustmentFiltersToggle,
   label: 'Filters',
   display: 'class',
-  setState: (c) => { S.isTimeAdjustmentFiltersCollapsed = c; },
+  setState: (c) => { S.ui.isTimeAdjustmentFiltersCollapsed = c; },
   refresh: () => refreshWindowMinHeight(timeAdjustmentControlsEl),
 });
 
-setTimeAdjustmentTrendCollapsed(S.isTimeAdjustmentTrendCollapsed);
-setTimeAdjustmentFiltersCollapsed(S.isTimeAdjustmentFiltersCollapsed);
+setTimeAdjustmentTrendCollapsed(S.ui.isTimeAdjustmentTrendCollapsed);
+setTimeAdjustmentFiltersCollapsed(S.ui.isTimeAdjustmentFiltersCollapsed);
 
 timeAdjustmentTrendToggle.addEventListener('click', () => {
-  setTimeAdjustmentTrendCollapsed(!S.isTimeAdjustmentTrendCollapsed);
+  setTimeAdjustmentTrendCollapsed(!S.ui.isTimeAdjustmentTrendCollapsed);
 });
 
 timeAdjustmentFiltersToggle.addEventListener('click', () => {
-  setTimeAdjustmentFiltersCollapsed(!S.isTimeAdjustmentFiltersCollapsed);
+  setTimeAdjustmentFiltersCollapsed(!S.ui.isTimeAdjustmentFiltersCollapsed);
 });
 
 const setCompFinderCriteriaCollapsed = createCollapseToggle({
   contentEl: compFinderCriteriaBody,
   toggleEl: compFinderCriteriaToggle,
   label: 'Criteria',
-  setState: (c) => { S.isCompFinderCriteriaCollapsed = c; },
+  setState: (c) => { S.ui.isCompFinderCriteriaCollapsed = c; },
   refresh: () => refreshWindowMinHeight(compFinderControlsEl),
 });
 
@@ -694,19 +694,19 @@ const setCompFinderCompsCollapsed = createCollapseToggle({
   contentEl: compFinderCompsBody,
   toggleEl: compFinderCompsToggle,
   label: 'Comps',
-  setState: (c) => { S.isCompFinderCompsCollapsed = c; },
+  setState: (c) => { S.ui.isCompFinderCompsCollapsed = c; },
   refresh: () => refreshWindowMinHeight(compFinderControlsEl),
 });
 
-setCompFinderCriteriaCollapsed(S.isCompFinderCriteriaCollapsed);
-setCompFinderCompsCollapsed(S.isCompFinderCompsCollapsed);
+setCompFinderCriteriaCollapsed(S.ui.isCompFinderCriteriaCollapsed);
+setCompFinderCompsCollapsed(S.ui.isCompFinderCompsCollapsed);
 
 compFinderCriteriaToggle.addEventListener('click', () => {
-  setCompFinderCriteriaCollapsed(!S.isCompFinderCriteriaCollapsed);
+  setCompFinderCriteriaCollapsed(!S.ui.isCompFinderCriteriaCollapsed);
 });
 
 compFinderCompsToggle.addEventListener('click', () => {
-  setCompFinderCompsCollapsed(!S.isCompFinderCompsCollapsed);
+  setCompFinderCompsCollapsed(!S.ui.isCompFinderCompsCollapsed);
 });
 
 // Color ramp choices
@@ -720,8 +720,8 @@ rampSelect.value = 'Magma';
 
 // Window management — using createWindowManager from windows.ts
 const layersWin = createWindowManager({
-  getMinimized: () => S.isLayersMinimized,
-  setMinimized: (v) => { S.isLayersMinimized = v; },
+  getMinimized: () => S.ui.isLayersMinimized,
+  setMinimized: (v) => { S.ui.isLayersMinimized = v; },
   contentEl: settingsContent,
   controlsEl: controlsEl,
   contentDisplay: 'block',
@@ -729,25 +729,25 @@ const layersWin = createWindowManager({
 });
 
 const settingsMenuWin = createWindowManager({
-  getMinimized: () => S.isSettingsMenuMinimized,
-  setMinimized: (v) => { S.isSettingsMenuMinimized = v; },
+  getMinimized: () => S.ui.isSettingsMenuMinimized,
+  setMinimized: (v) => { S.ui.isSettingsMenuMinimized = v; },
   contentEl: settingsMenuContent,
   controlsEl: settingsControlsEl,
   positionFn: positionSettingsPanel,
 });
 
 const legendWin = createWindowManager({
-  getMinimized: () => S.isLegendMinimized,
-  setMinimized: (v) => { S.isLegendMinimized = v; },
+  getMinimized: () => S.ui.isLegendMinimized,
+  setMinimized: (v) => { S.ui.isLegendMinimized = v; },
   contentEl: legendContent,
   controlsEl: floatingLegend,
   contentDisplay: 'block',
   onMinimize: () => {
-    S.isLegendVisible = false;
+    S.ui.isLegendVisible = false;
     updateLegendPosition();
   },
   onShow: () => {
-    S.isLegendVisible = true;
+    S.ui.isLegendVisible = true;
     // Override the default 'grid' — floating legend uses 'block'
     floatingLegend.style.display = 'block';
     updateFloatingLegend();
@@ -756,16 +756,16 @@ const legendWin = createWindowManager({
 });
 
 const statisticsWin = createWindowManager({
-  getMinimized: () => S.isStatisticsMinimized,
-  setMinimized: (v) => { S.isStatisticsMinimized = v; },
+  getMinimized: () => S.ui.isStatisticsMinimized,
+  setMinimized: (v) => { S.ui.isStatisticsMinimized = v; },
   contentEl: statisticsContent,
   controlsEl: statisticsControlsEl,
   positionFn: positionStatisticsPanel,
 });
 
 const scatterplotWin = createWindowManager({
-  getMinimized: () => S.isScatterplotMinimized,
-  setMinimized: (v) => { S.isScatterplotMinimized = v; },
+  getMinimized: () => S.ui.isScatterplotMinimized,
+  setMinimized: (v) => { S.ui.isScatterplotMinimized = v; },
   contentEl: scatterplotContent,
   controlsEl: scatterplotControlsEl,
   positionFn: positionScatterplotPanel,
@@ -777,8 +777,8 @@ const scatterplotWin = createWindowManager({
 });
 
 const filtersWin = createWindowManager({
-  getMinimized: () => S.isFiltersMinimized,
-  setMinimized: (v) => { S.isFiltersMinimized = v; },
+  getMinimized: () => S.ui.isFiltersMinimized,
+  setMinimized: (v) => { S.ui.isFiltersMinimized = v; },
   contentEl: filtersContent,
   controlsEl: filtersControlsEl,
   positionFn: positionFiltersPanel,
@@ -786,8 +786,8 @@ const filtersWin = createWindowManager({
 });
 
 const landScheduleWin = createWindowManager({
-  getMinimized: () => S.isLandScheduleMinimized,
-  setMinimized: (v) => { S.isLandScheduleMinimized = v; },
+  getMinimized: () => S.ui.isLandScheduleMinimized,
+  setMinimized: (v) => { S.ui.isLandScheduleMinimized = v; },
   contentEl: landScheduleContent,
   controlsEl: landScheduleControlsEl,
   positionFn: positionLandSchedulePanel,
@@ -797,8 +797,8 @@ const landScheduleWin = createWindowManager({
 });
 
 const timeAdjustmentWin = createWindowManager({
-  getMinimized: () => S.isTimeAdjustmentMinimized,
-  setMinimized: (v) => { S.isTimeAdjustmentMinimized = v; },
+  getMinimized: () => S.ui.isTimeAdjustmentMinimized,
+  setMinimized: (v) => { S.ui.isTimeAdjustmentMinimized = v; },
   contentEl: timeAdjustmentContent,
   controlsEl: timeAdjustmentControlsEl,
   positionFn: positionTimeAdjustmentPanel,
@@ -806,23 +806,23 @@ const timeAdjustmentWin = createWindowManager({
 });
 
 const compFinderWin = createWindowManager({
-  getMinimized: () => S.isCompFinderMinimized,
-  setMinimized: (v) => { S.isCompFinderMinimized = v; },
+  getMinimized: () => S.ui.isCompFinderMinimized,
+  setMinimized: (v) => { S.ui.isCompFinderMinimized = v; },
   contentEl: compFinderContent,
   controlsEl: compFinderControlsEl,
 });
 
 const inspectWin = createWindowManager({
-  getMinimized: () => S.isInspectMinimized,
-  setMinimized: (v) => { S.isInspectMinimized = v; },
+  getMinimized: () => S.ui.isInspectMinimized,
+  setMinimized: (v) => { S.ui.isInspectMinimized = v; },
   contentEl: inspectContent,
   controlsEl: inspectControlsEl,
   contentDisplay: 'block',
 });
 
 const writeWin = createWindowManager({
-  getMinimized: () => S.isWriteMinimized,
-  setMinimized: (v) => { S.isWriteMinimized = v; },
+  getMinimized: () => S.ui.isWriteMinimized,
+  setMinimized: (v) => { S.ui.isWriteMinimized = v; },
   contentEl: writeContent,
   controlsEl: writeControlsEl,
   contentDisplay: 'block',
@@ -832,8 +832,8 @@ const writeWin = createWindowManager({
 });
 
 const export3DWin = createWindowManager({
-  getMinimized: () => S.isExport3DMinimized,
-  setMinimized: (v) => { S.isExport3DMinimized = v; },
+  getMinimized: () => S.ui.isExport3DMinimized,
+  setMinimized: (v) => { S.ui.isExport3DMinimized = v; },
   contentEl: export3DContent,
   controlsEl: export3DControlsEl,
   contentDisplay: 'block',
@@ -883,7 +883,7 @@ initWindowCallbacks({
         suppressPopupCloseClear = false;
         S.activePopup = null;
       }
-      if (!S.isInspectMinimized) {
+      if (!S.ui.isInspectMinimized) {
         renderInspectPinnedContent();
       }
       return;
@@ -967,13 +967,13 @@ initRenderingCallbacks({
   addPopupEditFunctionality,
   refreshInspectView: () => {
     if (!S.lastPicked) {
-      if (isInspectPinned() && !S.isInspectMinimized) {
+      if (isInspectPinned() && !S.ui.isInspectMinimized) {
         renderInspectPinnedContent();
       }
       return;
     }
     if (isInspectPinned()) {
-      if (!S.isInspectMinimized) {
+      if (!S.ui.isInspectMinimized) {
         renderInspectPinnedContent();
       }
       return;
@@ -1048,7 +1048,7 @@ initCompFinderElements();
 initCompFinderCallbacks({
   showCompFinderMenu: showCompFinder,
 });
-setCompFinderMenuVisible(!S.isCompFinderMinimized);
+setCompFinderMenuVisible(!S.ui.isCompFinderMinimized);
 
 // Wire DOM elements and callbacks into the layers module
 initLayerCallbacks({
@@ -1202,7 +1202,7 @@ function hideLoading() { loadingOverlay.classList.remove('show'); }
 let pendingDeleteDataSourceId: string | null = null;
 
 function setSettingsDataSourcesCollapsed(collapsed: boolean) {
-  S.isSettingsDataSourcesCollapsed = collapsed;
+  S.ui.isSettingsDataSourcesCollapsed = collapsed;
   settingsDataSourcesList.style.display = collapsed ? 'none' : 'grid';
   settingsDataSourcesToggle.classList.toggle('is-collapsed', collapsed);
   // Arrow rotation is handled by CSS (.settings-data-sources-header.is-collapsed .toggle);
@@ -1376,7 +1376,7 @@ function renderSettingsDataSourcesSection() {
 }
 
 settingsDataSourcesToggle.addEventListener('click', () => {
-  setSettingsDataSourcesCollapsed(!S.isSettingsDataSourcesCollapsed);
+  setSettingsDataSourcesCollapsed(!S.ui.isSettingsDataSourcesCollapsed);
 });
 
 btnCancelDeleteDataSource.addEventListener('click', () => {
@@ -1392,7 +1392,7 @@ btnConfirmDeleteDataSource.addEventListener('click', () => {
   removeDataSourceAndDerivedArtifacts(storeId);
 });
 
-setSettingsDataSourcesCollapsed(S.isSettingsDataSourcesCollapsed);
+setSettingsDataSourcesCollapsed(S.ui.isSettingsDataSourcesCollapsed);
 renderSettingsDataSourcesSection();
 window.addEventListener('data-sources-changed', () => {
   renderSettingsDataSourcesSection();
@@ -1573,7 +1573,7 @@ function clearInspectState() {
   }
   S.lastPicked = null;
   removeInspectFocusMarker();
-  if (isInspectPinned() && !S.isInspectMinimized) {
+  if (isInspectPinned() && !S.ui.isInspectMinimized) {
     renderInspectPinnedContent();
   }
 }
@@ -1607,7 +1607,7 @@ function showPopupForLastPicked() {
     if (!suppressPopupCloseClear) {
       S.lastPicked = null;
       removeInspectFocusMarker();
-      if (isInspectPinned() && !S.isInspectMinimized) {
+      if (isInspectPinned() && !S.ui.isInspectMinimized) {
         renderInspectPinnedContent();
       }
     }
@@ -2044,7 +2044,7 @@ function refreshMenusBoundToDataSource(dataStoreId: string) {
   refreshTimeAdjustmentPanel();
   renderStatsLayerOptions();
   renderScatterLayerOptions();
-  if (S.isInspectMinimized || !S.lastPicked) return;
+  if (S.ui.isInspectMinimized || !S.lastPicked) return;
   if (isInspectPinned()) {
     renderInspectPinnedContent();
     return;
@@ -2883,7 +2883,7 @@ if (writeSelectionCountTimer) {
   window.clearInterval(writeSelectionCountTimer);
 }
 writeSelectionCountTimer = window.setInterval(() => {
-  if (!S.isWriteMinimized) updateWriteSelectionCount();
+  if (!S.ui.isWriteMinimized) updateWriteSelectionCount();
 }, 300);
 
 resetWriteMenu();

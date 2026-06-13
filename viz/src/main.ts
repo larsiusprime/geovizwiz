@@ -59,11 +59,8 @@ import {
   scatterYMaxInput,
   scatterResetExtentsButton,
   scatterColorByFieldSelect,
-  scatterSelectionControls,
   scatterZoomToSelectionButton,
   scatterClearSelectionButton,
-  scatterPlot,
-  scatterPlotEmpty,
   filtersControlsEl,
   filtersContent,
   filtersListEl,
@@ -1201,21 +1198,7 @@ initStatisticsCallbacks({
 
 // Wire DOM elements and callbacks into the scatterplot module
 initScatterplotElements({
-  scatterLayerName,
   scatterSubjectControls,
-  scatterXFieldSelect,
-  scatterYFieldSelect,
-  scatterXMinInput,
-  scatterXMaxInput,
-  scatterYMinInput,
-  scatterYMaxInput,
-  scatterResetExtentsButton,
-  scatterColorByFieldSelect,
-  scatterSelectionControls,
-  scatterZoomToSelectionButton,
-  scatterClearSelectionButton,
-  scatterPlot,
-  scatterPlotEmpty,
 });
 initScatterplotCallbacks({
   getScatterLayer,

@@ -26,63 +26,41 @@ import type {
   LayerState,
   DataStore,
 } from './types';
+import {
+  scatterLayerName,
+  scatterXFieldSelect,
+  scatterYFieldSelect,
+  scatterXMinInput,
+  scatterXMaxInput,
+  scatterYMinInput,
+  scatterYMaxInput,
+  scatterResetExtentsButton,
+  scatterColorByFieldSelect,
+  scatterSelectionControls,
+  scatterZoomToSelectionButton,
+  scatterClearSelectionButton,
+  scatterPlot,
+  scatterPlotEmpty,
+} from './dom-refs';
 
 /* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initScatterplotElements)      */
+/*  DOM element references                                             */
+/*                                                                     */
+/*  Plain DOM refs are imported directly from dom-refs (above). Only   */
+/*  the constructed subject-selector bundle is injected via            */
+/*  initScatterplotElements, since main.ts builds and shares it.       */
 /* ------------------------------------------------------------------ */
 
-let scatterLayerName: HTMLSelectElement;
 let scatterSubjectControls: SubjectSelectorControls;
 let scatterCategoryFieldSelect: HTMLSelectElement;
 let scatterCategoryValueSelect: HTMLSelectElement;
-let scatterXFieldSelect: HTMLSelectElement;
-let scatterYFieldSelect: HTMLSelectElement;
-let scatterXMinInput: HTMLInputElement;
-let scatterXMaxInput: HTMLInputElement;
-let scatterYMinInput: HTMLInputElement;
-let scatterYMaxInput: HTMLInputElement;
-let scatterResetExtentsButton: HTMLButtonElement;
-let scatterColorByFieldSelect: HTMLSelectElement;
-let scatterSelectionControls: HTMLDivElement;
-let scatterZoomToSelectionButton: HTMLButtonElement;
-let scatterClearSelectionButton: HTMLButtonElement;
-let scatterPlot: HTMLDivElement;
-let scatterPlotEmpty: HTMLDivElement;
 
 export function initScatterplotElements(els: {
-  scatterLayerName: HTMLSelectElement;
   scatterSubjectControls: SubjectSelectorControls;
-  scatterXFieldSelect: HTMLSelectElement;
-  scatterYFieldSelect: HTMLSelectElement;
-  scatterXMinInput: HTMLInputElement;
-  scatterXMaxInput: HTMLInputElement;
-  scatterYMinInput: HTMLInputElement;
-  scatterYMaxInput: HTMLInputElement;
-  scatterResetExtentsButton: HTMLButtonElement;
-  scatterColorByFieldSelect: HTMLSelectElement;
-  scatterSelectionControls: HTMLDivElement;
-  scatterZoomToSelectionButton: HTMLButtonElement;
-  scatterClearSelectionButton: HTMLButtonElement;
-  scatterPlot: HTMLDivElement;
-  scatterPlotEmpty: HTMLDivElement;
 }) {
-  scatterLayerName = els.scatterLayerName;
   scatterSubjectControls = els.scatterSubjectControls;
   scatterCategoryFieldSelect = els.scatterSubjectControls.categoryFieldSelect;
   scatterCategoryValueSelect = els.scatterSubjectControls.categoryValueSelect;
-  scatterXFieldSelect = els.scatterXFieldSelect;
-  scatterYFieldSelect = els.scatterYFieldSelect;
-  scatterXMinInput = els.scatterXMinInput;
-  scatterXMaxInput = els.scatterXMaxInput;
-  scatterYMinInput = els.scatterYMinInput;
-  scatterYMaxInput = els.scatterYMaxInput;
-  scatterResetExtentsButton = els.scatterResetExtentsButton;
-  scatterColorByFieldSelect = els.scatterColorByFieldSelect;
-  scatterSelectionControls = els.scatterSelectionControls;
-  scatterZoomToSelectionButton = els.scatterZoomToSelectionButton;
-  scatterClearSelectionButton = els.scatterClearSelectionButton;
-  scatterPlot = els.scatterPlot;
-  scatterPlotEmpty = els.scatterPlotEmpty;
 }
 
 /* ------------------------------------------------------------------ */

@@ -146,7 +146,6 @@ import {
   btnMinimizeWrite,
   floatingLegend,
   btnMinimizeLegend,
-  legendTitle,
   legendContent,
   compFinderControlsEl,
   compFinderContent,
@@ -295,7 +294,7 @@ import {
   updateSelectionControls,
 } from './selection';
 import {
-  initLegendElements, initLegendCallbacks,
+  initLegendCallbacks,
   clearLegendVisibility,
   updateFloatingLegend, updateLegendPosition,
   updateHighlightColors,
@@ -1095,11 +1094,6 @@ initRenderingCallbacks({
 });
 
 // Wire DOM elements and callbacks into the legend module
-initLegendElements({
-  floatingLegend,
-  legendContent,
-  legendTitle,
-});
 initLegendCallbacks({
   persistCurrentLayerState,
   renderLayerList,

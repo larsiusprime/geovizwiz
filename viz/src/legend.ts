@@ -10,24 +10,7 @@ import {
   updateSelectionControls,
 } from './selection';
 import { applyVisibilityFilters } from './filters';
-
-/* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initLegendElements)           */
-/* ------------------------------------------------------------------ */
-
-let floatingLegend: HTMLDivElement;
-let legendContent: HTMLDivElement;
-let legendTitle: HTMLDivElement;
-
-export function initLegendElements(els: {
-  floatingLegend: HTMLDivElement;
-  legendContent: HTMLDivElement;
-  legendTitle: HTMLDivElement;
-}) {
-  floatingLegend = els.floatingLegend;
-  legendContent = els.legendContent;
-  legendTitle = els.legendTitle;
-}
+import { floatingLegend, legendContent, legendTitle } from './dom-refs';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initLegendCallbacks)          */

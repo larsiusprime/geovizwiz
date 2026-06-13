@@ -7,7 +7,7 @@ let mainWindow = null;
 let currentProjectRoot = null;
 
 function resolveRendererEntry() {
-  return path.join(__dirname, '..', 'dist', 'index.html');
+  return path.join(__dirname, '..', '..', 'dist', 'index.html');
 }
 
 function isPathInsideProjectRoot(candidatePath) {

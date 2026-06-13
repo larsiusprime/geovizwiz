@@ -31,7 +31,14 @@ jobs:
 
       - name: Install app deps (viz/)
         working-directory: viz
-        run: npm ci
+        run: |
+          npm ci --include=dev --include=optional
+          # npm optional-deps can be skipped intermittently in CI; explicitly ensure Rollup native binary.
+          npm install --no-save --include=optional @rollup/rollup-linux-x64-gnu
+
+      - name: Verify Rollup native optional dependency (Linux)
+        working-directory: viz
+        run: node -e "require('@rollup/rollup-linux-x64-gnu')"
 
       - name: Build app (viz/)
         working-directory: viz
@@ -46,6 +53,13 @@ jobs:
           # Optional: ensure CNAME here so the custom domain is baked into the artifact
           echo "www.putitonamap.com" > site/CNAME
           # (site/index.html is already in your repo)
+
+      - name: Verify Pages artifact excludes viz desktop/hosted sources
+        run: |
+          # Deploy artifact should contain compiled browser assets only, not source/runtime folders.
+          test ! -e site/viz/desktop
+          test ! -e site/viz/hosted
+          test ! -e site/viz/electron
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

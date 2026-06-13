@@ -687,7 +687,7 @@ export function updateStatisticsResults() {
     const values = selection
       .map(feature => {
         const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-        let base = numOrNull(props[S.statsField]);
+        let base = numOrNull(props[S.statsField ?? '']);
         if (base === null) return null;
 
         const normalizationContext = getStatsNormalizationContext();
@@ -753,7 +753,7 @@ export function updateStatisticsResults() {
   const counts = new Map<string, number>();
   selection.forEach(feature => {
     const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-    const raw = props[S.statsField];
+    const raw = props[S.statsField ?? ''];
     if (raw === null || raw === undefined || raw === '') return;
     const key = String(raw);
     counts.set(key, (counts.get(key) ?? 0) + 1);

@@ -894,7 +894,7 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   element.style.position = 'relative';
   setPinnedState(element, true);
 
-  let targetColumn = column;
+  let targetColumn: HTMLDivElement | null = column ?? null;
   if (targetColumn && !canColumnFitWindow(targetColumn, element)) {
     targetColumn = null;
   }
@@ -904,6 +904,7 @@ function pinWindow(element: HTMLElement, column?: HTMLDivElement) {
   if (!targetColumn) {
     targetColumn = createPinnedColumn();
   }
+  if (!targetColumn) return; // no pinned container available
   element.dataset.pinnedColumn = `${getColumnIndex(targetColumn)}`;
   insertWindowInColumn(targetColumn, element);
   const columnIndex = getColumnIndex(targetColumn);
@@ -1092,6 +1093,7 @@ function restorePinnedWindow(element: HTMLElement) {
   if (!targetColumn) {
     targetColumn = createPinnedColumn();
   }
+  if (!targetColumn) return; // no pinned container available
   element.dataset.pinnedColumn = `${getColumnIndex(targetColumn)}`;
   insertWindowInColumn(targetColumn, element);
   updatePinnedLayout();

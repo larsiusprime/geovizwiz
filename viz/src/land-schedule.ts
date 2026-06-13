@@ -210,8 +210,8 @@ function updateRowTooltip(
   table: LandScheduleTable,
   row: LandScheduleRow,
   rowIndex: number,
-  minInput: HTMLInputElement,
-  maxInput: HTMLInputElement
+  minInput: HTMLElement,
+  maxInput: HTMLElement
 ) {
   const unitLabel = getUnitAxisLabel(table.unit);
   const minVal = formatRangeValue(row.min);

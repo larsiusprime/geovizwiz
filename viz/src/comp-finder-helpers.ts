@@ -44,7 +44,7 @@ export function getFeatureCenter(feature: GeoJSON.Feature): [number, number] | n
 }
 
 export function isValidLngLat(coord: [number, number] | null | undefined): coord is [number, number] {
-  return Boolean(coord)
+  return coord != null
     && Number.isFinite(coord[0])
     && Number.isFinite(coord[1])
     && Math.abs(coord[0]) <= 180

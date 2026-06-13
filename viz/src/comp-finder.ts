@@ -503,10 +503,11 @@ function buildCompsSortValue(comp: CompRow, field: string) {
 
 function sortCompsRows(rows: CompRow[]): CompRow[] {
   if (!sortField) return rows;
+  const field = sortField;
   const dir = sortDirection === 'asc' ? 1 : -1;
   return rows.slice().sort((a, b) => {
-    const va = buildCompsSortValue(a, sortField);
-    const vb = buildCompsSortValue(b, sortField);
+    const va = buildCompsSortValue(a, field);
+    const vb = buildCompsSortValue(b, field);
     const na = numOrNull(va);
     const nb = numOrNull(vb);
     if (na !== null && nb !== null) return (na - nb) * dir;
@@ -612,6 +613,7 @@ function centerOnSubject() {
     console.warn('[comp-finder] centerOnSubject skipped invalid center', { subjectCenter: subject?.center, subjectParcelId: subject?.parcelId });
     return;
   }
+  const subj = subject;
 
   const duration = 500;
   const didStart = centerOnLngLatInVisibleMapArea(subject.center, { inset: 12, duration });
@@ -628,7 +630,7 @@ function centerOnSubject() {
     bounced = true;
     window.clearTimeout(fallbackTimer);
     S.map.off('moveend', onCenterComplete);
-    compDebug('centerOnSubject bounce trigger', { subjectCenter: subject.center, subjectParcelId: subject.parcelId });
+    compDebug('centerOnSubject bounce trigger', { subjectCenter: subj.center, subjectParcelId: subj.parcelId });
     bounceSubjectMarker();
   };
 
@@ -882,6 +884,7 @@ async function findComps() {
 
   const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
   const subjectCenter = subject.center;
+  const subjectFeature = subject.feature;
   const useDistance = els.distanceEnabledInput.checked;
   const useSelection = els.selectionEnabledInput.checked;
   const distanceLimit = useDistance ? getDistanceLimitMeters() : null;
@@ -910,7 +913,7 @@ async function findComps() {
 
     const deltas = criteriaFields.map((entry) => {
       const compVal = getFieldValue(feature, entry.field);
-      const subjVal = getFieldValue(subject.feature, entry.field);
+      const subjVal = getFieldValue(subjectFeature, entry.field);
       return buildDelta(compVal, subjVal, entry.type);
     });
 
@@ -1083,9 +1086,10 @@ function syncCriteriaFields() {
 
 function syncCategoricalCriteriaToSubject() {
   if (!subject) return;
+  const subj = subject;
   criteria.forEach((row) => {
     if (row.fieldType !== 'categorical' || !row.field) return;
-    const subjectValue = getFieldValue(subject.feature, row.field);
+    const subjectValue = getFieldValue(subj.feature, row.field);
     row.value = (subjectValue === null || subjectValue === undefined || subjectValue === '')
       ? []
       : [String(subjectValue)];
@@ -1094,6 +1098,7 @@ function syncCategoricalCriteriaToSubject() {
 
 function ensureDefaultCriteria(store: DataStore) {
   if (criteria.length > 0 || !subject) return;
+  const subj = subject;
   const defaults = [
     store.bldgSizeField,
     store.landSizeField,
@@ -1108,7 +1113,7 @@ function ensureDefaultCriteria(store: DataStore) {
       criteria.push({ id: uid('criterion'), field, fieldType, value: 10, usePercent: true });
       return;
     }
-    const subjectValue = getFieldValue(subject.feature, field);
+    const subjectValue = getFieldValue(subj.feature, field);
     criteria.push({
       id: uid('criterion'),
       field,

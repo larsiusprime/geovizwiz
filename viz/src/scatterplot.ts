@@ -630,8 +630,8 @@ export function updateScatterPlot() {
   const colorByField = S.scatterColorByField;
   selection.forEach(feature => {
     const props = (feature.properties as Record<string, unknown> | undefined) ?? {};
-    const xVal = numOrNull(props[S.scatterXField]);
-    const yVal = numOrNull(props[S.scatterYField]);
+    const xVal = numOrNull(props[S.scatterXField ?? '']);
+    const yVal = numOrNull(props[S.scatterYField ?? '']);
     if (xVal === null || yVal === null) return;
     const index = xValues.length;
     xValues.push(xVal);

@@ -12,7 +12,8 @@ import type {
   SerializedLandSchedule,
   SerializedLandScheduleEntry,
   SerializedLandScheduleAdjustment,
-  SerializedLandScheduleTable
+  SerializedLandScheduleTable,
+  LandScheduleEntry
 } from './types.js';
 import { persistCurrentLayerState, renderDataStoreList, renderLayerList, registerLayer, applyLayerState, applyLayerOrderToMap } from './layers.js';
 import { cloneFilters } from './filters.js';
@@ -157,10 +158,11 @@ export function exportProject() {
     serializedLayers.push(serializeLayer(layer));
   });
 
+  const projectName = dataSources[0]?.name || 'Untitled Project';
   const projectFile: ProjectFileV1 = {
     version: '1.0',
     created: new Date().toISOString(),
-    projectName: dataSources[0]?.name || 'Untitled Project',
+    projectName,
     dataSources,
     layers: serializedLayers,
     savedFilters: serializeSavedFilters(),
@@ -172,7 +174,7 @@ export function exportProject() {
   const blob = new Blob([json], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
 
-  const filename = `${projectFile.projectName.replace(/[^a-z0-9]/gi, '_')}.geovizwiz.json`;
+  const filename = `${projectName.replace(/[^a-z0-9]/gi, '_')}.geovizwiz.json`;
 
   const a = document.createElement('a');
   a.href = url;
@@ -344,7 +346,7 @@ export async function loadProjectFile(file: File) {
         })),
       };
     } else if (projectData.landSchedules && projectData.landSchedules.length > 0) {
-      const merged = projectData.landSchedules.reduce((acc: SerializedLandSchedule, entry: SerializedLandScheduleEntry) => {
+      const merged = projectData.landSchedules.reduce((acc: LandScheduleEntry, entry: SerializedLandScheduleEntry) => {
         acc.tables.push(...entry.tables.map(table => ({
           id: table.id,
           name: table.name,

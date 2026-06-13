@@ -1267,7 +1267,7 @@ export function initTimeAdjustmentElements(elements: Elements) {
 
   const onYAxisInput = (value: string) => {
     const parsed = parseYAxisValue(value);
-    if (!Number.isFinite(parsed)) return;
+    if (parsed === null || !Number.isFinite(parsed)) return;
     applyDisplayedYMax(parsed);
   };
 
@@ -1276,7 +1276,7 @@ export function initTimeAdjustmentElements(elements: Elements) {
   els.yMaxInput.addEventListener('change', () => {
     const parsed = parseYAxisValue(els.yMaxInput.value);
     const fallback = displayedYMax ?? naturalYMax;
-    applyDisplayedYMax(Number.isFinite(parsed) ? parsed : fallback, false);
+    applyDisplayedYMax(parsed !== null && Number.isFinite(parsed) ? parsed : fallback, false);
     syncYAxisControls();
   });
 

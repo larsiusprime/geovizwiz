@@ -175,7 +175,7 @@ import type {
 } from './types';
 import {
   buildSubjectSelector,
-  initStatisticsElements, initStatisticsCallbacks,  // initStatisticsElements: subject-selector bundle only
+  initStatisticsElements,  // subject-selector bundle only
   resetStatisticsDisplay,
   populateStatisticsCategoryValues,
   getStatsFieldType,
@@ -186,7 +186,7 @@ import {
   renderStatsLayerOptions, getCurrentStatsSubjectSelection,
 } from './statistics';
 import {
-  initScatterplotElements, initScatterplotCallbacks,
+  initScatterplotElements,
   populateScatterCategoryValues,
   updateScatterSubjectControls, setScatterSubjectMode,
   setScatterRangeInputs,
@@ -282,7 +282,7 @@ import {
   createLayerState, persistCurrentLayerState,
   registerLayer, removeLayer,
   renderLayerList,
-  getStatsLayer, getScatterLayer, getLayerDataStore, getLayerGeoJSON, getScatterDataStore,
+  getStatsLayer,
   createDataStore, renderDataStoreList,
 } from './layers';
 import { initMetadataModule } from './metadata.js';
@@ -1020,21 +1020,10 @@ initModalCallbacks({
 initStatisticsElements({
   statsSubjectControls,
 });
-initStatisticsCallbacks({
-  getStatsLayer,
-  getLayerDataStore,
-  getLayerGeoJSON,
-  getParcelId,
-});
 
-// Wire DOM elements and callbacks into the scatterplot module
+// Wire DOM elements into the scatterplot module
 initScatterplotElements({
   scatterSubjectControls,
-});
-initScatterplotCallbacks({
-  getScatterLayer,
-  getScatterDataStore,
-  getParcelId,
 });
 
 // Wire DOM elements into the land-schedule module

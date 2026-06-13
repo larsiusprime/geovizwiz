@@ -15,8 +15,6 @@ import type {
   SubjectMode,
   SubjectSelectorControls,
   SubjectSelectorOptions,
-  LayerState,
-  DataStore,
 } from './types';
 
 /* ------------------------------------------------------------------ */
@@ -271,25 +269,17 @@ export function initStatisticsElements(els: {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Callbacks into main.ts (set once via initStatisticsCallbacks)      */
+/*  Cross-module dependencies — direct imports (formerly callback seams).  */
+/*  These are pure downstream getters into layers/selection, which do not  */
+/*  import statistics, so the direct imports are cycle-free.               */
 /* ------------------------------------------------------------------ */
 
-let _getStatsLayer: () => LayerState | null;
-let _getLayerDataStore: (layer: LayerState | null) => DataStore | null;
-let _getLayerGeoJSON: (layer: LayerState | null) => GeoJSON.FeatureCollection | null;
-let _getParcelId: (feature: GeoJSON.Feature) => string;
-
-export function initStatisticsCallbacks(cbs: {
-  getStatsLayer: () => LayerState | null;
-  getLayerDataStore: (layer: LayerState | null) => DataStore | null;
-  getLayerGeoJSON: (layer: LayerState | null) => GeoJSON.FeatureCollection | null;
-  getParcelId: (feature: GeoJSON.Feature) => string;
-}) {
-  _getStatsLayer = cbs.getStatsLayer;
-  _getLayerDataStore = cbs.getLayerDataStore;
-  _getLayerGeoJSON = cbs.getLayerGeoJSON;
-  _getParcelId = cbs.getParcelId;
-}
+import {
+  getStatsLayer as _getStatsLayer,
+  getLayerDataStore as _getLayerDataStore,
+  getLayerGeoJSON as _getLayerGeoJSON,
+} from './layers';
+import { getParcelId as _getParcelId } from './selection';
 
 /* ------------------------------------------------------------------ */
 /*  Statistics functions                                               */

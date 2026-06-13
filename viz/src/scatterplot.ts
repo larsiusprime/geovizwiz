@@ -24,7 +24,6 @@ import type {
   SubjectMode,
   SubjectSelectorControls,
   LayerState,
-  DataStore,
 } from './types';
 import {
   scatterLayerName,
@@ -64,22 +63,16 @@ export function initScatterplotElements(els: {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Callbacks into main.ts (set once via initScatterplotCallbacks)     */
+/*  Cross-module dependencies — direct imports (formerly callback seams).  */
+/*  Pure downstream getters into layers/selection, which don't import      */
+/*  scatterplot, so these are cycle-free.                                  */
 /* ------------------------------------------------------------------ */
 
-let _getScatterLayer: () => LayerState | null;
-let _getScatterDataStore: () => DataStore | null;
-let _getParcelId: (feature: GeoJSON.Feature) => string;
-
-export function initScatterplotCallbacks(cbs: {
-  getScatterLayer: () => LayerState | null;
-  getScatterDataStore: () => DataStore | null;
-  getParcelId: (feature: GeoJSON.Feature) => string;
-}) {
-  _getScatterLayer = cbs.getScatterLayer;
-  _getScatterDataStore = cbs.getScatterDataStore;
-  _getParcelId = cbs.getParcelId;
-}
+import {
+  getScatterLayer as _getScatterLayer,
+  getScatterDataStore as _getScatterDataStore,
+} from './layers';
+import { getParcelId as _getParcelId } from './selection';
 
 /* ------------------------------------------------------------------ */
 /*  Scatterplot functions                                             */

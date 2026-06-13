@@ -5,7 +5,7 @@ import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
 import PIN_SVG_RAW from './svg/pin.svg?raw';
-import { createCollapseToggle, escapeHtml, isTextInputElement } from './utils.dom';
+import { createCollapseToggle, escapeHtml } from './utils.dom';
 import { EYE_ICON_OPEN, EYE_ICON_CLOSED, PIN_ICON, PIN_ICON_TILTED } from './icons';
 import {
   fileInput,
@@ -164,7 +164,7 @@ import {
 } from './dom-refs';
 
 // Local imports
-import { OSM_STYLE, SATELLITE_STYLE, COLOR_RAMPS, UNIT_TO_METERS } from './config';
+import { OSM_STYLE, SATELLITE_STYLE, COLOR_RAMPS } from './config';
 import { sanitizeFeaturesInPlace, fileToAsyncBuffer } from './utils.sanitize';
 import { roundGeometryInPlace, trimPropertiesInPlace } from './utils.geo';
 import { fmt, parseStrictNumber } from './utils.number';
@@ -237,14 +237,12 @@ import {
 import {
   initCompFinderElements,
   initCompFinderCallbacks,
-  setCompFinderSubject,
-  setCompFinderToolActive,
   setCompFinderMenuVisible,
 } from './comp-finder';
 import {
   initToolbarCallbacks, initializeToolbar,
   updateToolbarButtonStates, updateCursor,
-  activateTool, HOTKEYS,
+  activateTool,
 } from './toolbar';
 import {
   addOrUpdateSource,
@@ -979,11 +977,6 @@ initRenderingCallbacks({
     }
     showPopupForLastPicked();
   },
-  updateCursor,
-  isTextInputElement,
-  activateTool: (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder' | 'write'),
-  setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => setCompFinderSubject(feature, layerId),
-  hotkeys: HOTKEYS,
 });
 
 // Wire DOM elements and callbacks into the legend module
@@ -999,12 +992,6 @@ initLegendCallbacks({
   buildNumericColorExpression,
   buildValueExpression,
   createEyeButton,
-  getMultiplierValue: () => {
-    const rawMult = Number(multInput.value);
-    return Number.isFinite(rawMult) ? rawMult : 0;
-  },
-  getUnitFactor: () => UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1,
-  getOpacityValue: () => parseFloat(opacityInput.value),
 });
 
 // Wire DOM elements and callbacks into the modals module
@@ -3368,7 +3355,6 @@ initToolbarCallbacks({
   toggleLandSchedule,
   toggleTimeAdjustment,
   showCompFinderMenu: showCompFinder,
-  setCompFinderToolActive: setCompFinderToolActive,
   toggleWriteMenu: toggleWrite,
   showWriteMenu: showWrite,
 });

@@ -72,17 +72,14 @@ let _buildPopupHTML: (props: Record<string, any>, parcelId: string) => string = 
 let _addPopupSearchFunctionality: () => void = () => {};
 let _addPopupEditFunctionality: (parcelId: string) => void = () => {};
 let _refreshInspectView: () => void = () => {};
-let _updateCursor: () => void = () => {};
-let _isTextInputElement: (el: Element | null) => boolean = () => false;
-let _activateTool: (tool: string) => void = () => {};
-let _setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void = () => {};
-let _hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string; WRITE: string } = {
-  PAN: 'h',
-  SELECT: 'v',
-  INFO: 'i',
-  COMP_FINDER: 'c',
-  WRITE: 'w',
-};
+// Direct imports (formerly callback seams). toolbar/utils.dom/comp-finder are
+// near-leaf here (none imports rendering), so these are cycle-free. Aliased to
+// the _names to leave call sites unchanged.
+import { updateCursor as _updateCursor, activateTool, HOTKEYS as _hotkeys } from './toolbar';
+import { isTextInputElement as _isTextInputElement } from './utils.dom';
+import { setCompFinderSubject as _setCompFinderSubject } from './comp-finder';
+// activateTool takes a tool-union; keep the string→union cast the seam had.
+const _activateTool = (tool: string) => activateTool(tool as 'pan' | 'info' | 'select' | 'comp-finder' | 'write');
 
 export type RenderingCallbacks = {
   getCurrentLayer: () => LayerState | null;
@@ -96,11 +93,6 @@ export type RenderingCallbacks = {
   addPopupSearchFunctionality: () => void;
   addPopupEditFunctionality: (parcelId: string) => void;
   refreshInspectView?: () => void;
-  updateCursor: () => void;
-  isTextInputElement: (el: Element | null) => boolean;
-  activateTool: (tool: string) => void;
-  setCompFinderSubject: (feature: GeoJSON.Feature, layerId: string) => void;
-  hotkeys: { PAN: string; SELECT: string; INFO: string; COMP_FINDER: string; WRITE: string };
 };
 
 export function initRenderingCallbacks(cb: RenderingCallbacks) {
@@ -118,11 +110,6 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   void _buildPopupHTML;
   void _addPopupSearchFunctionality;
   void _addPopupEditFunctionality;
-  _updateCursor = cb.updateCursor;
-  _isTextInputElement = cb.isTextInputElement;
-  _activateTool = cb.activateTool;
-  _setCompFinderSubject = cb.setCompFinderSubject;
-  _hotkeys = cb.hotkeys;
 }
 
 /* ================================================================== */

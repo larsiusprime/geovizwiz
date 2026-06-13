@@ -10,8 +10,21 @@ import {
   updateSelectionControls,
 } from './selection';
 import { applyVisibilityFilters } from './filters';
-import { floatingLegend, legendContent, legendTitle } from './dom-refs';
+import { floatingLegend, legendContent, legendTitle, multInput, unitsSelect, opacityInput } from './dom-refs';
 import { normalizedValue } from './rendering-helpers';
+import { UNIT_TO_METERS } from './config';
+
+/* ------------------------------------------------------------------ */
+/*  DOM-derived values (formerly callback seams). Read straight from   */
+/*  dom-refs/config — no cross-module dependency needed.               */
+/* ------------------------------------------------------------------ */
+
+const _getMultiplierValue = (): number => {
+  const rawMult = Number(multInput.value);
+  return Number.isFinite(rawMult) ? rawMult : 0;
+};
+const _getUnitFactor = (): number => UNIT_TO_METERS[unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
+const _getOpacityValue = (): number => parseFloat(opacityInput.value);
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initLegendCallbacks)          */
@@ -28,9 +41,6 @@ let _buildNumericColorRanges: () => Array<{ min: number; max: number; color: str
 let _buildNumericColorExpression: () => Expression = () => ['literal', '#888'] as any;
 let _buildValueExpression: () => Expression = () => ['literal', 0] as any;
 let _createEyeButton: (isHidden: boolean, title: string) => HTMLButtonElement = () => document.createElement('button');
-let _getMultiplierValue: () => number = () => 0;
-let _getUnitFactor: () => number = () => 1;
-let _getOpacityValue: () => number = () => 1;
 
 export interface LegendCallbacks {
   persistCurrentLayerState: () => void;
@@ -44,9 +54,6 @@ export interface LegendCallbacks {
   buildNumericColorExpression: () => Expression;
   buildValueExpression: () => Expression;
   createEyeButton: (isHidden: boolean, title: string) => HTMLButtonElement;
-  getMultiplierValue: () => number;
-  getUnitFactor: () => number;
-  getOpacityValue: () => number;
 }
 
 export function initLegendCallbacks(cb: LegendCallbacks) {
@@ -61,9 +68,6 @@ export function initLegendCallbacks(cb: LegendCallbacks) {
   _buildNumericColorExpression = cb.buildNumericColorExpression;
   _buildValueExpression = cb.buildValueExpression;
   _createEyeButton = cb.createEyeButton;
-  _getMultiplierValue = cb.getMultiplierValue;
-  _getUnitFactor = cb.getUnitFactor;
-  _getOpacityValue = cb.getOpacityValue;
 }
 
 /* ------------------------------------------------------------------ */

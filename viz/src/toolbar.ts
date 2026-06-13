@@ -5,6 +5,9 @@ import {
   handlePolygonMouseDown, handlePolygonMouseMove, handlePolygonDoubleClick,
   showSelectionControlsPanel,
 } from './selection';
+// Direct import (formerly a callback seam). comp-finder doesn't import toolbar
+// (only main does) and doesn't import main, so this is cycle-free.
+import { setCompFinderToolActive as _setCompFinderToolActive } from './comp-finder';
 
 /* ---------- callbacks wired from main.ts ---------- */
 
@@ -16,7 +19,6 @@ let _minimizeLegend: () => void = () => {};
 let _toggleLandSchedule: () => void = () => {};
 let _toggleTimeAdjustment: () => void = () => {};
 let _showCompFinderMenu: () => void = () => {};
-let _setCompFinderToolActive: (active: boolean) => void = () => {};
 let _toggleWriteMenu: () => void = () => {};
 let _showWriteMenu: () => void = () => {};
 
@@ -29,7 +31,6 @@ export interface ToolbarCallbacks {
   toggleLandSchedule: () => void;
   toggleTimeAdjustment: () => void;
   showCompFinderMenu: () => void;
-  setCompFinderToolActive: (active: boolean) => void;
   toggleWriteMenu: () => void;
   showWriteMenu: () => void;
 }
@@ -43,7 +44,6 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _toggleLandSchedule = cb.toggleLandSchedule;
   _toggleTimeAdjustment = cb.toggleTimeAdjustment;
   _showCompFinderMenu = cb.showCompFinderMenu;
-  _setCompFinderToolActive = cb.setCompFinderToolActive;
   _toggleWriteMenu = cb.toggleWriteMenu;
   _showWriteMenu = cb.showWriteMenu;
 }

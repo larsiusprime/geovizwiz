@@ -11,6 +11,7 @@ import {
 } from './selection';
 import { applyVisibilityFilters } from './filters';
 import { floatingLegend, legendContent, legendTitle } from './dom-refs';
+import { normalizedValue } from './rendering-helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initLegendCallbacks)          */
@@ -605,22 +606,24 @@ function updateNumericFloatingLegend() {
     rangeKey: range.rangeKey
   }));
 
-  // Pre-calculate counts for all ranges in a single pass
+  // Pre-calculate counts for all ranges in a single pass.
+  // Bin by the *normalized* value (matching the breaks/stats and the map paint
+  // expression) — counting the raw field value here would disagree with the
+  // ranges whenever a per-area normalization mode is active.
   const rangeCounts = new Map<string, number>();
   for (const feature of S.currentGeoJSON!.features) {
-    const value = feature.properties?.[S.currentField!];
-    if (value != null && value !== '' && value !== undefined) {
-      const numValue = Number(value);
-      if (!isNaN(numValue)) {
-        // Find which range this value belongs to
-        for (let i = 0; i < legendRanges.length; i++) {
-          const range = legendRanges[i];
-          if (numValue >= range.min && numValue <= range.max) {
-            const rangeKey = range.rangeKey;
-            rangeCounts.set(rangeKey, (rangeCounts.get(rangeKey) || 0) + 1);
-            break;
-          }
-        }
+    const numValue = normalizedValue(
+      feature.properties as Record<string, unknown> | null,
+      S.currentField!,
+      S.normalizationMode
+    );
+    if (numValue === null) continue;
+    // Find which range this value belongs to
+    for (let i = 0; i < legendRanges.length; i++) {
+      const range = legendRanges[i];
+      if (numValue >= range.min && numValue <= range.max) {
+        rangeCounts.set(range.rangeKey, (rangeCounts.get(range.rangeKey) || 0) + 1);
+        break;
       }
     }
   }

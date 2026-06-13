@@ -150,23 +150,59 @@ export function detectNumericFieldsFromFeatures(features: GeoJSON.Feature[]): st
     .sort();
 }
 
+/**
+ * Per-feature value under the given normalization mode, or `null` when the
+ * feature can't contribute (non-numeric value, or a missing/≤0 denominator).
+ * This is the single source of truth for "what number does this parcel show" —
+ * the legend count, the breaks/stats, and the map paint expression must all
+ * agree on it, otherwise the legend disagrees with the map.
+ */
+export function normalizedValue(
+  props: Record<string, unknown> | null | undefined,
+  field: string,
+  mode: 'asis' | 'perLand' | 'perBuilding'
+): number | null {
+  const base = Number(props?.[field]);
+  if (!Number.isFinite(base)) return null;
+
+  if (mode === 'perLand' && S.landSizeField) {
+    const d = Number(props?.[S.landSizeField]);
+    if (!Number.isFinite(d) || d <= 0) return null;
+    return base / d;
+  }
+  if (mode === 'perBuilding' && S.bldgSizeField) {
+    const d = Number(props?.[S.bldgSizeField]);
+    if (!Number.isFinite(d) || d <= 0) return null;
+    return base / d;
+  }
+  return base;
+}
+
+/**
+ * MapLibre expression sibling of `normalizedValue` — the per-feature value under
+ * the given normalization mode, for use in paint/filter expressions. Invalid
+ * denominators (≤0, or <0 / ==0 for buildings) collapse to 0 (flat), matching
+ * the paint path. Keep this in lockstep with `normalizedValue` so the map and
+ * the legend agree.
+ */
+export function normalizedValueExpression(field: string, mode: 'asis'|'perLand'|'perBuilding'): Expression {
+  const base: Expression = ['to-number', ['get', field]] as any;
+  if (mode === 'perLand' && S.landSizeField) {
+    const den: Expression = ['to-number', ['get', S.landSizeField]] as any;
+    return ['case', ['<=', den, 0], 0, ['/', base, den]] as any;
+  }
+  if (mode === 'perBuilding' && S.bldgSizeField) {
+    const den: Expression = ['to-number', ['get', S.bldgSizeField]] as any;
+    return ['case', ['<', den, 0], 0, ['==', den, 0], 0, ['/', base, den]] as any;
+  }
+  return base;
+}
+
 export function getNumericValuesNormalized(fc: GeoJSON.FeatureCollection, field: string, mode: 'asis'|'perLand'|'perBuilding'): number[] {
   const vals: number[] = [];
   for (const f of fc.features) {
-    const p = (f.properties as any) || {};
-    let base = Number(p?.[field]);
-    if (!Number.isFinite(base)) continue;
-
-    if (mode === 'perLand' && S.landSizeField) {
-      const d = Number(p?.[S.landSizeField]);
-      if (!Number.isFinite(d) || d <= 0) continue;
-      base = base / d;
-    } else if (mode === 'perBuilding' && S.bldgSizeField) {
-      const d = Number(p?.[S.bldgSizeField]);
-      if (!Number.isFinite(d) || d <= 0) continue;
-      base = base / d;
-    }
-    vals.push(base);
+    const v = normalizedValue(f.properties as Record<string, unknown> | null, field, mode);
+    if (v !== null) vals.push(v);
   }
   return vals;
 }

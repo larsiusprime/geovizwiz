@@ -24,8 +24,10 @@ import {
   addParcelToSelection, removeParcelFromSelection, clearAllSelections,
 } from './selection';
 import { fitBoundsInVisibleMapArea } from './map-viewport';
+import { refreshWindowMinHeight } from './windows';
+import { controlsEl } from './dom-refs';
 import {
-  polygonCentroid, generatePseudoRandomColor, makeStepColorExpression, makeColorExpressionFromExpr, detectNumericFieldsFromFeatures, getNumericValuesNormalized, computeStatsNormalized,
+  polygonCentroid, generatePseudoRandomColor, makeStepColorExpression, makeColorExpressionFromExpr, detectNumericFieldsFromFeatures, getNumericValuesNormalized, computeStatsNormalized, normalizedValueExpression,
 } from './rendering-helpers';
 // Re-exported for modules that historically imported these from ./rendering:
 export {
@@ -365,29 +367,9 @@ export function buildValueExpression(): Expression {
   if (S.hexMode && S.hexGeoJSON) return ['to-number', ['get', 'hexMetric']] as any;
 
   if (!S.currentField) return ['literal', 0] as any;
-  const base: Expression = ['to-number', ['get', S.currentField]] as any;
-
-  if (S.normalizationMode === 'perLand' && S.landSizeField) {
-    const den: Expression = ['to-number', ['get', S.landSizeField]] as any;
-    // Land invalid when ≤ 0 => height 0 (flat); outline layer will flag it.
-    return ['case',
-      ['<=', den, 0], 0,
-      ['/', base, den]
-    ] as any;
-  }
-
-  if (S.normalizationMode === 'perBuilding' && S.bldgSizeField) {
-    const den: Expression = ['to-number', ['get', S.bldgSizeField]] as any;
-    // Building invalid when < 0 => height 0 (flat) and flagged.
-    // Building == 0 is allowed conceptually (no building) but we can't divide by 0 => also 0 height (not flagged).
-    return ['case',
-      ['<', den, 0], 0,
-      ['==', den, 0], 0,
-      ['/', base, den]
-    ] as any;
-  }
-
-  return base;
+  // Single source of truth (shared with the legend visibility filter) for the
+  // per-feature normalized value. Invalid denominators collapse to 0 (flat).
+  return normalizedValueExpression(S.currentField, S.normalizationMode);
 }
 
 /**
@@ -937,4 +919,9 @@ export function updateFieldTypeUI() {
       divider.style.display = hasPrev && hasNext ? 'block' : 'none';
     });
   }
+
+  // Paint options just appeared/disappeared, which changes the panel's content
+  // height. Re-fit the Layers window so the chrome grows/shrinks to match
+  // (otherwise docked, the content spills until you drag the resize grabber).
+  refreshWindowMinHeight(controlsEl);
 }

@@ -12,6 +12,7 @@ import {
   REFERENCE_FILTER_OPERATORS
 } from './state';
 import { numOrNull } from './utils.number';
+import { normalizedValueExpression } from './rendering-helpers';
 import { showConfirm } from './modals';
 import { updateFiltersPanelLayout } from './windows';
 import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
@@ -568,7 +569,8 @@ export function buildLegendVisibilityFilterForState(
   stats: { min: number; max: number } | null,
   mode: ColorMode,
   breaks: number[] | null,
-  hiddenItems: Set<string>
+  hiddenItems: Set<string>,
+  normalizationMode: 'asis' | 'perLand' | 'perBuilding' = 'asis'
 ): any | null {
   if (!field || hiddenItems.size === 0) return null;
   const conditions: any[] = [];
@@ -598,13 +600,17 @@ export function buildLegendVisibilityFilterForState(
       }
     }
 
+    // Compare against the normalized value (matching the breaks/stats and the
+    // map paint), not the raw field, so hiding a tier works under per-area
+    // normalization.
+    const valueExpr = normalizedValueExpression(field, normalizationMode);
     hiddenItems.forEach(rangeKey => {
       const index = parseInt(rangeKey.split('_')[1]);
       if (ranges[index]) {
         const range = ranges[index];
         conditions.push(['!', ['all',
-          ['>=', ['get', field], range.min],
-          ['<=', ['get', field], range.max]
+          ['>=', valueExpr, range.min],
+          ['<=', valueExpr, range.max]
         ]]);
       }
     });
@@ -621,7 +627,8 @@ export function buildLegendVisibilityFilter(): any | null {
     S.currentStats,
     S.colorMode,
     S.colorBreaks,
-    S.hiddenLegendItems
+    S.hiddenLegendItems,
+    S.normalizationMode
   );
 }
 
@@ -656,7 +663,8 @@ export function buildLayerVisibilityExpression(layer: LayerState): any | null {
     layer.stats,
     layer.colorMode,
     layer.colorBreaks,
-    layer.hiddenLegendItems
+    layer.hiddenLegendItems,
+    layer.normalizationMode
   );
   if (legendExpr) expressions.push(legendExpr);
   const filterExpr = buildFilterModeExpressionForLayer(layer);

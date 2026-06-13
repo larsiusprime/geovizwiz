@@ -9,6 +9,7 @@ import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-wid
 import { showConfirm } from './modals';
 import { FILTER_ICON, PIN_ICON_TILTED, RESIZE_ICON } from './icons';
 import { featureIntersectsBbox, featureIntersectsPolygon, calculatePolygonBbox } from './selection-geometry';
+import { normalizedValue } from './rendering-helpers';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initSelection)               */
@@ -817,8 +818,14 @@ export function applyRangeSelection(
   }
   if (!S.currentGeoJSON) return;
   for (const feature of S.currentGeoJSON.features) {
-    const value = Number(feature.properties?.[S.currentField!]);
-    if (Number.isFinite(value) && feature.id !== undefined) {
+    // Bin by the normalized value (matching the legend breaks + map paint), so
+    // selecting a tier works under per-area normalization.
+    const value = normalizedValue(
+      feature.properties as Record<string, unknown> | null,
+      S.currentField!,
+      S.normalizationMode
+    );
+    if (value !== null && feature.id !== undefined) {
       if (value >= range.min && value <= range.max) {
         const parcelId = getParcelId(feature);
         if (shouldSelect) {

@@ -33,155 +33,60 @@ const AREA_UNIT_CHOICES: { key: string, label: string }[] = [
 ];
 
 /* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initModalElements)            */
+/*  DOM element references — imported directly from dom-refs.          */
 /* ------------------------------------------------------------------ */
 
-// Overlays
-let numericModalOverlay: HTMLElement;
-let categoricalModalOverlay: HTMLElement;
-let sizeOverlay: HTMLElement;
-let addLayerOverlay: HTMLDivElement;
-
-// Numeric modal
-let rowCountEl: HTMLElement;
-let geomColEl: HTMLElement;
-let numericFieldListEl: HTMLElement;
-let btnAllNumeric: HTMLButtonElement;
-let btnNoneNumeric: HTMLButtonElement;
-let btnCancelNumericModal: HTMLButtonElement;
-let btnConfirmNumericModal: HTMLButtonElement;
-
-// Categorical modal
-let categoricalRowCountEl: HTMLElement;
-let categoricalGeomColEl: HTMLElement;
-let categoricalFieldListEl: HTMLElement;
-let btnAllCategorical: HTMLButtonElement;
-let btnNoneCategorical: HTMLButtonElement;
-let btnCancelCategoricalModal: HTMLButtonElement;
-let btnConfirmCategoricalModal: HTMLButtonElement;
-
-// Size modal
-let bldgFieldSel: HTMLSelectElement;
-let bldgUnitSel: HTMLSelectElement;
-let landFieldSel: HTMLSelectElement;
-let landUnitSel: HTMLSelectElement;
-let salePriceFieldSel: HTMLSelectElement;
-let saleDateFieldSel: HTMLSelectElement;
-let validSaleFieldSel: HTMLSelectElement;
-let vacantSaleFieldSel: HTMLSelectElement;
-let parcelIdFieldSel: HTMLSelectElement;
-let addressFieldSel: HTMLSelectElement;
-let bldgQualityFieldSel: HTMLSelectElement;
-let bldgConditionFieldSel: HTMLSelectElement;
-let bldgAgeFieldSel: HTMLSelectElement;
-let bldgEffAgeFieldSel: HTMLSelectElement;
-let bldgBedsFieldSel: HTMLSelectElement;
-let bldgBathsFieldSel: HTMLSelectElement;
-let bldgTypeFieldSel: HTMLSelectElement;
-let landTypeFieldSel: HTMLSelectElement;
-let landZoningFieldSel: HTMLSelectElement;
-let saleIdFieldSel: HTMLSelectElement;
-let fullMarketValueFieldSel: HTMLSelectElement;
-let assessedValueFieldSel: HTMLSelectElement;
-let landValueFieldSel: HTMLSelectElement;
-let improvementValueFieldSel: HTMLSelectElement;
-let btnSizeBack: HTMLButtonElement;
-let btnSizeSkip: HTMLButtonElement;
-let btnSizeOk: HTMLButtonElement;
-
-export function initModalElements(els: {
-  numericModalOverlay: HTMLElement;
-  categoricalModalOverlay: HTMLElement;
-  sizeOverlay: HTMLElement;
-  addLayerOverlay: HTMLDivElement;
-  rowCountEl: HTMLElement;
-  geomColEl: HTMLElement;
-  numericFieldListEl: HTMLElement;
-  btnAllNumeric: HTMLButtonElement;
-  btnNoneNumeric: HTMLButtonElement;
-  btnCancelNumericModal: HTMLButtonElement;
-  btnConfirmNumericModal: HTMLButtonElement;
-  categoricalRowCountEl: HTMLElement;
-  categoricalGeomColEl: HTMLElement;
-  categoricalFieldListEl: HTMLElement;
-  btnAllCategorical: HTMLButtonElement;
-  btnNoneCategorical: HTMLButtonElement;
-  btnCancelCategoricalModal: HTMLButtonElement;
-  btnConfirmCategoricalModal: HTMLButtonElement;
-  bldgFieldSel: HTMLSelectElement;
-  bldgUnitSel: HTMLSelectElement;
-  landFieldSel: HTMLSelectElement;
-  landUnitSel: HTMLSelectElement;
-  salePriceFieldSel: HTMLSelectElement;
-  saleDateFieldSel: HTMLSelectElement;
-  validSaleFieldSel: HTMLSelectElement;
-  vacantSaleFieldSel: HTMLSelectElement;
-  parcelIdFieldSel: HTMLSelectElement;
-  addressFieldSel: HTMLSelectElement;
-  bldgQualityFieldSel: HTMLSelectElement;
-  bldgConditionFieldSel: HTMLSelectElement;
-  bldgAgeFieldSel: HTMLSelectElement;
-  bldgEffAgeFieldSel: HTMLSelectElement;
-  bldgBedsFieldSel: HTMLSelectElement;
-  bldgBathsFieldSel: HTMLSelectElement;
-  bldgTypeFieldSel: HTMLSelectElement;
-  landTypeFieldSel: HTMLSelectElement;
-  landZoningFieldSel: HTMLSelectElement;
-  saleIdFieldSel: HTMLSelectElement;
-  fullMarketValueFieldSel: HTMLSelectElement;
-  assessedValueFieldSel: HTMLSelectElement;
-  landValueFieldSel: HTMLSelectElement;
-  improvementValueFieldSel: HTMLSelectElement;
-  btnSizeBack: HTMLButtonElement;
-  btnSizeSkip: HTMLButtonElement;
-  btnSizeOk: HTMLButtonElement;
-}) {
-  numericModalOverlay = els.numericModalOverlay;
-  categoricalModalOverlay = els.categoricalModalOverlay;
-  sizeOverlay = els.sizeOverlay;
-  addLayerOverlay = els.addLayerOverlay;
-  rowCountEl = els.rowCountEl;
-  geomColEl = els.geomColEl;
-  numericFieldListEl = els.numericFieldListEl;
-  btnAllNumeric = els.btnAllNumeric;
-  btnNoneNumeric = els.btnNoneNumeric;
-  btnCancelNumericModal = els.btnCancelNumericModal;
-  btnConfirmNumericModal = els.btnConfirmNumericModal;
-  categoricalRowCountEl = els.categoricalRowCountEl;
-  categoricalGeomColEl = els.categoricalGeomColEl;
-  categoricalFieldListEl = els.categoricalFieldListEl;
-  btnAllCategorical = els.btnAllCategorical;
-  btnNoneCategorical = els.btnNoneCategorical;
-  btnCancelCategoricalModal = els.btnCancelCategoricalModal;
-  btnConfirmCategoricalModal = els.btnConfirmCategoricalModal;
-  bldgFieldSel = els.bldgFieldSel;
-  bldgUnitSel = els.bldgUnitSel;
-  landFieldSel = els.landFieldSel;
-  landUnitSel = els.landUnitSel;
-  salePriceFieldSel = els.salePriceFieldSel;
-  saleDateFieldSel = els.saleDateFieldSel;
-  validSaleFieldSel = els.validSaleFieldSel;
-  vacantSaleFieldSel = els.vacantSaleFieldSel;
-  parcelIdFieldSel = els.parcelIdFieldSel;
-  addressFieldSel = els.addressFieldSel;
-  bldgQualityFieldSel = els.bldgQualityFieldSel;
-  bldgConditionFieldSel = els.bldgConditionFieldSel;
-  bldgAgeFieldSel = els.bldgAgeFieldSel;
-  bldgEffAgeFieldSel = els.bldgEffAgeFieldSel;
-  bldgBedsFieldSel = els.bldgBedsFieldSel;
-  bldgBathsFieldSel = els.bldgBathsFieldSel;
-  bldgTypeFieldSel = els.bldgTypeFieldSel;
-  landTypeFieldSel = els.landTypeFieldSel;
-  landZoningFieldSel = els.landZoningFieldSel;
-  saleIdFieldSel = els.saleIdFieldSel;
-  fullMarketValueFieldSel = els.fullMarketValueFieldSel;
-  assessedValueFieldSel = els.assessedValueFieldSel;
-  landValueFieldSel = els.landValueFieldSel;
-  improvementValueFieldSel = els.improvementValueFieldSel;
-  btnSizeBack = els.btnSizeBack;
-  btnSizeSkip = els.btnSizeSkip;
-  btnSizeOk = els.btnSizeOk;
-}
+import {
+  // Overlays
+  numericModalOverlay,
+  categoricalModalOverlay,
+  sizeOverlay,
+  addLayerOverlay,
+  // Numeric modal
+  rowCountEl,
+  geomColEl,
+  numericFieldListEl,
+  btnAllNumeric,
+  btnNoneNumeric,
+  btnCancelNumericModal,
+  btnConfirmNumericModal,
+  // Categorical modal
+  categoricalRowCountEl,
+  categoricalGeomColEl,
+  categoricalFieldListEl,
+  btnAllCategorical,
+  btnNoneCategorical,
+  btnCancelCategoricalModal,
+  btnConfirmCategoricalModal,
+  // Size modal
+  bldgFieldSel,
+  bldgUnitSel,
+  landFieldSel,
+  landUnitSel,
+  salePriceFieldSel,
+  saleDateFieldSel,
+  validSaleFieldSel,
+  vacantSaleFieldSel,
+  parcelIdFieldSel,
+  addressFieldSel,
+  bldgQualityFieldSel,
+  bldgConditionFieldSel,
+  bldgAgeFieldSel,
+  bldgEffAgeFieldSel,
+  bldgBedsFieldSel,
+  bldgBathsFieldSel,
+  bldgTypeFieldSel,
+  landTypeFieldSel,
+  landZoningFieldSel,
+  saleIdFieldSel,
+  fullMarketValueFieldSel,
+  assessedValueFieldSel,
+  landValueFieldSel,
+  improvementValueFieldSel,
+  btnSizeBack,
+  btnSizeSkip,
+  btnSizeOk,
+} from './dom-refs';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into main.ts (set once via initModalCallbacks)           */

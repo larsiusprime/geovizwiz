@@ -229,76 +229,45 @@ export function populateCategoryValues(
 
 
 /* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initStatisticsElements)       */
+/*  DOM element references                                             */
+/*                                                                     */
+/*  Plain DOM refs are imported directly from dom-refs. Only the       */
+/*  constructed subject-selector bundle is injected via                */
+/*  initStatisticsElements, since main.ts builds and shares it.        */
 /* ------------------------------------------------------------------ */
 
-let statsLayerName: HTMLSelectElement;
+import {
+  statsLayerName,
+  statsFieldSelect,
+  statsNormModeSelect,
+  statsDetails,
+  statsNumericBlock,
+  statsCategoricalBlock,
+  statsParcelCount,
+  statsMedian,
+  statsMean,
+  statsStdDev,
+  statsCod,
+  statsPercentiles,
+  statsHistogram,
+  statsCategoricalParcelCount,
+  statsCategoricalUniqueCount,
+  statsCategoricalModalValue,
+  statsCategoricalValues,
+  statsOverflowMinPct,
+  statsOverflowMaxPct,
+} from './dom-refs';
+
 let statsSubjectControls: SubjectSelectorControls;
 let statsCategoryFieldSelect: HTMLSelectElement;
 let statsCategoryValueSelect: HTMLSelectElement;
-let statsFieldSelect: HTMLSelectElement;
-let statsNormModeSelect: HTMLSelectElement | null = null;
-let statsDetails: HTMLDivElement;
-let statsNumericBlock: HTMLDivElement;
-let statsCategoricalBlock: HTMLDivElement;
-let statsParcelCount: HTMLSpanElement;
-let statsMedian: HTMLSpanElement;
-let statsMean: HTMLSpanElement;
-let statsStdDev: HTMLSpanElement;
-let statsCod: HTMLSpanElement;
-let statsPercentiles: HTMLTableSectionElement;
-let statsHistogram: HTMLDivElement;
-let statsCategoricalParcelCount: HTMLSpanElement;
-let statsCategoricalUniqueCount: HTMLSpanElement;
-let statsCategoricalModalValue: HTMLSpanElement;
-let statsCategoricalValues: HTMLTableSectionElement;
-let statsOverflowMinPct: HTMLInputElement;
-let statsOverflowMaxPct: HTMLInputElement;
 
 export function initStatisticsElements(els: {
-  statsLayerName: HTMLSelectElement;
   statsSubjectControls: SubjectSelectorControls;
-  statsFieldSelect: HTMLSelectElement;
-  statsNormModeSelect?: HTMLSelectElement | null;
-  statsDetails: HTMLDivElement;
-  statsNumericBlock: HTMLDivElement;
-  statsCategoricalBlock: HTMLDivElement;
-  statsParcelCount: HTMLSpanElement;
-  statsMedian: HTMLSpanElement;
-  statsMean: HTMLSpanElement;
-  statsStdDev: HTMLSpanElement;
-  statsCod: HTMLSpanElement;
-  statsPercentiles: HTMLTableSectionElement;
-  statsHistogram: HTMLDivElement;
-  statsCategoricalParcelCount: HTMLSpanElement;
-  statsCategoricalUniqueCount: HTMLSpanElement;
-  statsCategoricalModalValue: HTMLSpanElement;
-  statsCategoricalValues: HTMLTableSectionElement;
-  statsOverflowMinPct: HTMLInputElement;
-  statsOverflowMaxPct: HTMLInputElement;
 }) {
-  statsLayerName = els.statsLayerName;
   statsSubjectControls = els.statsSubjectControls;
   statsCategoryFieldSelect = els.statsSubjectControls.categoryFieldSelect;
   statsCategoryValueSelect = els.statsSubjectControls.categoryValueSelect;
-  statsFieldSelect = els.statsFieldSelect;
-  statsNormModeSelect = els.statsNormModeSelect ?? null;
-  statsDetails = els.statsDetails;
-  statsNumericBlock = els.statsNumericBlock;
-  statsCategoricalBlock = els.statsCategoricalBlock;
-  statsParcelCount = els.statsParcelCount;
-  statsMedian = els.statsMedian;
-  statsMean = els.statsMean;
-  statsStdDev = els.statsStdDev;
-  statsCod = els.statsCod;
-  statsPercentiles = els.statsPercentiles;
-  statsHistogram = els.statsHistogram;
-  statsCategoricalParcelCount = els.statsCategoricalParcelCount;
-  statsCategoricalUniqueCount = els.statsCategoricalUniqueCount;
-  statsCategoricalModalValue = els.statsCategoricalModalValue;
-  statsCategoricalValues = els.statsCategoricalValues;
-  statsOverflowMinPct = els.statsOverflowMinPct;
-  statsOverflowMaxPct = els.statsOverflowMaxPct;
 }
 
 /* ------------------------------------------------------------------ */

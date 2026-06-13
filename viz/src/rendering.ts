@@ -33,63 +33,27 @@ export {
 };
 
 /* ------------------------------------------------------------------ */
-/*  DOM element refs injected from main.ts via initRenderingElements  */
+/*  DOM element refs — imported directly from dom-refs.                 */
 /* ------------------------------------------------------------------ */
 
-let _fieldSelect: HTMLSelectElement = null!;
-let _rampSelect: HTMLSelectElement = null!;
-let _opacityInput: HTMLInputElement = null!;
-let _multInput: HTMLInputElement = null!;
-let _unitsSelect: HTMLSelectElement = null!;
-let _hexResRow: HTMLElement | null = null;
-let _threeDSection: HTMLElement | null = null;   // the collapsible "3D" section
-let _enable3DRow: HTMLElement | null = null;      // the "Enable 3D" checkbox row
-let _colorRampOptions: HTMLFieldSetElement | null = null;
-let _colorScalingOptions: HTMLFieldSetElement | null = null;
-let _opacityOptions: HTMLFieldSetElement | null = null;
-let _colorOptions: HTMLDivElement | null = null;
-let _paintDividerNumeric: HTMLDivElement | null = null;
-let _paintDividerCategorical: HTMLDivElement | null = null;
-let _paintDividerRamp: HTMLDivElement | null = null;
-let _paintDividerScaling: HTMLDivElement | null = null;
-
-export type RenderingElements = {
-  fieldSelect: HTMLSelectElement;
-  rampSelect: HTMLSelectElement;
-  opacityInput: HTMLInputElement;
-  multInput: HTMLInputElement;
-  unitsSelect: HTMLSelectElement;
-  hexResRow: HTMLElement | null;
-  threeDSection: HTMLElement | null;
-  enable3DRow: HTMLElement | null;
-  colorRampOptions: HTMLFieldSetElement | null;
-  colorScalingOptions: HTMLFieldSetElement | null;
-  opacityOptions: HTMLFieldSetElement | null;
-  colorOptions: HTMLDivElement | null;
-  paintDividerNumeric: HTMLDivElement | null;
-  paintDividerCategorical: HTMLDivElement | null;
-  paintDividerRamp: HTMLDivElement | null;
-  paintDividerScaling: HTMLDivElement | null;
-};
-
-export function initRenderingElements(els: RenderingElements) {
-  _fieldSelect = els.fieldSelect;
-  _rampSelect = els.rampSelect;
-  _opacityInput = els.opacityInput;
-  _multInput = els.multInput;
-  _unitsSelect = els.unitsSelect;
-  _hexResRow = els.hexResRow;
-  _threeDSection = els.threeDSection;
-  _enable3DRow = els.enable3DRow;
-  _colorRampOptions = els.colorRampOptions;
-  _colorScalingOptions = els.colorScalingOptions;
-  _opacityOptions = els.opacityOptions;
-  _colorOptions = els.colorOptions;
-  _paintDividerNumeric = els.paintDividerNumeric;
-  _paintDividerCategorical = els.paintDividerCategorical;
-  _paintDividerRamp = els.paintDividerRamp;
-  _paintDividerScaling = els.paintDividerScaling;
-}
+import {
+  fieldSelect as _fieldSelect,
+  rampSelect as _rampSelect,
+  opacityInput as _opacityInput,
+  multInput as _multInput,
+  unitsSelect as _unitsSelect,
+  hexResRow as _hexResRow,
+  threeDSection as _threeDSection,
+  enable3DRow as _enable3DRow,
+  colorRampOptions as _colorRampOptions,
+  colorScalingOptions as _colorScalingOptions,
+  opacityOptions as _opacityOptions,
+  colorOptions as _colorOptions,
+  paintDividerNumeric as _paintDividerNumeric,
+  paintDividerCategorical as _paintDividerCategorical,
+  paintDividerRamp as _paintDividerRamp,
+  paintDividerScaling as _paintDividerScaling,
+} from './dom-refs';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks injected from main.ts via initRenderingCallbacks         */

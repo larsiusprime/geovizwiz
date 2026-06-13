@@ -14,26 +14,15 @@ import {
   enable3DCheckbox,
   multInput,
   unitsSelect,
-  hexResRow,
   enableHexCheckbox,
   hexResInput,
   hexResReadout,
-  enable3DRow,
-  threeDSection,
   threeDSectionContent,
   threeDSectionToggle,
-  layerList,
   addLayerFromStoreButton,
   settingsOtherActions,
   opacityInput,
   opacityOut,
-  colorRampOptions,
-  colorScalingOptions,
-  opacityOptions,
-  paintDividerNumeric,
-  paintDividerCategorical,
-  paintDividerRamp,
-  paintDividerScaling,
   btnZoomTo,
   appEl,
   pinnedPanelsEl,
@@ -77,21 +66,7 @@ import {
   btnPinLegend,
   statsFieldSelect,
   statsNormModeSelect,
-  statsDetails,
-  statsNumericBlock,
-  statsCategoricalBlock,
   statisticsSection,
-  statsParcelCount,
-  statsMedian,
-  statsMean,
-  statsStdDev,
-  statsCod,
-  statsPercentiles,
-  statsHistogram,
-  statsCategoricalParcelCount,
-  statsCategoricalUniqueCount,
-  statsCategoricalModalValue,
-  statsCategoricalValues,
   statsOverflowMinPct,
   statsOverflowMaxPct,
   statsLayerToggle,
@@ -108,20 +83,13 @@ import {
   timeAdjustmentContent,
   landScheduleContent,
   landScheduleTableSelect,
-  landScheduleTableSelectRow,
   landScheduleAddTableButton,
-  landScheduleTableContainer,
-  landScheduleTablesSection,
   landScheduleTablesToggle,
   landScheduleTablesContent,
-  landScheduleCurveSection,
   landScheduleCurveToggle,
   landScheduleCurveContent,
-  landScheduleCurveChart,
-  landScheduleAdjustmentsSection,
   landScheduleAdjustmentsToggle,
   landScheduleAdjustmentsContent,
-  landScheduleAdjustmentsContainer,
   landScheduleAddAdjustmentButton,
   timeAdjustmentTrendToggle,
   timeAdjustmentTrendBody,
@@ -206,7 +174,6 @@ import {
   addLayerOverlay,
   progressBar,
   progressMsg,
-  dataStoreList,
   btnBrowseDataSource,
   btnCancelAddLayer,
   settingsDataSourcesToggle,
@@ -223,9 +190,6 @@ import {
   colorPicker,
   btnCancelColorPicker,
   btnConfirmColorPicker,
-  numericModalOverlay,
-  categoricalModalOverlay,
-  sizeOverlay,
   loadingOverlay,
   progressEl,
 } from './dom-refs';
@@ -242,7 +206,7 @@ import type {
 } from './types';
 import {
   buildSubjectSelector,
-  initStatisticsElements, initStatisticsCallbacks,
+  initStatisticsElements, initStatisticsCallbacks,  // initStatisticsElements: subject-selector bundle only
   resetStatisticsDisplay,
   populateStatisticsCategoryValues,
   getStatsFieldType,
@@ -276,7 +240,7 @@ import {
   invalidateFiltersContextIf,
 } from './filters';
 import {
-  createWindowManager, initWindowCallbacks, initPositionElements,
+  createWindowManager, initWindowCallbacks,
   positionSettingsPanel, positionStatisticsPanel,
   positionScatterplotPanel, positionFiltersPanel, positionLandSchedulePanel, positionTimeAdjustmentPanel,
   updateFiltersPanelLayout, refreshWindowMinHeight, refreshWindowMinWidth,
@@ -298,7 +262,7 @@ import {
   applyExtrusionWithVisibility,
 } from './legend';
 import {
-  initModalElements, initModalCallbacks,
+  initModalCallbacks,
   openSizeModal, openAddLayerModal, closeAddLayerModal,
   setSizeState,
 } from './modals';
@@ -316,7 +280,7 @@ import {
 } from './toolbar';
 import {
   addOrUpdateSource,
-  initRenderingElements, initRenderingCallbacks,
+  initRenderingCallbacks,
   applyGrayRendering, applyExtrusion,
   buildCategoricalColorPairs, buildCategoricalColorExpression,
   buildNumericColorRanges, buildNumericColorExpression,
@@ -334,7 +298,6 @@ import {
   addLandScheduleAdjustment,
   addLandScheduleTable,
   initLandScheduleCallbacks,
-  initLandScheduleElements,
   refreshLandSchedulePanel,
   setActiveLandScheduleTable,
 } from './land-schedule';
@@ -344,7 +307,7 @@ import {
   refreshTimeAdjustmentPanel,
 } from './time-adjustment';
 import {
-  initLayerElements, initLayerCallbacks,
+  initLayerCallbacks,
   getCurrentLayer, getCurrentLayerIds, getCurrentSourceId,
   setCurrentLayer, setLayerVisibility,
   createLayerState, persistCurrentLayerState,
@@ -964,17 +927,6 @@ initWindowCallbacks({
     }
   },
 });
-initPositionElements({
-  controlsEl,
-  settingsControlsEl,
-  statisticsControlsEl,
-  scatterplotControlsEl,
-  filtersControlsEl,
-  filtersContent,
-  filtersListEl,
-  landScheduleControlsEl,
-  timeAdjustmentControlsEl,
-});
 initWindowDocking({
   pinnedContainer: pinnedPanelsEl,
   appContainer: appEl,
@@ -1039,24 +991,6 @@ initFilterCallbacks({
 });
 
 // Wire DOM elements and callbacks into the rendering module
-initRenderingElements({
-  fieldSelect,
-  rampSelect,
-  opacityInput,
-  multInput,
-  unitsSelect,
-  hexResRow,
-  threeDSection,
-  enable3DRow,
-  colorRampOptions,
-  colorScalingOptions,
-  opacityOptions,
-  colorOptions,
-  paintDividerNumeric,
-  paintDividerCategorical,
-  paintDividerRamp,
-  paintDividerScaling,
-});
 initRenderingCallbacks({
   getCurrentLayer,
   getCurrentLayerIds,
@@ -1112,53 +1046,6 @@ initLegendCallbacks({
 });
 
 // Wire DOM elements and callbacks into the modals module
-initModalElements({
-  numericModalOverlay,
-  categoricalModalOverlay,
-  sizeOverlay,
-  addLayerOverlay,
-  rowCountEl: document.getElementById('rowCount')!,
-  geomColEl: document.getElementById('geomCol')!,
-  numericFieldListEl: document.getElementById('numericFieldList')!,
-  btnAllNumeric: document.getElementById('btnAllNumeric') as HTMLButtonElement,
-  btnNoneNumeric: document.getElementById('btnNoneNumeric') as HTMLButtonElement,
-  btnCancelNumericModal: document.getElementById('btnCancelNumericModal') as HTMLButtonElement,
-  btnConfirmNumericModal: document.getElementById('btnConfirmNumericModal') as HTMLButtonElement,
-  categoricalRowCountEl: document.getElementById('categoricalRowCount')!,
-  categoricalGeomColEl: document.getElementById('categoricalGeomCol')!,
-  categoricalFieldListEl: document.getElementById('categoricalFieldList')!,
-  btnAllCategorical: document.getElementById('btnAllCategorical') as HTMLButtonElement,
-  btnNoneCategorical: document.getElementById('btnNoneCategorical') as HTMLButtonElement,
-  btnCancelCategoricalModal: document.getElementById('btnCancelCategoricalModal') as HTMLButtonElement,
-  btnConfirmCategoricalModal: document.getElementById('btnConfirmCategoricalModal') as HTMLButtonElement,
-  bldgFieldSel: document.getElementById('bldgField') as HTMLSelectElement,
-  bldgUnitSel: document.getElementById('bldgUnit') as HTMLSelectElement,
-  landFieldSel: document.getElementById('landField') as HTMLSelectElement,
-  landUnitSel: document.getElementById('landUnit') as HTMLSelectElement,
-  salePriceFieldSel: document.getElementById('salePriceField') as HTMLSelectElement,
-  saleDateFieldSel: document.getElementById('saleDateField') as HTMLSelectElement,
-  validSaleFieldSel: document.getElementById('validSaleField') as HTMLSelectElement,
-  vacantSaleFieldSel: document.getElementById('vacantSaleField') as HTMLSelectElement,
-  parcelIdFieldSel: document.getElementById('parcelIdField') as HTMLSelectElement,
-  addressFieldSel: document.getElementById('addressField') as HTMLSelectElement,
-  bldgQualityFieldSel: document.getElementById('bldgQualityField') as HTMLSelectElement,
-  bldgConditionFieldSel: document.getElementById('bldgConditionField') as HTMLSelectElement,
-  bldgAgeFieldSel: document.getElementById('bldgAgeField') as HTMLSelectElement,
-  bldgEffAgeFieldSel: document.getElementById('bldgEffAgeField') as HTMLSelectElement,
-  bldgBedsFieldSel: document.getElementById('bldgBedsField') as HTMLSelectElement,
-  bldgBathsFieldSel: document.getElementById('bldgBathsField') as HTMLSelectElement,
-  bldgTypeFieldSel: document.getElementById('bldgTypeField') as HTMLSelectElement,
-  landTypeFieldSel: document.getElementById('landTypeField') as HTMLSelectElement,
-  landZoningFieldSel: document.getElementById('landZoningField') as HTMLSelectElement,
-  saleIdFieldSel: document.getElementById('saleIdField') as HTMLSelectElement,
-  fullMarketValueFieldSel: document.getElementById('fullMarketValueField') as HTMLSelectElement,
-  assessedValueFieldSel: document.getElementById('assessedValueField') as HTMLSelectElement,
-  landValueFieldSel: document.getElementById('landValueField') as HTMLSelectElement,
-  improvementValueFieldSel: document.getElementById('improvementValueField') as HTMLSelectElement,
-  btnSizeBack: document.getElementById('btnSizeBack') as HTMLButtonElement,
-  btnSizeSkip: document.getElementById('btnSizeSkip') as HTMLButtonElement,
-  btnSizeOk: document.getElementById('btnSizeOk') as HTMLButtonElement,
-});
 initModalCallbacks({
   clearData,
   loadSelectedColumns,
@@ -1168,26 +1055,7 @@ initModalCallbacks({
 
 // Wire DOM elements and callbacks into the statistics module
 initStatisticsElements({
-  statsLayerName,
   statsSubjectControls,
-  statsFieldSelect,
-  statsNormModeSelect,
-  statsDetails,
-  statsNumericBlock,
-  statsCategoricalBlock,
-  statsParcelCount,
-  statsMedian,
-  statsMean,
-  statsStdDev,
-  statsCod,
-  statsPercentiles,
-  statsHistogram,
-  statsCategoricalParcelCount,
-  statsCategoricalUniqueCount,
-  statsCategoricalModalValue,
-  statsCategoricalValues,
-  statsOverflowMinPct,
-  statsOverflowMaxPct,
 });
 initStatisticsCallbacks({
   getStatsLayer,
@@ -1207,18 +1075,6 @@ initScatterplotCallbacks({
 });
 
 // Wire DOM elements into the land-schedule module
-initLandScheduleElements({
-  landScheduleTableSelect,
-  landScheduleTableSelectRow,
-  landScheduleAddTableButton,
-  landScheduleTableContainer,
-  landScheduleCurveSection,
-  landScheduleCurveChart,
-  landScheduleTablesSection,
-  landScheduleAdjustmentsSection,
-  landScheduleAdjustmentsContainer,
-  landScheduleAddAdjustmentButton,
-});
 initLandScheduleCallbacks({
   showFiltersPanel: showFilters,
 });
@@ -1301,22 +1157,6 @@ initCompFinderCallbacks({
 setCompFinderMenuVisible(!S.isCompFinderMinimized);
 
 // Wire DOM elements and callbacks into the layers module
-initLayerElements({
-  layerList,
-  dataStoreList,
-  fieldSelect,
-  rampSelect,
-  opacityInput,
-  opacityOut,
-  normModeSelect,
-  colorModeSelect,
-  colorPicker,
-  enable3DCheckbox: enable3DCheckbox,
-  enableHexCheckbox,
-  hexResInput,
-  hexResReadout,
-  filtersInvertToggle,
-});
 initLayerCallbacks({
   setSizeState,
   populateFieldDropdownFromList,

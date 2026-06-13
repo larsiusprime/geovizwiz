@@ -234,9 +234,52 @@ export const colorPicker = document.getElementById('colorPicker') as HTMLInputEl
 export const btnCancelColorPicker = document.getElementById('btnCancelColorPicker') as HTMLButtonElement;
 export const btnConfirmColorPicker = document.getElementById('btnConfirmColorPicker') as HTMLButtonElement;
 
-// --- Modal overlays (managed by modals.ts via initModalElements) ---
+// --- Modal overlays (managed by modals.ts) ---
 export const numericModalOverlay = document.getElementById('numericModalOverlay')!;
 export const categoricalModalOverlay = document.getElementById('categoricalModalOverlay')!;
 export const sizeOverlay = document.getElementById('sizeOverlay')!;
 export const loadingOverlay = document.getElementById('loadingOverlay')!;
 export const progressEl = document.getElementById('progress')!;
+
+// --- Modal form fields (managed by modals.ts) ---
+export const rowCountEl = document.getElementById('rowCount')!;
+export const geomColEl = document.getElementById('geomCol')!;
+export const numericFieldListEl = document.getElementById('numericFieldList')!;
+export const btnAllNumeric = document.getElementById('btnAllNumeric') as HTMLButtonElement;
+export const btnNoneNumeric = document.getElementById('btnNoneNumeric') as HTMLButtonElement;
+export const btnCancelNumericModal = document.getElementById('btnCancelNumericModal') as HTMLButtonElement;
+export const btnConfirmNumericModal = document.getElementById('btnConfirmNumericModal') as HTMLButtonElement;
+export const categoricalRowCountEl = document.getElementById('categoricalRowCount')!;
+export const categoricalGeomColEl = document.getElementById('categoricalGeomCol')!;
+export const categoricalFieldListEl = document.getElementById('categoricalFieldList')!;
+export const btnAllCategorical = document.getElementById('btnAllCategorical') as HTMLButtonElement;
+export const btnNoneCategorical = document.getElementById('btnNoneCategorical') as HTMLButtonElement;
+export const btnCancelCategoricalModal = document.getElementById('btnCancelCategoricalModal') as HTMLButtonElement;
+export const btnConfirmCategoricalModal = document.getElementById('btnConfirmCategoricalModal') as HTMLButtonElement;
+export const bldgFieldSel = document.getElementById('bldgField') as HTMLSelectElement;
+export const bldgUnitSel = document.getElementById('bldgUnit') as HTMLSelectElement;
+export const landFieldSel = document.getElementById('landField') as HTMLSelectElement;
+export const landUnitSel = document.getElementById('landUnit') as HTMLSelectElement;
+export const salePriceFieldSel = document.getElementById('salePriceField') as HTMLSelectElement;
+export const saleDateFieldSel = document.getElementById('saleDateField') as HTMLSelectElement;
+export const validSaleFieldSel = document.getElementById('validSaleField') as HTMLSelectElement;
+export const vacantSaleFieldSel = document.getElementById('vacantSaleField') as HTMLSelectElement;
+export const parcelIdFieldSel = document.getElementById('parcelIdField') as HTMLSelectElement;
+export const addressFieldSel = document.getElementById('addressField') as HTMLSelectElement;
+export const bldgQualityFieldSel = document.getElementById('bldgQualityField') as HTMLSelectElement;
+export const bldgConditionFieldSel = document.getElementById('bldgConditionField') as HTMLSelectElement;
+export const bldgAgeFieldSel = document.getElementById('bldgAgeField') as HTMLSelectElement;
+export const bldgEffAgeFieldSel = document.getElementById('bldgEffAgeField') as HTMLSelectElement;
+export const bldgBedsFieldSel = document.getElementById('bldgBedsField') as HTMLSelectElement;
+export const bldgBathsFieldSel = document.getElementById('bldgBathsField') as HTMLSelectElement;
+export const bldgTypeFieldSel = document.getElementById('bldgTypeField') as HTMLSelectElement;
+export const landTypeFieldSel = document.getElementById('landTypeField') as HTMLSelectElement;
+export const landZoningFieldSel = document.getElementById('landZoningField') as HTMLSelectElement;
+export const saleIdFieldSel = document.getElementById('saleIdField') as HTMLSelectElement;
+export const fullMarketValueFieldSel = document.getElementById('fullMarketValueField') as HTMLSelectElement;
+export const assessedValueFieldSel = document.getElementById('assessedValueField') as HTMLSelectElement;
+export const landValueFieldSel = document.getElementById('landValueField') as HTMLSelectElement;
+export const improvementValueFieldSel = document.getElementById('improvementValueField') as HTMLSelectElement;
+export const btnSizeBack = document.getElementById('btnSizeBack') as HTMLButtonElement;
+export const btnSizeSkip = document.getElementById('btnSizeSkip') as HTMLButtonElement;
+export const btnSizeOk = document.getElementById('btnSizeOk') as HTMLButtonElement;

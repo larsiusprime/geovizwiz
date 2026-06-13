@@ -49,46 +49,25 @@ const FRONTAGE_UNITS = [
 ] as const;
 
 /* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initLandScheduleElements)     */
+/*  DOM element references — imported directly from dom-refs.          */
 /* ------------------------------------------------------------------ */
 
-let landScheduleTableSelect: HTMLSelectElement;
-let landScheduleTableSelectRow: HTMLDivElement;
-let landScheduleAddTableButton: HTMLButtonElement;
-let landScheduleTableContainer: HTMLDivElement;
-let landScheduleCurveSection: HTMLDivElement;
-let landScheduleCurveChart: HTMLDivElement;
-let landScheduleTablesSection: HTMLDivElement;
-let landScheduleAdjustmentsSection: HTMLDivElement;
-let landScheduleAdjustmentsContainer: HTMLDivElement;
-let landScheduleAddAdjustmentButton: HTMLButtonElement;
+import {
+  landScheduleTableSelect,
+  landScheduleTableSelectRow,
+  landScheduleAddTableButton,
+  landScheduleTableContainer,
+  landScheduleCurveSection,
+  landScheduleCurveChart,
+  landScheduleTablesSection,
+  landScheduleAdjustmentsSection,
+  landScheduleAdjustmentsContainer,
+  landScheduleAddAdjustmentButton,
+} from './dom-refs';
+
 let landScheduleFilterButton: HTMLButtonElement | null = null;
 
 let showFiltersPanel: (() => void) | null = null;
-
-export function initLandScheduleElements(els: {
-  landScheduleTableSelect: HTMLSelectElement;
-  landScheduleTableSelectRow: HTMLDivElement;
-  landScheduleAddTableButton: HTMLButtonElement;
-  landScheduleTableContainer: HTMLDivElement;
-  landScheduleCurveSection: HTMLDivElement;
-  landScheduleCurveChart: HTMLDivElement;
-  landScheduleTablesSection: HTMLDivElement;
-  landScheduleAdjustmentsSection: HTMLDivElement;
-  landScheduleAdjustmentsContainer: HTMLDivElement;
-  landScheduleAddAdjustmentButton: HTMLButtonElement;
-}) {
-  landScheduleTableSelect = els.landScheduleTableSelect;
-  landScheduleTableSelectRow = els.landScheduleTableSelectRow;
-  landScheduleAddTableButton = els.landScheduleAddTableButton;
-  landScheduleTableContainer = els.landScheduleTableContainer;
-  landScheduleCurveSection = els.landScheduleCurveSection;
-  landScheduleCurveChart = els.landScheduleCurveChart;
-  landScheduleTablesSection = els.landScheduleTablesSection;
-  landScheduleAdjustmentsSection = els.landScheduleAdjustmentsSection;
-  landScheduleAdjustmentsContainer = els.landScheduleAdjustmentsContainer;
-  landScheduleAddAdjustmentButton = els.landScheduleAddAdjustmentButton;
-}
 
 export function initLandScheduleCallbacks(cbs: { showFiltersPanel?: () => void }) {
   showFiltersPanel = cbs.showFiltersPanel ?? null;

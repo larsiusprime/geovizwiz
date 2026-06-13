@@ -267,12 +267,29 @@ export type PositionElements = {
   timeAdjustmentControlsEl: HTMLDivElement;
 };
 
-let els: PositionElements;
+import {
+  controlsEl,
+  settingsControlsEl,
+  statisticsControlsEl,
+  scatterplotControlsEl,
+  filtersControlsEl,
+  filtersContent,
+  filtersListEl,
+  landScheduleControlsEl,
+  timeAdjustmentControlsEl,
+} from './dom-refs';
 
-/** Must be called once from main.ts to pass in the DOM elements. */
-export function initPositionElements(elements: PositionElements) {
-  els = elements;
-}
+const els: PositionElements = {
+  controlsEl,
+  settingsControlsEl,
+  statisticsControlsEl,
+  scatterplotControlsEl,
+  filtersControlsEl,
+  filtersContent,
+  filtersListEl,
+  landScheduleControlsEl,
+  timeAdjustmentControlsEl,
+};
 
 export function refreshWindowMinHeight(element: HTMLElement) {
   element.style.height = '';

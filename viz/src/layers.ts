@@ -15,55 +15,25 @@ import { refreshLandSchedulePanel } from './land-schedule';
 import { FILTER_ICON, CHART_ICON, SCATTER_ICON, STREET_ICON, SATELLITE_ICON } from './icons';
 
 /* ------------------------------------------------------------------ */
-/*  DOM element references (set once via initLayerElements)            */
+/*  DOM element references — imported directly from dom-refs.          */
 /* ------------------------------------------------------------------ */
 
-let _layerList: HTMLDivElement;
-let _dataStoreList: HTMLDivElement;
-let _fieldSelect: HTMLSelectElement;
-let _rampSelect: HTMLSelectElement;
-let _opacityInput: HTMLInputElement;
-let _opacityOut: HTMLOutputElement;
-let _normModeSelect: HTMLSelectElement | null = null;
-let _colorModeSelect: HTMLSelectElement | null = null;
-let _colorPicker: HTMLInputElement;
-let _enable3DCheckbox: HTMLInputElement;
-let _enableHexCheckbox: HTMLInputElement | null = null;
-let _hexResInput: HTMLInputElement | null = null;
-let _hexResReadout: HTMLOutputElement | null = null;
-let _filtersInvertToggle: HTMLInputElement;
-
-export function initLayerElements(els: {
-  layerList: HTMLDivElement;
-  dataStoreList: HTMLDivElement;
-  fieldSelect: HTMLSelectElement;
-  rampSelect: HTMLSelectElement;
-  opacityInput: HTMLInputElement;
-  opacityOut: HTMLOutputElement;
-  normModeSelect?: HTMLSelectElement | null;
-  colorModeSelect?: HTMLSelectElement | null;
-  colorPicker: HTMLInputElement;
-  enable3DCheckbox: HTMLInputElement;
-  enableHexCheckbox?: HTMLInputElement | null;
-  hexResInput?: HTMLInputElement | null;
-  hexResReadout?: HTMLOutputElement | null;
-  filtersInvertToggle: HTMLInputElement;
-}) {
-  _layerList = els.layerList;
-  _dataStoreList = els.dataStoreList;
-  _fieldSelect = els.fieldSelect;
-  _rampSelect = els.rampSelect;
-  _opacityInput = els.opacityInput;
-  _opacityOut = els.opacityOut;
-  _normModeSelect = els.normModeSelect ?? null;
-  _colorModeSelect = els.colorModeSelect ?? null;
-  _colorPicker = els.colorPicker;
-  _enable3DCheckbox = els.enable3DCheckbox;
-  _enableHexCheckbox = els.enableHexCheckbox ?? null;
-  _hexResInput = els.hexResInput ?? null;
-  _hexResReadout = els.hexResReadout ?? null;
-  _filtersInvertToggle = els.filtersInvertToggle;
-}
+import {
+  layerList as _layerList,
+  dataStoreList as _dataStoreList,
+  fieldSelect as _fieldSelect,
+  rampSelect as _rampSelect,
+  opacityInput as _opacityInput,
+  opacityOut as _opacityOut,
+  normModeSelect as _normModeSelect,
+  colorModeSelect as _colorModeSelect,
+  colorPicker as _colorPicker,
+  enable3DCheckbox as _enable3DCheckbox,
+  enableHexCheckbox as _enableHexCheckbox,
+  hexResInput as _hexResInput,
+  hexResReadout as _hexResReadout,
+  filtersInvertToggle as _filtersInvertToggle,
+} from './dom-refs';
 
 /* ------------------------------------------------------------------ */
 /*  Callbacks into other modules (set once via initLayerCallbacks)     */

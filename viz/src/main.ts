@@ -215,7 +215,6 @@ import {
   updateFiltersPanelLayout, refreshWindowMinHeight, refreshWindowMinWidth,
   initWindowDocking, registerDockableWindow, enableWindowResizing,
   makeDraggable, handleMouseMove, handleMouseUp,
-  ensureFloatingWindowVisible,
 } from './windows';
 import {
   initSelection, initSelectionElements,
@@ -3387,7 +3386,6 @@ installWelcome();
 initSelection({
   getCurrentSourceId,
   updateCursor,
-  makeDraggable,
   updateStatisticsResults,
   scheduleScatterPlotRefresh,
   updateHighlightColors,
@@ -3397,15 +3395,11 @@ initSelection({
     registerDockableWindow(panel, pinButton);
     enableWindowResizing(panel);
   },
-  refreshSelectionControlsDockLayout: () => {
-    window.dispatchEvent(new Event('resize'));
-  },
   openSelectionConditionsFilters: () => {
     const layer = getCurrentLayer();
     if (!layer) return;
     setSelectionFiltersContext(layer.id, layer.name || layer.field || `layer ${S.layerOrder.indexOf(layer.id) + 1}`);
     showFilters();
   },
-  ensureFloatingWindowVisible,
 });
 initSelectionElements();

@@ -12,20 +12,24 @@ import { featureIntersectsBbox, featureIntersectsPolygon, calculatePolygonBbox }
 import { normalizedValue } from './rendering-helpers';
 
 /* ------------------------------------------------------------------ */
-/*  Callbacks into main.ts (set once via initSelection)               */
+/*  Cross-module deps + callback seams                                 */
 /* ------------------------------------------------------------------ */
+
+// Direct imports (formerly callback seams). windows imports only state/dom-refs,
+// so these are cycle-free; aliased to the _names to leave call sites untouched.
+import { makeDraggable as _makeDraggable, ensureFloatingWindowVisible as _ensureFloatingWindowVisible } from './windows';
+
+// Pure DOM nudge (formerly injected from main); selection owns it directly now.
+const _refreshSelectionControlsDockLayout = () => window.dispatchEvent(new Event('resize'));
 
 let _getCurrentSourceId: () => string | null = () => null;
 let _updateCursor: () => void = () => {};
-let _makeDraggable: (el: HTMLElement) => void = () => {};
 let _updateStatisticsResults: () => void = () => {};
 let _scheduleScatterPlotRefresh: () => void = () => {};
 let _updateHighlightColors: () => void = () => {};
 let _persistCurrentLayerState: () => void = () => {};
 let _registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void = () => {};
-let _refreshSelectionControlsDockLayout: () => void = () => {};
 let _openSelectionConditionsFilters: () => void = () => {};
-let _ensureFloatingWindowVisible: (el: HTMLElement) => void = () => {};
 let _selectionSaveLoadWidget: SaveLoadWidgetHandle | null = null;
 let _selectionSaveLoadStatus: HTMLDivElement | null = null;
 let _selectionKeySelect: HTMLSelectElement | null = null;
@@ -34,30 +38,23 @@ let _selectionKeySelect: HTMLSelectElement | null = null;
 export interface SelectionCallbacks {
   getCurrentSourceId: () => string | null;
   updateCursor: () => void;
-  makeDraggable: (el: HTMLElement) => void;
   updateStatisticsResults: () => void;
   scheduleScatterPlotRefresh: () => void;
   updateHighlightColors: () => void;
   persistCurrentLayerState: () => void;
   registerSelectionControlsDocking: (panel: HTMLDivElement, pinButton: HTMLButtonElement) => void;
-  refreshSelectionControlsDockLayout: () => void;
   openSelectionConditionsFilters: () => void;
-  ensureFloatingWindowVisible: (el: HTMLElement) => void;
 }
 
 export function initSelection(cb: SelectionCallbacks) {
   _getCurrentSourceId = cb.getCurrentSourceId;
   _updateCursor = cb.updateCursor;
-  _makeDraggable = cb.makeDraggable;
   _updateStatisticsResults = cb.updateStatisticsResults;
   _scheduleScatterPlotRefresh = cb.scheduleScatterPlotRefresh;
   _updateHighlightColors = cb.updateHighlightColors;
   _persistCurrentLayerState = cb.persistCurrentLayerState;
   _registerSelectionControlsDocking = cb.registerSelectionControlsDocking;
-  _refreshSelectionControlsDockLayout = cb.refreshSelectionControlsDockLayout;
   _openSelectionConditionsFilters = cb.openSelectionConditionsFilters;
-  _ensureFloatingWindowVisible = cb.ensureFloatingWindowVisible;
-
 }
 
 /* ------------------------------------------------------------------ */

@@ -219,10 +219,47 @@ function setPickerView(view: PickerView) {
   });
 }
 
-/** Show the initial chooser (New / Open). */
+/** Show the initial chooser (New / Open + recent projects). */
 function showChooserView() {
   setPickerView('chooser');
   setStatus('');
+  void renderRecents();
+}
+
+/** Populate the chooser's recent-projects list. Clicking an entry opens it,
+ *  exactly as if the user browsed to and selected that folder. */
+async function renderRecents() {
+  const container = pickerEl?.querySelector('.desktop-recents') as HTMLElement | null;
+  if (!container) return;
+  let recents: { path: string; name: string; lastOpenedAt: string }[] = [];
+  try {
+    recents = (await window.vizDesktop?.project.recent()) ?? [];
+  } catch {
+    recents = [];
+  }
+  container.replaceChildren();
+  if (!recents.length) return;
+
+  const title = document.createElement('div');
+  title.className = 'desktop-recents-title';
+  title.textContent = 'Recent projects';
+  container.appendChild(title);
+
+  for (const r of recents) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'desktop-recent-item';
+    const name = document.createElement('span');
+    name.className = 'desktop-recent-name';
+    name.textContent = r.name;
+    const pathEl = document.createElement('span');
+    pathEl.className = 'desktop-recent-path';
+    pathEl.textContent = r.path;
+    btn.append(name, pathEl);
+    btn.title = `${r.path}\nLast opened ${new Date(r.lastOpenedAt).toLocaleString()}`;
+    btn.addEventListener('click', () => void openProjectPath(r.path));
+    container.appendChild(btn);
+  }
 }
 
 /** Show the dedicated per-project view (import a source, or go back). */
@@ -350,10 +387,17 @@ async function handleCreate() {
 }
 
 async function handleOpen() {
+  // No path → the IPC layer shows the OS folder dialog.
+  await openProjectPath(undefined);
+}
+
+/** Open a project by path (a recent-projects click) or via the OS folder dialog
+ *  (path undefined). Both routes converge on the same load + loading view. */
+async function openProjectPath(projectRoot?: string) {
   const api = window.vizDesktop;
   if (!api) return;
   try {
-    const res = await api.project.open(undefined); // OS dialog (modal)
+    const res = await api.project.open(projectRoot);
     if (res.canceled) return;
     await loadProjectSources();
   } catch (err: any) {
@@ -404,6 +448,7 @@ function buildPicker() {
           <button type="button" class="desktop-new-btn">New Project…</button>
           <button type="button" class="desktop-open-btn">Open Project…</button>
         </div>
+        <div class="desktop-recents"></div>
       </div>
       <div class="desktop-view-project" style="display:none;">
         <h2 class="desktop-project-name">Project</h2>

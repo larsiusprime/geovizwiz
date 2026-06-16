@@ -22,6 +22,7 @@ const desktopApi = {
     create: (projectRoot) => ipcRenderer.invoke('desktop:project:create', projectRoot),
     open: (projectRoot) => ipcRenderer.invoke('desktop:project:open', projectRoot),
     close: () => ipcRenderer.invoke('desktop:project:close'),
+    recent: () => ipcRenderer.invoke('desktop:project:recent'),
     delete: (projectRoot) => ipcRenderer.invoke('desktop:project:delete', projectRoot),
     current: () => ipcRenderer.invoke('desktop:project:current'),
     saveAppState: (appBlock) => ipcRenderer.invoke('desktop:project:saveAppState', appBlock)

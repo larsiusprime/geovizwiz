@@ -14,6 +14,13 @@ export interface ProjectSourceRecord {
   importedAt: string;
 }
 
+/** A recently-opened project (stored outside any project, in OS app-data). */
+export interface RecentProject {
+  path: string;
+  name: string;
+  lastOpenedAt: string;
+}
+
 /** viz-project.json contents. */
 export interface ProjectMeta {
   projectId: string;
@@ -50,6 +57,7 @@ declare global {
         create: (projectRoot: string) => Promise<{ projectRoot: string; meta: ProjectMeta }>;
         open: (projectRoot?: string) => Promise<{ canceled?: boolean; projectRoot?: string; meta?: ProjectMeta }>;
         close: () => Promise<{ ok: boolean }>;
+        recent: () => Promise<RecentProject[]>;
         delete: (projectRoot?: string) => Promise<{ ok: boolean }>;
         current: () => Promise<{ projectRoot: string | null; meta: ProjectMeta | null }>;
         saveAppState: (appBlock: unknown) => Promise<{ ok: boolean }>;

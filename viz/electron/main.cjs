@@ -3,6 +3,7 @@ const fs = require('fs/promises');
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const projectService = require('./project-service.cjs');
 const duckdbService = require('./duckdb-service.cjs');
+const recentsService = require('./recents-service.cjs');
 
 const isMac = process.platform === 'darwin';
 let mainWindow = null;
@@ -178,7 +179,12 @@ ipcMain.handle('desktop:pickProjectDir', async () => {
 ipcMain.handle('desktop:project:create', async (_evt, projectRoot) => {
   const { projectRoot: root, meta } = await projectService.createProject(projectRoot);
   currentProjectRoot = root;
+  await recentsService.recordRecent(root, meta?.name);
   return { projectRoot: root, meta };
+});
+
+ipcMain.handle('desktop:project:recent', async () => {
+  return recentsService.listRecents();
 });
 
 ipcMain.handle('desktop:project:open', async (_evt, projectRoot) => {
@@ -195,6 +201,7 @@ ipcMain.handle('desktop:project:open', async (_evt, projectRoot) => {
   }
   const { projectRoot: root, meta } = await projectService.openProject(target);
   currentProjectRoot = root;
+  await recentsService.recordRecent(root, meta?.name);
   return { canceled: false, projectRoot: root, meta };
 });
 

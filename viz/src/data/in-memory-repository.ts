@@ -80,6 +80,35 @@ export class InMemoryRepository implements DataRepository {
     return { type: 'FeatureCollection', features };
   }
 
+  async countGeometryByBBox(sourceId: string, bbox: BBox): Promise<number> {
+    const fc = this.resolveCollection(sourceId);
+    if (!fc) return 0;
+    let n = 0;
+    for (const f of fc.features) if (featureIntersectsBBox(f, bbox)) n += 1;
+    return n;
+  }
+
+  async getSourceExtent(sourceId: string): Promise<BBox | null> {
+    const fc = this.resolveCollection(sourceId);
+    if (!fc?.features?.length) return null;
+    let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+    const visit = (coords: any) => {
+      if (typeof coords[0] === 'number') {
+        const [x, y] = coords;
+        if (x < minLng) minLng = x; if (x > maxLng) maxLng = x;
+        if (y < minLat) minLat = y; if (y > maxLat) maxLat = y;
+      } else {
+        for (const c of coords) visit(c);
+      }
+    };
+    for (const f of fc.features) {
+      const g = f.geometry as any;
+      if (g?.coordinates) visit(g.coordinates);
+    }
+    if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) return null;
+    return { minLng, minLat, maxLng, maxLat };
+  }
+
   async queryFieldValues(
     sourceId: string,
     field: string,

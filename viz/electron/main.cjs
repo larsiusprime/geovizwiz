@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs/promises');
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const projectService = require('./project-service.cjs');
 const duckdbService = require('./duckdb-service.cjs');
 
@@ -28,6 +28,43 @@ function assertProjectBoundPath(candidatePath) {
   }
 }
 
+/** Send a File-menu action to the renderer, which owns the project handlers. */
+function sendMenuAction(action) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('desktop:menu', action);
+  }
+}
+
+/** Build the native application menu. The File items mirror the project ops;
+ *  clicks are forwarded to the renderer (see preload `onMenuAction`). */
+function buildAppMenu() {
+  const template = [];
+  if (isMac) {
+    template.push({ role: 'appMenu' });
+  }
+  template.push({
+    label: 'File',
+    submenu: [
+      { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => sendMenuAction('open') },
+      { label: 'New…', accelerator: 'CmdOrCtrl+N', click: () => sendMenuAction('new') },
+      { label: 'Close', click: () => sendMenuAction('close') },
+      { type: 'separator' },
+      { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => sendMenuAction('save') },
+      { type: 'separator' },
+      isMac ? { role: 'close' } : { role: 'quit' }
+    ]
+  });
+  // View menu: only full-screen (the default viewMenu's zoom items operate on
+  // the web/HTML layer, which we don't want).
+  template.push({
+    label: 'View',
+    submenu: [
+      { role: 'togglefullscreen' }
+    ]
+  });
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1500,
@@ -35,7 +72,7 @@ async function createWindow() {
     minWidth: 1100,
     minHeight: 700,
     show: false,
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -126,21 +163,22 @@ ipcMain.handle('desktop:getAppConfig', async () => {
 /*  Project lifecycle + database IPC (Milestones 2, 4, 5)                  */
 /* ----------------------------------------------------------------------- */
 
-// Pick a parent directory in which to create a new project folder.
-ipcMain.handle('desktop:pickParentDir', async () => {
+// Pick (or create) the folder that will BE the project root.
+ipcMain.handle('desktop:pickProjectDir', async () => {
   if (!mainWindow) throw new Error('Main window unavailable.');
   const result = await dialog.showOpenDialog(mainWindow, {
-    title: 'Choose where to create the project',
+    title: 'Choose or create the project folder',
+    buttonLabel: 'Use This Folder',
     properties: ['openDirectory', 'createDirectory']
   });
   if (result.canceled || !result.filePaths[0]) return { canceled: true };
-  return { canceled: false, parentDir: path.resolve(result.filePaths[0]) };
+  return { canceled: false, projectRoot: path.resolve(result.filePaths[0]) };
 });
 
-ipcMain.handle('desktop:project:create', async (_evt, parentDir, name) => {
-  const { projectRoot, meta } = await projectService.createProject(parentDir, name);
-  currentProjectRoot = projectRoot;
-  return { projectRoot, meta };
+ipcMain.handle('desktop:project:create', async (_evt, projectRoot) => {
+  const { projectRoot: root, meta } = await projectService.createProject(projectRoot);
+  currentProjectRoot = root;
+  return { projectRoot: root, meta };
 });
 
 ipcMain.handle('desktop:project:open', async (_evt, projectRoot) => {
@@ -171,6 +209,12 @@ ipcMain.handle('desktop:project:delete', async (_evt, projectRoot) => {
 ipcMain.handle('desktop:project:saveAppState', async (_evt, appBlock) => {
   if (!currentProjectRoot) throw new Error('No active project.');
   return projectService.saveAppState(currentProjectRoot, appBlock);
+});
+
+ipcMain.handle('desktop:project:close', async () => {
+  await duckdbService.closeDatabase().catch(() => {});
+  currentProjectRoot = null;
+  return { ok: true };
 });
 
 ipcMain.handle('desktop:project:current', async () => {
@@ -208,6 +252,7 @@ ipcMain.handle('desktop:db:exec', async (_evt, sql, params) => {
 });
 
 app.whenReady().then(async () => {
+  buildAppMenu();
   await createWindow();
 
   app.on('activate', async () => {

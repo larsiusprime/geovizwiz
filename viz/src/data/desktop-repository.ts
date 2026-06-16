@@ -108,9 +108,19 @@ export class DesktopRepository implements DataRepository {
     if (opts?.limit && Number.isFinite(opts.limit)) sql += ` LIMIT ${Math.floor(opts.limit)}`;
 
     const { rows } = await db().query(sql);
+    const signal = opts?.signal;
     const features: GeoJSON.Feature[] = [];
-    for (const row of rows) {
-      const gj = row._geojson;
+    for (let i = 0; i < rows.length; i++) {
+      // Yield to the event loop every chunk so a large parse doesn't freeze the
+      // renderer — this keeps the Cancel button responsive during a load — and
+      // bail immediately once aborted.
+      if ((i & 2047) === 0) {
+        if (signal?.aborted) return { type: 'FeatureCollection', features: [] };
+        await new Promise<void>((resolve) => setTimeout(resolve));
+        if (signal?.aborted) return { type: 'FeatureCollection', features: [] };
+      }
+      const row = rows[i];
+      const gj = (row as any)._geojson;
       if (!gj) continue;
       let geometry: GeoJSON.Geometry;
       try {
@@ -122,12 +132,38 @@ export class DesktopRepository implements DataRepository {
       for (const f of fields) properties[f] = (row as any)[f];
       features.push({
         type: 'Feature',
-        id: String(row.parcel_id),
+        id: String((row as any).parcel_id),
         geometry,
         properties
       });
     }
     return { type: 'FeatureCollection', features };
+  }
+
+  async countGeometryByBBox(sourceId: string, bbox: BBox): Promise<number> {
+    const table = await this.resolveTable(sourceId);
+    const env = `ST_MakeEnvelope(${bbox.minLng}, ${bbox.minLat}, ${bbox.maxLng}, ${bbox.maxLat})`;
+    const sql =
+      `SELECT count(*) AS n FROM ${qid(table)} ` +
+      `WHERE geom IS NOT NULL AND ST_Intersects(geom, ${env})`;
+    const { rows } = await db().query(sql);
+    return Number((rows[0] as any)?.n ?? 0);
+  }
+
+  async getSourceExtent(sourceId: string): Promise<BBox | null> {
+    const table = await this.resolveTable(sourceId);
+    // Aggregate the per-geometry envelope bounds (avoids BOX_2D type handling).
+    const sql =
+      `SELECT min(ST_XMin(geom)) AS minx, min(ST_YMin(geom)) AS miny, ` +
+      `max(ST_XMax(geom)) AS maxx, max(ST_YMax(geom)) AS maxy ` +
+      `FROM ${qid(table)} WHERE geom IS NOT NULL`;
+    const { rows } = await db().query(sql);
+    const r = rows[0] as any;
+    if (!r || r.minx == null || r.maxx == null) return null;
+    const minLng = Number(r.minx), minLat = Number(r.miny);
+    const maxLng = Number(r.maxx), maxLat = Number(r.maxy);
+    if (![minLng, minLat, maxLng, maxLat].every(Number.isFinite)) return null;
+    return { minLng, minLat, maxLng, maxLat };
   }
 
   async queryFieldValues(

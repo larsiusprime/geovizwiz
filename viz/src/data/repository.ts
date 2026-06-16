@@ -42,6 +42,9 @@ export interface GeometryQueryOptions {
   simplifyTolerance?: number;
   /** Hard cap on returned features (safety valve). */
   limit?: number;
+  /** Abort signal: producers should stop work and yield cooperatively so a
+   *  long parse doesn't freeze the UI and can be cancelled mid-flight. */
+  signal?: AbortSignal;
 }
 
 export interface FieldStats {
@@ -65,6 +68,12 @@ export interface DataRepository {
     bbox: BBox,
     opts?: GeometryQueryOptions
   ): Promise<GeoJSON.FeatureCollection>;
+
+  /** Count features intersecting `bbox` (cheap pre-check before a heavy fetch). */
+  countGeometryByBBox(sourceId: string, bbox: BBox): Promise<number>;
+
+  /** Full geographic extent of a source's geometry, or null if it has none. */
+  getSourceExtent(sourceId: string): Promise<BBox | null>;
 
   /** Return values of `field` for the given parcel ids (drives feature-state later). */
   queryFieldValues(

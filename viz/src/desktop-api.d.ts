@@ -41,11 +41,15 @@ declare global {
         projectRoot: string | null;
       }>;
 
+      /** Subscribe to native File-menu actions. Returns an unsubscribe fn. */
+      onMenuAction: (cb: (action: string) => void) => () => void;
+
       // Project lifecycle
-      pickParentDir: () => Promise<{ canceled: boolean; parentDir?: string }>;
+      pickProjectDir: () => Promise<{ canceled: boolean; projectRoot?: string }>;
       project: {
-        create: (parentDir: string, name: string) => Promise<{ projectRoot: string; meta: ProjectMeta }>;
+        create: (projectRoot: string) => Promise<{ projectRoot: string; meta: ProjectMeta }>;
         open: (projectRoot?: string) => Promise<{ canceled?: boolean; projectRoot?: string; meta?: ProjectMeta }>;
+        close: () => Promise<{ ok: boolean }>;
         delete: (projectRoot?: string) => Promise<{ ok: boolean }>;
         current: () => Promise<{ projectRoot: string | null; meta: ProjectMeta | null }>;
         saveAppState: (appBlock: unknown) => Promise<{ ok: boolean }>;

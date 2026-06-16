@@ -140,8 +140,10 @@ function serializeLandSchedules(): SerializedLandSchedule {
   };
 }
 
-export function exportProject() {
-  // Persist current layer state before export
+/** Build the serializable project snapshot from current app state. Shared by
+ *  the browser download (`exportProject`) and the desktop in-place save. */
+export function buildProjectFile(): ProjectFileV1 {
+  // Persist current layer state before serializing.
   if (S.currentLayerId) {
     persistCurrentLayerState();
   }
@@ -159,7 +161,7 @@ export function exportProject() {
   });
 
   const projectName = dataSources[0]?.name || 'Untitled Project';
-  const projectFile: ProjectFileV1 = {
+  return {
     version: '1.0',
     created: new Date().toISOString(),
     projectName,
@@ -169,6 +171,11 @@ export function exportProject() {
     savedSelections: serializeSavedSelections(),
     landSchedule: serializeLandSchedules()
   };
+}
+
+export function exportProject() {
+  const projectFile = buildProjectFile();
+  const projectName = projectFile.projectName ?? 'Untitled Project';
 
   const json = JSON.stringify(projectFile, null, 2);
   const blob = new Blob([json], { type: 'application/json' });

@@ -61,16 +61,24 @@ async function writeProjectFile(projectRoot, meta) {
   return meta;
 }
 
-/** Create a new project folder, scaffold structure, and open its DB. */
-async function createProject(parentDir, name) {
-  if (!parentDir || !name) throw new Error('parentDir and name are required.');
-  const folderName = String(name).trim();
-  if (!folderName) throw new Error('Project name cannot be empty.');
+/**
+ * Scaffold the given folder AS the project root (the folder itself becomes the
+ * project — no nested subfolder), then open its DB. The folder may be newly
+ * created or pre-existing; it must not already be a VIZ project.
+ */
+async function createProject(projectRoot) {
+  if (!projectRoot) throw new Error('projectRoot is required.');
+  const root = path.resolve(projectRoot);
 
-  const projectRoot = path.resolve(parentDir, folderName);
-  await fs.mkdir(projectRoot, { recursive: true });
+  const alreadyProject = await fs.access(projectFilePath(root)).then(() => true).catch(() => false);
+  if (alreadyProject) {
+    throw new Error('This folder is already a VIZ project. Use "Open Project" instead.');
+  }
+
+  const folderName = path.basename(root);
+  await fs.mkdir(root, { recursive: true });
   for (const sub of SUBDIRS) {
-    await fs.mkdir(path.join(projectRoot, sub), { recursive: true });
+    await fs.mkdir(path.join(root, sub), { recursive: true });
   }
 
   const meta = {
@@ -84,10 +92,10 @@ async function createProject(parentDir, name) {
     // Layer/filter/land-schedule blocks (browser-export lineage) attach here.
     app: null
   };
-  await writeProjectFile(projectRoot, meta);
+  await writeProjectFile(root, meta);
 
-  await duckdbService.openDatabase(dbFilePath(projectRoot));
-  return { projectRoot, meta };
+  await duckdbService.openDatabase(dbFilePath(root));
+  return { projectRoot: root, meta };
 }
 
 /** Open an existing project: validate, migrate forward, open DB. */

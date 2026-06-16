@@ -8,11 +8,20 @@ const desktopApi = {
   writeTextFile: (relativePath, content) => ipcRenderer.invoke('desktop:writeTextFile', relativePath, content),
   getAppConfig: () => ipcRenderer.invoke('desktop:getAppConfig'),
 
+  // --- Native menu bridge ---
+  // Subscribe to native File-menu actions ('open' | 'new' | 'close' | 'save').
+  onMenuAction: (cb) => {
+    const listener = (_evt, action) => cb(action);
+    ipcRenderer.on('desktop:menu', listener);
+    return () => ipcRenderer.removeListener('desktop:menu', listener);
+  },
+
   // --- Project lifecycle (Milestone 2) ---
-  pickParentDir: () => ipcRenderer.invoke('desktop:pickParentDir'),
+  pickProjectDir: () => ipcRenderer.invoke('desktop:pickProjectDir'),
   project: {
-    create: (parentDir, name) => ipcRenderer.invoke('desktop:project:create', parentDir, name),
+    create: (projectRoot) => ipcRenderer.invoke('desktop:project:create', projectRoot),
     open: (projectRoot) => ipcRenderer.invoke('desktop:project:open', projectRoot),
+    close: () => ipcRenderer.invoke('desktop:project:close'),
     delete: (projectRoot) => ipcRenderer.invoke('desktop:project:delete', projectRoot),
     current: () => ipcRenderer.invoke('desktop:project:current'),
     saveAppState: (appBlock) => ipcRenderer.invoke('desktop:project:saveAppState', appBlock)

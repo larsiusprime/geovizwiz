@@ -284,7 +284,8 @@ import {
 } from './layers';
 import { initMetadataModule } from './metadata.js';
 import { getRuntimeMode, isBrowserMode, isDesktopMode, isHostedMode } from './runtime-mode';
-import { initDesktop } from './desktop-bootstrap.js';
+import { getRepository } from './data/index.js';
+import { initDesktop, addDesktopLayerFromFile } from './desktop-bootstrap.js';
 (window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Runtime Mode ----------------- */
@@ -337,6 +338,14 @@ S.map.on('load', () => {
         refreshLandSchedulePanel();
         refreshTimeAdjustmentPanel();
         renderSettingsDataSourcesSection();
+      },
+      // After a pan or a lean re-fetch, recompute the viewport-dependent panels
+      // against the new features (no dropdown reset).
+      onViewportData: () => {
+        refreshStatisticsPanel();
+        refreshScatterPanel();
+        refreshLandSchedulePanel();
+        refreshTimeAdjustmentPanel();
       }
     });
   }
@@ -1622,6 +1631,22 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, pa
   // Only show popup if info tool is active
   if (!S.isInfoToolActive) return;
 
+  // Desktop streams a lean column set, so the rendered feature only carries the
+  // fields in use. Fetch this parcel's full attribute row on demand so the
+  // inspect popup shows everything. (Browser already has all fields in memory.)
+  if (isDesktopMode()) {
+    const sourceId = getCurrentSourceId();
+    if (sourceId) {
+      void getRepository().queryRowById(sourceId, parcelId)
+        .then((row) => finishShowPopup(row ? { ...props, ...row } : props, lngLat, parcelId))
+        .catch(() => finishShowPopup(props, lngLat, parcelId));
+      return;
+    }
+  }
+  finishShowPopup(props, lngLat, parcelId);
+}
+
+function finishShowPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) {
   S.lastPicked = { props, lngLat, parcelId };
   syncInspectFocusMarker();
 
@@ -2569,7 +2594,16 @@ function computeAndSetGoodExtrusionDefaults() {
 /* ---------------- Events ---------------- */
 
 if (btnBrowseDataSource) {
-  btnBrowseDataSource.addEventListener('click', () => fileInput.click());
+  btnBrowseDataSource.addEventListener('click', () => {
+    if (isDesktopMode()) {
+      // Desktop: import into the project DB and stream as a new layer (the
+      // browser in-renderer parquet parse would conflict with DB streaming).
+      closeAddLayerModal();
+      void addDesktopLayerFromFile();
+    } else {
+      fileInput.click();
+    }
+  });
 }
 
 if (btnCancelAddLayer) {

@@ -201,7 +201,7 @@ function validateProjectFile(data: any): data is ProjectFileV1 {
   return true;
 }
 
-function deserializeLayer(serialized: SerializedLayer): Partial<LayerState> {
+export function deserializeLayer(serialized: SerializedLayer): Partial<LayerState> {
   // Convert arrays to Sets, objects to Maps
   return {
     id: serialized.id,
@@ -233,6 +233,93 @@ function deserializeLayer(serialized: SerializedLayer): Partial<LayerState> {
     selectedParcels: new Set(),  // Runtime state
     parcelPatchMap: new Map()    // Runtime state (future: deserialize if present)
   };
+}
+
+/** Restore saved filters / selections / land-schedule from a project snapshot
+ *  into `S`. Shared by the browser project loader and the desktop restorer. */
+export function applyRestoredCollections(projectData: ProjectFileV1) {
+  // Restore saved filters
+  projectData.savedFilters.forEach((entry: SavedFilterEntry) => {
+    S.savedFiltersStore.set(entry.name, {
+      name: entry.name,
+      filters: entry.filters.map(f => ({...f})),
+      filterInvert: entry.filterInvert
+    });
+  });
+
+  // Restore saved selections
+  if (projectData.savedSelections) {
+    projectData.savedSelections.forEach((entry: SavedSelectionEntry) => {
+      S.savedSelectionsStore.set(entry.name, {
+        name: entry.name,
+        keyFields: [...entry.keyFields],
+        parcelKeys: entry.parcelKeys.map(k => ({...k})),
+        sourceName: entry.sourceName ?? null,
+      });
+    });
+  }
+
+  if (projectData.landSchedule) {
+    S.landScheduleStore = {
+      tables: (projectData.landSchedule.tables ?? []).map(table => ({
+        id: table.id,
+        name: table.name,
+        unit: table.unit,
+        valueMode: table.valueMode ?? 'per-unit',
+        rows: table.rows.map(row => ({ ...row })),
+        filters: (table.filters ?? []).map(f => ({ ...f })),
+        filterInvert: table.filterInvert ?? false,
+      })),
+      activeTableId: projectData.landSchedule.activeTableId ?? null,
+      adjustments: (projectData.landSchedule.adjustments ?? []).map(adjustment => ({
+        id: adjustment.id,
+        name: adjustment.name,
+        operation: adjustment.operation ?? 'add',
+        sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
+          ? 'per-land-area'
+          : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
+            ? 'per-frontage'
+            : adjustment.sizeUnit) ?? 'flat',
+        sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
+        value: adjustment.value ?? null,
+        filters: (adjustment.filters ?? []).map(f => ({ ...f })),
+        filterInvert: adjustment.filterInvert ?? false,
+      })),
+    };
+  } else if (projectData.landSchedules && projectData.landSchedules.length > 0) {
+    const merged = projectData.landSchedules.reduce((acc: LandScheduleEntry, entry: SerializedLandScheduleEntry) => {
+      acc.tables.push(...entry.tables.map(table => ({
+        id: table.id,
+        name: table.name,
+        unit: table.unit,
+        valueMode: table.valueMode ?? 'per-unit',
+        rows: table.rows.map(row => ({ ...row })),
+        filters: (table.filters ?? []).map(f => ({ ...f })),
+        filterInvert: table.filterInvert ?? false,
+      })));
+      acc.adjustments.push(...(entry.adjustments ?? []).map(adjustment => ({
+        id: adjustment.id,
+        name: adjustment.name,
+        operation: adjustment.operation ?? 'add',
+        sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
+          ? 'per-land-area'
+          : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
+            ? 'per-frontage'
+            : adjustment.sizeUnit) ?? 'flat',
+        sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
+        value: adjustment.value ?? null,
+        filters: (adjustment.filters ?? []).map(f => ({ ...f })),
+        filterInvert: adjustment.filterInvert ?? false,
+      })));
+      acc.activeTableId = acc.activeTableId ?? entry.activeTableId ?? null;
+      return acc;
+    }, {
+      tables: [],
+      activeTableId: null,
+      adjustments: [],
+    });
+    S.landScheduleStore = merged;
+  }
 }
 
 export async function loadProjectFile(file: File) {
@@ -304,88 +391,7 @@ export async function loadProjectFile(file: File) {
     S.dataStores.clear();
     S.dataStoreOrder.length = 0;
 
-    // Restore saved filters
-    projectData.savedFilters.forEach((entry: SavedFilterEntry) => {
-      S.savedFiltersStore.set(entry.name, {
-        name: entry.name,
-        filters: entry.filters.map(f => ({...f})),
-        filterInvert: entry.filterInvert
-      });
-    });
-
-    // Restore saved selections
-    if (projectData.savedSelections) {
-      projectData.savedSelections.forEach((entry: SavedSelectionEntry) => {
-        S.savedSelectionsStore.set(entry.name, {
-          name: entry.name,
-          keyFields: [...entry.keyFields],
-          parcelKeys: entry.parcelKeys.map(k => ({...k})),
-          sourceName: entry.sourceName ?? null,
-        });
-      });
-    }
-
-    if (projectData.landSchedule) {
-      S.landScheduleStore = {
-        tables: (projectData.landSchedule.tables ?? []).map(table => ({
-          id: table.id,
-          name: table.name,
-          unit: table.unit,
-          valueMode: table.valueMode ?? 'per-unit',
-          rows: table.rows.map(row => ({ ...row })),
-          filters: (table.filters ?? []).map(f => ({ ...f })),
-          filterInvert: table.filterInvert ?? false,
-        })),
-        activeTableId: projectData.landSchedule.activeTableId ?? null,
-        adjustments: (projectData.landSchedule.adjustments ?? []).map(adjustment => ({
-          id: adjustment.id,
-          name: adjustment.name,
-          operation: adjustment.operation ?? 'add',
-          sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
-            ? 'per-land-area'
-            : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
-              ? 'per-frontage'
-              : adjustment.sizeUnit) ?? 'flat',
-          sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
-          value: adjustment.value ?? null,
-          filters: (adjustment.filters ?? []).map(f => ({ ...f })),
-          filterInvert: adjustment.filterInvert ?? false,
-        })),
-      };
-    } else if (projectData.landSchedules && projectData.landSchedules.length > 0) {
-      const merged = projectData.landSchedules.reduce((acc: LandScheduleEntry, entry: SerializedLandScheduleEntry) => {
-        acc.tables.push(...entry.tables.map(table => ({
-          id: table.id,
-          name: table.name,
-          unit: table.unit,
-          valueMode: table.valueMode ?? 'per-unit',
-          rows: table.rows.map(row => ({ ...row })),
-          filters: (table.filters ?? []).map(f => ({ ...f })),
-          filterInvert: table.filterInvert ?? false,
-        })));
-        acc.adjustments.push(...(entry.adjustments ?? []).map(adjustment => ({
-          id: adjustment.id,
-          name: adjustment.name,
-          operation: adjustment.operation ?? 'add',
-          sizeUnit: (((adjustment.sizeUnit as unknown as string | null) === 'area')
-            ? 'per-land-area'
-            : ((adjustment.sizeUnit as unknown as string | null) === 'frontage')
-              ? 'per-frontage'
-              : adjustment.sizeUnit) ?? 'flat',
-          sizeUnitDetail: adjustment.sizeUnitDetail ?? null,
-          value: adjustment.value ?? null,
-          filters: (adjustment.filters ?? []).map(f => ({ ...f })),
-          filterInvert: adjustment.filterInvert ?? false,
-        })));
-        acc.activeTableId = acc.activeTableId ?? entry.activeTableId ?? null;
-        return acc;
-      }, {
-        tables: [],
-        activeTableId: null,
-        adjustments: [],
-      });
-      S.landScheduleStore = merged;
-    }
+    applyRestoredCollections(projectData);
 
     // Create or reuse data stores
     const dataStoreMap = new Map<string, string>();  // old ID -> new ID

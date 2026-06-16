@@ -6,6 +6,8 @@
  * live here.
  */
 import maplibregl from 'maplibre-gl';
+import { perfTime } from './perf.js';
+import { fieldsForPicker } from './field-availability.js';
 import { S } from './state';
 import { generatePseudoRandomColor } from './rendering';
 import { fitBoundsInVisibleMapArea } from './map-viewport';
@@ -160,9 +162,7 @@ export function populateScatterFields() {
     scatterYFieldSelect.disabled = true;
     return;
   }
-  const availableNumeric = scatterStore.chosenNumericFields.filter(k =>
-    scatterGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
+  const availableNumeric = fieldsForPicker(scatterStore.chosenNumericFields, scatterGeoJSON);
   S.scatterXField = populateScatterFieldSelect(scatterXFieldSelect, S.scatterXField, availableNumeric);
   S.scatterYField = populateScatterFieldSelect(scatterYFieldSelect, S.scatterYField, availableNumeric);
 }
@@ -179,9 +179,7 @@ export function populateScatterColorByFields() {
     return;
   }
 
-  const availableCategorical = scatterStore.chosenCategoricalFields.filter(k =>
-    scatterGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
+  const availableCategorical = fieldsForPicker(scatterStore.chosenCategoricalFields, scatterGeoJSON);
 
   availableCategorical.forEach(field => {
     scatterColorByFieldSelect.appendChild(new Option(field, field));
@@ -560,6 +558,9 @@ export function getCurrentScatterSubjectSelection(): GeoJSON.Feature[] {
 }
 
 export function updateScatterPlot() {
+  return perfTime('panel:scatter.update', updateScatterPlotImpl);
+}
+function updateScatterPlotImpl() {
   const plotly = getPlotly();
   if (!plotly) {
     resetScatterPlot('Plotly is still loading. Please try again in a moment.');

@@ -51,6 +51,9 @@ declare global {
       /** Subscribe to native File-menu actions. Returns an unsubscribe fn. */
       onMenuAction: (cb: (action: string) => void) => () => void;
 
+      /** Forward a perf line to the main-process terminal (desktop profiling). */
+      perf: (line: string) => void;
+
       // Project lifecycle
       pickProjectDir: () => Promise<{ canceled: boolean; projectRoot?: string }>;
       project: {

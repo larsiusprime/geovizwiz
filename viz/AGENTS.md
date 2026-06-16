@@ -1317,6 +1317,18 @@ Practical default posture:
 - **Later desktop enhancement:** optional vector tile server/materialization for faster large-scale map rendering.
 - Users are not forced to pre-bake vector tiles before they can work with newly imported data.
 
+#### Lean-column streaming (shipped — performance-critical, don't regress)
+
+The viewport query streams **only the columns currently in use**, not the whole table — profiling showed pulling all ~40 attribute columns per pan cost ~8–21 s (≈82% in IPC + marshalling), vs ~0.7–1.4 s lean. Key invariant: **the in-memory features (`S.currentGeoJSON`) in desktop carry only `geom` + `parcel_id` + the needed attribute columns.** Implications for anyone touching desktop:
+
+- The needed set is computed by `collectNeededFields()` in `desktop-bootstrap.ts` (colorized field of every layer, normalization sizes, stats/scatter/category fields, active filter fields, time-adjustment sale fields, + comp-finder criteria). **If you add a feature that reads a new attribute field from the in-memory features, add it there** (or it'll be blank).
+- Field **pickers** must list the schema, not loaded features — use `fieldsForPicker()` (`field-availability.ts`), never `features.some(hasOwnProperty)`. The latter would hide unloaded fields in desktop.
+- Panels with field state outside `S` (comp-finder criteria) register columns by dispatching `window.dispatchEvent(new CustomEvent('viz:request-fields', { detail: [...] }))`; filters dispatch a bare `viz:request-fields` after `applyMapFilters`. Both trigger a debounced lean re-fetch.
+- A change to a needed field re-fetches and then recomputes (`scheduleUpdate('recomputeAndAutoScale')`) — that's why first-pick coloring works despite the async load.
+- **Inspect popup / write tool** need a parcel's *full* attribute row → fetched on demand via `DataRepository.queryRowById` (NOT carried on every feature).
+- Panels read the **data store's** `geojson` (scatterplot, comp-finder) or the **layer's** `geojson` (statistics); desktop keeps both in sync per viewport in `refreshViewport`.
+- Profiling is opt-in: `localStorage.VIZ_PERF='1'` (renderer) / `VIZ_PERF=1` env (main process) — see `perf.ts`.
+
 ### Project lifecycle semantics (clarified)
 
 - **Delete project behavior:** deleting a project folder should also remove its bound project database to prevent orphaned local DBs and storage bloat (with soft confirmation only).

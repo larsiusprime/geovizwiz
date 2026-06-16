@@ -88,6 +88,17 @@ export class InMemoryRepository implements DataRepository {
     return n;
   }
 
+  async queryRowById(sourceId: string, parcelId: string): Promise<Record<string, unknown> | null> {
+    const fc = this.resolveCollection(sourceId);
+    if (!fc) return null;
+    for (let i = 0; i < fc.features.length; i += 1) {
+      if (getParcelId(fc.features[i], i) === parcelId) {
+        return { ...(fc.features[i].properties ?? {}) };
+      }
+    }
+    return null;
+  }
+
   async getSourceExtent(sourceId: string): Promise<BBox | null> {
     const fc = this.resolveCollection(sourceId);
     if (!fc?.features?.length) return null;

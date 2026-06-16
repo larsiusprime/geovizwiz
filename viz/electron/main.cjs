@@ -72,6 +72,7 @@ async function createWindow() {
     height: 900,
     minWidth: 1100,
     minHeight: 700,
+    title: 'OpenCAMA',
     show: false,
     autoHideMenuBar: false,
     webPreferences: {
@@ -149,6 +150,11 @@ ipcMain.handle('desktop:writeTextFile', async (_evt, relativePath, content) => {
   await fs.mkdir(path.dirname(target), { recursive: true });
   await fs.writeFile(target, String(content ?? ''), 'utf-8');
   return { ok: true };
+});
+
+// Perf lines forwarded from the renderer print to the terminal during profiling.
+ipcMain.on('desktop:perf', (_evt, line) => {
+  console.log(String(line));
 });
 
 ipcMain.handle('desktop:getAppConfig', async () => {

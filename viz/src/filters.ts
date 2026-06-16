@@ -5,6 +5,7 @@
  * saved filters, and the filters panel UI live here.
  */
 import type { Expression } from 'maplibre-gl';
+import { fieldsForPicker } from './field-availability.js';
 import {
   S,
   NUMERIC_FILTER_OPERATORS,
@@ -366,12 +367,8 @@ export function applySavedFilter(name: string) {
 
 export function getAvailableFilterFields() {
   if (!S.currentGeoJSON) return [];
-  const availableNumeric = S.chosenNumericFields.filter(k =>
-    S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
-  const availableCategorical = S.chosenCategoricalFields.filter(k =>
-    S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
+  const availableNumeric = fieldsForPicker(S.chosenNumericFields, S.currentGeoJSON);
+  const availableCategorical = fieldsForPicker(S.chosenCategoricalFields, S.currentGeoJSON);
   return [
     ...availableNumeric.map(field => ({ field, type: 'numeric' as const })),
     ...availableCategorical.map(field => ({ field, type: 'categorical' as const }))
@@ -694,6 +691,12 @@ export function applyMapFilters() {
     S.map.setFilter(ids.layerId, expressions as any);
   } else {
     S.map.setFilter(ids.layerId, null);
+  }
+  // Desktop streams a lean column set; ensure the active filter fields are
+  // loaded on the visible features (collectNeededFields reads S.filters). No-op
+  // in browser. The lean re-fetch then re-evaluates this filter correctly.
+  if (window.vizDesktop) {
+    window.dispatchEvent(new Event('viz:request-fields'));
   }
   if (S.statsSubjectMode === 'visible' && S.statsLayerId === S.currentLayerId) {
     _updateStatisticsResults();

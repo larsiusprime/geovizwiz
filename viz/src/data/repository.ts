@@ -72,6 +72,13 @@ export interface DataRepository {
   /** Count features intersecting `bbox` (cheap pre-check before a heavy fetch). */
   countGeometryByBBox(sourceId: string, bbox: BBox): Promise<number>;
 
+  /**
+   * All attribute values (no geometry) for a single parcel — used to populate
+   * the inspect popup on demand when the viewport fetch only carried a lean set
+   * of columns. Returns null if the parcel isn't found.
+   */
+  queryRowById(sourceId: string, parcelId: string): Promise<Record<string, unknown> | null>;
+
   /** Full geographic extent of a source's geometry, or null if it has none. */
   getSourceExtent(sourceId: string): Promise<BBox | null>;
 

@@ -8,6 +8,9 @@ const desktopApi = {
   writeTextFile: (relativePath, content) => ipcRenderer.invoke('desktop:writeTextFile', relativePath, content),
   getAppConfig: () => ipcRenderer.invoke('desktop:getAppConfig'),
 
+  // --- Perf profiling (desktop only) ---
+  perf: (line) => ipcRenderer.send('desktop:perf', line),
+
   // --- Native menu bridge ---
   // Subscribe to native File-menu actions ('open' | 'new' | 'close' | 'save').
   onMenuAction: (cb) => {

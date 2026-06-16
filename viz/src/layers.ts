@@ -7,6 +7,7 @@
  * main.ts.
  */
 import { S, PRIMARY_COLOR } from './state';
+import { fieldsForPicker } from './field-availability.js';
 import { SOURCE_ID, LAYER_ID, ERROR_LAYER_ID } from './config';
 import type { BasemapMode, LayerState, DataStore } from './types';
 import type { AsyncBuffer } from './utils.sanitize';
@@ -435,8 +436,8 @@ export function applyLayerState(layer: LayerState) {
       _fieldSelect.value = '';
     } else {
       const allAvailableFields = [
-        ...S.chosenNumericFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))),
-        ...S.chosenCategoricalFields.filter(k => S.currentGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k)))
+        ...fieldsForPicker(S.chosenNumericFields, S.currentGeoJSON),
+        ...fieldsForPicker(S.chosenCategoricalFields, S.currentGeoJSON)
       ];
       _populateFieldDropdownFromList(allAvailableFields);
       _fieldSelect.value = S.currentField ?? '';
@@ -558,6 +559,13 @@ export function addLayerFromDataStore(storeId: string): boolean {
   _addOrUpdateSource(layer.geojson);
   _applyGrayRendering();
   applyLayerOrderToMap();
+  // Desktop: register the new layer so the viewport streamer keeps it fresh on
+  // pan (it's backed by an already-streamed DB source). No-op in browser.
+  if (window.vizDesktop) {
+    window.dispatchEvent(new CustomEvent('viz:layer-added', {
+      detail: { sourceId: store.id, layerId: layer.id }
+    }));
+  }
   return true;
 }
 
@@ -574,6 +582,7 @@ export function setCurrentLayer(layerId: string) {
   } else if (S.currentGeoJSON) {
     _applyGrayRendering();
   }
+  if (window.vizDesktop) window.dispatchEvent(new Event('viz:state-changed'));
 }
 
 export function setLayerVisibility(layer: LayerState, visible: boolean) {
@@ -634,6 +643,7 @@ export function removeLayer(layerId: string) {
   }
   renderLayerList();
   applyLayerOrderToMap();
+  if (window.vizDesktop) window.dispatchEvent(new Event('viz:state-changed'));
 }
 
 /* ------------------------------------------------------------------ */

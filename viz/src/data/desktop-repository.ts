@@ -15,6 +15,31 @@ import type {
   GeometryQueryOptions,
   SourceInfo
 } from './repository.js';
+import { perfEnabled, perfLog, perfNote, perfNow } from '../perf.js';
+
+/** One-shot EXPLAIN per table per session (confirms spatial index usage). */
+const explainedTables = new Set<string>();
+
+/** Log the physical plan of the viewport query once, so we can see whether the
+ *  R-tree index is used or it's a full scan. Best-effort; never throws. */
+async function explainOnce(table: string, sql: string): Promise<void> {
+  if (!perfEnabled() || explainedTables.has(table)) return;
+  explainedTables.add(table);
+  try {
+    const { rows } = await db().query(`EXPLAIN ${sql}`);
+    const plan = rows.map((r) => Object.values(r).join(' ')).join('\n');
+    const usesIndex = /RTREE|INDEX_SCAN/i.test(plan);
+    const seqScan = /SEQ_SCAN/i.test(plan);
+    const verdict = usesIndex
+      ? 'USES SPATIAL INDEX'
+      : seqScan
+        ? 'SEQ_SCAN — spatial R-tree index NOT used'
+        : 'unknown plan';
+    perfNote(`viewport index check (${table})`, verdict);
+  } catch (err) {
+    perfNote(`EXPLAIN failed (${table})`, err);
+  }
+}
 
 const NUMERIC_DB_TYPES = [
   'TINYINT', 'SMALLINT', 'INTEGER', 'BIGINT', 'HUGEINT',
@@ -107,7 +132,13 @@ export class DesktopRepository implements DataRepository {
       `WHERE geom IS NOT NULL AND ST_Intersects(geom, ${env})`;
     if (opts?.limit && Number.isFinite(opts.limit)) sql += ` LIMIT ${Math.floor(opts.limit)}`;
 
+    void explainOnce(table, sql);
+
+    const tDb = perfNow();
     const { rows } = await db().query(sql);
+    perfLog('repo.queryGeometry db+ipc', perfNow() - tDb, { rows: rows.length, tol });
+
+    const tParse = perfNow();
     const signal = opts?.signal;
     const features: GeoJSON.Feature[] = [];
     for (let i = 0; i < rows.length; i++) {
@@ -137,6 +168,7 @@ export class DesktopRepository implements DataRepository {
         properties
       });
     }
+    perfLog('repo.queryGeometry parse', perfNow() - tParse, { features: features.length });
     return { type: 'FeatureCollection', features };
   }
 
@@ -148,6 +180,13 @@ export class DesktopRepository implements DataRepository {
       `WHERE geom IS NOT NULL AND ST_Intersects(geom, ${env})`;
     const { rows } = await db().query(sql);
     return Number((rows[0] as any)?.n ?? 0);
+  }
+
+  async queryRowById(sourceId: string, parcelId: string): Promise<Record<string, unknown> | null> {
+    const table = await this.resolveTable(sourceId);
+    const sql = `SELECT * EXCLUDE (geom) FROM ${qid(table)} WHERE parcel_id = ${lit(parcelId)} LIMIT 1`;
+    const { rows } = await db().query(sql);
+    return (rows[0] as Record<string, unknown>) ?? null;
   }
 
   async getSourceExtent(sourceId: string): Promise<BBox | null> {

@@ -119,9 +119,13 @@ function sanitizeRows(rows) {
   });
 }
 
+// Opt-in: run with VIZ_PERF=1 to log per-query exec/extract timings.
+const PERF_DB = process.env.VIZ_PERF === '1';
+
 /** Run a read query, returning row objects. `params` are positional ($1,$2,...). */
 async function query(sql, params) {
   const conn = requireConnection();
+  const t0 = PERF_DB ? Date.now() : 0;
   let reader;
   if (params && params.length) {
     const prepared = await conn.prepare(sql);
@@ -130,7 +134,17 @@ async function query(sql, params) {
   } else {
     reader = await conn.runAndReadAll(sql);
   }
-  return { rows: sanitizeRows(reader.getRowObjects()) };
+  const tExec = PERF_DB ? Date.now() : 0;
+  const rows = sanitizeRows(reader.getRowObjects());
+  if (PERF_DB) {
+    const exec = tExec - t0;            // DuckDB compute (incl. ST_AsGeoJSON/Simplify)
+    const extract = Date.now() - tExec; // getRowObjects + sanitize (main-process JS)
+    if (exec + extract > 80) {
+      const label = String(sql).replace(/\s+/g, ' ').slice(0, 80);
+      console.log(`[perf-db] exec=${exec}ms extract+sanitize=${extract}ms rows=${rows.length} :: ${label}`);
+    }
+  }
+  return { rows };
 }
 
 /** Run a write/DDL statement. Returns affected info where available. */

@@ -6,6 +6,8 @@
  * normalization options live here.
  */
 import { S } from './state';
+import { perfTime } from './perf.js';
+import { fieldsForPicker } from './field-availability.js';
 import { fmt, percentile, numOrNull } from './utils.number';
 import {
   buildLayerVisibilityExpression,
@@ -137,9 +139,7 @@ export function populateCategoryFields(
     return [];
   }
 
-  const available = categoricalFields.filter(k =>
-    geoJSON.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
+  const available = fieldsForPicker(categoricalFields, geoJSON);
 
   available.forEach(field => {
     select.appendChild(new Option(field, field));
@@ -353,12 +353,8 @@ export function populateStatisticsFields() {
     return;
   }
 
-  const availableNumeric = numericFields.filter(k =>
-    sourceGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
-  const availableCategorical = categoricalFields.filter(k =>
-    sourceGeoJSON?.features?.some(f => f?.properties?.hasOwnProperty(k))
-  );
+  const availableNumeric = fieldsForPicker(numericFields, sourceGeoJSON);
+  const availableCategorical = fieldsForPicker(categoricalFields, sourceGeoJSON);
   const availableFields = [...availableNumeric, ...availableCategorical];
   availableFields.forEach(field => {
     statsFieldSelect.appendChild(new Option(field, field));
@@ -604,6 +600,9 @@ export function getCurrentStatsSubjectSelection(): GeoJSON.Feature[] {
 }
 
 export function updateStatisticsResults() {
+  return perfTime('panel:stats.updateResults', updateStatisticsResultsImpl);
+}
+function updateStatisticsResultsImpl() {
   const { layer, layerGeoJSON } = getStatsSourceContext();
   const sourceGeoJSON = layerGeoJSON;
   const numericFields = layer?.chosenNumericFields ?? [];

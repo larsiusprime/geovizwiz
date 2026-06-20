@@ -1,4 +1,5 @@
 import maplibregl from 'maplibre-gl';
+import { perfSpan } from './perf.js';
 import PIN_SVG from './svg/pin.svg?raw';
 
 import { S } from './state';
@@ -556,6 +557,14 @@ function renderCriteriaTable() {
   });
 
   renderAddFieldOptions();
+
+  // Desktop streams a lean column set; make sure the criteria fields are loaded
+  // on the visible features so comps can be evaluated. No-op in browser.
+  if (window.vizDesktop) {
+    window.dispatchEvent(new CustomEvent('viz:request-fields', {
+      detail: getComparisonFields().map((f) => f.field)
+    }));
+  }
 }
 
 function buildCompsSortValue(comp: CompRow, field: string) {
@@ -927,6 +936,9 @@ function expandPanelForCompsIfNeeded() {
 }
 
 async function findComps() {
+  return perfSpan('panel:findComps', findCompsImpl);
+}
+async function findCompsImpl() {
   if (!subject) return;
   if (!hasAnyThresholdEnabled()) {
     comps = [];

@@ -1300,11 +1300,13 @@ Practical default posture:
 
 ### Desktop data and storage model (confirmed)
 
-- Desktop uses **one Postgres/PostGIS database per project**.
+> **Implementation note (shipped):** the plan below originally specified **Postgres/PostGIS**. The shipped desktop build uses an **embedded DuckDB** database (`project.duckdb`) with the `spatial` extension (plus best-effort `h3`) instead — this avoids provisioning/bundling a separate DB service while keeping the one-DB-per-project model and the same SQL-over-IPC access seam. References to "Postgres/PostGIS" below should be read as "the project's embedded DuckDB" unless/until a Postgres backend is actually added.
+
+- Desktop uses **one embedded DuckDB database per project** (`project.duckdb` in the project root).
 - Importing a data source creates **one physical table per imported data source**, using a sanitized source-name-derived table name.
 - Multiple in-app layers that reference the same data source must share that single table (no duplicate table copies).
-- Geometry is stored in standard PostGIS geometry columns with SRID/CRS preserved where available.
-- Import pipeline eagerly creates indexes for query performance on large datasets: geometry index (where geometry exists) and PK index (where a primary key exists); no broad auto-indexing on other fields by default.
+- Geometry is normalized into a DuckDB `GEOMETRY` column named `geom`, with the source SRID/CRS captured into the source record where available.
+- Import pipeline eagerly creates indexes for query performance on large datasets: an R-tree index on `geom` (where geometry exists) and a unique index on the synthesized `parcel_id`; no broad auto-indexing on other fields by default.
 - By default, imported source files are retained under `/data/raw`.
 - Derived outputs/caches/materializations are stored under `/data/derived`.
 - Desktop should allow immediate use of imported data without requiring a tile-bake step.
@@ -1314,6 +1316,18 @@ Practical default posture:
 - **Phase 1 desktop behavior:** direct DB-backed query windows + server-side pagination/chunking.
 - **Later desktop enhancement:** optional vector tile server/materialization for faster large-scale map rendering.
 - Users are not forced to pre-bake vector tiles before they can work with newly imported data.
+
+#### Lean-column streaming (shipped — performance-critical, don't regress)
+
+The viewport query streams **only the columns currently in use**, not the whole table — profiling showed pulling all ~40 attribute columns per pan cost ~8–21 s (≈82% in IPC + marshalling), vs ~0.7–1.4 s lean. Key invariant: **the in-memory features (`S.currentGeoJSON`) in desktop carry only `geom` + `parcel_id` + the needed attribute columns.** Implications for anyone touching desktop:
+
+- The needed set is computed by `collectNeededFields()` in `desktop-bootstrap.ts` (colorized field of every layer, normalization sizes, stats/scatter/category fields, active filter fields, time-adjustment sale fields, + comp-finder criteria). **If you add a feature that reads a new attribute field from the in-memory features, add it there** (or it'll be blank).
+- Field **pickers** must list the schema, not loaded features — use `fieldsForPicker()` (`field-availability.ts`), never `features.some(hasOwnProperty)`. The latter would hide unloaded fields in desktop.
+- Panels with field state outside `S` (comp-finder criteria) register columns by dispatching `window.dispatchEvent(new CustomEvent('viz:request-fields', { detail: [...] }))`; filters dispatch a bare `viz:request-fields` after `applyMapFilters`. Both trigger a debounced lean re-fetch.
+- A change to a needed field re-fetches and then recomputes (`scheduleUpdate('recomputeAndAutoScale')`) — that's why first-pick coloring works despite the async load.
+- **Inspect popup / write tool** need a parcel's *full* attribute row → fetched on demand via `DataRepository.queryRowById` (NOT carried on every feature).
+- Panels read the **data store's** `geojson` (scatterplot, comp-finder) or the **layer's** `geojson` (statistics); desktop keeps both in sync per viewport in `refreshViewport`.
+- Profiling is opt-in: `localStorage.VIZ_PERF='1'` (renderer) / `VIZ_PERF=1` env (main process) — see `perf.ts`.
 
 ### Project lifecycle semantics (clarified)
 
@@ -1336,6 +1350,32 @@ Rationale: this is more secure than plaintext `.env` files while still preservin
 - UI should only render tools/actions that are available in current mode.
 - Data formats should preserve unknown/high-tier metadata whenever feasible to maximize cross-tier compatibility.
 - Audit logging is a first-class requirement for Hosted/Cloud write operations.
+
+### Responsiveness, feedback & cancelability (CORE UX PRINCIPLE — applies everywhere)
+
+These are non-negotiable interaction principles for the whole app, not just one panel. Treat them as defaults; deviating needs a concrete reason.
+
+**1. Every user action gets immediate — ideally instant — acknowledgment.**
+The instant a user does something (click, submit, drag, menu pick), the UI must visibly confirm "yes, that registered," *even if the action itself can't complete yet*. Acknowledge that it *happened*, then handle the eventual execution gracefully (and report success/failure when it lands). Never let an action appear to do nothing while work happens silently.
+- If the result is immediate, just show it.
+- If the result is deferred/async, show the pending state right away (spinner, "Saving…/Cancelling…/Importing…", disabled/transformed control) and resolve it when the work finishes.
+- Beware the **blocked main thread**: heavy synchronous work (parsing tens of thousands of rows, big `setData`) freezes the renderer so clicks and even hover/repaint can't happen — so the acknowledgment never paints. Break such work into chunks that **yield to the event loop**, and check for cancellation between chunks, so the UI stays live. (Reference: the desktop geometry parse yields every ~2048 features via an `AbortSignal`.)
+
+**2. Pending/long-running actions are gracefully cancelable — except where genuinely untenable.**
+- A user-initiated operation that can take more than ~300ms should offer a single, obvious **Cancel** that aborts it.
+- Cancel itself follows principle #1: **instant acknowledgment** ("Cancelling…", control hidden/disabled) the moment it's clicked, then a clean return to the prior state with **no dangling or partially-initialized state** and no instability.
+- Abort cooperatively: signal the in-flight work to stop (e.g. `AbortSignal`), guard against late results mutating state after cancel, and do any expensive cleanup (closing DBs, etc.) in the background so the UI never blocks behind it.
+- "Untenable" exceptions are narrow — e.g. a DB write/index that can't be safely interrupted mid-flight. Those may be non-cancellable, but must still show a spinner (principle #1 still applies).
+
+**3. Loading/pending states are their own view, with real progress where possible.**
+- Always show **at least a spinner** so it's obvious the app is working, not stuck — never a static "Loading…" label with no motion.
+- Show a **determinate progress bar whenever a meaningful fraction exists** (byte/row counts, N-of-M steps, parse %); fall back to the spinner when there's no honest fraction (a single opaque query). Don't fake a bar.
+- A pending state must **not** be mixed in with still-actionable controls (don't append "loading…" text next to a live New/Open button) — hide/replace the originating controls while it runs.
+
+**4. Don't reimplement this per feature — reuse the shared helpers.**
+Feedback, spinner/progress, and cancel plumbing should live in shared code and be reused, not copy-pasted per call site. When adding a new long/async action, route it through the existing helpers rather than rolling bespoke logic. Extend the shared helper if it doesn't cover your case.
+
+Reference implementation: the desktop project picker's loading view — `desktop-bootstrap.ts` (`showLoadingView` / `setLoadingMessage` / `setLoadingProgress` / `handleCancelLoad`, the `AbortController`/`loadCancelled` cancellation plumbing), the chunked-yield parse in `data/desktop-repository.ts`, and the spinner/progress styles in `app.css`.
 
 
 
@@ -1363,8 +1403,10 @@ Rationale: this is more secure than plaintext `.env` files while still preservin
 3. Keep renderer logic shared with browser code path wherever possible.
 
 #### Milestone 2 — Project structure contract + lifecycle
+0. **Project root selection (shipped):** "New Project" and "Open Project" both treat the folder the user picks as the project root directly — the picked folder *is* the project (its basename is the project name). There is no parent-dir + name nesting step. "New Project" refuses a folder that already contains `viz-project.json` (directing the user to "Open Project").
 1. Standardize project folder structure:
    - `/viz-project.json`
+   - `/project.duckdb` (the project's embedded database)
    - `/data/raw`
    - `/data/derived`
    - `/assets`
@@ -1382,11 +1424,12 @@ Rationale: this is more secure than plaintext `.env` files while still preservin
    - run forward-only schema migrations by version
    - block open with explicit error if migration fails safely
 
-#### Milestone 3 — Bundled Postgres/PostGIS (one DB per project)
-1. Windows installer provisions app-specific Postgres + PostGIS runtime.
-2. App creates one DB per project using naming pattern `viz_<projectId>`.
-3. Store secrets in OS credential store; non-secret config in OS app config dir.
-4. Support env overrides for dev/ops only.
+#### Milestone 3 — Per-project database (one DB per project)
+**Shipped as embedded DuckDB** (originally planned as bundled Postgres/PostGIS):
+1. Each project owns a single `project.duckdb` file in its root — no separate DB service to install or provision.
+2. The `spatial` extension is loaded on DB open (with best-effort `h3`); `allow_unsigned_extensions` is enabled for offline/local use.
+3. No DB secrets to store (file-based, single-user). Non-secret config stays in the OS app config dir.
+4. (Deferred) A Postgres/PostGIS backend could be added later behind the same `DataRepository`/IPC seam if multi-user or server scenarios require it.
 
 #### Milestone 4 — Import pipeline v1 (large-data ready baseline)
 1. On import, copy original input into `/data/raw` by default.
@@ -1414,7 +1457,7 @@ Rationale: this is more secure than plaintext `.env` files while still preservin
 #### Exit criteria for initial Desktop launch track
 - Browser build behavior unchanged.
 - Desktop build launches and can create/open/delete projects.
-- Each project gets its own Postgres/PostGIS DB.
+- Each project gets its own embedded DuckDB database (`project.duckdb`).
 - Imports populate DB tables (one per source) and retain raw source files.
 - Large datasets can be browsed via paginated DB reads without requiring tile bake.
 - Core security posture is in place (secure Electron + OS secret storage).

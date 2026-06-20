@@ -182,6 +182,13 @@ export function updateErrorLayer() {
 export function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
   const layer = _getCurrentLayer();
   if (!layer) return;
+  addOrUpdateSourceForLayer(layer, fc);
+}
+
+/** Update (or create) a SPECIFIC layer's map source — used by desktop's
+ *  multi-source streamer to feed each layer its own data without touching the
+ *  current-layer assumption. `addOrUpdateSource` is the current-layer wrapper. */
+export function addOrUpdateSourceForLayer(layer: LayerState, fc: GeoJSON.FeatureCollection) {
   _showRenderingToast('Geometry is rendering');
   const existing = S.map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
   if (existing) {

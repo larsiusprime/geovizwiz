@@ -2,7 +2,7 @@ import { S } from './state.js';
 import type { DataStore } from './types.js';
 import { createLayerState, registerLayer } from './layers.js';
 import { addOrUpdateSourceForLayer } from './rendering.js';
-import { renderSettingsDataSourcesSection } from './main.js';
+import { renderSettingsDataSourcesSection, revealUI } from './main.js';
 import {
   btnNewCivilOSDataSource,
   civilSetupOverlay,
@@ -262,6 +262,10 @@ export async function handleOIDCCallback() {
 
     renderSettingsDataSourcesSection();
     createCivilLayer(newStore);
+    revealUI();
+    if (typeof (window as any).hideDesktopPicker === 'function') {
+      (window as any).hideDesktopPicker();
+    }
   } catch (err) {
     console.error("Failed OIDC token exchange:", err);
     alert("Failed to sign in to Civil OS instance.");
@@ -319,7 +323,7 @@ export function initCivilIntegration() {
       try {
         const normalized = normalizeDomain(domain);
         const metadata = await fetchInstanceMetadata(normalized);
-        const authIssuerUrl = metadata.auth_issuer_url;
+        const authIssuerUrl = metadata.auth_issuer_url || metadata.authIssuerUrl;
         if (!authIssuerUrl) {
           throw new Error("An issue with the Civil OS instance occurred");
         }

@@ -289,8 +289,9 @@ export function addExtrusionLayer(layer: LayerState) {
 
   if (isCivil) {
     let sourceLayer = 'parcels';
-    if (store?.civilTileJson?.vector_layers?.[0]?.id) {
-      sourceLayer = store.civilTileJson.vector_layers[0].id;
+    const layers = store?.civilTileJson?.vector_layers || store?.civilTileJson?.vectorLayers;
+    if (layers?.[0]?.id) {
+      sourceLayer = layers[0].id;
     }
     layerDef['source-layer'] = sourceLayer;
   }

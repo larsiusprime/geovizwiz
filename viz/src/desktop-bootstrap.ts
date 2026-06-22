@@ -756,6 +756,7 @@ function buildPicker() {
         <p class="desktop-picker-sub">This project has no data yet. Import a data source to begin.</p>
         <div class="desktop-picker-actions">
           <button type="button" class="desktop-import-btn">Import Data Source…</button>
+          <button type="button" class="desktop-civil-btn">New Civil OS Data Source…</button>
         </div>
         <button type="button" class="desktop-back-btn">← Back to projects</button>
       </div>
@@ -796,6 +797,10 @@ function buildPicker() {
   pickerEl.querySelector('.desktop-new-btn')!.addEventListener('click', () => void handleCreate());
   pickerEl.querySelector('.desktop-open-btn')!.addEventListener('click', () => void handleOpen());
   pickerEl.querySelector('.desktop-import-btn')!.addEventListener('click', () => void handleImport());
+  pickerEl.querySelector('.desktop-civil-btn')!.addEventListener('click', () => {
+    const btnNew = document.getElementById('btnNewCivilOSDataSource');
+    if (btnNew) btnNew.click();
+  });
   pickerEl.querySelector('.desktop-back-btn')!.addEventListener('click', () => showChooserView());
   pickerEl.querySelector('.desktop-cancel-btn')!.addEventListener('click', () => handleCancelLoad());
   document.body.appendChild(pickerEl);
@@ -893,6 +898,7 @@ async function handleMenuSave(): Promise<void> {
 /** Entry point — call once at startup when isDesktopMode(). */
 export async function initDesktop(h: DesktopHost): Promise<void> {
   host = h;
+  (window as any).hideDesktopPicker = hidePicker;
   // The File menu is the native OS application menu (built in the main process);
   // its clicks arrive here over IPC.
   window.vizDesktop?.onMenuAction?.(handleMenuAction);

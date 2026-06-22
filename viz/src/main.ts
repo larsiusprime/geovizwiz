@@ -1121,9 +1121,8 @@ function installWelcome() {
     const card = document.createElement('div');
     card.style.cssText = 'background:#fff;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.12);padding:18px 20px;max-width:560px;width:min(92vw,560px);display:grid;gap:12px;text-align:center;';
     card.innerHTML = `
-      <div style="font-size:16px;font-weight:600;">Load a GeoParquet file</div>
-      <div style="color:#666;font-size:13px;">Choose a <code>.parquet</code> to visualize.</div>
-      <div style="color:#666;font-size:13px;">TIP: make sure it has polygon geometry; lines/points won't work.</div>
+      <div style="font-size:16px;font-weight:600;">Set up a Data Source</div>
+      <div style="color:#666;font-size:13px;">Choose a local GeoParquet file or connect to a Civil OS jurisdiction gateway.</div>
     `;
     const row = document.createElement('div');
     row.style.cssText='display:flex;gap:10px;justify-content:center;flex-wrap:wrap';
@@ -1133,7 +1132,15 @@ function installWelcome() {
     btnBrowse.style.cssText='border:1px solid #ddd;background:#f8f8f8;padding:8px 12px;border-radius:10px;cursor:pointer;';
     btnBrowse.onclick = () => fileInput.click();
 
-    row.append(btnBrowse);
+    const btnCivil = document.createElement('button');
+    btnCivil.textContent='New Civil OS Data Source…';
+    btnCivil.style.cssText='border:1px solid #ddd;background:#f8f8f8;padding:8px 12px;border-radius:10px;cursor:pointer;';
+    btnCivil.onclick = () => {
+      const btnNew = document.getElementById('btnNewCivilOSDataSource');
+      if (btnNew) btnNew.click();
+    };
+
+    row.append(btnBrowse, btnCivil);
     card.append(row);
     S.welcomeEl.append(card);
     document.body.append(S.welcomeEl);

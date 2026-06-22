@@ -46,3 +46,12 @@ For any layers derived from a Civil OS Data Source, use the GetParcelTiles TileJ
 
 ### Other Functionality
 More work will be required to implement other geovizwiz features for Civil OS. DO NOT make any changes for those features, including Comp Finding, statistical analysis, click parcels for details, etc. Only implement the above listed tasks for now.
+
+## Changes
+Below are improvements/fixes to make to the code already written to implement this feature. Use git diff to discover new additions.
+
+### Project Creation Screen
+Change the web and desktop versions of the app to allow a Civil OS data source to be added as a precondition to setting up a project, instead of forcing a local file to be used.
+
+### Civil OS Data Source Creation Error
+Setting up a civil os data source always fails with "An issue with the Civil OS instance occured". But in the web version I can see that the GetInstanceMetadata call is being made and returning data correctly.

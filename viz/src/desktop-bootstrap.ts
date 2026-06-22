@@ -769,9 +769,11 @@ function buildPicker() {
       <p class="desktop-picker-status"></p>
     </div>`;
   // Minimal inline styling so it works without touching style.css.
+  // Set zIndex to 2995 so it covers the toolbar (2990) and submenus (2991),
+  // but sits below global overlays and modal dialogs (3000).
   Object.assign(pickerEl.style, {
     position: 'fixed', inset: '0', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', background: 'rgba(15,23,42,0.85)', zIndex: '9999'
+    justifyContent: 'center', background: 'rgba(15,23,42,0.85)', zIndex: '2995'
   } as CSSStyleDeclaration);
   const card = pickerEl.querySelector('.desktop-picker-card') as HTMLElement;
   Object.assign(card.style, {

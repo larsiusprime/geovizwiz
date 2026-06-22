@@ -63,3 +63,6 @@ The /.well-known/openid-configuration to the issuer URL is failing, and not even
 Redirect auth is now working and the auth token is being received. However, the user immediately gets a toast pop up by the browser saying "Failed to sign in to Civil OS instance.". Looking at the network requests, it appears that the app is attempting to make a call to a GetTileJson endpoint. This is not a real tile endpoint for Civil. The only tile call it should be making is to get_parcel_tiles, and that is made like {CIVIL_BASE_URL}/tiles/get_parcel_tiles/...
 
 It is unclear if this failed is what is causing the UI error to appear, but it needs to be resolved regardless.
+
+## Can't configure civil os data source on desktop welcome screen
+The New Civil OS Data Source button on the project initialization screen doesn't work.

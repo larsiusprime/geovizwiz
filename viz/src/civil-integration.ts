@@ -132,7 +132,11 @@ export async function triggerOIDCRedirect(gatewayUrl: string, authIssuerUrl: str
     code_challenge_method: 'S256'
   }).toString();
 
-  window.location.href = authUrl;
+  if (window.location.href.startsWith('file://')) {
+    window.open(authUrl, '_blank');
+  } else {
+    window.location.href = authUrl;
+  }
 }
 
 export function createCivilLayer(store: DataStore) {
@@ -165,7 +169,19 @@ export async function handleOIDCCallback() {
   window.history.replaceState({}, document.title, window.location.pathname);
 
   if (state !== storedState || !verifier || !gateway || !issuer || !configStr) {
-    console.error("OIDC state mismatch or missing stored verifier.");
+    console.warn("OIDC state mismatch or missing stored verifier locally. Attempting to forward to local desktop app callback server...");
+    try {
+      const forwardUrl = `http://localhost:5173/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+      await fetch(forwardUrl, { mode: 'no-cors' });
+      document.body.innerHTML = `
+        <div style="font-family: sans-serif; text-align: center; padding-top: 50px; background: #0f172a; color: #f8fafc; height: 100vh; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+          <h2 style="color: #38bdf8; margin-bottom: 8px;">Forwarded to Desktop App</h2>
+          <p style="color: #94a3b8; font-size: 14px;">The authentication has been sent to your OpenCAMA desktop application. You can close this tab now.</p>
+        </div>
+      `;
+    } catch (err) {
+      console.error("Failed to forward OIDC callback to local desktop server:", err);
+    }
     return;
   }
 

@@ -66,3 +66,9 @@ It is unclear if this failed is what is causing the UI error to appear, but it n
 
 ## Can't configure civil os data source on desktop welcome screen
 The New Civil OS Data Source button on the project initialization screen doesn't work.
+
+### Redirect to user's system browser
+For desktop, instead of opening the auth redirect in a web view on the desktop app, the user should be redirected to their system browser to login. This is more secure and makes better use of password autofill for users
+
+### Project Initialization screen reappears
+After the user logs in on desktop and the app shows that it is rendering, the foreground is still populated with the project initalization screen asking to choose a starting data source.

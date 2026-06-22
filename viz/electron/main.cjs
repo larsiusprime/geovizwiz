@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs/promises');
+const http = require('http');
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
 const projectService = require('./project-service.cjs');
 const duckdbService = require('./duckdb-service.cjs');
@@ -287,8 +288,79 @@ ipcMain.handle('desktop:db:exec', async (_evt, sql, params) => {
   return duckdbService.exec(String(sql), Array.isArray(params) ? params : []);
 });
 
+let oidcServer = null;
+
+function startOidcServer() {
+  oidcServer = http.createServer((req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+
+    const urlObj = new URL(req.url, 'http://localhost:5173');
+    const code = urlObj.searchParams.get('code');
+    const state = urlObj.searchParams.get('state');
+
+    if (code && state) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const entryFile = resolveRendererEntry();
+        mainWindow.loadFile(entryFile, { query: { code, state } });
+        mainWindow.focus();
+      }
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Login Successful</title>
+            <style>
+              body {
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+                background-color: #0f172a;
+                color: #f8fafc;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+              }
+              h2 { color: #38bdf8; margin-bottom: 8px; }
+              p { color: #94a3b8; font-size: 14px; }
+            </style>
+          </head>
+          <body>
+            <h2>Login Successful!</h2>
+            <p>You can close this tab and return to the OpenCAMA app.</p>
+            <script>
+              setTimeout(() => { window.close(); }, 3000);
+            </script>
+          </body>
+        </html>
+      `);
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Not found');
+    }
+  });
+
+  oidcServer.listen(5173, '127.0.0.1', () => {
+    console.log('OIDC Desktop redirect server listening on http://localhost:5173');
+  });
+
+  oidcServer.on('error', (err) => {
+    console.error('Failed to start OIDC Desktop redirect server (port 5173 might be in use):', err);
+  });
+}
+
 app.whenReady().then(async () => {
   buildAppMenu();
+  startOidcServer();
   await createWindow();
 
   app.on('activate', async () => {
@@ -303,5 +375,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', async () => {
+  if (oidcServer) {
+    oidcServer.close().catch(() => {});
+  }
   await duckdbService.closeDatabase().catch(() => {});
 });

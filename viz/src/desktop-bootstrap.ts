@@ -262,6 +262,57 @@ function registerDesktopDataStore(source: SourceInfo): DataStore {
   return ds;
 }
 
+/** Build + register a synthetic desktop data store for a Civil OS source. */
+function registerCivilDataStore(m: SerializedDataSource): DataStore {
+  const storeId = m.id;
+  const newStore: DataStore = {
+    id: storeId,
+    name: m.name || `Civil OS: ${m.civilGateway}`,
+    file: null,
+    asyncBuffer: null,
+    geojson: { type: 'FeatureCollection', features: [] },
+    numericFieldsFromSchema: [],
+    categoricalFieldsFromSchema: [],
+    chosenNumericFields: [],
+    chosenCategoricalFields: [],
+    landSizeField: null,
+    landSizeUnitLabel: null,
+    bldgSizeField: null,
+    bldgSizeUnitLabel: null,
+    salePriceField: null,
+    saleDateField: null,
+    validSaleField: null,
+    vacantSaleField: null,
+    parcelIdField: null,
+    addressField: null,
+    bldgQualityField: null,
+    bldgConditionField: null,
+    bldgAgeField: null,
+    bldgEffAgeField: null,
+    bldgBedsField: null,
+    bldgBathsField: null,
+    bldgTypeField: null,
+    landTypeField: null,
+    landZoningField: null,
+    saleIdField: null,
+    fullMarketValueField: null,
+    assessedValueField: null,
+    landValueField: null,
+    improvementValueField: null,
+    isCivil: true,
+    civilGateway: m.civilGateway,
+    civilAuthIssuer: m.civilAuthIssuer,
+    civilToken: m.civilToken,
+    civilOIDCConfig: m.civilOIDCConfig,
+    civilTileJson: m.civilTileJson
+  };
+  S.dataStores.set(storeId, newStore);
+  if (!S.dataStoreOrder.includes(storeId)) S.dataStoreOrder.push(storeId);
+  S.currentDataStoreId = storeId;
+  renderDataStoreList();
+  return newStore;
+}
+
 /** Copy serialized semantic-field classification onto a data store (restore). */
 function applySerializedClassification(ds: DataStore, m: SerializedDataSource) {
   ds.landSizeField = m.landSizeField; ds.landSizeUnitLabel = m.landSizeUnitLabel;
@@ -312,10 +363,14 @@ async function restoreProjectAppState(app: ProjectFileV1): Promise<boolean> {
   const byId = new Map(dbSources.map((s) => [s.id, s]));
   const byName = new Map(dbSources.map((s) => [s.name, s]));
 
-  const sourceForStore = new Map<string, SourceInfo>(); // serialized dataStoreId → live source
+  const sourceForStore = new Map<string, any>(); // serialized dataStoreId → live source or serialized civil meta
   for (const dsMeta of app.dataSources ?? []) {
-    const src = byId.get(dsMeta.id) ?? byName.get(dsMeta.name);
-    if (src) sourceForStore.set(dsMeta.id, src);
+    if (dsMeta.isCivil) {
+      sourceForStore.set(dsMeta.id, dsMeta);
+    } else {
+      const src = byId.get(dsMeta.id) ?? byName.get(dsMeta.name);
+      if (src) sourceForStore.set(dsMeta.id, src);
+    }
   }
   const layersToRestore = (app.layers ?? []).filter((l) => sourceForStore.has(l.dataStoreId));
   if (layersToRestore.length === 0) return false;
@@ -328,19 +383,25 @@ async function restoreProjectAppState(app: ProjectFileV1): Promise<boolean> {
     const storeReady = new Set<string>();
     for (const dsMeta of app.dataSources ?? []) {
       const src = sourceForStore.get(dsMeta.id);
-      if (!src || storeReady.has(src.id)) continue;
-      storeReady.add(src.id);
-      applySerializedClassification(registerDesktopDataStore(src), dsMeta);
+      if (!src || storeReady.has(dsMeta.id)) continue;
+      storeReady.add(dsMeta.id);
+      if (dsMeta.isCivil) {
+        applySerializedClassification(registerCivilDataStore(dsMeta), dsMeta);
+      } else {
+        applySerializedClassification(registerDesktopDataStore(src), dsMeta);
+      }
     }
 
     // Layers (saved order) bound to their source's store, with saved settings.
     for (const sl of layersToRestore) {
       const src = sourceForStore.get(sl.dataStoreId)!;
-      const store = S.dataStores.get(src.id);
-      const layer = createLayerState(sl.name, src.id);
+      const isCivil = src.isCivil;
+      const storeId = isCivil ? src.id : src.id;
+      const store = S.dataStores.get(storeId);
+      const layer = createLayerState(sl.name, storeId);
       Object.assign(layer, deserializeLayer(sl), {
         id: layer.id,
-        dataStoreId: src.id,
+        dataStoreId: storeId,
         sourceId: layer.sourceId,
         layerId: layer.layerId,
         errorLayerId: layer.errorLayerId,
@@ -359,38 +420,56 @@ async function restoreProjectAppState(app: ProjectFileV1): Promise<boolean> {
         layer.bldgSizeUnitLabel = store.bldgSizeUnitLabel;
       }
       registerLayer(layer);
-      streamed.push({ sourceId: src.id, layerId: layer.id });
-    }
-    if (streamed.length === 0) return false;
-
-    const primary = sourceById.get(streamed[0].sourceId)!;
-    const extent = await getRepository().getSourceExtent(primary.id).catch(() => null);
-    if (loadCancelled) return false;
-    if (extent) S.map.fitBounds([[extent.minLng, extent.minLat], [extent.maxLng, extent.maxLat]], { padding: 40, duration: 0 });
-
-    // Stream every layer's data (restoring ⇒ streamLayer skips auto-recompute).
-    await refreshViewport(loadAbort?.signal);
-    if (loadCancelled) return false;
-
-    // Paint each layer by briefly making it current. For layers with a field,
-    // recompute color breaks against the streamed data (the same path a field
-    // change uses) so coloring is correct — cached breaks alone can render gray.
-    S.currentLayerId = '';
-    for (const e of [...streamed]) {
-      setCurrentLayer(e.layerId);
-      const lyr = S.layers.get(e.layerId);
-      if (lyr?.field && S.currentGeoJSON?.features?.length) {
-        computeAndApplyAutoMultiplier('auto');
+      if (isCivil) {
+        addOrUpdateSourceForLayer(layer, null as any);
+      } else {
+        streamed.push({ sourceId: storeId, layerId: layer.id });
       }
     }
-    setCurrentLayer(streamed[0].layerId);
-    applyLayerOrderToMap();
+    if (streamed.length === 0 && !app.dataSources?.some(ds => ds.isCivil)) return false;
 
-    host?.revealUI();
-    hidePicker();
-    S.map.off('moveend', onMoveEnd);
-    S.map.on('moveend', onMoveEnd);
-    host?.onSourceLoaded([...primary.numericFields, ...primary.categoricalFields]);
+    if (streamed.length > 0) {
+      const primary = sourceById.get(streamed[0].sourceId)!;
+      const extent = await getRepository().getSourceExtent(primary.id).catch(() => null);
+      if (loadCancelled) return false;
+      if (extent) S.map.fitBounds([[extent.minLng, extent.minLat], [extent.maxLng, extent.maxLat]], { padding: 40, duration: 0 });
+
+      // Stream every layer's data (restoring ⇒ streamLayer skips auto-recompute).
+      await refreshViewport(loadAbort?.signal);
+      if (loadCancelled) return false;
+
+      // Paint each layer by briefly making it current. For layers with a field,
+      // recompute color breaks against the streamed data (the same path a field
+      // change uses) so coloring is correct — cached breaks alone can render gray.
+      S.currentLayerId = '';
+      for (const e of [...streamed]) {
+        setCurrentLayer(e.layerId);
+        const lyr = S.layers.get(e.layerId);
+        if (lyr?.field && S.currentGeoJSON?.features?.length) {
+          computeAndApplyAutoMultiplier('auto');
+        }
+      }
+      setCurrentLayer(streamed[0].layerId);
+      applyLayerOrderToMap();
+
+      host?.revealUI();
+      hidePicker();
+      S.map.off('moveend', onMoveEnd);
+      S.map.on('moveend', onMoveEnd);
+      host?.onSourceLoaded([...primary.numericFields, ...primary.categoricalFields]);
+    } else {
+      // Civil-only project
+      const civilLayers = (app.layers ?? []).filter(l => {
+        const ds = app.dataSources?.find(d => d.id === l.dataStoreId);
+        return ds?.isCivil;
+      });
+      if (civilLayers.length > 0) {
+        setCurrentLayer(civilLayers[0].id);
+      }
+      applyLayerOrderToMap();
+      host?.revealUI();
+      hidePicker();
+    }
     return true;
   } finally {
     restoring = false;
@@ -658,6 +737,12 @@ async function loadProjectSources() {
     return;
   }
   if (loadCancelled) return;
+  const hasCivilSource = Array.from(S.dataStores.values()).some(ds => ds.isCivil);
+  if (hasCivilSource) {
+    hidePicker();
+    host?.revealUI();
+    return;
+  }
   const withGeom = sources.find((s) => s.hasGeometry) ?? sources[0];
   if (withGeom) {
     await addStreamedSource(withGeom, { fit: true, reveal: true });

@@ -235,7 +235,6 @@ export async function handleOIDCCallback() {
 
     const gatewayUrlObj = new URL(gateway);
     const domainName = gatewayUrlObj.hostname;
-    const storeId = `store-civil-${Date.now()}`;
 
     // Setup TileJSON discovery
     const tileJsonUrl = `${gateway}/tiles/get_parcel_tiles`;
@@ -265,53 +264,77 @@ export async function handleOIDCCallback() {
       };
     }
 
-    const newStore: DataStore = {
-      id: storeId,
-      name: `Civil OS: ${domainName}`,
-      file: null,
-      asyncBuffer: null,
-      geojson: { type: 'FeatureCollection', features: [] },
-      numericFieldsFromSchema: [],
-      categoricalFieldsFromSchema: [],
-      chosenNumericFields: [],
-      chosenCategoricalFields: [],
-      landSizeField: null,
-      landSizeUnitLabel: null,
-      bldgSizeField: null,
-      bldgSizeUnitLabel: null,
-      salePriceField: null,
-      saleDateField: null,
-      validSaleField: null,
-      vacantSaleField: null,
-      parcelIdField: null,
-      addressField: null,
-      bldgQualityField: null,
-      bldgConditionField: null,
-      bldgAgeField: null,
-      bldgEffAgeField: null,
-      bldgBedsField: null,
-      bldgBathsField: null,
-      bldgTypeField: null,
-      landTypeField: null,
-      landZoningField: null,
-      saleIdField: null,
-      fullMarketValueField: null,
-      assessedValueField: null,
-      landValueField: null,
-      improvementValueField: null,
-      isCivil: true,
-      civilGateway: gateway,
-      civilAuthIssuer: issuer,
-      civilToken: idToken,
-      civilOIDCConfig: oidcConfig,
-      civilTileJson: tileJsonData
-    };
+    // Check if there is an existing Civil OS data store with the same gateway
+    const existingStore = Array.from(S.dataStores.values()).find(
+      s => s.isCivil && s.civilGateway && s.civilGateway.replace(/\/$/, '') === gateway.replace(/\/$/, '')
+    );
 
-    S.dataStores.set(storeId, newStore);
-    S.dataStoreOrder.push(storeId);
+    let storeId: string;
+    if (existingStore) {
+      storeId = existingStore.id;
+      existingStore.civilToken = idToken;
+      existingStore.civilOIDCConfig = oidcConfig;
+      existingStore.civilTileJson = tileJsonData;
+
+      // Force reload map sources/layers for this store
+      const layers = Array.from(S.layers.values()).filter(l => l.dataStoreId === storeId);
+      for (const layer of layers) {
+        if (S.map) {
+          if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
+          if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
+          if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
+        }
+        addOrUpdateSourceForLayer(layer, null as any);
+      }
+    } else {
+      storeId = `store-civil-${Date.now()}`;
+      const newStore: DataStore = {
+        id: storeId,
+        name: `Civil OS: ${domainName}`,
+        file: null,
+        asyncBuffer: null,
+        geojson: { type: 'FeatureCollection', features: [] },
+        numericFieldsFromSchema: [],
+        categoricalFieldsFromSchema: [],
+        chosenNumericFields: [],
+        chosenCategoricalFields: [],
+        landSizeField: null,
+        landSizeUnitLabel: null,
+        bldgSizeField: null,
+        bldgSizeUnitLabel: null,
+        salePriceField: null,
+        saleDateField: null,
+        validSaleField: null,
+        vacantSaleField: null,
+        parcelIdField: null,
+        addressField: null,
+        bldgQualityField: null,
+        bldgConditionField: null,
+        bldgAgeField: null,
+        bldgEffAgeField: null,
+        bldgBedsField: null,
+        bldgBathsField: null,
+        bldgTypeField: null,
+        landTypeField: null,
+        landZoningField: null,
+        saleIdField: null,
+        fullMarketValueField: null,
+        assessedValueField: null,
+        landValueField: null,
+        improvementValueField: null,
+        isCivil: true,
+        civilGateway: gateway,
+        civilAuthIssuer: issuer,
+        civilToken: idToken,
+        civilOIDCConfig: oidcConfig,
+        civilTileJson: tileJsonData
+      };
+      S.dataStores.set(storeId, newStore);
+      S.dataStoreOrder.push(storeId);
+      createCivilLayer(newStore);
+    }
 
     renderSettingsDataSourcesSection();
-    createCivilLayer(newStore);
     revealUI();
     if (typeof (window as any).hideDesktopPicker === 'function') {
       (window as any).hideDesktopPicker();

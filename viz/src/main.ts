@@ -286,7 +286,7 @@ import { initMetadataModule } from './metadata.js';
 import { getRuntimeMode, isBrowserMode, isDesktopMode } from './runtime-mode';
 import { getRepository } from './data/index.js';
 import { initDesktop, addDesktopLayerFromFile } from './desktop-bootstrap.js';
-import { initCivilIntegration } from './civil-integration.js';
+import { initCivilIntegration, triggerOIDCRedirect } from './civil-integration.js';
 (window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Runtime Mode ----------------- */
@@ -1398,7 +1398,18 @@ export function renderSettingsDataSourcesSection() {
     deleteBtn.textContent = '❌';
     deleteBtn.addEventListener('click', () => openDeleteDataSourceConfirm(store.id));
 
-    row.append(sourceName, classifyBtn, deleteBtn);
+    if (store.isCivil) {
+      const loginBtn = document.createElement('button');
+      loginBtn.type = 'button';
+      loginBtn.textContent = 'login…';
+      loginBtn.title = 'Authenticate with Civil OS';
+      loginBtn.addEventListener('click', () => {
+        void triggerOIDCRedirect(store.civilGateway || '', store.civilAuthIssuer || '', store.civilOIDCConfig);
+      });
+      row.append(sourceName, loginBtn, deleteBtn);
+    } else {
+      row.append(sourceName, classifyBtn, deleteBtn);
+    }
     settingsDataSourcesList.appendChild(row);
   });
 }

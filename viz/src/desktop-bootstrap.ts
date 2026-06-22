@@ -373,7 +373,8 @@ async function restoreProjectAppState(app: ProjectFileV1): Promise<boolean> {
     }
   }
   const layersToRestore = (app.layers ?? []).filter((l) => sourceForStore.has(l.dataStoreId));
-  if (layersToRestore.length === 0) return false;
+  const hasCivil = (app.dataSources ?? []).some(ds => ds.isCivil);
+  if (layersToRestore.length === 0 && !hasCivil) return false;
 
   restoring = true;
   try {
@@ -715,7 +716,8 @@ async function loadProjectSources() {
     const current = await window.vizDesktop?.project.current();
     if (loadCancelled) return;
     const app = current?.meta?.app as ProjectFileV1 | null | undefined;
-    if (app && Array.isArray(app.layers) && app.layers.length > 0) {
+    const hasCivil = app?.dataSources?.some(ds => ds.isCivil);
+    if (app && ((Array.isArray(app.layers) && app.layers.length > 0) || hasCivil)) {
       const ok = await restoreProjectAppState(app);
       if (loadCancelled) return;
       if (ok) return;

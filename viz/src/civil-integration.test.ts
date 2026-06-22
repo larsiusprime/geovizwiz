@@ -323,4 +323,58 @@ describe('handleOIDCCallback', () => {
     const addedStore = Array.from(S.dataStores.values())[0];
     expect(addedStore.civilToken).toBe('desktop-jwt-id-token');
   });
+
+  it('updates existing store instead of creating duplicate if gateway matches', async () => {
+    const existingStore = {
+      id: 'existing-store-id',
+      name: 'Existing Civil OS',
+      isCivil: true,
+      civilGateway: 'https://gateway.example.com/',
+      civilToken: 'old-token',
+      chosenNumericFields: [],
+      chosenCategoricalFields: []
+    } as any;
+    S.dataStores.set('existing-store-id', existingStore);
+
+    const mockTokenRes = { id_token: 'new-id-token' };
+    const mockTileJson = { tilejson: '3.0.0', tiles: ['http://tile-url'] };
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTokenRes,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTileJson,
+      } as Response);
+
+    (S as any).map = {
+      getSource: vi.fn().mockReturnValue(true),
+      getLayer: vi.fn().mockReturnValue(true),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn()
+    };
+    const mockLayer = {
+      id: 'layer-id',
+      layerId: 'layer-layer-id',
+      errorLayerId: 'layer-error-id',
+      sourceId: 'layer-source-id',
+      dataStoreId: 'existing-store-id'
+    } as any;
+    (S as any).layers = new Map([['layer-id', mockLayer]]);
+
+    await handleOIDCCallback();
+
+    expect(S.dataStores.size).toBe(1);
+    expect(existingStore.civilToken).toBe('new-id-token');
+    expect(existingStore.civilTileJson).toEqual(mockTileJson);
+
+    expect(S.map.removeLayer).toHaveBeenCalledWith('layer-layer-id');
+    expect(S.map.removeLayer).toHaveBeenCalledWith('layer-error-id');
+    expect(S.map.removeSource).toHaveBeenCalledWith('layer-source-id');
+    
+    delete (S as any).map;
+    delete (S as any).layers;
+  });
 });

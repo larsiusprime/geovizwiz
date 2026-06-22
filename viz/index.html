@@ -397,6 +397,9 @@
           <span>Data Sources</span>
         </div>
         <div id="settingsDataSourcesList" class="settings-data-sources-list"></div>
+        <div class="buttons" style="margin-top: 8px;">
+          <button id="btnNewCivilOSDataSource" type="button">New Civil OS Data Source</button>
+        </div>
       </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
@@ -1202,6 +1205,23 @@
       <div class="footer">
         <button id="btnCancelDeleteDataSource" type="button">Cancel</button>
         <button id="btnConfirmDeleteDataSource" type="button">Delete</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Civil OS Setup Modal -->
+  <div id="civilSetupOverlay" class="overlay">
+    <div class="modal" style="max-width: 400px;">
+      <h3>New Civil OS Data Source</h3>
+      <div class="muted">Enter the domain of your Civil OS Gateway (e.g. leepa.civillabs.app).</div>
+      <div style="margin-top: 12px; display: grid; gap: 6px;">
+        <label for="civilDomainInput"><strong>Gateway Domain:</strong></label>
+        <input type="text" id="civilDomainInput" placeholder="jurisdiction.civillabs.app" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 6px; background: #fff; color: #111;" />
+        <div id="civilSetupError" class="muted" style="color: #ef4444; display: none; font-size: 12px; margin-top: 4px;"></div>
+      </div>
+      <div class="footer" style="margin-top: 16px;">
+        <button id="btnCancelCivilSetup" type="button">Cancel</button>
+        <button id="btnConfirmCivilSetup" type="button">Confirm</button>
       </div>
     </div>
   </div>

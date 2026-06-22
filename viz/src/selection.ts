@@ -81,7 +81,16 @@ function getViewportPoint(e: MouseEvent): maplibregl.Point {
 /* ------------------------------------------------------------------ */
 
 export function getParcelId(feature: any): string {
-  return feature.id.toString();
+  if (feature.properties && feature.properties.parcel_id) {
+    return feature.properties.parcel_id.toString();
+  }
+  if (feature.properties && feature.properties.id) {
+    return feature.properties.id.toString();
+  }
+  if (feature.id !== undefined && feature.id !== null) {
+    return feature.id.toString();
+  }
+  return "";
 }
 
 export function findFeatureByParcelId(parcelId: string): GeoJSON.Feature | null {

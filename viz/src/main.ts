@@ -283,9 +283,10 @@ import {
   createDataStore, renderDataStoreList,
 } from './layers';
 import { initMetadataModule } from './metadata.js';
-import { getRuntimeMode, isBrowserMode, isDesktopMode, isHostedMode } from './runtime-mode';
+import { getRuntimeMode, isBrowserMode, isDesktopMode } from './runtime-mode';
 import { getRepository } from './data/index.js';
 import { initDesktop, addDesktopLayerFromFile } from './desktop-bootstrap.js';
+import { initCivilIntegration } from './civil-integration.js';
 (window as any).savedFiltersStore = S.savedFiltersStore;
 
 /* ---------------- Runtime Mode ----------------- */
@@ -296,8 +297,6 @@ if (isBrowserMode()) {
   console.info('[viz] browser mode features enabled');
 } else if (isDesktopMode()) {
   console.info('[viz] desktop mode features enabled');
-} else if (isHostedMode()) {
-  console.info('[viz] hosted mode features enabled');
 }
 if (typeof document !== 'undefined') {
   document.documentElement.setAttribute('data-viz-runtime-mode', runtimeMode);
@@ -318,7 +317,20 @@ S.map = new maplibregl.Map({
   hash: true,
   boxZoom: false,
   doubleClickZoom: false,
-  pixelRatio: HQ_PR // supersample: render at higher internal resolution (smooth lines)
+  pixelRatio: HQ_PR,
+  transformRequest: (url: string) => {
+    if (url.includes('/tiles/')) {
+      const stores = Array.from(S.dataStores.values());
+      const civilStore = stores.find(s => s.isCivil && s.civilGateway && url.includes(s.civilGateway));
+      if (civilStore && civilStore.civilToken) {
+        return {
+          url: url,
+          headers: { 'Authorization': `Bearer ${civilStore.civilToken}` }
+        };
+      }
+    }
+    return { url };
+  }
 });
 S.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 S.map.on('load', () => {
@@ -1326,7 +1338,7 @@ function openDeleteDataSourceConfirm(storeId: string) {
   confirmDeleteDataSourceOverlay.classList.add('show');
 }
 
-function renderSettingsDataSourcesSection() {
+export function renderSettingsDataSourcesSection() {
   settingsDataSourcesList.replaceChildren();
 
   if (S.dataStoreOrder.length === 0) {
@@ -2637,6 +2649,7 @@ fileInput.addEventListener('change', async () => {
     S.lastFile = dataStore.file;
     S.lastAsyncBuffer = dataStore.asyncBuffer;
 
+    if (!S.lastAsyncBuffer) return;
     const md = await parquetMetadataAsync(S.lastAsyncBuffer);
     const numRows = Number(md.num_rows ?? 0);
 
@@ -3448,3 +3461,4 @@ initSelection({
   },
 });
 initSelectionElements();
+initCivilIntegration();

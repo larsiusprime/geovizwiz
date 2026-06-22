@@ -1,7 +1,7 @@
-export type RuntimeMode = 'browser' | 'desktop' | 'hosted';
+export type RuntimeMode = 'browser' | 'desktop';
 
 const FALLBACK_MODE: RuntimeMode = 'browser';
-const ALLOWED_MODES = new Set<RuntimeMode>(['browser', 'desktop', 'hosted']);
+const ALLOWED_MODES = new Set<RuntimeMode>(['browser', 'desktop']);
 
 function readBuildMode(): string | undefined {
   return (import.meta.env.VITE_VIZ_BUILD_MODE as string | undefined)?.trim().toLowerCase();
@@ -23,6 +23,3 @@ export function isDesktopMode(): boolean {
   return getRuntimeMode() === 'desktop';
 }
 
-export function isHostedMode(): boolean {
-  return getRuntimeMode() === 'hosted';
-}

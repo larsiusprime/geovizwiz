@@ -314,3 +314,12 @@ export const timeAdjustmentRatioHigh = document.getElementById('timeAdjustmentRa
 export const timeAdjustmentMinSample = document.getElementById('timeAdjustmentMinSample') as HTMLInputElement;
 export const timeAdjustmentSizeHeader = document.getElementById('timeAdjustmentSizeHeader') as HTMLTableCellElement;
 export const timeAdjustmentRatioHeader = document.getElementById('timeAdjustmentRatioHeader') as HTMLTableCellElement;
+
+// --- Civil OS Setup Modal ---
+export const btnNewCivilOSDataSource = document.getElementById('btnNewCivilOSDataSource') as HTMLButtonElement;
+export const civilSetupOverlay = document.getElementById('civilSetupOverlay') as HTMLDivElement;
+export const civilDomainInput = document.getElementById('civilDomainInput') as HTMLInputElement;
+export const civilSetupError = document.getElementById('civilSetupError') as HTMLDivElement;
+export const btnCancelCivilSetup = document.getElementById('btnCancelCivilSetup') as HTMLButtonElement;
+export const btnConfirmCivilSetup = document.getElementById('btnConfirmCivilSetup') as HTMLButtonElement;
+

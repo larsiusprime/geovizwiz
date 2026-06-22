@@ -190,11 +190,41 @@ export function addOrUpdateSource(fc: GeoJSON.FeatureCollection) {
  *  current-layer assumption. `addOrUpdateSource` is the current-layer wrapper. */
 export function addOrUpdateSourceForLayer(layer: LayerState, fc: GeoJSON.FeatureCollection) {
   _showRenderingToast('Geometry is rendering');
-  const existing = S.map.getSource(layer.sourceId) as maplibregl.GeoJSONSource | undefined;
+  const store = S.dataStores.get(layer.dataStoreId);
+  const isCivil = store?.isCivil;
+
+  const existing = S.map.getSource(layer.sourceId);
   if (existing) {
-    existing.setData(fc);
+    if (!isCivil && fc) {
+      (existing as maplibregl.GeoJSONSource).setData(fc);
+    }
   } else {
-    S.map.addSource(layer.sourceId, { type: 'geojson', data: fc });
+    if (isCivil) {
+      let tileJson = store?.civilTileJson;
+      if (!tileJson) {
+        tileJson = {
+          tilejson: '3.0.0',
+          tiles: [`${store?.civilGateway}/tiles/get_parcel_tiles/{z}/{x}/{y}`],
+          vector_layers: [{ id: 'parcels' }]
+        };
+      }
+
+      if (tileJson.tiles && store?.civilGateway) {
+        tileJson.tiles = tileJson.tiles.map((url: string) => {
+          if (url.startsWith('/')) {
+            return store.civilGateway + url;
+          }
+          return url;
+        });
+      }
+
+      S.map.addSource(layer.sourceId, {
+        type: 'vector',
+        ...tileJson
+      });
+    } else {
+      S.map.addSource(layer.sourceId, { type: 'geojson', data: fc });
+    }
     addExtrusionLayer(layer);
   }
   _awaitFirstRenderedFeature(layer.layerId);
@@ -242,15 +272,30 @@ function getFeatureInspectFocusLngLat(feature: GeoJSON.Feature, fallback: maplib
 
 export function addExtrusionLayer(layer: LayerState) {
   if (S.map.getLayer(layer.layerId)) return;
-  S.map.addLayer({
-    id: layer.layerId, type: 'fill-extrusion', source: layer.sourceId,
+  const store = S.dataStores.get(layer.dataStoreId);
+  const isCivil = store?.isCivil;
+
+  const layerDef: any = {
+    id: layer.layerId,
+    type: 'fill-extrusion',
+    source: layer.sourceId,
     paint: {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
       'fill-extrusion-opacity': parseFloat(_opacityInput.value),
       'fill-extrusion-vertical-gradient': true
     }
-  });
+  };
+
+  if (isCivil) {
+    let sourceLayer = 'parcels';
+    if (store?.civilTileJson?.vector_layers?.[0]?.id) {
+      sourceLayer = store.civilTileJson.vector_layers[0].id;
+    }
+    layerDef['source-layer'] = sourceLayer;
+  }
+
+  S.map.addLayer(layerDef);
   _setLayerVisibility(layer, layer.visible);
 
   // NEW: parcel selection and inspection

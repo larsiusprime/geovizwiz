@@ -25,7 +25,6 @@
     "preview": "vite preview --host --port 4173",
     "build:browser": "vite build --mode browser",
     "build:desktop": "vite build --mode desktop",
-    "build:hosted": "vite build --mode hosted",
     "rebuild:desktop": "electron-rebuild -f -w @duckdb/node-api",
     "run:desktop": "npm run build:desktop && npm exec electron ./electron/main.cjs"
   }

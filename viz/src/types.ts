@@ -187,8 +187,14 @@ export type LayerState = {
 export type DataStore = {
   id: string;
   name: string;
-  file: File;
-  asyncBuffer: AsyncBuffer;
+  file: File | null;
+  asyncBuffer: AsyncBuffer | null;
+  isCivil?: boolean;
+  civilGateway?: string;
+  civilAuthIssuer?: string;
+  civilToken?: string;
+  civilOIDCConfig?: any;
+  civilTileJson?: any;
   geojson: GeoJSON.FeatureCollection | null;
   numericFieldsFromSchema: string[];
   categoricalFieldsFromSchema: string[];
@@ -237,6 +243,12 @@ export type SerializedDataSource = {
   id: string;
   name: string;
   parquetFile: string;
+  isCivil?: boolean;
+  civilGateway?: string;
+  civilAuthIssuer?: string;
+  civilToken?: string;
+  civilOIDCConfig?: any;
+  civilTileJson?: any;
   chosenNumericFields: string[];
   chosenCategoricalFields: string[];
   allNumericFields: boolean;

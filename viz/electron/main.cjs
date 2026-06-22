@@ -90,11 +90,34 @@ async function createWindow() {
     return { action: 'deny' };
   });
 
+  const handleRedirect = (event, navigationUrl) => {
+    if (navigationUrl.includes('code=') && navigationUrl.includes('state=')) {
+      event.preventDefault();
+      try {
+        const urlObj = new URL(navigationUrl);
+        const code = urlObj.searchParams.get('code');
+        const state = urlObj.searchParams.get('state');
+        const entryFile = resolveRendererEntry();
+        mainWindow.loadFile(entryFile, { query: { code, state } });
+      } catch (err) {
+        console.error("Failed to parse navigation callback url", err);
+      }
+    }
+  };
+
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     const allowedPrefix = 'file://';
     if (!navigationUrl.startsWith(allowedPrefix)) {
-      event.preventDefault();
+      if (navigationUrl.startsWith('http://') || navigationUrl.startsWith('https://')) {
+        handleRedirect(event, navigationUrl);
+      } else {
+        event.preventDefault();
+      }
     }
+  });
+
+  mainWindow.webContents.on('will-redirect', (event, navigationUrl) => {
+    handleRedirect(event, navigationUrl);
   });
 
   mainWindow.once('ready-to-show', () => {

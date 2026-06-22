@@ -25,7 +25,13 @@ function serializeDataSource(store: DataStore): SerializedDataSource {
   return {
     id: store.id,
     name: store.name,
-    parquetFile: store.file.name,
+    parquetFile: store.file?.name ?? '',
+    isCivil: store.isCivil,
+    civilGateway: store.civilGateway,
+    civilAuthIssuer: store.civilAuthIssuer,
+    civilToken: store.civilToken,
+    civilOIDCConfig: store.civilOIDCConfig,
+    civilTileJson: store.civilTileJson,
     chosenNumericFields: [...store.chosenNumericFields],
     chosenCategoricalFields: [...store.chosenCategoricalFields],
     allNumericFields: store.chosenNumericFields.length === store.numericFieldsFromSchema.length,
@@ -385,6 +391,8 @@ export async function loadProjectFile(file: File) {
     S.dataStores.forEach(store => {
       if (store.file && existingStores.has(store.file.name)) {
         storesToKeep.set(store.file.name, store);
+      } else if (store.isCivil) {
+        storesToKeep.set(store.id, store);
       }
     });
 
@@ -397,6 +405,54 @@ export async function loadProjectFile(file: File) {
     const dataStoreMap = new Map<string, string>();  // old ID -> new ID
 
     for (const dsData of projectData.dataSources) {
+      if (dsData.isCivil) {
+        dataStoreMap.set(dsData.id, dsData.id);
+        const civilStore: DataStore = {
+          id: dsData.id,
+          name: dsData.name,
+          file: null,
+          asyncBuffer: null,
+          geojson: { type: 'FeatureCollection', features: [] },
+          numericFieldsFromSchema: [],
+          categoricalFieldsFromSchema: [],
+          chosenNumericFields: [...dsData.chosenNumericFields],
+          chosenCategoricalFields: [...dsData.chosenCategoricalFields],
+          landSizeField: dsData.landSizeField,
+          landSizeUnitLabel: dsData.landSizeUnitLabel,
+          bldgSizeField: dsData.bldgSizeField,
+          bldgSizeUnitLabel: dsData.bldgSizeUnitLabel,
+          salePriceField: dsData.salePriceField ?? null,
+          saleDateField: dsData.saleDateField ?? null,
+          validSaleField: dsData.validSaleField ?? null,
+          vacantSaleField: dsData.vacantSaleField ?? null,
+          parcelIdField: dsData.parcelIdField ?? null,
+          addressField: dsData.addressField ?? null,
+          bldgQualityField: dsData.bldgQualityField ?? null,
+          bldgConditionField: dsData.bldgConditionField ?? null,
+          bldgAgeField: dsData.bldgAgeField ?? null,
+          bldgEffAgeField: dsData.bldgEffAgeField ?? null,
+          bldgBedsField: dsData.bldgBedsField ?? null,
+          bldgBathsField: dsData.bldgBathsField ?? null,
+          bldgTypeField: dsData.bldgTypeField ?? null,
+          landTypeField: dsData.landTypeField ?? null,
+          landZoningField: dsData.landZoningField ?? null,
+          saleIdField: dsData.saleIdField ?? null,
+          fullMarketValueField: dsData.fullMarketValueField ?? null,
+          assessedValueField: dsData.assessedValueField ?? null,
+          landValueField: dsData.landValueField ?? null,
+          improvementValueField: dsData.improvementValueField ?? null,
+          isCivil: true,
+          civilGateway: dsData.civilGateway,
+          civilAuthIssuer: dsData.civilAuthIssuer,
+          civilToken: dsData.civilToken,
+          civilOIDCConfig: dsData.civilOIDCConfig,
+          civilTileJson: dsData.civilTileJson
+        };
+        S.dataStores.set(dsData.id, civilStore);
+        S.dataStoreOrder.push(dsData.id);
+        continue;
+      }
+
       const existingStore = existingStores.get(dsData.parquetFile);
 
       if (existingStore) {
@@ -575,7 +631,7 @@ export async function loadProjectFile(file: File) {
       console.log('Project loaded successfully with all data sources.');
     } else {
       alert(`Project loaded successfully!\n\nData sources needed:\n${
-        projectData.dataSources.map((ds: SerializedDataSource) => `- ${ds.parquetFile}`).join('\n')
+        projectData.dataSources.map((ds: SerializedDataSource) => `- ${ds.isCivil ? (ds.civilGateway || ds.name) : ds.parquetFile}`).join('\n')
       }\n\nPlease load the parquet files using "Browse for file…"`);
     }
 

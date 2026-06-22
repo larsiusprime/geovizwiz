@@ -80,6 +80,9 @@ declare global {
 
       // Token exchange for OIDC (CORS bypass)
       exchangeToken: (tokenEndpoint: string, params: Record<string, string>) => Promise<any>;
+
+      // Forward a log message to the main process terminal
+      log: (level: 'info' | 'warn' | 'error' | 'debug', msg: string) => void;
     };
   }
 }

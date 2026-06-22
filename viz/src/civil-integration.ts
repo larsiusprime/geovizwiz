@@ -170,7 +170,9 @@ export async function handleOIDCCallback() {
 
   if (state !== storedState || !verifier || !gateway || !issuer || !configStr) {
     if (window.location.href.startsWith('file://')) {
-      console.warn("OIDC state mismatch or missing stored verifier inside the Electron app context. Skipping loopback forwarding to prevent loops.", {
+      const msg = `OIDC state mismatch or missing stored verifier inside the Electron app context. State: ${state}, StoredState: ${storedState}`;
+      window.vizDesktop?.log('warn', msg);
+      console.warn(msg, {
         state, storedState, verifier, gateway, issuer, configStr
       });
       return;
@@ -314,7 +316,11 @@ export async function handleOIDCCallback() {
     if (typeof (window as any).hideDesktopPicker === 'function') {
       (window as any).hideDesktopPicker();
     }
-  } catch (err) {
+  } catch (err: any) {
+    const errorMsg = err?.message || String(err);
+    if (window.vizDesktop?.log) {
+      window.vizDesktop.log('error', `Failed OIDC token exchange: ${errorMsg}`);
+    }
     console.error("Failed OIDC token exchange:", err);
     alert("Failed to sign in to Civil OS instance.");
   }

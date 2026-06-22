@@ -40,7 +40,10 @@ const desktopApi = {
   },
 
   // --- Token exchange for OIDC (bypassing CORS) ---
-  exchangeToken: (tokenEndpoint, params) => ipcRenderer.invoke('desktop:exchangeToken', tokenEndpoint, params)
+  exchangeToken: (tokenEndpoint, params) => ipcRenderer.invoke('desktop:exchangeToken', tokenEndpoint, params),
+
+  // --- Forward logs to the main process terminal ---
+  log: (level, msg) => ipcRenderer.send('desktop:log', level, msg)
 };
 
 contextBridge.exposeInMainWorld('vizDesktop', desktopApi);

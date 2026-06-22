@@ -101,3 +101,7 @@ Even after closing the desktop app, I am still randomly being redirected to the 
 (node:49724) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). To terminate the node process on unhandled promise rejection, use the CLI flag `--unhandled-rejections=strict` (see https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode). (rejection id: 1)
 ```
 * **Fix**: Removed the `.catch()` call chained directly to `oidcServer.close()` in the `before-quit` handler of `main.cjs`. Since Node's native `http.Server.close()` does not return a Promise, chaining `.catch()` was throwing a TypeError which prevented Electron from shutting down cleanly. Removing it ensures clean server shutdown and process exit.
+
+### Still getting Failed to Login to Civil OS Instance on Desktop
+As the header says. Add a debug mode if needed to make it easier to see any errors in the vite process stdout.
+* **Fix**: Implemented a debug logging bridge via the `desktop:log` IPC channel, allowing the renderer process to forward state validation warnings and authentication errors directly to the Electron main process terminal (vite process stdout). Added try-catch blocks and detailed `console.error` logs in the main process `desktop:exchangeToken` IPC handler, ensuring that any OIDC network failures, protocol deviations, or bad responses are printed directly to the terminal stdout.

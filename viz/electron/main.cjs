@@ -181,6 +181,11 @@ ipcMain.on('desktop:perf', (_evt, line) => {
   console.log(String(line));
 });
 
+// Logs forwarded from the renderer print to the terminal.
+ipcMain.on('desktop:log', (_evt, level, msg) => {
+  console.log(`[Renderer][${String(level).toUpperCase()}] ${msg}`);
+});
+
 ipcMain.handle('desktop:getAppConfig', async () => {
   return {
     mode: 'desktop',
@@ -289,20 +294,27 @@ ipcMain.handle('desktop:db:exec', async (_evt, sql, params) => {
 });
 
 ipcMain.handle('desktop:exchangeToken', async (_evt, tokenEndpoint, params) => {
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams(params).toString(),
-  });
+  try {
+    const response = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams(params).toString(),
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '');
-    throw new Error(`Token exchange failed: ${response.status} ${response.statusText}. Details: ${errorText}`);
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      const errMsg = `Token exchange failed: ${response.status} ${response.statusText}. Details: ${errorText}`;
+      console.error(`[Main][exchangeToken] ${errMsg}`);
+      throw new Error(errMsg);
+    }
+
+    return await response.json();
+  } catch (err) {
+    console.error(`[Main][exchangeToken] Error during fetch:`, err);
+    throw err;
   }
-
-  return await response.json();
 });
 
 let oidcServer = null;

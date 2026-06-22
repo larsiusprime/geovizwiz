@@ -50,11 +50,19 @@ export async function fetchOIDCConfig(authIssuerUrl: string) {
     issuer = issuer.slice(0, -1);
   }
   const oidcUrl = `${issuer}/.well-known/openid-configuration`;
-  const response = await fetch(oidcUrl);
-  if (!response.ok) {
-    throw new Error("Failed to fetch OIDC configuration");
+  try {
+    const response = await fetch(oidcUrl);
+    if (!response.ok) {
+      throw new Error("Failed to fetch OIDC configuration");
+    }
+    return await response.json();
+  } catch (err) {
+    console.warn("Failed to fetch OIDC configuration from well-known endpoint. Falling back to standard Dex endpoints.", err);
+    return {
+      authorization_endpoint: `${issuer}/auth`,
+      token_endpoint: `${issuer}/token`
+    };
   }
-  return await response.json();
 }
 
 function dec2hex(dec: number): string {

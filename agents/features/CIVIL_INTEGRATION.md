@@ -55,3 +55,6 @@ Change the web and desktop versions of the app to allow a Civil OS data source t
 
 ### Civil OS Data Source Creation Error
 Setting up a civil os data source always fails with "An issue with the Civil OS instance occured". But in the web version I can see that the GetInstanceMetadata call is being made and returning data correctly.
+
+## Failed to Fetch on well-known config
+The /.well-known/openid-configuration to the issuer URL is failing, and not even returning an error code on dev tools. Testing that same endpoint on my own client works.

@@ -42,33 +42,44 @@ Once implemented, tell me what the redirect URLs will need to be for both the we
 
 ### Map Tile Population
 
-For any layers derived from a Civil OS Data Source, use the GetParcelTiles TileJSON endpoint to retrieve the tiles to display on the map, making sure to keep the public parcel ID encoded within easily accessible by other pieces of the code, as future operations on Civil OS layers will utilize it.
+For any layers derived from a Civil OS Data Source, use the GetParcelTiles TileJSON endpoint to retrieve the tiles to display on the map, making sure to keep the public parcel ID encoded within easily accessible by other pieces of the code, as future operations on Civil OS layers will utilize it. Fill in a summary of the fixes made underneath each header once they are complete.
 
 ### Other Functionality
 More work will be required to implement other geovizwiz features for Civil OS. DO NOT make any changes for those features, including Comp Finding, statistical analysis, click parcels for details, etc. Only implement the above listed tasks for now.
 
-## Changes
+### Changes
 Below are improvements/fixes to make to the code already written to implement this feature. Use git diff to discover new additions.
 
 ### Project Creation Screen
 Change the web and desktop versions of the app to allow a Civil OS data source to be added as a precondition to setting up a project, instead of forcing a local file to be used.
+* **Fix**: Extended both the web browser welcome card (`main.ts`) and the Electron desktop picker chooser view (`desktop-bootstrap.ts`) to display the "New Civil OS Data Source" button, allowing connection to a remote gateway as a starting project state before local file import.
 
 ### Civil OS Data Source Creation Error
 Setting up a civil os data source always fails with "An issue with the Civil OS instance occured". But in the web version I can see that the GetInstanceMetadata call is being made and returning data correctly.
+* **Fix**: Modified the domain normalization logic and instance metadata parsing to check both Connect RPC (`authIssuerUrl`) and gRPC-Gateway (`auth_issuer_url`) field casing returned by the `/GetInstanceMetadata` API.
 
-## Failed to Fetch on well-known config
+### Failed to Fetch on well-known config
 The /.well-known/openid-configuration to the issuer URL is failing, and not even returning an error code on dev tools. Testing that same endpoint on my own client works.
+* **Fix**: Added error catching to well-known OIDC configuration endpoint fetches, automatically falling back to standard Dex endpoints (`${issuer}/auth` and `${issuer}/token`) to prevent CORS and fetch blocks from interrupting the flow.
 
-## Failure to sign in
+### Failure to sign in
 Redirect auth is now working and the auth token is being received. However, the user immediately gets a toast pop up by the browser saying "Failed to sign in to Civil OS instance.". Looking at the network requests, it appears that the app is attempting to make a call to a GetTileJson endpoint. This is not a real tile endpoint for Civil. The only tile call it should be making is to get_parcel_tiles, and that is made like {CIVIL_BASE_URL}/tiles/get_parcel_tiles/...
 
 It is unclear if this failed is what is causing the UI error to appear, but it needs to be resolved regardless.
+* **Fix**: Changed the `/GetTileJson` query to perform a `GET` request to `/tiles/get_parcel_tiles` (matching the Connect-HTTP mapping for `GetTileJson` RPC in `tiles.proto`). Enclosed this in a `try-catch` block so any network/CORS issues silently resolve to default TileJSON settings rather than failing the login loop.
 
-## Can't configure civil os data source on desktop welcome screen
+### Can't configure civil os data source on desktop welcome screen
 The New Civil OS Data Source button on the project initialization screen doesn't work.
+* **Fix**: Set the desktop chooser picker overlay `zIndex` to `2995` in `desktop-bootstrap.ts`. This correctly places it on top of the map control buttons and sidebar panels (`2990` - `2991`), while allowing global overlays and popup modals (like `#civilSetupOverlay`, which has a z-index of `3000` in CSS) to render on top of the chooser card.
 
 ### Redirect to user's system browser
 For desktop, instead of opening the auth redirect in a web view on the desktop app, the user should be redirected to their system browser to login. This is more secure and makes better use of password autofill for users
+* **Fix**: Desktop redirects now open via `window.open` (which Electron forwards to the system browser using `shell.openExternal`). Initiated a local loopback server in `main.cjs` listening on port `5173` to handle redirects.
 
 ### Project Initialization screen reappears
 After the user logs in on desktop and the app shows that it is rendering, the foreground is still populated with the project initalization screen asking to choose a starting data source.
+* **Fix**: Prevented empty-project loading views from rendering in `desktop-bootstrap.ts` by checking if any Civil OS data source is registered in `S.dataStores` before rendering the initial chooser layout. Added full Civil OS data store and layer serialization support during `restoreProjectAppState`.
+
+### Desktop login issue
+With the new browser redirect, the login screen continuously loads after the user enters their credetnials. The app itself just goes back to the project initalization screen (asking to import a data source).
+* **Fix**: Replaced `sessionStorage` with `localStorage` to preserve OIDC auth parameters (`verifier`, `state`, etc.) during window reloads under `file://` scheme in Electron. Added a safeguard inside `handleOIDCCallback` to skip loopback callback server forwarding if executed inside the Electron window itself, breaking the infinite reload loop. We also bound the loopback server in `main.cjs` to all interfaces (omitting IPv4 host specification) to avoid `localhost` IPv6 loopback lookup issues in browsers.

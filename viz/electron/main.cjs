@@ -349,8 +349,8 @@ function startOidcServer() {
     }
   });
 
-  oidcServer.listen(5173, '127.0.0.1', () => {
-    console.log('OIDC Desktop redirect server listening on http://localhost:5173');
+  oidcServer.listen(5173, () => {
+    console.log('OIDC Desktop redirect server listening on port 5173');
   });
 
   oidcServer.on('error', (err) => {

@@ -198,26 +198,38 @@ export async function handleOIDCCallback() {
     const tokenEndpoint = oidcConfig.token_endpoint;
     const redirectUri = getOIDCRedirectUri();
 
-    const tokenRes = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
+    let idToken: string;
+    if (window.vizDesktop?.exchangeToken) {
+      const tokenData = await window.vizDesktop.exchangeToken(tokenEndpoint, {
         grant_type: 'authorization_code',
         client_id: 'geovizwiz',
         code: code,
         redirect_uri: redirectUri,
         code_verifier: verifier,
-      }).toString(),
-    });
+      });
+      idToken = tokenData.id_token;
+    } else {
+      const tokenRes = await fetch(tokenEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          grant_type: 'authorization_code',
+          client_id: 'geovizwiz',
+          code: code,
+          redirect_uri: redirectUri,
+          code_verifier: verifier,
+        }).toString(),
+      });
 
-    if (!tokenRes.ok) {
-      throw new Error(`Token exchange failed: ${tokenRes.statusText}`);
+      if (!tokenRes.ok) {
+        throw new Error(`Token exchange failed: ${tokenRes.statusText}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      idToken = tokenData.id_token;
     }
-
-    const tokenData = await tokenRes.json();
-    const idToken = tokenData.id_token;
 
     const gatewayUrlObj = new URL(gateway);
     const domainName = gatewayUrlObj.hostname;

@@ -63,7 +63,8 @@ vi.stubGlobal('document', {
 
 // Now import the functions to test
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { normalizeDomain, getOIDCRedirectUri, fetchOIDCConfig, fetchInstanceMetadata } from './civil-integration';
+import { normalizeDomain, getOIDCRedirectUri, fetchOIDCConfig, fetchInstanceMetadata, handleOIDCCallback } from './civil-integration';
+import { S } from './state';
 
 describe('normalizeDomain', () => {
   it('adds https:// if no transport scheme is present', () => {
@@ -206,5 +207,120 @@ describe('fetchOIDCConfig', () => {
       authorization_endpoint: 'https://auth.example.com/auth',
       token_endpoint: 'https://auth.example.com/token',
     });
+  });
+});
+
+describe('handleOIDCCallback', () => {
+  const store: Record<string, string> = {};
+  const mockLocalStorage = {
+    getItem: vi.fn((key) => store[key] || null),
+    setItem: vi.fn((key, value) => { store[key] = String(value); }),
+    removeItem: vi.fn((key) => { delete store[key]; }),
+    clear: vi.fn(() => { for (const k in store) delete store[k]; })
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal('localStorage', mockLocalStorage);
+    vi.stubGlobal('document', {
+      title: 'OpenCAMA Test',
+    });
+    mockLocation.href = 'http://localhost:5173/?code=mycode&state=mystate';
+    (mockLocation as any).search = '?code=mycode&state=mystate';
+    (mockLocation as any).pathname = '/';
+    
+    S.dataStores.clear();
+    S.dataStoreOrder.length = 0;
+
+    mockLocalStorage.getItem.mockClear();
+    mockLocalStorage.setItem.mockClear();
+    mockLocalStorage.removeItem.mockClear();
+    for (const k in store) delete store[k];
+
+    store['civil_oidc_state'] = 'mystate';
+    store['civil_oidc_verifier'] = 'myverifier';
+    store['civil_oidc_gateway'] = 'https://gateway.example.com';
+    store['civil_oidc_issuer'] = 'https://auth.example.com';
+    store['civil_oidc_config'] = JSON.stringify({
+      authorization_endpoint: 'https://auth.example.com/auth',
+      token_endpoint: 'https://auth.example.com/token',
+    });
+
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.stubGlobal('window', mockWindow);
+    vi.stubGlobal('document', {
+      title: 'OpenCAMA Test',
+    });
+    delete (mockLocation as any).search;
+    delete (mockLocation as any).pathname;
+    if ((mockWindow as any).vizDesktop) {
+      delete (mockWindow as any).vizDesktop;
+    }
+  });
+
+  it('performs standard browser fetch when window.vizDesktop is not present', async () => {
+    const mockTokenRes = { id_token: 'my-jwt-id-token' };
+    const mockTileJson = { tilejson: '3.0.0', tiles: ['http://tile-url'] };
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTokenRes,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTileJson,
+      } as Response);
+
+    await handleOIDCCallback();
+
+    expect(fetch).toHaveBeenCalledWith('https://auth.example.com/token', expect.objectContaining({
+      method: 'POST',
+      body: expect.stringContaining('code=mycode'),
+    }));
+
+    expect(fetch).toHaveBeenCalledWith('https://gateway.example.com/tiles/get_parcel_tiles', expect.objectContaining({
+      headers: { Authorization: 'Bearer my-jwt-id-token' }
+    }));
+
+    expect(S.dataStores.size).toBe(1);
+    const addedStore = Array.from(S.dataStores.values())[0];
+    expect(addedStore.civilToken).toBe('my-jwt-id-token');
+    expect(addedStore.isCivil).toBe(true);
+  });
+
+  it('performs token exchange via IPC in desktop environment', async () => {
+    const exchangeTokenMock = vi.fn().mockResolvedValue({
+      id_token: 'desktop-jwt-id-token'
+    });
+    (mockWindow as any).vizDesktop = {
+      exchangeToken: exchangeTokenMock
+    };
+
+    const mockTileJson = { tilejson: '3.0.0', tiles: ['http://tile-url-desktop'] };
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => mockTileJson,
+    } as Response);
+
+    await handleOIDCCallback();
+
+    expect(exchangeTokenMock).toHaveBeenCalledWith('https://auth.example.com/token', {
+      grant_type: 'authorization_code',
+      client_id: 'geovizwiz',
+      code: 'mycode',
+      redirect_uri: 'http://localhost:5173/',
+      code_verifier: 'myverifier'
+    });
+
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith('https://gateway.example.com/tiles/get_parcel_tiles', expect.any(Object));
+
+    expect(S.dataStores.size).toBe(1);
+    const addedStore = Array.from(S.dataStores.values())[0];
+    expect(addedStore.civilToken).toBe('desktop-jwt-id-token');
   });
 });

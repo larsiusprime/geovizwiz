@@ -83,3 +83,21 @@ After the user logs in on desktop and the app shows that it is rendering, the fo
 ### Desktop login issue
 With the new browser redirect, the login screen continuously loads after the user enters their credetnials. The app itself just goes back to the project initalization screen (asking to import a data source).
 * **Fix**: Replaced `sessionStorage` with `localStorage` to preserve OIDC auth parameters (`verifier`, `state`, etc.) during window reloads under `file://` scheme in Electron. Added a safeguard inside `handleOIDCCallback` to skip loopback callback server forwarding if executed inside the Electron window itself, breaking the infinite reload loop. We also bound the loopback server in `main.cjs` to all interfaces (omitting IPv4 host specification) to avoid `localhost` IPv6 loopback lookup issues in browsers.
+
+### Failed to Login to Civil OS Instance on Desktop
+The desktop app is now correctly redirected to, showing the success page on the browser. But on the app it gives an Electron popup saying "Failed to Login to Civil OS Instance". If confirm is clicked, it allows the user to pass to the map screen and shows a geometry is rendering popup at the top, but no tiles ever load
+* **Fix**: Implemented the `desktop:exchangeToken` IPC handler. When executing on desktop, the application delegates the OIDC authorization code and verifier token exchange to the Electron main process via this IPC channel. The main process executes the request via Node's native `fetch` API, entirely bypassing the browser CORS restrictions associated with the `file://` renderer origin.
+
+### Zombie OIDC server process
+Even after closing the desktop app, I am still randomly being redirected to the civil os login page on my focused browser window. I believe there is a zombie oidc server process on my machine doing it, left over from the desktop app. Here is an error that the vite runtime spit out after closing the app:
+
+```
+(node:49724) UnhandledPromiseRejectionWarning: TypeError: oidcServer.close(...).catch is not a function
+    at App.<anonymous> (C:\Users\jacks\development\geovizwiz\viz\electron\main.cjs:379:29)
+    at App.emit (node:events:518:28)
+    at App.<anonymous> (C:\Users\jacks\development\geovizwiz\viz\electron\main.cjs:374:19)
+    at App.emit (node:events:530:35)
+(Use `electron --trace-warnings ...` to show where the warning was created)
+(node:49724) UnhandledPromiseRejectionWarning: Unhandled promise rejection. This error originated either by throwing inside of an async function without a catch block, or by rejecting a promise which was not handled with .catch(). To terminate the node process on unhandled promise rejection, use the CLI flag `--unhandled-rejections=strict` (see https://nodejs.org/api/cli.html#cli_unhandled_rejections_mode). (rejection id: 1)
+```
+* **Fix**: Removed the `.catch()` call chained directly to `oidcServer.close()` in the `before-quit` handler of `main.cjs`. Since Node's native `http.Server.close()` does not return a Promise, chaining `.catch()` was throwing a TypeError which prevented Electron from shutting down cleanly. Removing it ensures clean server shutdown and process exit.

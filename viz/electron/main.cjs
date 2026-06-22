@@ -288,6 +288,23 @@ ipcMain.handle('desktop:db:exec', async (_evt, sql, params) => {
   return duckdbService.exec(String(sql), Array.isArray(params) ? params : []);
 });
 
+ipcMain.handle('desktop:exchangeToken', async (_evt, tokenEndpoint, params) => {
+  const response = await fetch(tokenEndpoint, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams(params).toString(),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '');
+    throw new Error(`Token exchange failed: ${response.status} ${response.statusText}. Details: ${errorText}`);
+  }
+
+  return await response.json();
+});
+
 let oidcServer = null;
 
 function startOidcServer() {
@@ -376,7 +393,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   if (oidcServer) {
-    oidcServer.close().catch(() => {});
+    oidcServer.close();
   }
   await duckdbService.closeDatabase().catch(() => {});
 });

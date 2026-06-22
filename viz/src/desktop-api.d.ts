@@ -77,6 +77,9 @@ declare global {
         query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
         exec: (sql: string, params?: unknown[]) => Promise<{ ok: boolean }>;
       };
+
+      // Token exchange for OIDC (CORS bypass)
+      exchangeToken: (tokenEndpoint: string, params: Record<string, string>) => Promise<any>;
     };
   }
 }

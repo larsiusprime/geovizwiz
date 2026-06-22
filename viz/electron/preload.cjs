@@ -37,7 +37,10 @@ const desktopApi = {
     importSource: (opts) => ipcRenderer.invoke('desktop:db:importSource', opts),
     query: (sql, params) => ipcRenderer.invoke('desktop:db:query', sql, params),
     exec: (sql, params) => ipcRenderer.invoke('desktop:db:exec', sql, params)
-  }
+  },
+
+  // --- Token exchange for OIDC (bypassing CORS) ---
+  exchangeToken: (tokenEndpoint, params) => ipcRenderer.invoke('desktop:exchangeToken', tokenEndpoint, params)
 };
 
 contextBridge.exposeInMainWorld('vizDesktop', desktopApi);

@@ -26,6 +26,25 @@ import { perfLog, perfNow } from './perf.js';
  *  the renderer was the source of the pan-to-dense-area crash. */
 const MAX_RENDER_FEATURES = 60000;
 
+let projectLoaded = false;
+let projectLoadedResolvers: (() => void)[] = [];
+
+export function whenProjectLoaded(): Promise<void> {
+  if (typeof window === 'undefined' || !window.vizDesktop || projectLoaded) {
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => {
+    projectLoadedResolvers.push(resolve);
+  });
+}
+
+function markProjectLoaded() {
+  projectLoaded = true;
+  const resolvers = projectLoadedResolvers;
+  projectLoadedResolvers = [];
+  for (const r of resolvers) r();
+}
+
 export interface DesktopHost {
   /** Reveal the main app chrome (same as the browser upload flow does). */
   revealUI(): void;
@@ -342,7 +361,7 @@ function applySerializedClassification(ds: DataStore, m: SerializedDataSource) {
 /** Debounced auto-save of the full app state into viz-project.json. Suppressed
  *  while restoring or when no project is loaded. */
 function scheduleDesktopSave() {
-  if (restoring || streamed.length === 0) return;
+  if (restoring || !projectLoaded) return;
   if (saveTimer != null) window.clearTimeout(saveTimer);
   saveTimer = window.setTimeout(() => {
     saveTimer = null;
@@ -667,6 +686,8 @@ function setLoadingProgress(fraction: number | null) {
  *  synchronously so cancel is instant; clearing the registry also makes any
  *  in-flight `streamLayer` bail (its layer is gone) when it resolves. */
 function teardownActiveProject() {
+  projectLoaded = false;
+  projectLoadedResolvers = [];
   S.map.off('moveend', onMoveEnd);
   if (moveTimer != null) { window.clearTimeout(moveTimer); moveTimer = null; }
   setViewportMessage(null);
@@ -720,7 +741,10 @@ async function loadProjectSources() {
     if (app && ((Array.isArray(app.layers) && app.layers.length > 0) || hasCivil)) {
       const ok = await restoreProjectAppState(app);
       if (loadCancelled) return;
-      if (ok) return;
+      if (ok) {
+        markProjectLoaded();
+        return;
+      }
     }
   } catch (err) {
     console.error('[desktop] restore failed, falling back:', err);
@@ -743,16 +767,19 @@ async function loadProjectSources() {
   if (hasCivilSource) {
     hidePicker();
     host?.revealUI();
+    markProjectLoaded();
     return;
   }
   const withGeom = sources.find((s) => s.hasGeometry) ?? sources[0];
   if (withGeom) {
     await addStreamedSource(withGeom, { fit: true, reveal: true });
+    markProjectLoaded();
   } else {
     // Empty project: hand off to the dedicated project-init view.
     const current = await window.vizDesktop?.project.current();
     if (loadCancelled) return;
     showProjectView(current?.meta?.name ?? 'Untitled project');
+    markProjectLoaded();
   }
 }
 

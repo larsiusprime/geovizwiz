@@ -112,3 +112,8 @@ When ever the app is reopened and an exeisting project is selected that has had 
 
 ### Failed to Sign In to Civil OS
 [Renderer][ERROR] Failed OIDC token exchange: Style is not done loading.
+* **Fix**: Wrapped map layers and sources initialization and update code in `createCivilLayer` and `handleOIDCCallback` to check `S.map.isStyleLoaded()`. If the style is not yet fully loaded, we defer these map updates by listening to the map's `'load'` event. This avoids the "Style is not done loading" error when OIDC redirect callbacks complete before the map style load finishes.
+
+### Civil OS Instance Not Persisiting
+After adding a Civil OS data source to a project, that data source is still not being persisted to the project's configuration for automatic use when opening that same project later.
+* **Fix**: Changed `scheduleDesktopSave` in `desktop-bootstrap.ts` to allow auto-saving when `projectLoaded` is true, replacing the old `streamed.length === 0` check. Added `projectLoaded` state tracking and a `whenProjectLoaded()` Promise to synchronize the OIDC redirect callback page load with project restoration. When authentication finishes, the `viz:state-changed` event is dispatched, successfully triggering an auto-save of the newly added Civil OS data source.

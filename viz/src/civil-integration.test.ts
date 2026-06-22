@@ -24,6 +24,10 @@ vi.mock('./rendering.js', () => ({
   addOrUpdateSourceForLayer: vi.fn(),
 }));
 
+vi.mock('./desktop-bootstrap.js', () => ({
+  whenProjectLoaded: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('./state.js', () => ({
   S: {
     dataStores: new Map(),
@@ -53,7 +57,8 @@ const mockWindow = {
         return new ArrayBuffer(32);
       }
     }
-  }
+  },
+  dispatchEvent: vi.fn(),
 };
 
 vi.stubGlobal('window', mockWindow);

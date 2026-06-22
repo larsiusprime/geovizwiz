@@ -3,6 +3,7 @@ import type { DataStore } from './types.js';
 import { createLayerState, registerLayer } from './layers.js';
 import { addOrUpdateSourceForLayer } from './rendering.js';
 import { renderSettingsDataSourcesSection, revealUI } from './main.js';
+import { whenProjectLoaded } from './desktop-bootstrap.js';
 import {
   btnNewCivilOSDataSource,
   civilSetupOverlay,
@@ -162,6 +163,9 @@ export async function handleOIDCCallback() {
   const state = urlParams.get('state');
 
   if (!code || !state) return;
+
+  // Wait for project bootstrap to complete in desktop mode
+  await whenProjectLoaded();
 
   const storedState = localStorage.getItem('civil_oidc_state');
   const verifier = localStorage.getItem('civil_oidc_verifier');
@@ -360,6 +364,7 @@ export async function handleOIDCCallback() {
     if (typeof (window as any).hideDesktopPicker === 'function') {
       (window as any).hideDesktopPicker();
     }
+    window.dispatchEvent?.(new Event('viz:state-changed'));
   } catch (err: any) {
     const errorMsg = err?.message || String(err);
     if (window.vizDesktop?.log) {

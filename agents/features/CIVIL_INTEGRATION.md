@@ -117,3 +117,7 @@ When ever the app is reopened and an exeisting project is selected that has had 
 ### Civil OS Instance Not Persisiting
 After adding a Civil OS data source to a project, that data source is still not being persisted to the project's configuration for automatic use when opening that same project later.
 * **Fix**: Changed `scheduleDesktopSave` in `desktop-bootstrap.ts` to allow auto-saving when `projectLoaded` is true, replacing the old `streamed.length === 0` check. Added `projectLoaded` state tracking and a `whenProjectLoaded()` Promise to synchronize the OIDC redirect callback page load with project restoration. When authentication finishes, the `viz:state-changed` event is dispatched, successfully triggering an auto-save of the newly added Civil OS data source.
+
+### Civil Labs Data Store Doesn't Show Up In Settings on Reopen
+If reopening a project and automatically retrieving a civil labs data stored within it, that data store does not show up in the app settings, with the ability to delete it and manually login, like it does after manually adding the data store.
+* **Fix**: Added an optional `onProjectLoaded` callback to the `DesktopHost` interface in `desktop-bootstrap.ts` and triggered it on all successful project load/restoration paths inside `loadProjectSources`. Implemented the callback in `main.ts` to call `renderSettingsDataSourcesSection()`, ensuring the settings panel data source list is rendered correctly when a project is reopened.

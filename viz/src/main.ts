@@ -358,6 +358,9 @@ S.map.on('load', () => {
         refreshScatterPanel();
         refreshLandSchedulePanel();
         refreshTimeAdjustmentPanel();
+      },
+      onProjectLoaded: () => {
+        renderSettingsDataSourcesSection();
       }
     });
   }

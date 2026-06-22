@@ -53,6 +53,8 @@ export interface DesktopHost {
   /** Refresh the viewport-dependent panels after new geometry/attrs arrive
    *  (no dropdown reset — used on pan and on a lean re-fetch). */
   onViewportData?(): void;
+  /** Callback when a project is loaded or restored, even if empty or Civil-only. */
+  onProjectLoaded?(): void;
 }
 
 let host: DesktopHost | null = null;
@@ -743,6 +745,7 @@ async function loadProjectSources() {
       if (loadCancelled) return;
       if (ok) {
         markProjectLoaded();
+        host?.onProjectLoaded?.();
         return;
       }
     }
@@ -768,18 +771,21 @@ async function loadProjectSources() {
     hidePicker();
     host?.revealUI();
     markProjectLoaded();
+    host?.onProjectLoaded?.();
     return;
   }
   const withGeom = sources.find((s) => s.hasGeometry) ?? sources[0];
   if (withGeom) {
     await addStreamedSource(withGeom, { fit: true, reveal: true });
     markProjectLoaded();
+    host?.onProjectLoaded?.();
   } else {
     // Empty project: hand off to the dedicated project-init view.
     const current = await window.vizDesktop?.project.current();
     if (loadCancelled) return;
     showProjectView(current?.meta?.name ?? 'Untitled project');
     markProjectLoaded();
+    host?.onProjectLoaded?.();
   }
 }
 

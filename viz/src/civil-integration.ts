@@ -201,20 +201,25 @@ export async function handleOIDCCallback() {
     const storeId = `store-civil-${Date.now()}`;
 
     // Setup TileJSON discovery
-    const tileJsonUrl = `${gateway}/civil.public.tiles.v1.TileService/GetTileJson`;
-    const tileJsonRes = await fetch(tileJsonUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${idToken}`
-      },
-      body: JSON.stringify({ sourceName: 'get_parcel_tiles' })
-    });
-
+    const tileJsonUrl = `${gateway}/tiles/get_parcel_tiles`;
     let tileJsonData = null;
-    if (tileJsonRes.ok) {
-      tileJsonData = await tileJsonRes.json();
-    } else {
+    try {
+      const tileJsonRes = await fetch(tileJsonUrl, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${idToken}`
+        }
+      });
+      if (tileJsonRes.ok) {
+        tileJsonData = await tileJsonRes.json();
+      } else {
+        console.warn(`TileJSON fetch failed with status ${tileJsonRes.status}. Using fallback.`);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch TileJSON from gateway. Using fallback.", err);
+    }
+
+    if (!tileJsonData) {
       tileJsonData = {
         tilejson: '3.0.0',
         name: 'parcels',

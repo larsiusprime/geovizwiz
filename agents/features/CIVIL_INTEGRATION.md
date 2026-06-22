@@ -58,3 +58,8 @@ Setting up a civil os data source always fails with "An issue with the Civil OS 
 
 ## Failed to Fetch on well-known config
 The /.well-known/openid-configuration to the issuer URL is failing, and not even returning an error code on dev tools. Testing that same endpoint on my own client works.
+
+## Failure to sign in
+Redirect auth is now working and the auth token is being received. However, the user immediately gets a toast pop up by the browser saying "Failed to sign in to Civil OS instance.". Looking at the network requests, it appears that the app is attempting to make a call to a GetTileJson endpoint. This is not a real tile endpoint for Civil. The only tile call it should be making is to get_parcel_tiles, and that is made like {CIVIL_BASE_URL}/tiles/get_parcel_tiles/...
+
+It is unclear if this failed is what is causing the UI error to appear, but it needs to be resolved regardless.

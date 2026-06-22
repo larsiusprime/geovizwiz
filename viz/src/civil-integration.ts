@@ -142,7 +142,18 @@ export async function triggerOIDCRedirect(gatewayUrl: string, authIssuerUrl: str
 export function createCivilLayer(store: DataStore) {
   const layer = createLayerState(store.name, store.id);
   registerLayer(layer);
-  addOrUpdateSourceForLayer(layer, null as any);
+  
+  const setupSource = () => {
+    addOrUpdateSourceForLayer(layer, null as any);
+  };
+
+  if (S.map) {
+    if (S.map.isStyleLoaded()) {
+      setupSource();
+    } else {
+      S.map.once('load', setupSource);
+    }
+  }
 }
 
 export async function handleOIDCCallback() {
@@ -278,13 +289,23 @@ export async function handleOIDCCallback() {
 
       // Force reload map sources/layers for this store
       const layers = Array.from(S.layers.values()).filter(l => l.dataStoreId === storeId);
-      for (const layer of layers) {
-        if (S.map) {
-          if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
-          if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
-          if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
+      const updateLayers = () => {
+        for (const layer of layers) {
+          if (S.map) {
+            if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
+            if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
+            if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
+          }
+          addOrUpdateSourceForLayer(layer, null as any);
         }
-        addOrUpdateSourceForLayer(layer, null as any);
+      };
+
+      if (S.map) {
+        if (S.map.isStyleLoaded()) {
+          updateLayers();
+        } else {
+          S.map.once('load', updateLayers);
+        }
       }
     } else {
       storeId = `store-civil-${Date.now()}`;

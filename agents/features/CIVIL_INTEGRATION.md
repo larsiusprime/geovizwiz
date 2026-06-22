@@ -109,3 +109,6 @@ As the header says. Add a debug mode if needed to make it easier to see any erro
 ### Civil Domain Not Loaded By Project
 When ever the app is reopened and an exeisting project is selected that has had a Civil OS data source initialized to it, the user is forced to reenter the domain before logging in. That domain should be saved, so all the user must do is authenticate. To get back to work.
 * **Fix**: Modified `loadProjectSources` and `restoreProjectAppState` in `desktop-bootstrap.ts` to allow project restoration even if 0 layers are active, provided that a Civil OS data source is configured. In `handleOIDCCallback` inside `civil-integration.ts`, we now lookup any existing data store with a matching gateway and reuse it instead of creating a duplicate. Reused stores update their OIDC parameters, token, and TileJSON, and then force MapLibre GL to reload the vector tiles using the fresh token. Added a "login…" button to Civil OS data sources in the settings panel in `main.ts` so users can trigger authentication manually.
+
+### Failed to Sign In to Civil OS
+[Renderer][ERROR] Failed OIDC token exchange: Style is not done loading.

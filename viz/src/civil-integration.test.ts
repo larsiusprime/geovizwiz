@@ -350,6 +350,8 @@ describe('handleOIDCCallback', () => {
       } as Response);
 
     (S as any).map = {
+      isStyleLoaded: vi.fn().mockReturnValue(true),
+      once: vi.fn(),
       getSource: vi.fn().mockReturnValue(true),
       getLayer: vi.fn().mockReturnValue(true),
       removeLayer: vi.fn(),
@@ -374,6 +376,74 @@ describe('handleOIDCCallback', () => {
     expect(S.map.removeLayer).toHaveBeenCalledWith('layer-error-id');
     expect(S.map.removeSource).toHaveBeenCalledWith('layer-source-id');
     
+    delete (S as any).map;
+    delete (S as any).layers;
+  });
+
+  it('defers map source/layer updates if style is not loaded yet', async () => {
+    const existingStore = {
+      id: 'existing-store-id',
+      name: 'Existing Civil OS',
+      isCivil: true,
+      civilGateway: 'https://gateway.example.com/',
+      civilToken: 'old-token',
+      chosenNumericFields: [],
+      chosenCategoricalFields: []
+    } as any;
+    S.dataStores.set('existing-store-id', existingStore);
+
+    const mockTokenRes = { id_token: 'new-id-token' };
+    const mockTileJson = { tilejson: '3.0.0', tiles: ['http://tile-url'] };
+
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTokenRes,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockTileJson,
+      } as Response);
+
+    let loadCallback: any = null;
+    (S as any).map = {
+      isStyleLoaded: vi.fn().mockReturnValue(false),
+      once: vi.fn((event, cb) => {
+        if (event === 'load') {
+          loadCallback = cb;
+        }
+      }),
+      getSource: vi.fn().mockReturnValue(true),
+      getLayer: vi.fn().mockReturnValue(true),
+      removeLayer: vi.fn(),
+      removeSource: vi.fn()
+    };
+    const mockLayer = {
+      id: 'layer-id',
+      layerId: 'layer-layer-id',
+      errorLayerId: 'layer-error-id',
+      sourceId: 'layer-source-id',
+      dataStoreId: 'existing-store-id'
+    } as any;
+    (S as any).layers = new Map([['layer-id', mockLayer]]);
+
+    await handleOIDCCallback();
+
+    // Map operations should NOT be called yet because style is not loaded
+    expect(S.map.removeLayer).not.toHaveBeenCalled();
+    expect(S.map.once).toHaveBeenCalledWith('load', expect.any(Function));
+
+    // Execute the load callback
+    expect(loadCallback).not.toBeNull();
+    if (loadCallback) {
+      loadCallback();
+    }
+
+    // Map operations should now be called
+    expect(S.map.removeLayer).toHaveBeenCalledWith('layer-layer-id');
+    expect(S.map.removeLayer).toHaveBeenCalledWith('layer-error-id');
+    expect(S.map.removeSource).toHaveBeenCalledWith('layer-source-id');
+
     delete (S as any).map;
     delete (S as any).layers;
   });

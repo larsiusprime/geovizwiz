@@ -594,6 +594,10 @@ export function setLayerVisibility(layer: LayerState, visible: boolean) {
   if (S.map.getLayer(layer.errorLayerId)) {
     S.map.setLayoutProperty(layer.errorLayerId, 'visibility', visibility);
   }
+  const outlineLayerId = `${layer.layerId}-outline`;
+  if (S.map.getLayer(outlineLayerId)) {
+    S.map.setLayoutProperty(outlineLayerId, 'visibility', visibility);
+  }
 }
 
 export function removeLayer(layerId: string) {
@@ -601,6 +605,8 @@ export function removeLayer(layerId: string) {
   if (!layer) return;
   if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
   if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
+  const outlineLayerId = `${layer.layerId}-outline`;
+  if (S.map.getLayer(outlineLayerId)) S.map.removeLayer(outlineLayerId);
   if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
   S.layers.delete(layerId);
   const idx = S.layerOrder.indexOf(layerId);

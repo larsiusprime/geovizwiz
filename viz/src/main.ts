@@ -1000,6 +1000,7 @@ initRenderingCallbacks({
   setLayerVisibility,
   setCurrentLayer,
   showRenderingToast,
+  hideRenderingToast,
   awaitFirstRenderedFeature,
   showPopup,
   buildPopupHTML,
@@ -1759,6 +1760,17 @@ function addPopupSearchFunctionality() {
 function getPopupFieldType(field: string): 'numeric' | 'categorical' {
   if (S.chosenNumericFields.includes(field) || field === S.landSizeField || field === S.bldgSizeField) {
     return 'numeric';
+  }
+  if (S.lastPicked?.props && typeof S.lastPicked.props[field] === 'number') {
+    return 'numeric';
+  }
+  const currentLayer = getCurrentLayer();
+  const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
+  if (store?.isCivil) {
+    const numericFields = ['land_area_sq_ft', 'frontage_ft', 'depth_ft'];
+    if (numericFields.includes(field)) {
+      return 'numeric';
+    }
   }
   return 'categorical';
 }
@@ -2528,12 +2540,26 @@ function addPopupEditFunctionality(parcelId: string) {
 
 
 function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
-  const fieldsToShow = Array.from(new Set([
-    ...S.chosenNumericFields,
-    ...S.chosenCategoricalFields,
-    ...(S.landSizeField ? [S.landSizeField] : []),
-    ...(S.bldgSizeField ? [S.bldgSizeField] : []),
-  ]));
+  const currentLayer = getCurrentLayer();
+  const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
+  const isCivil = store?.isCivil || false;
+
+  let fieldsToShow: string[];
+  if (isCivil) {
+    fieldsToShow = Object.keys(props).filter(k => {
+      if (k === 'properties') return false;
+      const lower = k.toLowerCase();
+      const isId = lower === 'id' || lower.endsWith('_id') || lower.endsWith('_ids') || k.endsWith('Id') || k.endsWith('Ids');
+      return !isId;
+    });
+  } else {
+    fieldsToShow = Array.from(new Set([
+      ...S.chosenNumericFields,
+      ...S.chosenCategoricalFields,
+      ...(S.landSizeField ? [S.landSizeField] : []),
+      ...(S.bldgSizeField ? [S.bldgSizeField] : []),
+    ]));
+  }
 
   const rows = fieldsToShow.map(k => {
     const fieldType = getPopupFieldType(k);

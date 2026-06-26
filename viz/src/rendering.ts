@@ -66,6 +66,7 @@ let _getCurrentLayerIds: () => { sourceId: string; layerId: string; errorLayerId
 let _setLayerVisibility: (layer: LayerState, visible: boolean) => void = () => {};
 let _setCurrentLayer: (id: string) => void = () => {};
 let _showRenderingToast: (msg?: string) => void = () => {};
+let _hideRenderingToast: () => void = () => {};
 let _awaitFirstRenderedFeature: (layerId: string) => void = () => {};
 let _showPopup: (props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) => void = () => {};
 let _buildPopupHTML: (props: Record<string, any>, parcelId: string) => string = () => '';
@@ -87,6 +88,7 @@ export type RenderingCallbacks = {
   setLayerVisibility: (layer: LayerState, visible: boolean) => void;
   setCurrentLayer: (id: string) => void;
   showRenderingToast: (msg?: string) => void;
+  hideRenderingToast?: () => void;
   awaitFirstRenderedFeature: (layerId: string) => void;
   showPopup: (props: Record<string, any>, lngLat: maplibregl.LngLatLike, parcelId: string) => void;
   buildPopupHTML: (props: Record<string, any>, parcelId: string) => string;
@@ -101,6 +103,7 @@ export function initRenderingCallbacks(cb: RenderingCallbacks) {
   _setLayerVisibility = cb.setLayerVisibility;
   _setCurrentLayer = cb.setCurrentLayer;
   _showRenderingToast = cb.showRenderingToast;
+  _hideRenderingToast = cb.hideRenderingToast ?? (() => {});
   _awaitFirstRenderedFeature = cb.awaitFirstRenderedFeature;
   _showPopup = cb.showPopup;
   _buildPopupHTML = cb.buildPopupHTML;
@@ -270,6 +273,29 @@ function getFeatureInspectFocusLngLat(feature: GeoJSON.Feature, fallback: maplib
   return fallback;
 }
 
+async function getParcelByFeatureId(
+  gateway: string,
+  token: string,
+  featureId: number | string
+) {
+  const url = `${gateway}/civil.public.parcels.v1.ParcelsService/GetParcelByFeatureId`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify({
+      featureId: String(featureId)
+    })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch parcel by feature ID: ${response.statusText}`);
+  }
+  const data = await response.json();
+  return data;
+}
+
 export function addExtrusionLayer(layer: LayerState) {
   if (S.map.getLayer(layer.layerId)) return;
   const store = S.dataStores.get(layer.dataStoreId);
@@ -299,6 +325,24 @@ export function addExtrusionLayer(layer: LayerState) {
   S.map.addLayer(layerDef);
   _setLayerVisibility(layer, layer.visible);
 
+  if (isCivil) {
+    const outlineLayerId = `${layer.layerId}-outline`;
+    if (!S.map.getLayer(outlineLayerId)) {
+      const lineLayerDef: any = {
+        id: outlineLayerId,
+        type: 'line',
+        source: layer.sourceId,
+        'source-layer': layerDef['source-layer'],
+        paint: {
+          'line-color': '#38bdf8',
+          'line-width': 1.5,
+          'line-opacity': 0.8
+        }
+      };
+      S.map.addLayer(lineLayerDef);
+    }
+  }
+
   // NEW: parcel selection and inspection
   S.map.on('click', layer.layerId, (e) => {
     const f = e.features?.[0];
@@ -309,6 +353,57 @@ export function addExtrusionLayer(layer: LayerState) {
 
     // Handle info tool
     if (S.isInfoToolActive) {
+      if (isCivil && store?.civilGateway && store?.civilToken) {
+        const featureId = f.id || f.properties?.feature_id || f.properties?.featureId;
+        if (featureId) {
+          _showRenderingToast('Fetching parcel data');
+          getParcelByFeatureId(store.civilGateway, store.civilToken, featureId)
+            .then(res => {
+              _hideRenderingToast();
+              const parcel = res.parcel;
+              if (parcel) {
+                let extraProps = {};
+                if (parcel.properties) {
+                  try {
+                    extraProps = JSON.parse(parcel.properties);
+                  } catch (err) {
+                    console.warn("Failed to parse parcel properties JSON", err);
+                  }
+                }
+                const fullProps = {
+                  parcel_id: parcel.parcelId || parcel.parcel_id || '',
+                  feature_id: Number(parcel.featureId || parcel.feature_id || featureId),
+                  formatted_address: parcel.formattedAddress || parcel.formatted_address || '',
+                  address_id: parcel.addressId || parcel.address_id || '',
+                  primary_owner_name: parcel.primaryOwnerName || parcel.primary_owner_name || '',
+                  primary_owner_address: parcel.primaryOwnerAddress || parcel.primary_owner_address || '',
+                  party_ids: parcel.partyIds || parcel.party_id || [],
+                  land_use_id: parcel.landUseId || parcel.land_use_id || '',
+                  neighborhood_id: parcel.neighborhoodId || parcel.neighborhood_id || '',
+                  land_area_sq_ft: parcel.landAreaSqFt || parcel.land_area_sq_ft || 0,
+                  frontage_ft: parcel.frontageFt || parcel.frontage_sub || 0,
+                  depth_ft: parcel.depthFt || parcel.depth_sub || 0,
+                  zoning_ids: parcel.zoningIds || parcel.zoning_id || [],
+                  market_land_value: parcel.marketLandValue || parcel.market_land_value || '',
+                  assessed_land_value: parcel.assessedLandValue || parcel.assessed_land_value || '',
+                  ...extraProps
+                };
+                const focusLngLat = getFeatureInspectFocusLngLat(f as GeoJSON.Feature, e.lngLat);
+                _showPopup(fullProps, focusLngLat, fullProps.parcel_id);
+              } else {
+                _showRenderingToast('Parcel not found');
+                setTimeout(() => _hideRenderingToast(), 2000);
+              }
+            })
+            .catch(err => {
+              console.error("Failed to fetch parcel by feature ID:", err);
+              _showRenderingToast('Failed to fetch parcel data');
+              setTimeout(() => _hideRenderingToast(), 2000);
+            });
+        }
+        return;
+      }
+
       const props = (f.properties || {}) as Record<string, any>;
       const parcelId = getParcelId(f);
       const focusLngLat = getFeatureInspectFocusLngLat(f as GeoJSON.Feature, e.lngLat);

@@ -298,6 +298,8 @@ export async function handleOIDCCallback() {
           if (S.map) {
             if (S.map.getLayer(layer.layerId)) S.map.removeLayer(layer.layerId);
             if (S.map.getLayer(layer.errorLayerId)) S.map.removeLayer(layer.errorLayerId);
+            const outlineLayerId = `${layer.layerId}-outline`;
+            if (S.map.getLayer(outlineLayerId)) S.map.removeLayer(outlineLayerId);
             if (S.map.getSource(layer.sourceId)) S.map.removeSource(layer.sourceId);
           }
           addOrUpdateSourceForLayer(layer, null as any);

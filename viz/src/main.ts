@@ -1669,6 +1669,13 @@ function showPopup(props: Record<string, any>, lngLat: maplibregl.LngLatLike, pa
   // fields in use. Fetch this parcel's full attribute row on demand so the
   // inspect popup shows everything. (Browser already has all fields in memory.)
   if (isDesktopMode()) {
+    const currentLayer = getCurrentLayer();
+    const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
+    if (store?.isCivil) {
+      finishShowPopup(props, lngLat, parcelId);
+      return;
+    }
+
     const sourceId = getCurrentSourceId();
     if (sourceId) {
       void getRepository().queryRowById(sourceId, parcelId)

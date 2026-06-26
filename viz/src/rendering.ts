@@ -303,9 +303,12 @@ export function addExtrusionLayer(layer: LayerState) {
 
   const layerDef: any = {
     id: layer.layerId,
-    type: 'fill-extrusion',
+    type: isCivil ? 'fill' : 'fill-extrusion',
     source: layer.sourceId,
-    paint: {
+    paint: isCivil ? {
+      'fill-color': '#e5e7eb',
+      'fill-opacity': parseFloat(_opacityInput.value)
+    } : {
       'fill-extrusion-color': '#888',
       'fill-extrusion-height': 0,
       'fill-extrusion-opacity': parseFloat(_opacityInput.value),
@@ -334,7 +337,7 @@ export function addExtrusionLayer(layer: LayerState) {
         source: layer.sourceId,
         'source-layer': layerDef['source-layer'],
         paint: {
-          'line-color': '#38bdf8',
+          'line-color': '#000000',
           'line-width': 1.5,
           'line-opacity': 0.8
         }

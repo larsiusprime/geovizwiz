@@ -1745,11 +1745,13 @@ function addPopupSearchFunctionality() {
       if (searchInput && tableBody) {
         const filterFields = (searchText: string) => {
           const rows = tableBody.querySelectorAll('tr');
+          const searchLower = searchText.toLowerCase();
           rows.forEach(row => {
             const fieldNameCell = row.querySelector('code');
+            const rawField = row.dataset.field || '';
             if (fieldNameCell) {
               const fieldName = fieldNameCell.textContent || '';
-              const matches = fieldName.toLowerCase().startsWith(searchText.toLowerCase());
+              const matches = fieldName.toLowerCase().includes(searchLower) || rawField.toLowerCase().includes(searchLower);
               (row as HTMLElement).style.display = matches ? '' : 'none';
             }
           });
@@ -2543,7 +2545,39 @@ function addPopupEditFunctionality(parcelId: string) {
   }, 0);
 }
 
-/* --- rendering functions → see rendering.ts --- */
+export function getLocalizedFieldName(field: string): string {
+  const lang = (typeof navigator !== 'undefined' ? navigator.language : 'en').split('-')[0];
+
+  const translations: Record<string, Record<string, string>> = {
+    en: {
+      formatted_address: "Address",
+      primary_owner_name: "Primary Owner",
+      primary_owner_address: "Primary Owner Address",
+      land_use_id: "Land Use",
+      land_area_sq_ft: "Land Area (sqft)",
+      frontage_ft: "Frontage (ft)",
+      depth_ft: "Depth (ft)",
+      zoning_ids: "Zoning",
+      market_land_value: "Land Value (Market)",
+      assessed_land_value: "Land Value (Assessed)"
+    },
+    es: {
+      formatted_address: "Dirección",
+      primary_owner_name: "Propietario Principal",
+      primary_owner_address: "Dirección del Propietario Principal",
+      land_use_id: "Uso del Suelo",
+      land_area_sq_ft: "Área del Terreno (pies cuadrados)",
+      frontage_ft: "Frente (pies)",
+      depth_ft: "Profundidad (pies)",
+      zoning_ids: "Zonificación",
+      market_land_value: "Valor de Terreno de Mercado",
+      assessed_land_value: "Valor de Terreno Evaluado"
+    }
+  };
+
+  const langDict = translations[lang] || translations['en'];
+  return langDict[field] || field;
+}
 
 
 function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
@@ -2611,7 +2645,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
           <button type="button" class="popup-reset-btn" title="Reset to original" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;${changed ? '' : 'display:none;'}">↩</button>
         </td>
         <td style="padding:2px 6px; overflow-wrap:anywhere; vertical-align:top;">
-          <code style="white-space:normal;${nameStyle}">${escapeHtml(k)}</code>
+          <code style="white-space:normal;${nameStyle}">${escapeHtml(getLocalizedFieldName(k))}</code>
         </td>
         <td style="padding:2px 6px; text-align:right; white-space:normal; overflow-wrap:anywhere;" data-value-cell>
           ${printable}

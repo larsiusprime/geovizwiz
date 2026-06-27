@@ -23,3 +23,17 @@ Change the tile colors to a lighter grey and add a black border insteadf of the 
 ### ID Substitution
 Instead of hiding the values for zoning_id and land_use_id, etc, use the zoning and land use lookup apis to subsitute the ID value in the pop up with the name of the land use and the code of the zoning. To do this, prepull the maps of zoning, land use, and land use type values and store them in memory.
 * **Fix**: Added asynchronous prepulling of the zoning, land use, and land use type lookup tables from the Civil OS API upon successful authentication, startup, and project load. Updated `buildPopupHTML` to display the `land_use_id` and `zoning_ids` fields and substitute their UUID values with the in-memory lookup details (showing the land use name and joined zoning codes respectively).
+
+### Field Naming Improvements
+Since Civil OS conforms to a well-defined data schema that OpenCAMA can know and encode, it should display field names in readable, well-formatted text with the ability to substitute that text value for different languages based on the browser language (support for different languages only needs to be stubbed out in the code, without full UI implementation yet). This should be the case everywhere the field names are displayed. Based on the current field names in the parcel details pop up, the current field names should be:
+- formatted_address: Address
+- primary_owner_name: Primary Owner
+- primary_owner_address: Primary Owner Address
+- land_use_id: Land Use
+- land_area_sq_ft: Land Area (sqft)
+- frontage_ft: Frontage (ft)
+- depth_ft: Depth (ft)
+- zoning_ids: Zoning
+- market_land_value: Land Value (Market)
+- assessed_land_value: Land Value (Assessed)
+* **Fix**: Implemented a localized field name formatting function `getLocalizedFieldName` in `main.ts` that detects the browser language (`navigator.language`) and maps the database keys to readable labels (with full English mappings and stubbed Spanish translations). Integrated this function inside `buildPopupHTML` to render readable headers in the parcel details popup table, and updated the popup search to match on both the localized label and the raw field key.

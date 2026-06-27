@@ -1,0 +1,12 @@
+{
+  "formatted_address": "Dirección",
+  "primary_owner_name": "Propietario Principal",
+  "primary_owner_address": "Dirección del Propietario Principal",
+  "land_use_id": "Uso del Suelo",
+  "land_area_sq_ft": "Área del Terreno (pies cuadrados)",
+  "frontage_ft": "Frente (pies)",
+  "depth_ft": "Profundidad (pies)",
+  "zoning_ids": "Zonificación",
+  "market_land_value": "Valor de Terreno de Mercado",
+  "assessed_land_value": "Valor de Terreno Evaluado"
+}

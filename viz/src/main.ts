@@ -197,6 +197,8 @@ import {
 } from './scatterplot';
 
 
+import enTranslations from '../locales/en.json';
+import esTranslations from '../locales/es.json';
 import { S } from './state';
 import {
   initFilterElements, initFilterCallbacks,
@@ -2549,30 +2551,8 @@ export function getLocalizedFieldName(field: string): string {
   const lang = (typeof navigator !== 'undefined' ? navigator.language : 'en').split('-')[0];
 
   const translations: Record<string, Record<string, string>> = {
-    en: {
-      formatted_address: "Address",
-      primary_owner_name: "Primary Owner",
-      primary_owner_address: "Primary Owner Address",
-      land_use_id: "Land Use",
-      land_area_sq_ft: "Land Area (sqft)",
-      frontage_ft: "Frontage (ft)",
-      depth_ft: "Depth (ft)",
-      zoning_ids: "Zoning",
-      market_land_value: "Land Value (Market)",
-      assessed_land_value: "Land Value (Assessed)"
-    },
-    es: {
-      formatted_address: "Dirección",
-      primary_owner_name: "Propietario Principal",
-      primary_owner_address: "Dirección del Propietario Principal",
-      land_use_id: "Uso del Suelo",
-      land_area_sq_ft: "Área del Terreno (pies cuadrados)",
-      frontage_ft: "Frente (pies)",
-      depth_ft: "Profundidad (pies)",
-      zoning_ids: "Zonificación",
-      market_land_value: "Valor de Terreno de Mercado",
-      assessed_land_value: "Valor de Terreno Evaluado"
-    }
+    en: enTranslations,
+    es: esTranslations
   };
 
   const langDict = translations[lang] || translations['en'];

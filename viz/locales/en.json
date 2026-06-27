@@ -1,0 +1,12 @@
+{
+  "formatted_address": "Address",
+  "primary_owner_name": "Primary Owner",
+  "primary_owner_address": "Primary Owner Address",
+  "land_use_id": "Land Use",
+  "land_area_sq_ft": "Land Area (sqft)",
+  "frontage_ft": "Frontage (ft)",
+  "depth_ft": "Depth (ft)",
+  "zoning_ids": "Zoning",
+  "market_land_value": "Land Value (Market)",
+  "assessed_land_value": "Land Value (Assessed)"
+}

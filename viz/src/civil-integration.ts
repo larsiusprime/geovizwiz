@@ -361,7 +361,13 @@ export async function handleOIDCCallback() {
       createCivilLayer(newStore);
     }
 
-    renderSettingsDataSourcesSection();
+    const storeToUpdate = existingStore || S.dataStores.get(storeId);
+    if (storeToUpdate) {
+      void prepullCivilLookupData(storeToUpdate).then(() => {
+        renderSettingsDataSourcesSection();
+      });
+    }
+
     revealUI();
     if (typeof (window as any).hideDesktopPicker === 'function') {
       (window as any).hideDesktopPicker();
@@ -450,4 +456,74 @@ export function initCivilIntegration() {
 
   // 3. Process OIDC callback if present in URL
   void handleOIDCCallback();
+
+  // Prepull lookups on startup
+  prepullAllCivilStoresLookups();
+}
+
+export async function prepullCivilLookupData(store: DataStore) {
+  if (typeof process !== 'undefined' && process.env && (process.env.VITEST || process.env.NODE_ENV === 'test')) {
+    return;
+  }
+  if (!store.civilGateway || !store.civilToken) return;
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${store.civilToken}`
+  };
+
+  // 1. Fetch Zoning
+  try {
+    const res = await fetch(`${store.civilGateway}/civil.public.zoning.v1.ZoningService/GetZoning`, {
+      method: 'POST',
+      headers,
+      body: '{}'
+    });
+    if (res && res.ok) {
+      const data = await res.json();
+      store.civilZoningMap = data.zoning || {};
+    }
+  } catch (err) {
+    console.error("Failed to fetch zoning lookups:", err);
+  }
+
+  // 2. Fetch Land Uses
+  try {
+    const res = await fetch(`${store.civilGateway}/civil.public.landuses.v1.LandUsesService/GetLandUses`, {
+      method: 'POST',
+      headers,
+      body: '{}'
+    });
+    if (res && res.ok) {
+      const data = await res.json();
+      store.civilLandUseMap = data.landUses || data.land_uses || {};
+    }
+  } catch (err) {
+    console.error("Failed to fetch land use lookups:", err);
+  }
+
+  // 3. Fetch Land Use Types
+  try {
+    const res = await fetch(`${store.civilGateway}/civil.public.landuses.v1.LandUsesService/GetLandUseTypes`, {
+      method: 'POST',
+      headers,
+      body: '{}'
+    });
+    if (res && res.ok) {
+      const data = await res.json();
+      store.civilLandUseTypeMap = data.landUseTypes || data.land_use_types || {};
+    }
+  } catch (err) {
+    console.error("Failed to fetch land use type lookups:", err);
+  }
+}
+
+export function prepullAllCivilStoresLookups() {
+  for (const store of S.dataStores.values()) {
+    if (store.isCivil && store.civilToken && store.civilGateway) {
+      if (!store.civilZoningMap || !store.civilLandUseMap) {
+        void prepullCivilLookupData(store);
+      }
+    }
+  }
 }

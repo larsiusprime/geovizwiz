@@ -19,6 +19,7 @@ import { createDataStore, createLayerState, registerLayer, renderDataStoreList, 
 import { addOrUpdateSourceForLayer, applyGrayRendering, scheduleUpdate, computeAndApplyAutoMultiplier } from './rendering.js';
 import { buildProjectFile, deserializeLayer, applyRestoredCollections } from './metadata.js';
 import type { DataStore, ProjectFileV1, SerializedDataSource } from './types.js';
+import { prepullAllCivilStoresLookups } from './civil-integration.js';
 import { perfLog, perfNow } from './perf.js';
 
 /** Above this many features in view, skip the heavy geometry fetch and ask the
@@ -492,6 +493,7 @@ async function restoreProjectAppState(app: ProjectFileV1): Promise<boolean> {
       host?.revealUI();
       hidePicker();
     }
+    prepullAllCivilStoresLookups();
     return true;
   } finally {
     restoring = false;

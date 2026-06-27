@@ -2555,6 +2555,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   if (isCivil) {
     fieldsToShow = Object.keys(props).filter(k => {
       if (k === 'properties') return false;
+      if (k === 'zoning_ids' || k === 'zoningIds' || k === 'land_use_id' || k === 'landUseId') return true;
       const lower = k.toLowerCase();
       const isId = lower === 'id' || lower.endsWith('_id') || lower.endsWith('_ids') || k.endsWith('Id') || k.endsWith('Ids');
       return !isId;
@@ -2571,7 +2572,32 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   const rows = fieldsToShow.map(k => {
     const fieldType = getPopupFieldType(k);
     const patch = getParcelPatchEntry(parcelId, k);
-    const v = patch ? patch.current : (props as any)[k];
+    let v = patch ? patch.current : (props as any)[k];
+
+    if (isCivil && store) {
+      if (k === 'land_use_id' || k === 'landUseId') {
+        if (v) {
+          const lookup = store.civilLandUseMap?.[v];
+          if (lookup) {
+            v = lookup.name || lookup.code || v;
+          }
+        }
+      } else if (k === 'zoning_ids' || k === 'zoningIds') {
+        if (v) {
+          const ids = Array.isArray(v) ? v : (typeof v === 'string' ? [v] : []);
+          const codes = ids.map(id => {
+            const lookup = store.civilZoningMap?.[id];
+            return lookup ? (lookup.code || lookup.name || id) : id;
+          });
+          if (codes.length > 0) {
+            v = codes.join(', ');
+          } else {
+            v = '—';
+          }
+        }
+      }
+    }
+
     const printable = escapeHtml(formatPopupValue(fieldType, v));
     const changed = isFieldChanged(parcelId, k, fieldType);
     const rowStyle = changed ? 'background: rgba(255, 0, 0, 0.08);' : '';

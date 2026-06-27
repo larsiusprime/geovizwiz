@@ -195,6 +195,9 @@ export type DataStore = {
   civilToken?: string;
   civilOIDCConfig?: any;
   civilTileJson?: any;
+  civilZoningMap?: Record<string, any>;
+  civilLandUseMap?: Record<string, any>;
+  civilLandUseTypeMap?: Record<string, any>;
   geojson: GeoJSON.FeatureCollection | null;
   numericFieldsFromSchema: string[];
   categoricalFieldsFromSchema: string[];
@@ -249,6 +252,9 @@ export type SerializedDataSource = {
   civilToken?: string;
   civilOIDCConfig?: any;
   civilTileJson?: any;
+  civilZoningMap?: Record<string, any>;
+  civilLandUseMap?: Record<string, any>;
+  civilLandUseTypeMap?: Record<string, any>;
   chosenNumericFields: string[];
   chosenCategoricalFields: string[];
   allNumericFields: boolean;

@@ -20,6 +20,7 @@ import { cloneFilters } from './filters.js';
 import { revealUI } from './main.js';
 import { addOrUpdateSource, applyGrayRendering, ensureErrorLayer } from './rendering.js';
 import { applyExtrusionWithVisibility } from './legend.js';
+import { prepullAllCivilStoresLookups } from './civil-integration.js';
 
 function serializeDataSource(store: DataStore): SerializedDataSource {
   return {
@@ -32,6 +33,9 @@ function serializeDataSource(store: DataStore): SerializedDataSource {
     civilToken: store.civilToken,
     civilOIDCConfig: store.civilOIDCConfig,
     civilTileJson: store.civilTileJson,
+    civilZoningMap: store.civilZoningMap,
+    civilLandUseMap: store.civilLandUseMap,
+    civilLandUseTypeMap: store.civilLandUseTypeMap,
     chosenNumericFields: [...store.chosenNumericFields],
     chosenCategoricalFields: [...store.chosenCategoricalFields],
     allNumericFields: store.chosenNumericFields.length === store.numericFieldsFromSchema.length,
@@ -446,7 +450,10 @@ export async function loadProjectFile(file: File) {
           civilAuthIssuer: dsData.civilAuthIssuer,
           civilToken: dsData.civilToken,
           civilOIDCConfig: dsData.civilOIDCConfig,
-          civilTileJson: dsData.civilTileJson
+          civilTileJson: dsData.civilTileJson,
+          civilZoningMap: dsData.civilZoningMap,
+          civilLandUseMap: dsData.civilLandUseMap,
+          civilLandUseTypeMap: dsData.civilLandUseTypeMap
         };
         S.dataStores.set(dsData.id, civilStore);
         S.dataStoreOrder.push(dsData.id);
@@ -619,6 +626,7 @@ export async function loadProjectFile(file: File) {
     renderDataStoreList();
     renderLayerList();
     window.dispatchEvent(new CustomEvent('data-sources-changed'));
+    prepullAllCivilStoresLookups();
     revealUI();
 
     // Notify user about status

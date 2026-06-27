@@ -191,7 +191,8 @@ ipcMain.handle('desktop:getAppConfig', async () => {
     mode: 'desktop',
     platform: process.platform,
     userDataDir: app.getPath('userData'),
-    projectRoot: currentProjectRoot
+    projectRoot: currentProjectRoot,
+    locale: app.getLocale()
   };
 });
 

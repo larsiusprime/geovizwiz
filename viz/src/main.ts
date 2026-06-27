@@ -2547,8 +2547,28 @@ function addPopupEditFunctionality(parcelId: string) {
   }, 0);
 }
 
+let desktopLocale: string | null = null;
+
+if (typeof window !== 'undefined' && window.vizDesktop?.getAppConfig) {
+  window.vizDesktop.getAppConfig().then(config => {
+    if (config && config.locale) {
+      desktopLocale = config.locale;
+    }
+  }).catch(err => {
+    console.warn("Failed to get desktop config locale:", err);
+  });
+}
+
 export function getLocalizedFieldName(field: string): string {
-  const lang = (typeof navigator !== 'undefined' ? navigator.language : 'en').split('-')[0];
+  let rawLang = 'en';
+
+  if (desktopLocale) {
+    rawLang = desktopLocale;
+  } else if (typeof navigator !== 'undefined' && navigator.language) {
+    rawLang = navigator.language;
+  }
+
+  const lang = (rawLang || 'en').split('-')[0].toLowerCase();
 
   const translations: Record<string, Record<string, string>> = {
     en: enTranslations,

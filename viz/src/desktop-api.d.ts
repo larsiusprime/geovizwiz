@@ -46,6 +46,7 @@ declare global {
         platform: string;
         userDataDir: string;
         projectRoot: string | null;
+        locale?: string;
       }>;
 
       /** Subscribe to native File-menu actions. Returns an unsubscribe fn. */

@@ -1410,7 +1410,7 @@ export function renderSettingsDataSourcesSection() {
       loginBtn.textContent = 'login…';
       loginBtn.title = 'Authenticate with Civil OS';
       loginBtn.addEventListener('click', () => {
-        void triggerOIDCRedirect(store.civilGateway || '', store.civilAuthIssuer || '', store.civilOIDCConfig);
+        void triggerOIDCRedirect(store.civilGateway || '', store.civilAuthIssuer || '', store.civilOIDCConfig, true);
       });
       row.append(sourceName, loginBtn, deleteBtn);
     } else {

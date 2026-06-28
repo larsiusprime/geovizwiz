@@ -109,16 +109,9 @@ export function getOIDCRedirectUri(): string {
   return redirectUri;
 }
 
-let isRedirecting = false;
-
-export async function triggerOIDCRedirect(gatewayUrl: string, authIssuerUrl: string, oidcConfig: any) {
-  if (isRedirecting) return;
-  isRedirecting = true;
-
-  // Reset flag after 5 seconds to allow retry if redirect was canceled/closed
-  setTimeout(() => {
-    isRedirecting = false;
-  }, 5000);
+export async function triggerOIDCRedirect(gatewayUrl: string, authIssuerUrl: string, oidcConfig: any, force = false) {
+  if ((window as any)._isRedirectingToOIDC && !force) return;
+  (window as any)._isRedirectingToOIDC = true;
 
   const verifier = generateCodeVerifier();
   const challenge = await generateCodeChallenge(verifier);

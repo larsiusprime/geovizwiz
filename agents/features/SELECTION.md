@@ -19,3 +19,6 @@ Clicking on a Civil OS layer parcel while the layer is selected and the select t
 
 ### Multiple Auth Prompts
 When logging in to a Civil OS data source, the app opens 3 new tabs on the system's default browser with the Civil OS login screen. Only one needs to be filled out for the login to work, but if any of them are closed the login fails and another 3 tabs are opened to reattempt it.
+
+### Ensure
+I've fixed the feature ID issue with the parcel IDs, so the pg feature_id should come promoted as the feature ID. Ensure that the change you previously made to promote the feature ID does not cause an error when its already promoted.

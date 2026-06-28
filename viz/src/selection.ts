@@ -115,7 +115,7 @@ export function addParcelToSelection(feature: any) {
   const parcelId = getParcelId(feature);
   S.selectedParcels.add(parcelId);
   S.map.setFeatureState(
-    { source: sourceId, id: feature.id },
+    { source: sourceId, sourceLayer: feature.sourceLayer, id: feature.id },
     { selected: true }
   );
   updateSelectionControls();
@@ -132,7 +132,7 @@ export function removeParcelFromSelection(feature: any) {
   const parcelId = getParcelId(feature);
   S.selectedParcels.delete(parcelId);
   S.map.setFeatureState(
-    { source: sourceId, id: feature.id },
+    { source: sourceId, sourceLayer: feature.sourceLayer, id: feature.id },
     { selected: false }
   );
   updateSelectionControls();
@@ -145,13 +145,13 @@ export function toggleParcelSelection(feature: any) {
   if (S.selectedParcels.has(parcelId)) {
     S.selectedParcels.delete(parcelId);
     S.map.setFeatureState(
-      { source: sourceId, id: feature.id },
+      { source: sourceId, sourceLayer: feature.sourceLayer, id: feature.id },
       { selected: false }
     );
   } else {
     S.selectedParcels.add(parcelId);
     S.map.setFeatureState(
-      { source: sourceId, id: feature.id },
+      { source: sourceId, sourceLayer: feature.sourceLayer, id: feature.id },
       { selected: true }
     );
     const store = getActiveDataStore();
@@ -173,7 +173,7 @@ export function clearAllSelections() {
         const fid = Number(fidStr);
         if (!isNaN(fid)) {
           S.map.setFeatureState(
-            { source: sourceId, id: fid },
+            { source: sourceId, sourceLayer: 'parcels', id: fid },
             { selected: false }
           );
         }
@@ -915,25 +915,23 @@ function updateParcelsInArea(
     if (!intersectionTest(feature)) continue;
 
     const parcelId = getParcelId(feature);
+    const featureStateArgs: any = { source: sourceId, id: feature.id };
+    if ((feature as any).sourceLayer) {
+      featureStateArgs.sourceLayer = (feature as any).sourceLayer;
+    }
 
     if (shouldSelect) {
       S.selectedParcels.add(parcelId);
-      S.map.setFeatureState(
-        { source: sourceId, id: feature.id },
-        { selected: true }
-      );
+      S.map.setFeatureState(featureStateArgs, { selected: true });
       if (isCivil) {
-        newlySelectedFeatureIds.push(feature.id);
+        newlySelectedFeatureIds.push(feature.id as number);
       }
       count++;
     } else {
       // Only unselect if it was previously selected
       if (S.selectedParcels.has(parcelId)) {
         S.selectedParcels.delete(parcelId);
-        S.map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: false }
-        );
+        S.map.setFeatureState(featureStateArgs, { selected: false });
         count++;
       }
     }

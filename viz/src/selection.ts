@@ -88,6 +88,12 @@ export function getParcelId(feature: any): string {
   if (feature.properties && feature.properties.id) {
     return feature.properties.id.toString();
   }
+  if (feature.properties && feature.properties.feature_id) {
+    return feature.properties.feature_id.toString();
+  }
+  if (feature.properties && feature.properties.featureId) {
+    return feature.properties.featureId.toString();
+  }
   if (feature.id !== undefined && feature.id !== null) {
     return feature.id.toString();
   }

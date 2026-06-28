@@ -223,6 +223,7 @@ export function addOrUpdateSourceForLayer(layer: LayerState, fc: GeoJSON.Feature
 
       S.map.addSource(layer.sourceId, {
         type: 'vector',
+        promoteId: 'feature_id',
         ...tileJson
       });
     } else {

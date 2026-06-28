@@ -4,6 +4,7 @@
  */
 import maplibregl from 'maplibre-gl';
 import { S } from './state';
+import type { DataStore } from './types';
 import { getSelectionFilterActiveCount, matchesSelectionFilters } from './filters';
 import { createSaveLoadWidget, type SaveLoadWidgetHandle } from './save-load-widget';
 import { showConfirm } from './modals';
@@ -112,6 +113,11 @@ export function addParcelToSelection(feature: any) {
     { selected: true }
   );
   updateSelectionControls();
+
+  const store = getActiveDataStore();
+  if (store?.isCivil && feature.id !== undefined) {
+    void resolveCivilSelectionIds([feature.id]);
+  }
 }
 
 export function removeParcelFromSelection(feature: any) {
@@ -142,19 +148,38 @@ export function toggleParcelSelection(feature: any) {
       { source: sourceId, id: feature.id },
       { selected: true }
     );
+    const store = getActiveDataStore();
+    if (store?.isCivil && feature.id !== undefined) {
+      void resolveCivilSelectionIds([feature.id]);
+    }
   }
   updateSelectionControls();
 }
 
 export function clearAllSelections() {
   const sourceId = _getCurrentSourceId();
-  if (sourceId && S.currentGeoJSON) {
-    for (const feature of S.currentGeoJSON.features) {
-      if (feature.id !== undefined) {
-        S.map.setFeatureState(
-          { source: sourceId, id: feature.id },
-          { selected: false }
-        );
+  if (sourceId) {
+    const store = getActiveDataStore();
+    const isCivil = store?.isCivil || false;
+
+    if (isCivil) {
+      for (const fidStr of S.selectedParcels) {
+        const fid = Number(fidStr);
+        if (!isNaN(fid)) {
+          S.map.setFeatureState(
+            { source: sourceId, id: fid },
+            { selected: false }
+          );
+        }
+      }
+    } else if (S.currentGeoJSON) {
+      for (const feature of S.currentGeoJSON.features) {
+        if (feature.id !== undefined) {
+          S.map.setFeatureState(
+            { source: sourceId, id: feature.id },
+            { selected: false }
+          );
+        }
       }
     }
   }
@@ -856,16 +881,29 @@ function updateParcelsInArea(
   intersectionTest: (feature: GeoJSON.Feature) => boolean,
   shouldSelect: boolean
 ): void {
-  if (!S.currentGeoJSON) {
-    console.log(`No data loaded to ${shouldSelect ? 'select' : 'unselect'} from`);
-    return;
-  }
   const sourceId = _getCurrentSourceId();
   if (!sourceId) return;
 
-  let count = 0;
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
 
-  for (const feature of S.currentGeoJSON.features) {
+  let featuresToProcess: any[] = [];
+  if (isCivil) {
+    const currentLayer = S.currentLayerId ? S.layers.get(S.currentLayerId) : null;
+    if (currentLayer) {
+      featuresToProcess = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+    }
+  } else if (S.currentGeoJSON) {
+    featuresToProcess = S.currentGeoJSON.features;
+  } else {
+    console.log(`No data loaded to ${shouldSelect ? 'select' : 'unselect'} from`);
+    return;
+  }
+
+  let count = 0;
+  const newlySelectedFeatureIds: number[] = [];
+
+  for (const feature of featuresToProcess) {
     if (!feature.geometry || !feature.id) continue;
 
     if (!intersectionTest(feature)) continue;
@@ -878,6 +916,9 @@ function updateParcelsInArea(
         { source: sourceId, id: feature.id },
         { selected: true }
       );
+      if (isCivil) {
+        newlySelectedFeatureIds.push(feature.id);
+      }
       count++;
     } else {
       // Only unselect if it was previously selected
@@ -894,6 +935,11 @@ function updateParcelsInArea(
 
   const verb = shouldSelect ? 'Selected' : 'Unselected';
   console.log(`${verb} ${count} parcels within the area`);
+
+  if (isCivil && shouldSelect && newlySelectedFeatureIds.length > 0) {
+    void resolveCivilSelectionIds(newlySelectedFeatureIds);
+  }
+
   updateSelectionControls();
 }
 
@@ -903,15 +949,20 @@ function updateParcelsInArea(
 
 export function selectParcelsInPolygon(polygon: number[][]) {
   const bbox = calculatePolygonBbox(polygon);
-  if (!S.currentGeoJSON) {
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+
+  if (!isCivil && !S.currentGeoJSON) {
     console.log('No data loaded to select from');
     return;
   }
   // Log broad-phase info
-  const candidateCount = S.currentGeoJSON.features.filter(f =>
-    f.geometry && f.id && featureIntersectsBbox(f, bbox)
-  ).length;
-  console.log(`Broad-phase filtering: ${candidateCount} features out of ${S.currentGeoJSON.features.length} candidates`);
+  if (!isCivil && S.currentGeoJSON) {
+    const candidateCount = S.currentGeoJSON.features.filter(f =>
+      f.geometry && f.id && featureIntersectsBbox(f, bbox)
+    ).length;
+    console.log(`Broad-phase filtering: ${candidateCount} features out of ${S.currentGeoJSON.features.length} candidates`);
+  }
 
   updateParcelsInArea(
     (feature) => featureIntersectsBbox(feature, bbox) && featureIntersectsPolygon(feature, polygon),
@@ -921,14 +972,19 @@ export function selectParcelsInPolygon(polygon: number[][]) {
 
 export function unselectParcelsInPolygon(polygon: number[][]) {
   const bbox = calculatePolygonBbox(polygon);
-  if (!S.currentGeoJSON) {
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+
+  if (!isCivil && !S.currentGeoJSON) {
     console.log('No data loaded to unselect from');
     return;
   }
-  const candidateCount = S.currentGeoJSON.features.filter(f =>
-    f.geometry && f.id && featureIntersectsBbox(f, bbox)
-  ).length;
-  console.log(`Broad-phase filtering: ${candidateCount} features out of ${S.currentGeoJSON.features.length} candidates`);
+  if (!isCivil && S.currentGeoJSON) {
+    const candidateCount = S.currentGeoJSON.features.filter(f =>
+      f.geometry && f.id && featureIntersectsBbox(f, bbox)
+    ).length;
+    console.log(`Broad-phase filtering: ${candidateCount} features out of ${S.currentGeoJSON.features.length} candidates`);
+  }
 
   updateParcelsInArea(
     (feature) => featureIntersectsBbox(feature, bbox) && featureIntersectsPolygon(feature, polygon),
@@ -1498,4 +1554,51 @@ export function initSelectionElements() {
   // Document-level mouse-up listeners for catching releases outside the map
   document.addEventListener('mouseup', handleRectangleMouseUp);
   document.addEventListener('mouseup', handleLassoMouseUp);
+}
+
+export function getActiveDataStore(): DataStore | null {
+  if (!S.currentLayerId) return null;
+  const layer = S.layers.get(S.currentLayerId);
+  if (!layer) return null;
+  return S.dataStores.get(layer.dataStoreId) ?? null;
+}
+
+export async function resolveCivilSelectionIds(featureIds: (number | string)[]) {
+  const store = getActiveDataStore();
+  if (!store || !store.isCivil || !store.civilGateway || !store.civilToken) return;
+
+  store.civilFeatureToParcelIdMap = store.civilFeatureToParcelIdMap || new Map<number, string>();
+  const numericIds = featureIds
+    .map(id => Number(id))
+    .filter(id => !isNaN(id) && !store.civilFeatureToParcelIdMap!.has(id));
+
+  if (numericIds.length === 0) return;
+
+  try {
+    const url = `${store.civilGateway}/civil.public.parcels.v1.ParcelsService/GetParcelIdsByFeatureId`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${store.civilToken}`
+      },
+      body: JSON.stringify({
+        featureIds: numericIds.map(String),
+        feature_ids: numericIds.map(String)
+      })
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const parcelIdsMap = data.parcelIds || data.parcel_ids || {};
+      for (const [fidStr, pid] of Object.entries(parcelIdsMap)) {
+        const fid = Number(fidStr);
+        if (!isNaN(fid) && pid) {
+          store.civilFeatureToParcelIdMap!.set(fid, String(pid));
+        }
+      }
+      console.log(`Resolved and mapped ${Object.keys(parcelIdsMap).length} feature IDs to parcel IDs`);
+    }
+  } catch (err) {
+    console.error("Failed to resolve parcel IDs by feature IDs:", err);
+  }
 }

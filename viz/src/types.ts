@@ -198,6 +198,7 @@ export type DataStore = {
   civilZoningMap?: Record<string, any>;
   civilLandUseMap?: Record<string, any>;
   civilLandUseTypeMap?: Record<string, any>;
+  civilFeatureToParcelIdMap?: Map<number, string>;
   geojson: GeoJSON.FeatureCollection | null;
   numericFieldsFromSchema: string[];
   categoricalFieldsFromSchema: string[];

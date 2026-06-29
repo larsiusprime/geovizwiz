@@ -251,7 +251,7 @@ function getFeatureFromMap(featureId: number | string | bigint): GeoJSON.Feature
     }
     const feat = sourceFeatures.find(f => Number(f.id) === fidNum);
     if (feat) {
-      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Found feature in querySourceFeatures!`);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Found feature in querySourceFeatures! Keys: ${Object.keys(feat).join(',')}, type: ${feat.type}, hasGeometry: ${!!(feat as any).geometry || !!(feat as any)._geometry || (typeof (feat as any).geometry === 'function')}`);
       return feat as GeoJSON.Feature;
     }
   } catch (e: any) {
@@ -270,7 +270,7 @@ function getFeatureFromMap(featureId: number | string | bigint): GeoJSON.Feature
     }
     const featRendered = renderedFeatures.find(f => Number(f.id) === fidNum);
     if (featRendered) {
-      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Found feature in queryRenderedFeatures!`);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Found feature in queryRenderedFeatures! Keys: ${Object.keys(featRendered).join(',')}, type: ${featRendered.type}, hasGeometry: ${!!(featRendered as any).geometry || !!(featRendered as any)._geometry || (typeof (featRendered as any).geometry === 'function')}`);
       return featRendered as GeoJSON.Feature;
     }
   } catch (e: any) {
@@ -498,20 +498,24 @@ function updateCompMarkers() {
     let feature = comp.feature;
     if ((!feature || !feature.geometry) && comp.featureId) {
       const mapFeat = getFeatureFromMap(comp.featureId);
-      if (mapFeat && mapFeat.geometry) {
-        feature = {
-          ...mapFeat,
-          properties: {
-            ...mapFeat.properties,
-            ...feature.properties
-          }
-        };
-        comp.feature = feature;
+      if (mapFeat) {
+        const geometry = mapFeat.geometry || (typeof (mapFeat as any).toJSON === 'function' ? (mapFeat as any).toJSON().geometry : null);
+        if (geometry) {
+          feature = {
+            ...mapFeat,
+            geometry: geometry,
+            properties: {
+              ...mapFeat.properties,
+              ...feature.properties
+            }
+          };
+          comp.feature = feature;
+        }
       }
     }
     const center = getFeatureCenter(feature);
     if (!center) {
-      (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] No center found for comp: ${comp.id}, featureId: ${comp.featureId}, hasGeometry: ${!!feature?.geometry}`);
+      (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] No center found for comp: ${comp.id}, featureId: ${comp.featureId}, hasGeometry: ${!!feature?.geometry}, featureKeys: ${feature ? Object.keys(feature).join(',') : 'none'}, geometryType: ${feature?.geometry?.type || 'none'}`);
       continue;
     }
     (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Adding marker for comp: ${comp.id} at LngLat: ${JSON.stringify(center)}`);

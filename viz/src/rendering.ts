@@ -22,6 +22,7 @@ import {
 import {
   getParcelId,
   addParcelToSelection, removeParcelFromSelection, clearAllSelections,
+  getActiveDataStore,
 } from './selection';
 import { fitBoundsInVisibleMapArea } from './map-viewport';
 import { refreshWindowMinHeight } from './windows';
@@ -223,7 +224,6 @@ export function addOrUpdateSourceForLayer(layer: LayerState, fc: GeoJSON.Feature
 
       S.map.addSource(layer.sourceId, {
         type: 'vector',
-        promoteId: 'feature_id',
         ...tileJson
       });
     } else {
@@ -307,7 +307,10 @@ export function addExtrusionLayer(layer: LayerState) {
     type: isCivil ? 'fill' : 'fill-extrusion',
     source: layer.sourceId,
     paint: isCivil ? {
-      'fill-color': '#e5e7eb',
+      'fill-color': ['case',
+        ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
+        '#e5e7eb'
+      ],
       'fill-opacity': parseFloat(_opacityInput.value)
     } : {
       'fill-extrusion-color': '#888',
@@ -696,18 +699,26 @@ export function buildNumericColorExpression(): Expression {
 /* ================================================================== */
 
 export function applyGrayRendering() {
-  if (!S.currentGeoJSON) return;
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!isCivil && !S.currentGeoJSON) return;
   const ids = _getCurrentLayerIds();
   if (!ids) return;
 
   // Apply gray color when no field is selected, but preserve selected-feature highlighting.
   const grayWithSelectionColor: Expression = ['case',
     ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
-    '#888'
+    isCivil ? '#e5e7eb' : '#888'
   ] as any;
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-  S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+
+  if (isCivil) {
+    S.map.setPaintProperty(ids.layerId, 'fill-color', grayWithSelectionColor);
+    S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
+  } else {
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+  }
 
   applyMapFilters();
 
@@ -718,7 +729,9 @@ export function applyGrayRendering() {
 }
 
 export function applyExtrusion() {
-  if (!S.currentGeoJSON) return;
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!isCivil && !S.currentGeoJSON) return;
   const ids = _getCurrentLayerIds();
   if (!ids) return;
 
@@ -732,22 +745,32 @@ export function applyExtrusion() {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
 
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+    if (isCivil) {
+      S.map.setPaintProperty(ids.layerId, 'fill-color', colorExpr);
+      S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
+    } else {
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+    }
   } else {
     // For numeric fields, use the new color expression builder
     const colorExpr = buildNumericColorExpression();
     const valueExpr = buildValueExpression();
 
-    const rawMult = Number(_multInput.value);
-    const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
-    const unitFactor = UNIT_TO_METERS[_unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
-    const heightExpr: Expression = S.is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
+    if (isCivil) {
+      S.map.setPaintProperty(ids.layerId, 'fill-color', colorExpr);
+      S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
+    } else {
+      const rawMult = Number(_multInput.value);
+      const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
+      const unitFactor = UNIT_TO_METERS[_unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
+      const heightExpr: Expression = S.is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
 
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
-    S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
+      S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
+    }
   }
 
   // refresh which features are flagged as erroneous for current mode

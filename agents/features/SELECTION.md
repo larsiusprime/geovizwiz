@@ -22,3 +22,6 @@ When logging in to a Civil OS data source, the app opens 3 new tabs on the syste
 
 ### Ensure
 I've fixed the feature ID issue with the parcel IDs, so the pg feature_id should come promoted as the feature ID. Ensure that the change you previously made to promote the feature ID does not cause an error when its already promoted.
+
+### Selection Issues
+Now when using the select tool, the tool can only select one parcel at a time (as indicated by the selection count on the modal), and the selections do not show up visually on the layer (the select parcel does not have its color changed). Both of these need to be resolved so it can select multiple at a time The unselect all is clearing out the single selection when present, so it is likely working as expected.

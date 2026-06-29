@@ -50,15 +50,29 @@ function getAttributeKey(attrVal: any): string | null {
   if (attrVal === undefined || attrVal === null) return null;
   if (typeof attrVal === 'number') {
     const str = ParcelAttribute[attrVal];
-    return str ? str.toLowerCase() : null;
+    if (!str) return null;
+    let key = str.toLowerCase();
+    if (key.startsWith('parcel_attribute_')) {
+      key = key.substring('parcel_attribute_'.length);
+    }
+    return key;
   }
   if (typeof attrVal === 'string') {
     const parsed = parseInt(attrVal, 10);
     if (!isNaN(parsed)) {
       const str = ParcelAttribute[parsed];
-      return str ? str.toLowerCase() : null;
+      if (!str) return null;
+      let key = str.toLowerCase();
+      if (key.startsWith('parcel_attribute_')) {
+        key = key.substring('parcel_attribute_'.length);
+      }
+      return key;
     }
-    return attrVal.toLowerCase();
+    let key = attrVal.toLowerCase();
+    if (key.startsWith('parcel_attribute_')) {
+      key = key.substring('parcel_attribute_'.length);
+    }
+    return key;
   }
   return null;
 }

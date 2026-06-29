@@ -11,11 +11,7 @@ import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map
 import {
   makeDistanceCircleFeature, getFeatureCenter, isValidLngLat, distanceMeters, getPageTokens, getDeltaClass, buildDelta,
 } from './comp-finder-helpers';
-import { createClient } from "@connectrpc/connect";
-import { createConnectTransport } from "@connectrpc/connect-web";
-import { create } from "@bufbuild/protobuf";
-import type { ComparableCriteria } from "@civil-labs/civil-api-js";
-import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, GetParcelByFeatureIdRequestSchema, ComparableCriteriaSchema, ParcelAttribute } from "@civil-labs/civil-api-js";
+import { ParcelAttribute } from "@civil-labs/civil-api-js";
 import { resolveCivilSelectionIds } from './selection';
 import enTranslations from '../locales/en.json';
 import esTranslations from '../locales/es.json';
@@ -1178,25 +1174,32 @@ async function findCivilComps(): Promise<StandardCompResults> {
     await resolveCivilSelectionIds(Array.from(selectedParcels), compStore);
   }
 
-  const transport = createConnectTransport({
-    baseUrl: compStore.civilGateway!,
-    interceptors: [
-      (next) => async (req) => {
-        req.header.set("Authorization", `Bearer ${compStore.civilToken}`);
-        return await next(req);
-      }
-    ]
-  });
-  const client = createClient(ParcelsService, transport);
+  const gateway = compStore.civilGateway!.replace(/\/$/, '');
+  const token = compStore.civilToken!;
 
+  // Fetch the subject parcel data so we can calculate absolute tolerances
   if (subjectFeatureIdNum !== null) {
     try {
       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCivilComps fetching subject parcel for feature ID: ${subjectFeatureIdNum}...`);
-      const req = create(GetParcelByFeatureIdRequestSchema, { featureId: BigInt(subjectFeatureIdNum) });
-      const res = await client.getParcelByFeatureId(req);
-      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] GetParcelByFeatureId returned: ${JSON.stringify(res)}`);
-      if (res.parcel) {
-        const p = res.parcel;
+      
+      const res = await fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetParcelByFeatureId`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          featureId: String(subjectFeatureIdNum)
+        })
+      });
+      if (!res.ok) {
+        throw new Error(`GetParcelByFeatureId HTTP ${res.status}: ${res.statusText}`);
+      }
+      const data = await res.json();
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] GetParcelByFeatureId returned: ${JSON.stringify(data)}`);
+      
+      if (data.parcel) {
+        const p = data.parcel;
         subject!.parcelId = p.parcelId;
         subject!.address = p.formattedAddress || '';
         
@@ -1235,11 +1238,11 @@ async function findCivilComps(): Promise<StandardCompResults> {
          const subjValNum = numOrNull(getFieldValue(subject!.feature, entry.field));
          if (subjValNum !== null) {
            const absoluteTol = row.usePercent ? subjValNum * tol : tol;
-           return create(ComparableCriteriaSchema, {
+           return {
              attribute: attr,
              minNumericalTolerance: subjValNum - absoluteTol,
              maxNumericalTolerance: subjValNum + absoluteTol
-           });
+           };
          }
        }
        return null;
@@ -1264,12 +1267,12 @@ async function findCivilComps(): Promise<StandardCompResults> {
          return val;
        }).filter(Boolean);
 
-       return create(ComparableCriteriaSchema, {
+       return {
          attribute: attr,
          categoricalTolerance: apiTolerance
-       });
+       };
      }
-  }).filter(Boolean) as ComparableCriteria[];
+  }).filter(Boolean);
 
   let wkt = '';
   if (useDistance && distanceLimit !== null) {
@@ -1285,23 +1288,40 @@ async function findCivilComps(): Promise<StandardCompResults> {
     ? Array.from(selectedParcels).map(fid => compStore.civilFeatureToParcelIdMap?.get(Number(fid))).filter(Boolean) as string[]
     : [];
 
-  const eqReq = create(GetEquityComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
-  const saleReq = create(GetSalesComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
-
   (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Sending GetEquityComparables and GetSalesComparables... WKT: ${wkt}, criteria: ${JSON.stringify(criteriaArr)}`);
 
+  const headers = {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${token}`
+  };
+
   const [eqRes, saleRes] = await Promise.all([
-    client.getEquityComparables(eqReq),
-    client.getSalesComparables(saleReq)
+    fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetEquityComparables`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds })
+    }).then(r => {
+      if (!r.ok) throw new Error(`GetEquityComparables HTTP ${r.status}: ${r.statusText}`);
+      return r.json();
+    }),
+    fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetSalesComparables`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds })
+    }).then(r => {
+      if (!r.ok) throw new Error(`GetSalesComparables HTTP ${r.status}: ${r.statusText}`);
+      return r.json();
+    })
   ]);
 
   const allParcels = [
     ...Object.values(eqRes.parcels || {}),
     ...Object.values(saleRes.parcels || {})
-  ];
+  ] as any[];
 
   (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Received response. Equity: ${Object.keys(eqRes.parcels || {}).length} parcels, Sales: ${Object.keys(saleRes.parcels || {}).length} parcels`);
 
+  // Try to find subject parcel and map attributes
   const subjComp = allParcels.find(c => {
     const matchesUUID = c.parcelId === subjectParcelId;
     const matchesFeatureId = subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum;
@@ -1391,6 +1411,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
     resultValues[parcelRowId] = { deltas };
   }
 
+  // Columns definition using translation keys for Civil OS
   const resultColumns = criteriaFields.map(entry => {
     const attr = getParcelAttributeForField(entry.field);
     let label = entry.field;

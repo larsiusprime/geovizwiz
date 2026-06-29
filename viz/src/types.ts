@@ -198,6 +198,8 @@ export type DataStore = {
   civilZoningMap?: Record<string, any>;
   civilLandUseMap?: Record<string, any>;
   civilLandUseTypeMap?: Record<string, any>;
+  civilImprovementTypeMap?: Record<string, any>;
+  civilImprovementConditionMap?: Record<string, any>;
   civilFeatureToParcelIdMap?: Map<number, string>;
   geojson: GeoJSON.FeatureCollection | null;
   numericFieldsFromSchema: string[];
@@ -256,6 +258,8 @@ export type SerializedDataSource = {
   civilZoningMap?: Record<string, any>;
   civilLandUseMap?: Record<string, any>;
   civilLandUseTypeMap?: Record<string, any>;
+  civilImprovementTypeMap?: Record<string, any>;
+  civilImprovementConditionMap?: Record<string, any>;
   chosenNumericFields: string[];
   chosenCategoricalFields: string[];
   allNumericFields: boolean;

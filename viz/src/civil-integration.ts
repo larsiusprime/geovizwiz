@@ -525,12 +525,42 @@ export async function prepullCivilLookupData(store: DataStore) {
   } catch (err) {
     console.error("Failed to fetch land use type lookups:", err);
   }
+
+  // 4. Fetch Improvement Types
+  try {
+    const res = await fetch(`${store.civilGateway}/civil.public.improvements.v1.ImprovementsService/GetImprovementTypes`, {
+      method: 'POST',
+      headers,
+      body: '{}'
+    });
+    if (res && res.ok) {
+      const data = await res.json();
+      store.civilImprovementTypeMap = data.improvementTypes || data.improvement_types || {};
+    }
+  } catch (err) {
+    console.error("Failed to fetch improvement type lookups:", err);
+  }
+
+  // 5. Fetch Improvement Conditions
+  try {
+    const res = await fetch(`${store.civilGateway}/civil.public.improvements.v1.ImprovementsService/GetImprovementConditions`, {
+      method: 'POST',
+      headers,
+      body: '{}'
+    });
+    if (res && res.ok) {
+      const data = await res.json();
+      store.civilImprovementConditionMap = data.improvementConditions || data.improvement_conditions || {};
+    }
+  } catch (err) {
+    console.error("Failed to fetch improvement condition lookups:", err);
+  }
 }
 
 export function prepullAllCivilStoresLookups() {
   for (const store of S.dataStores.values()) {
     if (store.isCivil && store.civilToken && store.civilGateway) {
-      if (!store.civilZoningMap || !store.civilLandUseMap) {
+      if (!store.civilZoningMap || !store.civilLandUseMap || !store.civilImprovementTypeMap || !store.civilImprovementConditionMap) {
         void prepullCivilLookupData(store);
       }
     }

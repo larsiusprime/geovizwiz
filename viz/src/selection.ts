@@ -1567,16 +1567,27 @@ export function getActiveDataStore(): DataStore | null {
   return S.dataStores.get(layer.dataStoreId) ?? null;
 }
 
-export async function resolveCivilSelectionIds(featureIds: (number | string)[]) {
-  const store = getActiveDataStore();
+const pendingCivilSelectionResolutions = new Set<number>();
+
+export async function resolveCivilSelectionIds(featureIds: (number | string)[], targetStore?: DataStore | null) {
+  const store = targetStore || getActiveDataStore();
   if (!store || !store.isCivil || !store.civilGateway || !store.civilToken) return;
 
   store.civilFeatureToParcelIdMap = store.civilFeatureToParcelIdMap || new Map<number, string>();
   const numericIds = featureIds
     .map(id => Number(id))
-    .filter(id => !isNaN(id) && !store.civilFeatureToParcelIdMap!.has(id));
+    .filter(id => !isNaN(id) && !store.civilFeatureToParcelIdMap!.has(id) && !pendingCivilSelectionResolutions.has(id));
 
-  if (numericIds.length === 0) return;
+  if (numericIds.length === 0) {
+    // Wait for any pending resolutions to finish if we're waiting on them
+    const pendingForUs = featureIds.map(id => Number(id)).filter(id => !isNaN(id) && pendingCivilSelectionResolutions.has(id));
+    if (pendingForUs.length > 0) {
+      await new Promise(resolve => setTimeout(resolve, 500)); // simple backoff
+    }
+    return;
+  }
+
+  numericIds.forEach(id => pendingCivilSelectionResolutions.add(id));
 
   try {
     const url = `${store.civilGateway}/civil.public.parcels.v1.ParcelsService/GetParcelIdsByFeatureId`;
@@ -1604,5 +1615,7 @@ export async function resolveCivilSelectionIds(featureIds: (number | string)[]) 
     }
   } catch (err) {
     console.error("Failed to resolve parcel IDs by feature IDs:", err);
+  } finally {
+    numericIds.forEach(id => pendingCivilSelectionResolutions.delete(id));
   }
 }

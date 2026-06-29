@@ -41,3 +41,33 @@ Fix: Updated `getAvailableFieldsForDataStore` to return explicitly the string na
 Even without criteria (which therefore should return everything), no comps are being returned when trying to search for them within a radius or based on selected parcels.
 
 Fix: Modified the comp loading flow to lookup the corresponding map feature from the MapLibre source or rendered layer using the `featureId` returned in the comparable response. If the map tile isn't currently loaded or rendering, we gracefully construct a placeholder object so the comparables table still populates, and then automatically resolve the parcel geometries and attach markers dynamically as the map moves (`moveend` / `sourcedata` events load the tiles).
+
+### Adding Field to Returned Comps
+The Comp finder contains the ability to optionally add additional fields to the table of found comps at the bottom of the modal. Whenever this is used with a Civil OS layer, the new rows have blank values (technically showing a dash). What should happen is that the app should use GetParcelsById to retrieve the data for each of the parcels, take the requested field, and populate it into the column
+
+Fix: Integrated `GetParcelsById` API call right after retrieving comparables to fetch full parcel details for both the comps and the subject. Values from both explicit fields (like `landAreaSqFt`) and custom `properties` JSON fields are merged into the feature properties map, allowing any newly added fields to populate successfully.
+
+### Map Tacks for Found Comps Don't Appear
+Any found comps should have map tacks appear over their parcels. The functionality is already built into the app for local layers. It is not working for Civil layers
+
+Fix: Replaced potentially fragile MapLibre query filters with robust Javascript checks (`Number(f.id) === fidNum`), resolved the layer's sourceLayer ID dynamically (instead of hardcoding `'parcels'`), and re-triggered `updateCompMarkers()` immediately after `GetParcelsById` retrieves the details.
+
+### Field Names
+Field names are appearing as their database column names, not their natural language versions that use translation keys to support different languages
+
+Fix: Updated the criteria dropdown generation in `renderCriteriaTable()` to map labels using `getFieldLabel()`. Additionally, updated `getFieldLabel()` to resolve mapping for `zoning_id` to `zoning_ids` to align with the translation configuration keys.
+
+### Zoning Names
+Zoning options are currently shown based on their names. As stated above, they should be populated from their codes
+
+Fix: Modified `getCategoricalValuesForField()` to return `v.code` for both the value and label when evaluating `"zoning_ids"`, ensuring options correspond to the zoning code strings instead of names or database IDs.
+
+### Adding Land Area Criteria Means No Comps are found
+If the land area criteria is added, comps are no long returned. I added this criteria (and only this criteria) and  I cranked up the tolerance on land area sq ft to +/- 5000, which should have covered everything in the suburban neighborhood I was attempting to find comps in, but nothing was returned. 80 comps were returned when the criteria was removed though.
+
+Fix: Corrected the numerical bounds calculation sent to the backend. Instead of passing absolute tolerances (which queried exact values), we now calculate relative ranges `subjVal - tol` and `subjVal + tol` as the lower/upper search bounds.
+
+### Land Use Value Error
+Attempting to find comps with a criteria on the parcel's land use worked. However, the found comp attribute did not show the land use values of those comps, rather just stating "Error"
+
+Fix: Introduced a `resolveCategoricalValue()` helper that decodes raw database IDs (e.g. `2`) to their corresponding name/code values using fetched store metadata maps (`civilLandUseMap`, etc.) for both subject and comp attributes, resolving the `ERROR` display in deltas.

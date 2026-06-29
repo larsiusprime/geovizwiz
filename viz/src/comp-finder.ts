@@ -15,7 +15,7 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { create } from "@bufbuild/protobuf";
 import type { ComparableCriteria } from "@civil-labs/civil-api-js";
-import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, ComparableCriteriaSchema, ParcelAttribute } from "@civil-labs/civil-api-js";
+import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, ComparableCriteriaSchema, ParcelAttribute, GetParcelsByIdRequestSchema } from "@civil-labs/civil-api-js";
 import { resolveCivilSelectionIds } from './selection';
 import enTranslations from '../locales/en.json';
 import esTranslations from '../locales/es.json';
@@ -54,7 +54,8 @@ function getFieldLabel(store: DataStore | null, field: string): string {
   if (store?.isCivil) {
     const attr = getParcelAttributeForField(field);
     if (attr !== null) {
-      const key = ParcelAttribute[attr].toLowerCase();
+      let key = ParcelAttribute[attr].toLowerCase();
+      if (key === 'zoning_id') key = 'zoning_ids';
       return t(key);
     }
   }
@@ -204,28 +205,29 @@ function getFeatureFromMap(featureId: number | string | bigint): GeoJSON.Feature
   const fidNum = Number(featureId);
   if (isNaN(fidNum)) return null;
 
-  // Search in querySourceFeatures
+  let sourceLayer = 'parcels';
+  if (compStore.civilTileJson?.vector_layers?.[0]?.id) {
+    sourceLayer = compStore.civilTileJson.vector_layers[0].id;
+  }
+
+  // Search in querySourceFeatures safely
   try {
     const sourceFeatures = S.map.querySourceFeatures(compLayer.sourceId, {
-      sourceLayer: 'parcels',
-      filter: ['==', '$id', fidNum]
+      sourceLayer: sourceLayer
     });
-    if (sourceFeatures && sourceFeatures.length > 0) {
-      return sourceFeatures[0] as GeoJSON.Feature;
-    }
+    const feat = sourceFeatures.find(f => Number(f.id) === fidNum);
+    if (feat) return feat as GeoJSON.Feature;
   } catch (e) {
     console.warn('[comp-finder] failed to query source features', e);
   }
 
-  // Fallback to queryRenderedFeatures
+  // Fallback to queryRenderedFeatures safely
   try {
     const renderedFeatures = S.map.queryRenderedFeatures({
-      layers: [compLayer.layerId],
-      filter: ['==', '$id', fidNum]
+      layers: [compLayer.layerId]
     });
-    if (renderedFeatures && renderedFeatures.length > 0) {
-      return renderedFeatures[0] as GeoJSON.Feature;
-    }
+    const featRendered = renderedFeatures.find(f => Number(f.id) === fidNum);
+    if (featRendered) return featRendered as GeoJSON.Feature;
   } catch (e) {
     console.warn('[comp-finder] failed to query rendered features', e);
   }
@@ -248,6 +250,33 @@ function registerMapCompEvents() {
       updateCompMarkers();
     }
   });
+}
+
+
+function resolveCategoricalValue(store: DataStore, field: string, rawVal: any): string {
+  if (rawVal === null || rawVal === undefined || rawVal === '') return '—';
+  
+  if (field === 'land_use_id') {
+    const lookup = store.civilLandUseMap?.[rawVal];
+    return lookup ? (lookup.name || lookup.code || String(rawVal)) : String(rawVal);
+  }
+  if (field === 'zoning_ids') {
+    const ids = Array.isArray(rawVal) ? rawVal : (typeof rawVal === 'string' ? [rawVal] : []);
+    const codes = ids.map(id => {
+      const lookup = store.civilZoningMap?.[id];
+      return lookup ? (lookup.code || lookup.name || String(id)) : String(id);
+    });
+    return codes.filter(Boolean).join(', ') || '—';
+  }
+  if (field === 'improvement_type_id') {
+    const lookup = store.civilImprovementTypeMap?.[rawVal];
+    return lookup ? (lookup.name || lookup.code || String(rawVal)) : String(rawVal);
+  }
+  if (field === 'condition_id') {
+    const lookup = store.civilImprovementConditionMap?.[rawVal];
+    return lookup ? (lookup.name || lookup.code || String(rawVal)) : String(rawVal);
+  }
+  return String(rawVal);
 }
 
 let compMarkers = new Map<string, maplibregl.Marker>();
@@ -462,7 +491,15 @@ function getDistanceLimitMeters(): number | null {
 
 function getFieldValue(feature: GeoJSON.Feature, field: string | null): any {
   if (!field) return null;
-  return feature.properties?.[field];
+  const raw = feature.properties?.[field];
+  const store = getCompDataStore();
+  if (store?.isCivil && store) {
+    const available = getAvailableFieldsForDataStore(store);
+    if (available.categorical.includes(field)) {
+      return resolveCategoricalValue(store, field, raw);
+    }
+  }
+  return raw;
 }
 
 function getAvailableFieldsForDataStore(dataStore: DataStore | null) {
@@ -548,10 +585,15 @@ function getCategoricalValuesForField(field: string): Array<{value: string, labe
     else if (field === "condition_id") mapToUse = store.civilImprovementConditionMap;
     
     if (mapToUse) {
-      return Object.values(mapToUse).map((v: any) => ({
-        value: String(v.code || v.id || ''),
-        label: t(v.name || v.code || String(v.id || ''))
-      })).filter(x => x.value).sort((a, b) => a.label.localeCompare(b.label));
+      return Object.values(mapToUse).map((v: any) => {
+        const valStr = field === "zoning_ids" 
+          ? String(v.code || v.name || v.id || '')
+          : String(v.name || v.code || v.id || '');
+        return {
+          value: valStr,
+          label: t(valStr)
+        };
+      }).filter(x => x.value).sort((a, b) => a.label.localeCompare(b.label));
     }
   }
 
@@ -601,7 +643,7 @@ function renderCriteriaTable() {
     availableFields.forEach(({ field, type }) => {
       const option = document.createElement('option');
       option.value = field;
-      option.textContent = field;
+      option.textContent = getFieldLabel(getCompDataStore(), field);
       option.dataset.fieldType = type;
       if (row.field === field) option.selected = true;
       fieldSelect.appendChild(option);
@@ -1139,16 +1181,17 @@ async function findCompsImpl() {
        if (!row) return null;
        
        if (entry.type === 'numeric') {
-         let tol = 0;
          const val = numOrNull(row.value);
-         if (val !== null) {
-           tol = row.usePercent ? val / 100 : val;
+         const subjVal = numOrNull(getFieldValue(subjectFeature, entry.field));
+         if (val !== null && subjVal !== null) {
+           const tol = row.usePercent ? subjVal * (val / 100) : val;
+           return create(ComparableCriteriaSchema, {
+             attribute: attr,
+             minNumericalTolerance: subjVal - tol,
+             maxNumericalTolerance: subjVal + tol
+           });
          }
-         return create(ComparableCriteriaSchema, {
-           attribute: attr,
-           minNumericalTolerance: tol,
-           maxNumericalTolerance: tol
-         });
+         return null;
        } else {
          return create(ComparableCriteriaSchema, {
            attribute: attr,
@@ -1194,7 +1237,8 @@ async function findCompsImpl() {
       
       const syntheticProperties: any = {};
       (c.attributes || []).forEach((attr: any) => {
-         const key = ParcelAttribute[attr.attribute]?.toLowerCase();
+         let key = ParcelAttribute[attr.attribute]?.toLowerCase();
+         if (key === 'zoning_id') key = 'zoning_ids';
          if (key) {
            syntheticProperties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
              ? attr.numericalValue 
@@ -1243,6 +1287,82 @@ async function findCompsImpl() {
       ]);
       Object.values(eqRes.parcels || {}).forEach(mergeComp);
       Object.values(saleRes.parcels || {}).forEach(mergeComp);
+
+      // Now fetch full parcel details using GetParcelsById for all comps + subject!
+      const compParcelIds = comps.map(c => c.parcelId).filter(Boolean);
+      if (subjectParcelId) {
+        compParcelIds.push(subjectParcelId);
+      }
+      
+      if (compParcelIds.length > 0) {
+        const getParcelsReq = create(GetParcelsByIdRequestSchema, { parcelIds: compParcelIds });
+        const parcelsRes = await client.getParcelsById(getParcelsReq);
+        
+        Object.entries(parcelsRes.parcels || {}).forEach(([pid, parcel]) => {
+          let targetFeature: any = null;
+          if (pid === subjectParcelId && subject) {
+            targetFeature = subject.feature;
+          } else {
+            const comp = comps.find(c => c.parcelId === pid);
+            if (comp) {
+              targetFeature = comp.feature;
+              if (parcel.formattedAddress) {
+                comp.address = parcel.formattedAddress;
+              }
+            }
+          }
+          
+          if (targetFeature) {
+            targetFeature.properties = targetFeature.properties || {};
+            
+            // 1. Merge explicit fields
+            if (parcel.landAreaSqFt !== undefined && parcel.landAreaSqFt !== null) {
+              targetFeature.properties.land_area_sq_ft = parcel.landAreaSqFt;
+            }
+            if (parcel.frontageFt !== undefined && parcel.frontageFt !== null) {
+              targetFeature.properties.frontage_ft = parcel.frontageFt;
+            }
+            if (parcel.depthFt !== undefined && parcel.depthFt !== null) {
+              targetFeature.properties.depth_ft = parcel.depthFt;
+            }
+            if (parcel.landUseId) {
+              targetFeature.properties.land_use_id = parcel.landUseId;
+            }
+            if (parcel.zoningIds && parcel.zoningIds.length > 0) {
+              targetFeature.properties.zoning_ids = parcel.zoningIds;
+            }
+            if (parcel.improvementSummary) {
+              targetFeature.properties.improvement_area_sq_ft = parcel.improvementSummary.totalAreaSqFt;
+              targetFeature.properties.improvement_year_built = parcel.improvementSummary.newestYearBuilt || parcel.improvementSummary.oldestYearBuilt;
+              targetFeature.properties.improvement_effective_year_built = parcel.improvementSummary.newestYearBuilt;
+              targetFeature.properties.bedrooms = parcel.improvementSummary.totalBedrooms;
+              targetFeature.properties.bathrooms = parcel.improvementSummary.totalBathrooms;
+              targetFeature.properties.units = parcel.improvementSummary.totalUnits;
+              targetFeature.properties.condition_id = parcel.improvementSummary.worstConditionId || parcel.improvementSummary.bestConditionId;
+            }
+            
+            // 2. Parse and merge properties JSON
+            if (parcel.properties) {
+              try {
+                const parsed = JSON.parse(parcel.properties);
+                Object.assign(targetFeature.properties, parsed);
+                // Also merge under snake_case keys if any are camelCase
+                Object.entries(parsed).forEach(([k, val]) => {
+                  const snake = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+                  if (targetFeature.properties[snake] === undefined) {
+                    targetFeature.properties[snake] = val;
+                  }
+                });
+              } catch (e) {
+                // ignore
+              }
+            }
+          }
+        });
+      }
+
+      // Re-trigger updateCompMarkers after properties & addresses are resolved
+      updateCompMarkers();
       registerMapCompEvents();
     } catch (err) {
       console.error("Failed to fetch civil comps:", err);

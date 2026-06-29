@@ -1159,7 +1159,7 @@ async function findCompsImpl() {
 
   const compLayer = getCompLayer();
   const compStore = getCompDataStore();
-  if (!compLayer || !compStore?.geojson) return;
+  if (!compLayer || (!compStore?.geojson && !compStore?.isCivil)) return;
 
   setFinding(true);
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -1415,7 +1415,7 @@ async function findCompsImpl() {
       console.error("Failed to fetch civil comps:", err);
     }
   } else {
-    for (const feature of compStore.geojson.features) {
+    for (const feature of compStore.geojson!.features) {
       const compCenter = getFeatureCenter(feature);
       if (!compCenter) continue;
       const parcelId = String(getFieldValue(feature, compStore.parcelIdField) ?? '');

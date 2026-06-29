@@ -96,3 +96,6 @@ Fix:
 This is still an issue.
 
 Fix: The comparables API response returns both the string UUID `parcelId` and the integer `featureId`. However, the map's selected subject feature only inherently possesses the integer feature ID (as MVT tiles omit full properties). Originally, the matching logic relied purely on `parcelId`, but the map's initialized `subjectParcelId` would sometimes be an empty string or the raw integer string (failing strict UUID matching) if `civilFeatureToParcelIdMap` hadn't populated. To guarantee the subject is correctly extracted from the API response and its `LAND_AREA_SQ_FT` merged for deltas, updated `comp-finder.ts` to implement a dual-match fallback: it checks both `c.parcelId === subjectParcelId` and `Number(c.featureId) === Number(subjectFeature.id)`.
+
+### Instantly Claiming "No Comps Found"
+When clicking the "Find Comps" button, the app instantly claims "No Comps Found". The timeframe is so fast I'm led to believe it never called the API. This occurs whether a criteria is set or not.

@@ -91,3 +91,8 @@ Fix:
 - Created a robust `getFeatureId()` helper that retrieves the ID as a string from various locations on the MapLibre feature (`f.id`, `f.properties.feature_id`, `f.properties.featureId`, `f.properties.id`).
 - Changed `getFeatureFromMap()` to compare IDs using string-based matching to avoid type mismatches and JS floating-point precision issues with BigInts.
 - Added delayed fallback polling (after `500ms`, `1500ms`, and `3000ms`) to trigger `updateCompMarkers()` to ensure markers render correctly even if MapLibre takes a moment to index features after tiles load.
+
+### Land Area Comp Attribute Table Error
+This is still an issue.
+
+Fix: Since the map's vector tiles contain zero attribute data (strictly only providing `id` and `geom` in MVT), the selected subject feature starts with empty properties. Modified the query flow to run a first pass over the comparables API response, locating the subject parcel's attributes inside it and merging them into `subjectFeature.properties` before comparables are processed. This guarantees the subject properties are fully loaded and deltas calculate successfully without using `GetParcelsById`.

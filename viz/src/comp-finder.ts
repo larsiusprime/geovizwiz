@@ -1313,6 +1313,27 @@ async function findCompsImpl() {
         client.getEquityComparables(eqReq),
         client.getSalesComparables(saleReq)
       ]);
+
+      // 1. First pass: find subject parcel properties from the response if returned
+      const allParcels = [
+        ...Object.values(eqRes.parcels || {}),
+        ...Object.values(saleRes.parcels || {})
+      ];
+      const subjComp = allParcels.find(c => c.parcelId === subjectParcelId);
+      if (subjComp) {
+        subjComp.attributes.forEach((attr: any) => {
+          let key = ParcelAttribute[attr.attribute]?.toLowerCase();
+          if (key === 'zoning_id') key = 'zoning_ids';
+          if (key) {
+            subjectFeature.properties = subjectFeature.properties || {};
+            subjectFeature.properties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
+              ? attr.numericalValue 
+              : attr.categoricalValue;
+          }
+        });
+      }
+
+      // 2. Second pass: merge comparables
       Object.values(eqRes.parcels || {}).forEach(mergeComp);
       Object.values(saleRes.parcels || {}).forEach(mergeComp);
 

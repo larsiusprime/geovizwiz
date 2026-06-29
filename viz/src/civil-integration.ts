@@ -392,6 +392,12 @@ export function initCivilIntegration() {
   window.fetch = async function(input, init) {
     const response = await originalFetch(input, init);
     if (response.status === 401) {
+      // If we are currently handling an OIDC redirect callback, do not trigger a redirect again
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.has('code')) {
+        return response;
+      }
+
       const urlString = typeof input === 'string' ? input : (input instanceof Request ? input.url : '');
       const stores = Array.from(S.dataStores.values());
       const civilStore = stores.find(s => s.isCivil && s.civilGateway && urlString.includes(s.civilGateway));

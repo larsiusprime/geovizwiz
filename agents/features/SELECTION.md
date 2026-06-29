@@ -25,3 +25,6 @@ I've fixed the feature ID issue with the parcel IDs, so the pg feature_id should
 
 ### Selection Issues
 Now when using the select tool, the tool can only select one parcel at a time (as indicated by the selection count on the modal), and the selections do not show up visually on the layer (the select parcel does not have its color changed). Both of these need to be resolved so it can select multiple at a time The unselect all is clearing out the single selection when present, so it is likely working as expected.
+
+### Double login
+While the user isn't having 3 simulatenous redirect auth sessions opened at once, when reopening a project with a civil os data source they are prompted to login twice sequentially (once they finish the first login, they are immediately prompted for a second)

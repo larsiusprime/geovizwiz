@@ -1191,8 +1191,10 @@ async function findCivilComps(): Promise<StandardCompResults> {
 
   if (subjectFeatureIdNum !== null) {
     try {
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCivilComps fetching subject parcel for feature ID: ${subjectFeatureIdNum}...`);
       const req = create(GetParcelByFeatureIdRequestSchema, { featureId: BigInt(subjectFeatureIdNum) });
       const res = await client.getParcelByFeatureId(req);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] GetParcelByFeatureId returned: ${JSON.stringify(res)}`);
       if (res.parcel) {
         const p = res.parcel;
         subject!.parcelId = p.parcelId;
@@ -1212,8 +1214,10 @@ async function findCivilComps(): Promise<StandardCompResults> {
             Object.assign(props, JSON.parse(p.properties));
           } catch (e) {}
         }
+        (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Mapped subject attributes: ${JSON.stringify(props)}`);
       }
-    } catch (err) {
+    } catch (err: any) {
+      (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] findCivilComps GetParcelByFeatureId failed: ${err?.message || err}`);
       console.error("Failed to fetch subject parcel attributes via GetParcelByFeatureId", err);
     }
   }
@@ -1284,6 +1288,8 @@ async function findCivilComps(): Promise<StandardCompResults> {
   const eqReq = create(GetEquityComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
   const saleReq = create(GetSalesComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
 
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Sending GetEquityComparables and GetSalesComparables... WKT: ${wkt}, criteria: ${JSON.stringify(criteriaArr)}`);
+
   const [eqRes, saleRes] = await Promise.all([
     client.getEquityComparables(eqReq),
     client.getSalesComparables(saleReq)
@@ -1293,6 +1299,8 @@ async function findCivilComps(): Promise<StandardCompResults> {
     ...Object.values(eqRes.parcels || {}),
     ...Object.values(saleRes.parcels || {})
   ];
+
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Received response. Equity: ${Object.keys(eqRes.parcels || {}).length} parcels, Sales: ${Object.keys(saleRes.parcels || {}).length} parcels`);
 
   const subjComp = allParcels.find(c => {
     const matchesUUID = c.parcelId === subjectParcelId;
@@ -1530,7 +1538,8 @@ async function findCompsImpl() {
       setTimeout(updateCompMarkers, 3000);
       registerMapCompEvents();
     }
-  } catch (err) {
+  } catch (err: any) {
+    (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] findCompsImpl failed: ${err?.message || err}`);
     console.error("Failed to find comps:", err);
   }
 

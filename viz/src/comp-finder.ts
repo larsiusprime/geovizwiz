@@ -1142,9 +1142,338 @@ function expandPanelForCompsIfNeeded() {
   }
 }
 
+interface StandardCompResults {
+  parcels: Array<{
+    id: string;
+    parcelId: string;
+    address: string;
+    feature: GeoJSON.Feature;
+    featureId?: string;
+  }>;
+  columns: Array<{
+    field: string;
+    label: string;
+    type: 'numeric' | 'categorical';
+  }>;
+  values: Record<string, {
+    deltas: Record<string, { text: string; error?: string; sign: 'positive' | 'negative' | 'neutral' | 'error' }>;
+  }>;
+}
+
+async function findCivilComps(): Promise<StandardCompResults> {
+  const compLayer = getCompLayer()!;
+  const compStore = getCompDataStore()!;
+  const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
+  const subjectCenter = subject!.center;
+  const subjectFeature = subject!.feature;
+  const subjectFeatureIdRaw = subjectFeature.id || subjectFeature.properties?.feature_id || subjectFeature.properties?.featureId || subjectFeature.properties?.id;
+  const subjectFeatureIdNum = subjectFeatureIdRaw !== undefined && subjectFeatureIdRaw !== null ? Number(subjectFeatureIdRaw) : null;
+  const useDistance = els.distanceEnabledInput.checked;
+  const useSelection = els.selectionEnabledInput.checked;
+  const distanceLimit = useDistance ? getDistanceLimitMeters() : null;
+  const selectedParcels = compLayer.selectedParcels;
+  const subjectParcelId = subject?.parcelId;
+
+  if (useSelection) {
+    await resolveCivilSelectionIds(Array.from(selectedParcels), compStore);
+  }
+
+  const transport = createConnectTransport({
+    baseUrl: compStore.civilGateway!,
+    interceptors: [
+      (next) => async (req) => {
+        req.header.set("Authorization", `Bearer ${compStore.civilToken}`);
+        return await next(req);
+      }
+    ]
+  });
+  const client = createClient(ParcelsService, transport);
+
+  if (subjectFeatureIdNum !== null) {
+    try {
+      const req = create(GetParcelByFeatureIdRequestSchema, { featureId: BigInt(subjectFeatureIdNum) });
+      const res = await client.getParcelByFeatureId(req);
+      if (res.parcel) {
+        const p = res.parcel;
+        subject!.parcelId = p.parcelId;
+        subject!.address = p.formattedAddress || '';
+        
+        subject!.feature = { ...subject!.feature, properties: { ...(subject!.feature.properties || {}) } };
+        const mutableSubjectFeature = subject!.feature;
+        const props = mutableSubjectFeature.properties!;
+
+        if (p.landAreaSqFt !== undefined) props.land_area_sq_ft = p.landAreaSqFt;
+        if (p.frontageFt !== undefined) props.frontage_ft = p.frontageFt;
+        if (p.depthFt !== undefined) props.depth_ft = p.depthFt;
+        if (p.zoningIds && p.zoningIds.length > 0) props.zoning_ids = p.zoningIds;
+        if (p.landUseId) props.land_use_id = p.landUseId;
+        if (p.properties) {
+          try {
+            Object.assign(props, JSON.parse(p.properties));
+          } catch (e) {}
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch subject parcel attributes via GetParcelByFeatureId", err);
+    }
+  }
+
+  const criteriaArr = criteriaFields.map(entry => {
+     const attr = getParcelAttributeForField(entry.field);
+     if (attr === null) return null;
+     const row = criteria.find(c => c.field === entry.field);
+     if (!row) return null;
+     
+     if (entry.type === 'numeric') {
+       const val = numOrNull(row.value);
+       if (val !== null) {
+         const tol = row.usePercent ? val / 100 : val;
+         const subjValNum = numOrNull(getFieldValue(subject!.feature, entry.field));
+         if (subjValNum !== null) {
+           const absoluteTol = row.usePercent ? subjValNum * tol : tol;
+           return create(ComparableCriteriaSchema, {
+             attribute: attr,
+             minNumericalTolerance: subjValNum - absoluteTol,
+             maxNumericalTolerance: subjValNum + absoluteTol
+           });
+         }
+       }
+       return null;
+     } else {
+       const selectedNames = Array.isArray(row.value) ? row.value : [];
+       let mapToUse: Record<string, any> | undefined;
+       if (entry.field === "zoning_ids") mapToUse = compStore.civilZoningMap;
+       else if (entry.field === "land_use_id") mapToUse = compStore.civilLandUseMap;
+       else if (entry.field === "improvement_type_id") mapToUse = compStore.civilImprovementTypeMap;
+       else if (entry.field === "condition_id") mapToUse = compStore.civilImprovementConditionMap;
+
+       const apiTolerance = selectedNames.map(val => {
+         if (mapToUse) {
+           const found = Object.values(mapToUse).find(v => {
+             const valStr = entry.field === "zoning_ids"
+               ? String(v.code || v.name || v.id || '')
+               : String(v.name || v.code || v.id || '');
+             return valStr === val;
+           });
+           return found ? String(found.id || '') : val;
+         }
+         return val;
+       }).filter(Boolean);
+
+       return create(ComparableCriteriaSchema, {
+         attribute: attr,
+         categoricalTolerance: apiTolerance
+       });
+     }
+  }).filter(Boolean) as ComparableCriteria[];
+
+  let wkt = '';
+  if (useDistance && distanceLimit !== null) {
+    const circleFeat = makeDistanceCircleFeature(subjectCenter, distanceLimit);
+    if (circleFeat && circleFeat.geometry.type === 'Polygon') {
+      const coords = circleFeat.geometry.coordinates[0];
+      const wktCoords = coords.map((c: any) => `${c[0]} ${c[1]}`).join(', ');
+      wkt = `POLYGON((${wktCoords}))`;
+    }
+  }
+
+  const selectedParcelIds = useSelection 
+    ? Array.from(selectedParcels).map(fid => compStore.civilFeatureToParcelIdMap?.get(Number(fid))).filter(Boolean) as string[]
+    : [];
+
+  const eqReq = create(GetEquityComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
+  const saleReq = create(GetSalesComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
+
+  const [eqRes, saleRes] = await Promise.all([
+    client.getEquityComparables(eqReq),
+    client.getSalesComparables(saleReq)
+  ]);
+
+  const allParcels = [
+    ...Object.values(eqRes.parcels || {}),
+    ...Object.values(saleRes.parcels || {})
+  ];
+
+  const subjComp = allParcels.find(c => {
+    const matchesUUID = c.parcelId === subjectParcelId;
+    const matchesFeatureId = subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum;
+    return matchesUUID || matchesFeatureId;
+  });
+
+  if (subjComp) {
+    if (!subject!.address && subjComp.formattedAddress) {
+      subject!.address = subjComp.formattedAddress;
+    }
+    if (!subject!.parcelId && subjComp.parcelId) {
+      subject!.parcelId = subjComp.parcelId;
+    }
+    subject!.feature = { ...subject!.feature, properties: { ...(subject!.feature.properties || {}) } };
+    const subjectFeatureRef = subject!.feature;
+    (subjComp.attributes || []).forEach((attr: any) => {
+      let key = ParcelAttribute[attr.attribute]?.toLowerCase();
+      if (key === 'zoning_id') key = 'zoning_ids';
+      if (key) {
+        subjectFeatureRef.properties![key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
+          ? attr.numericalValue 
+          : attr.categoricalValue;
+      }
+    });
+  }
+
+  const resultParcels: any[] = [];
+  const resultValues: Record<string, any> = {};
+
+  const fetchedIds = new Set<string>();
+  for (const c of allParcels) {
+    if (subject!.parcelId && c.parcelId === subject!.parcelId) continue;
+    if (subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum) continue;
+    if (fetchedIds.has(c.parcelId)) continue;
+    fetchedIds.add(c.parcelId);
+
+    const featureIdStr = String(c.featureId);
+    let baseFeature = getFeatureFromMap(c.featureId);
+    
+    const syntheticProperties: any = {};
+    (c.attributes || []).forEach((attr: any) => {
+       let key = ParcelAttribute[attr.attribute]?.toLowerCase();
+       if (key === 'zoning_id') key = 'zoning_ids';
+       if (key) {
+         syntheticProperties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
+           ? attr.numericalValue 
+           : attr.categoricalValue;
+       }
+    });
+
+    let feature: any;
+    if (!baseFeature) {
+       feature = {
+          type: 'Feature',
+          id: featureIdStr,
+          geometry: null,
+          properties: syntheticProperties
+       };
+    } else {
+       feature = {
+          ...baseFeature,
+          properties: {
+             ...(baseFeature.properties || {}),
+             ...syntheticProperties
+          }
+       };
+    }
+
+    const deltas: Record<string, any> = {};
+    criteriaFields.forEach(entry => {
+      let compVal = getFieldValue(feature, entry.field);
+      let subjVal = getFieldValue(subject!.feature, entry.field);
+      compVal = resolveCategoricalValue(compStore, entry.field, compVal);
+      subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
+      deltas[entry.field] = buildDelta(compVal, subjVal, entry.type);
+    });
+
+    const parcelRowId = c.parcelId || uid('comp');
+    resultParcels.push({
+      id: parcelRowId,
+      parcelId: c.parcelId || '—',
+      address: c.formattedAddress || '—',
+      feature,
+      featureId: featureIdStr
+    });
+
+    resultValues[parcelRowId] = { deltas };
+  }
+
+  const resultColumns = criteriaFields.map(entry => {
+    const attr = getParcelAttributeForField(entry.field);
+    let label = entry.field;
+    if (attr !== null) {
+      let key = ParcelAttribute[attr].toLowerCase();
+      if (key === 'zoning_id') key = 'zoning_ids';
+      label = t(key);
+    }
+    return {
+      field: entry.field,
+      label,
+      type: entry.type
+    };
+  });
+
+  return {
+    parcels: resultParcels,
+    columns: resultColumns,
+    values: resultValues
+  };
+}
+
+async function findLocalComps(): Promise<StandardCompResults> {
+  const compLayer = getCompLayer()!;
+  const compStore = getCompDataStore()!;
+  const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
+  const subjectCenter = subject!.center;
+  const useDistance = els.distanceEnabledInput.checked;
+  const useSelection = els.selectionEnabledInput.checked;
+  const distanceLimit = useDistance ? getDistanceLimitMeters() : null;
+  const selectedParcels = compLayer.selectedParcels;
+  const subjectParcelId = subject?.parcelId;
+
+  const resultParcels: any[] = [];
+  const resultValues: Record<string, any> = {};
+
+  for (const feature of compStore.geojson!.features) {
+    const compCenter = getFeatureCenter(feature);
+    if (!compCenter) continue;
+    const parcelId = String(getFieldValue(feature, compStore.parcelIdField) ?? '');
+    const featureId = feature.id === undefined || feature.id === null ? null : String(feature.id);
+    if (parcelId && subjectParcelId && parcelId === subjectParcelId) continue;
+
+    if (useDistance && distanceLimit !== null) {
+      const dist = distanceMeters(subjectCenter, compCenter);
+      if (dist > distanceLimit) continue;
+    }
+
+    if (useSelection) {
+      if (!featureId || !selectedParcels.has(featureId)) continue;
+    }
+
+    if (!passesCriteria(feature)) continue;
+
+    const deltas: Record<string, any> = {};
+    criteriaFields.forEach(entry => {
+      const compVal = getFieldValue(feature, entry.field);
+      const subjVal = getFieldValue(subject!.feature, entry.field);
+      deltas[entry.field] = buildDelta(compVal, subjVal, entry.type);
+    });
+
+    const parcelRowId = parcelId || uid('comp');
+    resultParcels.push({
+      id: parcelRowId,
+      parcelId: parcelId || '—',
+      address: String(getFieldValue(feature, compStore.addressField) ?? '—'),
+      feature
+    });
+
+    resultValues[parcelRowId] = { deltas };
+  }
+
+  const resultColumns = criteriaFields.map(entry => {
+    return {
+      field: entry.field,
+      label: entry.field,
+      type: entry.type
+    };
+  });
+
+  return {
+    parcels: resultParcels,
+    columns: resultColumns,
+    values: resultValues
+  };
+}
+
 async function findComps() {
   return perfSpan('panel:findComps', findCompsImpl);
 }
+
 async function findCompsImpl() {
   if (!subject) return;
   if (!hasAnyThresholdEnabled()) {
@@ -1164,289 +1493,37 @@ async function findCompsImpl() {
   setFinding(true);
   await new Promise((resolve) => setTimeout(resolve, 0));
 
-  const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
-  const subjectCenter = subject.center;
-  const subjectFeature = subject.feature;
-  const subjectFeatureIdNum = subjectFeature.id !== undefined && subjectFeature.id !== null ? Number(subjectFeature.id) : null;
-  const useDistance = els.distanceEnabledInput.checked;
-  const useSelection = els.selectionEnabledInput.checked;
-  const distanceLimit = useDistance ? getDistanceLimitMeters() : null;
-  const selectedParcels = compLayer.selectedParcels;
-  const subjectParcelId = subject?.parcelId;
-
-  comps = [];
-
-  if (compStore.isCivil) {
-    if (useSelection) {
-      await resolveCivilSelectionIds(Array.from(selectedParcels), compStore);
-    }
-    
-    const transport = createConnectTransport({
-      baseUrl: compStore.civilGateway!,
-      interceptors: [
-        (next) => async (req) => {
-          req.header.set("Authorization", `Bearer ${compStore.civilToken}`);
-          return await next(req);
-        }
-      ]
-    });
-    const client = createClient(ParcelsService, transport);
-
-    // Fetch the subject parcel data so we can calculate absolute tolerances
-    if (subjectFeatureIdNum !== null) {
-      try {
-        const req = create(GetParcelByFeatureIdRequestSchema, { featureId: BigInt(subjectFeatureIdNum) });
-        const res = await client.getParcelByFeatureId(req);
-        if (res.parcel) {
-          const p = res.parcel;
-          subject.parcelId = p.parcelId;
-          subject.address = p.formattedAddress || '';
-          
-          subject.feature = { ...subject.feature, properties: { ...(subject.feature.properties || {}) } };
-          const mutableSubjectFeature = subject.feature;
-          const props = mutableSubjectFeature.properties!;
-
-          if (p.landAreaSqFt !== undefined) props.land_area_sq_ft = p.landAreaSqFt;
-          if (p.frontageFt !== undefined) props.frontage_ft = p.frontageFt;
-          if (p.depthFt !== undefined) props.depth_ft = p.depthFt;
-          if (p.zoningIds && p.zoningIds.length > 0) props.zoning_ids = p.zoningIds;
-          if (p.landUseId) props.land_use_id = p.landUseId;
-          if (p.properties) {
-            try {
-              Object.assign(props, JSON.parse(p.properties));
-            } catch (e) {}
-          }
-        }
-      } catch (err) {
-        console.error("Failed to fetch subject parcel attributes via GetParcelByFeatureId", err);
-      }
+  try {
+    let results: StandardCompResults;
+    if (compStore.isCivil) {
+      results = await findCivilComps();
+    } else {
+      results = await findLocalComps();
     }
 
-    const criteriaArr = criteriaFields.map(entry => {
-       const attr = getParcelAttributeForField(entry.field);
-       if (attr === null) return null;
-       const row = criteria.find(c => c.field === entry.field);
-       if (!row) return null;
-       
-       if (entry.type === 'numeric') {
-         const val = numOrNull(row.value);
-         if (val !== null) {
-           const tol = row.usePercent ? val / 100 : val;
-           const subjValNum = numOrNull(getFieldValue(subject!.feature, entry.field));
-           if (subjValNum !== null) {
-             const absoluteTol = row.usePercent ? subjValNum * tol : tol;
-             return create(ComparableCriteriaSchema, {
-               attribute: attr,
-               minNumericalTolerance: subjValNum - absoluteTol,
-               maxNumericalTolerance: subjValNum + absoluteTol
-             });
-           }
-         }
-         return null;
-       } else {
-         const selectedNames = Array.isArray(row.value) ? row.value : [];
-         let mapToUse: Record<string, any> | undefined;
-         if (entry.field === "zoning_ids") mapToUse = compStore.civilZoningMap;
-         else if (entry.field === "land_use_id") mapToUse = compStore.civilLandUseMap;
-         else if (entry.field === "improvement_type_id") mapToUse = compStore.civilImprovementTypeMap;
-         else if (entry.field === "condition_id") mapToUse = compStore.civilImprovementConditionMap;
-
-         const apiTolerance = selectedNames.map(val => {
-           if (mapToUse) {
-             const found = Object.values(mapToUse).find(v => {
-               const valStr = entry.field === "zoning_ids"
-                 ? String(v.code || v.name || v.id || '')
-                 : String(v.name || v.code || v.id || '');
-               return valStr === val;
-             });
-             return found ? String(found.id || '') : val;
-           }
-           return val;
-         }).filter(Boolean);
-
-         return create(ComparableCriteriaSchema, {
-           attribute: attr,
-           categoricalTolerance: apiTolerance
-         });
-       }
-    }).filter(Boolean) as ComparableCriteria[];
-
-    let wkt = '';
-    if (useDistance && distanceLimit !== null) {
-      const circleFeat = makeDistanceCircleFeature(subjectCenter, distanceLimit);
-      if (circleFeat && circleFeat.geometry.type === 'Polygon') {
-        const coords = circleFeat.geometry.coordinates[0];
-        const wktCoords = coords.map((c: any) => `${c[0]} ${c[1]}`).join(', ');
-        wkt = `POLYGON((${wktCoords}))`;
-      }
-    }
-
-
-    const selectedParcelIds = useSelection 
-      ? Array.from(selectedParcels).map(fid => compStore.civilFeatureToParcelIdMap?.get(Number(fid))).filter(Boolean) as string[]
-      : [];
-
-    const eqReq = create(GetEquityComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
-    const saleReq = create(GetSalesComparablesRequestSchema, { wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds });
-
-    const fetchedIds = new Set<string>();
-    const mergeComp = (c: any) => {
-      // Use subject.parcelId instead of the static subjectParcelId since it may have been populated in the first pass
-      if (subject?.parcelId && c.parcelId === subject.parcelId) return;
-      if (subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum) return;
-      if (fetchedIds.has(c.parcelId)) return;
-      fetchedIds.add(c.parcelId);
-      
-      const featureIdStr = String(c.featureId);
-      let baseFeature = getFeatureFromMap(c.featureId);
-      
-      const syntheticProperties: any = {};
-      (c.attributes || []).forEach((attr: any) => {
-         let key = ParcelAttribute[attr.attribute]?.toLowerCase();
-         if (key === 'zoning_id') key = 'zoning_ids';
-         if (key) {
-           syntheticProperties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
-             ? attr.numericalValue 
-             : attr.categoricalValue;
-         }
-      });
-      
-      let feature: any;
-      if (!baseFeature) {
-         feature = {
-            type: 'Feature',
-            id: featureIdStr,
-            geometry: null,
-            properties: syntheticProperties
-         };
-      } else {
-         feature = {
-            ...baseFeature,
-            properties: {
-               ...(baseFeature.properties || {}),
-               ...syntheticProperties
-            }
-         };
-      }
-      
-      const deltas = criteriaFields.map((entry) => {
-        let compVal = getFieldValue(feature, entry.field);
-        let subjVal = getFieldValue(subject!.feature, entry.field);
-        if (compStore.isCivil) {
-          compVal = resolveCategoricalValue(compStore, entry.field, compVal);
-          subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
-        }
-        return buildDelta(compVal, subjVal, entry.type);
-      });
-
-      comps.push({
-        id: c.parcelId || uid('comp'),
-        feature,
+    comps = results.parcels.map(p => {
+      const valObj = results.values[p.id] || { deltas: {} };
+      const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
+      const deltas = criteriaFields.map(entry => valObj.deltas[entry.field]).filter(Boolean);
+      return {
+        id: p.id,
+        feature: p.feature,
         deltas,
-        parcelId: c.parcelId || '—',
-        address: c.formattedAddress || '—',
-        featureId: featureIdStr,
-      });
-    };
+        parcelId: p.parcelId,
+        address: p.address,
+        featureId: p.featureId
+      };
+    });
 
-    try {
-      const [eqRes, saleRes] = await Promise.all([
-        client.getEquityComparables(eqReq),
-        client.getSalesComparables(saleReq)
-      ]);
-
-      // 1. First pass: find subject parcel properties from the response if returned
-      const allParcels = [
-        ...Object.values(eqRes.parcels || {}),
-        ...Object.values(saleRes.parcels || {})
-      ];
-      (window as any).desktopApi?.log('debug', `[CompFinder Debug] Looking for subject parcel. map feature.id: ${subjectFeature.id}, subjectParcelId (UUID): ${subjectParcelId}`);
-      
-      const subjComp = allParcels.find(c => {
-        const matchesUUID = c.parcelId === subjectParcelId;
-        const matchesFeatureId = subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum;
-        if (matchesUUID || matchesFeatureId) {
-           (window as any).desktopApi?.log('debug', `[CompFinder Debug] Found match! matchesUUID: ${matchesUUID}, matchesFeatureId: ${matchesFeatureId}, c.parcelId: ${c.parcelId}, c.featureId: ${c.featureId}`);
-           return true;
-        }
-        return false;
-      });
-
-      if (subjComp) {
-        (window as any).desktopApi?.log('debug', `[CompFinder Debug] subjComp found with ${subjComp.attributes?.length || 0} attributes`);
-        if (!subject.address && subjComp.formattedAddress) {
-          subject.address = subjComp.formattedAddress;
-        }
-        if (!subject.parcelId && subjComp.parcelId) {
-          subject.parcelId = subjComp.parcelId;
-        }
-        
-        // MapLibre features might have read-only properties getters. We must clone it to mutate properties.
-        subject.feature = { ...subject.feature, properties: { ...(subject.feature.properties || {}) } };
-        const subjectFeature = subject.feature;
-
-        (subjComp.attributes || []).forEach((attr: any) => {
-          let key = ParcelAttribute[attr.attribute]?.toLowerCase();
-          if (key === 'zoning_id') key = 'zoning_ids';
-          if (key) {
-            subjectFeature.properties = subjectFeature.properties || {};
-            subjectFeature.properties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
-              ? attr.numericalValue 
-              : attr.categoricalValue;
-            (window as any).desktopApi?.log('debug', `[CompFinder Debug] Mapped subject attribute ${key} = ${subjectFeature.properties[key]} (num: ${attr.numericalValue}, cat: ${attr.categoricalValue})`);
-          }
-        });
-      } else {
-        (window as any).desktopApi?.log('error', `[CompFinder Debug] subjComp NOT FOUND in API response! Total parcels returned: ${allParcels.length}`);
-      }
-
-      // 2. Second pass: merge comparables
-      Object.values(eqRes.parcels || {}).forEach(mergeComp);
-      Object.values(saleRes.parcels || {}).forEach(mergeComp);
-
-      // Re-trigger updateCompMarkers immediately
+    if (compStore.isCivil) {
       updateCompMarkers();
       setTimeout(updateCompMarkers, 500);
       setTimeout(updateCompMarkers, 1500);
       setTimeout(updateCompMarkers, 3000);
-      
       registerMapCompEvents();
-    } catch (err) {
-      console.error("Failed to fetch civil comps:", err);
     }
-  } else {
-    for (const feature of compStore.geojson!.features) {
-      const compCenter = getFeatureCenter(feature);
-      if (!compCenter) continue;
-      const parcelId = String(getFieldValue(feature, compStore.parcelIdField) ?? '');
-      const featureId = feature.id === undefined || feature.id === null ? null : String(feature.id);
-      if (parcelId && subjectParcelId && parcelId === subjectParcelId) continue;
-
-      if (useDistance && distanceLimit !== null) {
-        const dist = distanceMeters(subjectCenter, compCenter);
-        if (dist > distanceLimit) continue;
-      }
-
-      if (useSelection) {
-        if (!featureId || !selectedParcels.has(featureId)) continue;
-      }
-
-      if (!passesCriteria(feature)) continue;
-
-      const deltas = criteriaFields.map((entry) => {
-        const compVal = getFieldValue(feature, entry.field);
-        const subjVal = getFieldValue(subject!.feature, entry.field);
-        return buildDelta(compVal, subjVal, entry.type);
-      });
-
-      comps.push({
-        id: parcelId || uid('comp'),
-        feature,
-        deltas,
-        parcelId: parcelId || '—',
-        address: String(getFieldValue(feature, compStore.addressField) ?? '—'),
-      });
-    }
+  } catch (err) {
+    console.error("Failed to find comps:", err);
   }
 
   currentPage = 1;

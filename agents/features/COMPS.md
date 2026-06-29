@@ -99,3 +99,6 @@ Fix: The comparables API response returns both the string UUID `parcelId` and th
 
 ### Instantly Claiming "No Comps Found"
 When clicking the "Find Comps" button, the app instantly claims "No Comps Found". The timeframe is so fast I'm led to believe it never called the API. This occurs whether a criteria is set or not.
+
+### Refactor findCompsImpl in comp-finder.ts
+Refactor findCompsImpl, splitting it up so that it handles finding comps for Civil OS and local layers in two different functions. They should then return a standard format of comparison parcels, columns, and values that can be read by the UI controller logic and populated. The only hiccup to watch out for is using translation keys for column names when operating on Civil OS layers, and the actual column name in the DuckDB when dealing with local layers.

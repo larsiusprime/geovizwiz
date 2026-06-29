@@ -16,3 +16,28 @@ Implement OpenCAMA's comp finder functionality with Civil OS data.
 - Ensure that all Civil OS api calls are made through the official handlers in civil-api-js
 
 ## Changes/Fixes
+### Error during build
+error during build:
+[vite]: Rollup failed to resolve import "@connectrpc/connect" from "C:/Users/jacks/development/geovizwiz/viz/src/comp-finder.ts".
+This is most likely unintended because it can break your application at runtime.
+If you do want to externalize this module explicitly add it to
+`build.rollupOptions.external`
+    at viteLog (file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/vite/dist/node/chunks/config.js:33635:57)
+    at onRollupLog (file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/vite/dist/node/chunks/config.js:33665:7)
+    at onLog (file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/vite/dist/node/chunks/config.js:33467:4)
+    at file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/rollup/dist/es/shared/node-entry.js:20863:32
+    at Object.logger [as onLog] (file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/rollup/dist/es/shared/node-entry.js:22745:9)
+    at ModuleLoader.handleInvalidResolvedId (file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/rollup/dist/es/shared/node-entry.js:21489:26)
+    at file:///C:/Users/jacks/development/geovizwiz/viz/node_modules/rollup/dist/es/shared/node-entry.js:21447:26
+
+Fix: Instructed the user to run `npm install` inside the `viz` directory to ensure all newly added dependencies (`@connectrpc/connect`, etc.) are downloaded locally to `node_modules`, fixing the Vite/Rollup module resolution issue during build.
+
+### No Criteria Field Options
+When adding a new criteria, not field options are populating in the drop down
+
+Fix: Updated `getAvailableFieldsForDataStore` to return explicitly the string names of the `ParcelAttribute` enumerations (e.g. `land_area_sq_ft`, `bathrooms`, `zoning_ids`) instead of checking the user-configured DataStore fields (which start as null). This ensures that the criteria dropdown populates accurately using the correct API attributes.
+
+### Can't find
+Even without criteria (which therefore should return everything), no comps are being returned when trying to search for them within a radius or based on selected parcels.
+
+Fix: Modified the comp loading flow to lookup the corresponding map feature from the MapLibre source or rendered layer using the `featureId` returned in the comparable response. If the map tile isn't currently loaded or rendering, we gracefully construct a placeholder object so the comparables table still populates, and then automatically resolve the parcel geometries and attach markers dynamically as the map moves (`moveend` / `sourcedata` events load the tiles).

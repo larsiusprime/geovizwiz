@@ -46,13 +46,30 @@ function getParcelAttributeForField(field: string): ParcelAttribute | null {
   return null;
 }
 
+function getAttributeKey(attrVal: any): string | null {
+  if (attrVal === undefined || attrVal === null) return null;
+  if (typeof attrVal === 'number') {
+    const str = ParcelAttribute[attrVal];
+    return str ? str.toLowerCase() : null;
+  }
+  if (typeof attrVal === 'string') {
+    const parsed = parseInt(attrVal, 10);
+    if (!isNaN(parsed)) {
+      const str = ParcelAttribute[parsed];
+      return str ? str.toLowerCase() : null;
+    }
+    return attrVal.toLowerCase();
+  }
+  return null;
+}
+
 function getFieldLabel(store: DataStore | null, field: string): string {
   if (store?.isCivil) {
     const attr = getParcelAttributeForField(field);
     if (attr !== null) {
-      let key = ParcelAttribute[attr].toLowerCase();
-      if (key === 'zoning_id') key = 'zoning_ids';
-      return t(key);
+      let key = getAttributeKey(attr);
+      if (key && key === 'zoning_id') key = 'zoning_ids';
+      if (key) return t(key);
     }
   }
   return field;
@@ -1338,12 +1355,16 @@ async function findCivilComps(): Promise<StandardCompResults> {
     subject!.feature = { ...subject!.feature, properties: { ...(subject!.feature.properties || {}) } };
     const subjectFeatureRef = subject!.feature;
     (subjComp.attributes || []).forEach((attr: any) => {
-      let key = ParcelAttribute[attr.attribute]?.toLowerCase();
+      let key = getAttributeKey(attr.attribute);
       if (key === 'zoning_id') key = 'zoning_ids';
       if (key) {
-        subjectFeatureRef.properties![key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
+        const numVal = attr.numericalValue !== undefined && attr.numericalValue !== null 
           ? attr.numericalValue 
-          : attr.categoricalValue;
+          : attr.numerical_value;
+        const catVal = attr.categoricalValue !== undefined && attr.categoricalValue !== null 
+          ? attr.categoricalValue 
+          : attr.categorical_value;
+        subjectFeatureRef.properties![key] = numVal !== undefined && numVal !== null ? numVal : catVal;
       }
     });
   }
@@ -1363,12 +1384,16 @@ async function findCivilComps(): Promise<StandardCompResults> {
     
     const syntheticProperties: any = {};
     (c.attributes || []).forEach((attr: any) => {
-       let key = ParcelAttribute[attr.attribute]?.toLowerCase();
+       let key = getAttributeKey(attr.attribute);
        if (key === 'zoning_id') key = 'zoning_ids';
        if (key) {
-         syntheticProperties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
+         const numVal = attr.numericalValue !== undefined && attr.numericalValue !== null 
            ? attr.numericalValue 
-           : attr.categoricalValue;
+           : attr.numerical_value;
+         const catVal = attr.categoricalValue !== undefined && attr.categoricalValue !== null 
+           ? attr.categoricalValue 
+           : attr.categorical_value;
+         syntheticProperties[key] = numVal !== undefined && numVal !== null ? numVal : catVal;
        }
     });
 
@@ -1416,9 +1441,9 @@ async function findCivilComps(): Promise<StandardCompResults> {
     const attr = getParcelAttributeForField(entry.field);
     let label = entry.field;
     if (attr !== null) {
-      let key = ParcelAttribute[attr].toLowerCase();
-      if (key === 'zoning_id') key = 'zoning_ids';
-      label = t(key);
+      let key = getAttributeKey(attr);
+      if (key && key === 'zoning_id') key = 'zoning_ids';
+      if (key) label = t(key);
     }
     return {
       field: entry.field,

@@ -15,7 +15,7 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { create } from "@bufbuild/protobuf";
 import type { ComparableCriteria } from "@civil-labs/civil-api-js";
-import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, ComparableCriteriaSchema, ParcelAttribute } from "@civil-labs/civil-api-js";
+import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, GetParcelByFeatureIdRequestSchema, ComparableCriteriaSchema, ParcelAttribute } from "@civil-labs/civil-api-js";
 import { resolveCivilSelectionIds } from './selection';
 import enTranslations from '../locales/en.json';
 import esTranslations from '../locales/es.json';
@@ -1167,11 +1167,12 @@ async function findCompsImpl() {
   const criteriaFields = getComparisonFields().filter((entry) => entry.source === 'criteria');
   const subjectCenter = subject.center;
   const subjectFeature = subject.feature;
+  const subjectFeatureIdNum = subjectFeature.id !== undefined && subjectFeature.id !== null ? Number(subjectFeature.id) : null;
   const useDistance = els.distanceEnabledInput.checked;
   const useSelection = els.selectionEnabledInput.checked;
   const distanceLimit = useDistance ? getDistanceLimitMeters() : null;
   const selectedParcels = compLayer.selectedParcels;
-  const subjectParcelId = subject.parcelId;
+  const subjectParcelId = subject?.parcelId;
 
   comps = [];
 
@@ -1180,6 +1181,47 @@ async function findCompsImpl() {
       await resolveCivilSelectionIds(Array.from(selectedParcels), compStore);
     }
     
+    const transport = createConnectTransport({
+      baseUrl: compStore.civilGateway!,
+      interceptors: [
+        (next) => async (req) => {
+          req.header.set("Authorization", `Bearer ${compStore.civilToken}`);
+          return await next(req);
+        }
+      ]
+    });
+    const client = createClient(ParcelsService, transport);
+
+    // Fetch the subject parcel data so we can calculate absolute tolerances
+    if (subjectFeatureIdNum !== null) {
+      try {
+        const req = create(GetParcelByFeatureIdRequestSchema, { featureId: BigInt(subjectFeatureIdNum) });
+        const res = await client.getParcelByFeatureId(req);
+        if (res.parcel) {
+          const p = res.parcel;
+          subject.parcelId = p.parcelId;
+          subject.address = p.formattedAddress || '';
+          
+          subject.feature = { ...subject.feature, properties: { ...(subject.feature.properties || {}) } };
+          const mutableSubjectFeature = subject.feature;
+          const props = mutableSubjectFeature.properties!;
+
+          if (p.landAreaSqFt !== undefined) props.land_area_sq_ft = p.landAreaSqFt;
+          if (p.frontageFt !== undefined) props.frontage_ft = p.frontageFt;
+          if (p.depthFt !== undefined) props.depth_ft = p.depthFt;
+          if (p.zoningIds && p.zoningIds.length > 0) props.zoning_ids = p.zoningIds;
+          if (p.landUseId) props.land_use_id = p.landUseId;
+          if (p.properties) {
+            try {
+              Object.assign(props, JSON.parse(p.properties));
+            } catch (e) {}
+          }
+        }
+      } catch (err) {
+        console.error("Failed to fetch subject parcel attributes via GetParcelByFeatureId", err);
+      }
+    }
+
     const criteriaArr = criteriaFields.map(entry => {
        const attr = getParcelAttributeForField(entry.field);
        if (attr === null) return null;
@@ -1190,11 +1232,15 @@ async function findCompsImpl() {
          const val = numOrNull(row.value);
          if (val !== null) {
            const tol = row.usePercent ? val / 100 : val;
-           return create(ComparableCriteriaSchema, {
-             attribute: attr,
-             minNumericalTolerance: -tol,
-             maxNumericalTolerance: tol
-           });
+           const subjValNum = numOrNull(getFieldValue(subject!.feature, entry.field));
+           if (subjValNum !== null) {
+             const absoluteTol = row.usePercent ? subjValNum * tol : tol;
+             return create(ComparableCriteriaSchema, {
+               attribute: attr,
+               minNumericalTolerance: subjValNum - absoluteTol,
+               maxNumericalTolerance: subjValNum + absoluteTol
+             });
+           }
          }
          return null;
        } else {
@@ -1235,16 +1281,7 @@ async function findCompsImpl() {
       }
     }
 
-    const transport = createConnectTransport({
-      baseUrl: compStore.civilGateway!,
-      interceptors: [
-        (next) => async (req) => {
-          req.header.set("Authorization", `Bearer ${compStore.civilToken}`);
-          return await next(req);
-        }
-      ]
-    });
-    const client = createClient(ParcelsService, transport);
+
     const selectedParcelIds = useSelection 
       ? Array.from(selectedParcels).map(fid => compStore.civilFeatureToParcelIdMap?.get(Number(fid))).filter(Boolean) as string[]
       : [];
@@ -1254,7 +1291,10 @@ async function findCompsImpl() {
 
     const fetchedIds = new Set<string>();
     const mergeComp = (c: any) => {
-      if (c.parcelId === subjectParcelId || fetchedIds.has(c.parcelId)) return;
+      // Use subject.parcelId instead of the static subjectParcelId since it may have been populated in the first pass
+      if (subject?.parcelId && c.parcelId === subject.parcelId) return;
+      if (subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum) return;
+      if (fetchedIds.has(c.parcelId)) return;
       fetchedIds.add(c.parcelId);
       
       const featureIdStr = String(c.featureId);
@@ -1291,7 +1331,7 @@ async function findCompsImpl() {
       
       const deltas = criteriaFields.map((entry) => {
         let compVal = getFieldValue(feature, entry.field);
-        let subjVal = getFieldValue(subjectFeature, entry.field);
+        let subjVal = getFieldValue(subject!.feature, entry.field);
         if (compStore.isCivil) {
           compVal = resolveCategoricalValue(compStore, entry.field, compVal);
           subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
@@ -1320,25 +1360,32 @@ async function findCompsImpl() {
         ...Object.values(eqRes.parcels || {}),
         ...Object.values(saleRes.parcels || {})
       ];
-      const subjectFeatureIdNum = subjectFeature.id !== undefined && subjectFeature.id !== null ? Number(subjectFeature.id) : null;
-      console.log(`[CompFinder Debug] Looking for subject parcel. map feature.id: ${subjectFeature.id}, subjectParcelId (UUID): ${subjectParcelId}`);
+      (window as any).desktopApi?.log('debug', `[CompFinder Debug] Looking for subject parcel. map feature.id: ${subjectFeature.id}, subjectParcelId (UUID): ${subjectParcelId}`);
       
       const subjComp = allParcels.find(c => {
         const matchesUUID = c.parcelId === subjectParcelId;
         const matchesFeatureId = subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum;
         if (matchesUUID || matchesFeatureId) {
-           console.log(`[CompFinder Debug] Found match! matchesUUID: ${matchesUUID}, matchesFeatureId: ${matchesFeatureId}, c.parcelId: ${c.parcelId}, c.featureId: ${c.featureId}`);
+           (window as any).desktopApi?.log('debug', `[CompFinder Debug] Found match! matchesUUID: ${matchesUUID}, matchesFeatureId: ${matchesFeatureId}, c.parcelId: ${c.parcelId}, c.featureId: ${c.featureId}`);
            return true;
         }
         return false;
       });
 
       if (subjComp) {
-        console.log(`[CompFinder Debug] subjComp found with ${subjComp.attributes?.length || 0} attributes`);
+        (window as any).desktopApi?.log('debug', `[CompFinder Debug] subjComp found with ${subjComp.attributes?.length || 0} attributes`);
         if (!subject.address && subjComp.formattedAddress) {
           subject.address = subjComp.formattedAddress;
         }
-        subjComp.attributes.forEach((attr: any) => {
+        if (!subject.parcelId && subjComp.parcelId) {
+          subject.parcelId = subjComp.parcelId;
+        }
+        
+        // MapLibre features might have read-only properties getters. We must clone it to mutate properties.
+        subject.feature = { ...subject.feature, properties: { ...(subject.feature.properties || {}) } };
+        const subjectFeature = subject.feature;
+
+        (subjComp.attributes || []).forEach((attr: any) => {
           let key = ParcelAttribute[attr.attribute]?.toLowerCase();
           if (key === 'zoning_id') key = 'zoning_ids';
           if (key) {
@@ -1346,11 +1393,11 @@ async function findCompsImpl() {
             subjectFeature.properties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
               ? attr.numericalValue 
               : attr.categoricalValue;
-            console.log(`[CompFinder Debug] Mapped subject attribute ${key} = ${subjectFeature.properties[key]} (num: ${attr.numericalValue}, cat: ${attr.categoricalValue})`);
+            (window as any).desktopApi?.log('debug', `[CompFinder Debug] Mapped subject attribute ${key} = ${subjectFeature.properties[key]} (num: ${attr.numericalValue}, cat: ${attr.categoricalValue})`);
           }
         });
       } else {
-        console.error(`[CompFinder Debug] subjComp NOT FOUND in API response! Total parcels returned: ${allParcels.length}`);
+        (window as any).desktopApi?.log('error', `[CompFinder Debug] subjComp NOT FOUND in API response! Total parcels returned: ${allParcels.length}`);
       }
 
       // 2. Second pass: merge comparables
@@ -1388,7 +1435,7 @@ async function findCompsImpl() {
 
       const deltas = criteriaFields.map((entry) => {
         const compVal = getFieldValue(feature, entry.field);
-        const subjVal = getFieldValue(subjectFeature, entry.field);
+        const subjVal = getFieldValue(subject!.feature, entry.field);
         return buildDelta(compVal, subjVal, entry.type);
       });
 

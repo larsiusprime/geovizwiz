@@ -81,13 +81,17 @@ export function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'cat
   if (type === 'numeric') {
     const compVal = numOrNull(value);
     const subjVal = numOrNull(subjectValue);
-    if (compVal === null || subjVal === null) return { text: 'ERROR', error: 'Missing numeric value', sign: 'error' as const };
+    if (compVal === null || subjVal === null) {
+      console.error(`[CompFinder Debug] buildDelta ERROR (numeric): compVal=${compVal} (raw: ${value}), subjVal=${subjVal} (raw: ${subjectValue})`);
+      return { text: 'ERROR', error: 'Missing numeric value', sign: 'error' as const };
+    }
     const delta = compVal - subjVal;
     if (delta === 0) return { text: '=', sign: 'neutral' as const };
     const sign = delta > 0 ? '+' : '';
     return { text: `${sign}${fmt(delta)}`, sign: delta > 0 ? 'positive' as const : 'negative' as const };
   }
   if (value === null || value === undefined || subjectValue === null || subjectValue === undefined) {
+    console.error(`[CompFinder Debug] buildDelta ERROR (categorical): compVal=${value}, subjVal=${subjectValue}`);
     return { text: 'ERROR', error: 'Missing categorical value', sign: 'error' as const };
   }
   if (String(value) === String(subjectValue)) return { text: '=', sign: 'neutral' as const };

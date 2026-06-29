@@ -551,6 +551,7 @@ function getFieldType(field: string): 'numeric' | 'categorical' | null {
   return match?.type ?? null;
 }
 
+
 function formatSubjectValue(field: string | null, type: 'numeric' | 'categorical' | null): string {
   if (!subject || !field || !type) return '—';
   const value = getFieldValue(subject.feature, field);
@@ -1320,11 +1321,20 @@ async function findCompsImpl() {
         ...Object.values(saleRes.parcels || {})
       ];
       const subjectFeatureIdNum = subjectFeature.id !== undefined && subjectFeature.id !== null ? Number(subjectFeature.id) : null;
-      const subjComp = allParcels.find(c => 
-        c.parcelId === subjectParcelId || 
-        (subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum)
-      );
+      console.log(`[CompFinder Debug] Looking for subject parcel. map feature.id: ${subjectFeature.id}, subjectParcelId (UUID): ${subjectParcelId}`);
+      
+      const subjComp = allParcels.find(c => {
+        const matchesUUID = c.parcelId === subjectParcelId;
+        const matchesFeatureId = subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum;
+        if (matchesUUID || matchesFeatureId) {
+           console.log(`[CompFinder Debug] Found match! matchesUUID: ${matchesUUID}, matchesFeatureId: ${matchesFeatureId}, c.parcelId: ${c.parcelId}, c.featureId: ${c.featureId}`);
+           return true;
+        }
+        return false;
+      });
+
       if (subjComp) {
+        console.log(`[CompFinder Debug] subjComp found with ${subjComp.attributes?.length || 0} attributes`);
         if (!subject.address && subjComp.formattedAddress) {
           subject.address = subjComp.formattedAddress;
         }
@@ -1336,8 +1346,11 @@ async function findCompsImpl() {
             subjectFeature.properties[key] = attr.numericalValue !== undefined && attr.numericalValue !== null 
               ? attr.numericalValue 
               : attr.categoricalValue;
+            console.log(`[CompFinder Debug] Mapped subject attribute ${key} = ${subjectFeature.properties[key]} (num: ${attr.numericalValue}, cat: ${attr.categoricalValue})`);
           }
         });
+      } else {
+        console.error(`[CompFinder Debug] subjComp NOT FOUND in API response! Total parcels returned: ${allParcels.length}`);
       }
 
       // 2. Second pass: merge comparables

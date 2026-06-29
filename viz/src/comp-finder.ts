@@ -1475,7 +1475,9 @@ async function findComps() {
 }
 
 async function findCompsImpl() {
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCompsImpl ENTERED! subject exists: ${!!subject}`);
   if (!subject) return;
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCompsImpl checking threshold. hasAnyThresholdEnabled: ${hasAnyThresholdEnabled()}`);
   if (!hasAnyThresholdEnabled()) {
     comps = [];
     currentPage = 1;
@@ -1489,10 +1491,10 @@ async function findCompsImpl() {
   const compLayer = getCompLayer();
   const compStore = getCompDataStore();
   
-  (window as any).desktopApi?.log?.('info', `[CompFinder Debug] findCompsImpl early exit check: compLayer exists: ${!!compLayer}, compStore exists: ${!!compStore}, compStore.geojson exists: ${!!compStore?.geojson}, compStore.isCivil: ${compStore?.isCivil}`);
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCompsImpl early exit check: compLayer exists: ${!!compLayer}, compStore exists: ${!!compStore}, compStore.geojson exists: ${!!compStore?.geojson}, compStore.isCivil: ${compStore?.isCivil}`);
   
   if (!compLayer || (!compStore?.geojson && !compStore?.isCivil)) {
-    (window as any).desktopApi?.log?.('warn', `[CompFinder Debug] findCompsImpl early exit triggered! compLayer: ${!!compLayer}, geojson: ${!!compStore?.geojson}, isCivil: ${compStore?.isCivil}`);
+    (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] findCompsImpl early exit triggered! compLayer: ${!!compLayer}, geojson: ${!!compStore?.geojson}, isCivil: ${compStore?.isCivil}`);
     return;
   }
 

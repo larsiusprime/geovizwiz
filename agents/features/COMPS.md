@@ -146,3 +146,6 @@ As well as fixing this issue, list out every single assumption that findCompsImp
 [Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
 [Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
 [Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+
+### Map Pins
+Any found comps are still not showing up on the map, with pins above those parcels. This is a feature already built into the app.

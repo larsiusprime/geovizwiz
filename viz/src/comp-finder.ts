@@ -233,18 +233,29 @@ function getFeatureFromMap(featureId: number | string | bigint): GeoJSON.Feature
   if (isNaN(fidNum)) return null;
 
   let sourceLayer = 'parcels';
-  if (compStore.civilTileJson?.vector_layers?.[0]?.id) {
-    sourceLayer = compStore.civilTileJson.vector_layers[0].id;
+  const layers = compStore.civilTileJson?.vector_layers || compStore.civilTileJson?.vectorLayers;
+  if (layers?.[0]?.id) {
+    sourceLayer = layers[0].id;
   }
+
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] getFeatureFromMap: fidNum=${fidNum}, sourceId=${compLayer.sourceId}, sourceLayer=${sourceLayer}, layerId=${compLayer.layerId}`);
 
   // Search in querySourceFeatures safely
   try {
     const sourceFeatures = S.map.querySourceFeatures(compLayer.sourceId, {
       sourceLayer: sourceLayer
     });
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] querySourceFeatures count: ${sourceFeatures.length}`);
+    if (sourceFeatures.length > 0) {
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] querySourceFeatures sample ids: ${sourceFeatures.slice(0, 5).map(f => f.id).join(', ')}`);
+    }
     const feat = sourceFeatures.find(f => Number(f.id) === fidNum);
-    if (feat) return feat as GeoJSON.Feature;
-  } catch (e) {
+    if (feat) {
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Found feature in querySourceFeatures!`);
+      return feat as GeoJSON.Feature;
+    }
+  } catch (e: any) {
+    (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] querySourceFeatures failed: ${e?.message || e}`);
     console.warn('[comp-finder] failed to query source features', e);
   }
 
@@ -253,9 +264,17 @@ function getFeatureFromMap(featureId: number | string | bigint): GeoJSON.Feature
     const renderedFeatures = S.map.queryRenderedFeatures({
       layers: [compLayer.layerId]
     });
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] queryRenderedFeatures count: ${renderedFeatures.length}`);
+    if (renderedFeatures.length > 0) {
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] queryRenderedFeatures sample ids: ${renderedFeatures.slice(0, 5).map(f => f.id).join(', ')}`);
+    }
     const featRendered = renderedFeatures.find(f => Number(f.id) === fidNum);
-    if (featRendered) return featRendered as GeoJSON.Feature;
-  } catch (e) {
+    if (featRendered) {
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Found feature in queryRenderedFeatures!`);
+      return featRendered as GeoJSON.Feature;
+    }
+  } catch (e: any) {
+    (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] queryRenderedFeatures failed: ${e?.message || e}`);
     console.warn('[comp-finder] failed to query rendered features', e);
   }
 

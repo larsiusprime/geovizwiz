@@ -490,8 +490,10 @@ function updateSubjectMarker() {
 }
 
 function updateCompMarkers() {
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] updateCompMarkers called. isMenuVisible=${isMenuVisible}, comps count=${comps.length}`);
   clearCompMarkers();
   if (!isMenuVisible) return;
+  let addedCount = 0;
   for (const comp of comps) {
     let feature = comp.feature;
     if ((!feature || !feature.geometry) && comp.featureId) {
@@ -508,7 +510,11 @@ function updateCompMarkers() {
       }
     }
     const center = getFeatureCenter(feature);
-    if (!center) continue;
+    if (!center) {
+      (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] No center found for comp: ${comp.id}, featureId: ${comp.featureId}, hasGeometry: ${!!feature?.geometry}`);
+      continue;
+    }
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Adding marker for comp: ${comp.id} at LngLat: ${JSON.stringify(center)}`);
     const marker = new maplibregl.Marker({ element: ensureMarker(COMP_MARKER_CLASS), anchor: 'bottom' })
       .setLngLat(center)
       .addTo(S.map);
@@ -518,7 +524,9 @@ function updateCompMarkers() {
       if (targetLayerId) setCompFinderSubject(comp.feature, targetLayerId);
     });
     compMarkers.set(comp.id, marker);
+    addedCount++;
   }
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] updateCompMarkers finished. Added markers count: ${addedCount}`);
 }
 
 

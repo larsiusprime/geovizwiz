@@ -15,7 +15,7 @@ import { createClient } from "@connectrpc/connect";
 import { createConnectTransport } from "@connectrpc/connect-web";
 import { create } from "@bufbuild/protobuf";
 import type { ComparableCriteria } from "@civil-labs/civil-api-js";
-import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, ComparableCriteriaSchema, ParcelAttribute, GetParcelsByIdRequestSchema } from "@civil-labs/civil-api-js";
+import { ParcelsService, GetEquityComparablesRequestSchema, GetSalesComparablesRequestSchema, ComparableCriteriaSchema, ParcelAttribute } from "@civil-labs/civil-api-js";
 import { resolveCivilSelectionIds } from './selection';
 import enTranslations from '../locales/en.json';
 import esTranslations from '../locales/es.json';
@@ -589,9 +589,12 @@ function getCategoricalValuesForField(field: string): Array<{value: string, labe
         const valStr = field === "zoning_ids" 
           ? String(v.code || v.name || v.id || '')
           : String(v.name || v.code || v.id || '');
+        const labelStr = field === "zoning_ids"
+          ? String(v.code || v.name || v.id || '')
+          : String(v.name || v.code || v.id || '');
         return {
           value: valStr,
-          label: t(valStr)
+          label: t(labelStr)
         };
       }).filter(x => x.value).sort((a, b) => a.label.localeCompare(b.label));
     }
@@ -966,6 +969,7 @@ function buildSubjectColumnButton(label = 'Subject') {
 }
 
 function renderCompsTable() {
+  const compStore = getCompDataStore();
   const comparisonFields = getComparisonFields();
   const visible = getVisibleComps();
 
@@ -1083,7 +1087,8 @@ function renderCompsTable() {
         if (cls) td.classList.add(cls);
       } else {
         const val = getFieldValue(comp.feature, entry.field);
-        text = val === null || val === undefined || val === '' ? '—' : (entry.type === 'numeric' ? fmt(val) : String(val));
+        const resolved = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, entry.field, val) : val;
+        text = resolved === null || resolved === undefined || resolved === '' ? '—' : (entry.type === 'numeric' ? fmt(resolved) : String(resolved));
       }
       td.appendChild(buildCompColumnButton(text, comp));
       row.appendChild(td);
@@ -1182,20 +1187,39 @@ async function findCompsImpl() {
        
        if (entry.type === 'numeric') {
          const val = numOrNull(row.value);
-         const subjVal = numOrNull(getFieldValue(subjectFeature, entry.field));
-         if (val !== null && subjVal !== null) {
-           const tol = row.usePercent ? subjVal * (val / 100) : val;
+         if (val !== null) {
+           const tol = row.usePercent ? val / 100 : val;
            return create(ComparableCriteriaSchema, {
              attribute: attr,
-             minNumericalTolerance: subjVal - tol,
-             maxNumericalTolerance: subjVal + tol
+             minNumericalTolerance: -tol,
+             maxNumericalTolerance: tol
            });
          }
          return null;
        } else {
+         const selectedNames = Array.isArray(row.value) ? row.value : [];
+         let mapToUse: Record<string, any> | undefined;
+         if (entry.field === "zoning_ids") mapToUse = compStore.civilZoningMap;
+         else if (entry.field === "land_use_id") mapToUse = compStore.civilLandUseMap;
+         else if (entry.field === "improvement_type_id") mapToUse = compStore.civilImprovementTypeMap;
+         else if (entry.field === "condition_id") mapToUse = compStore.civilImprovementConditionMap;
+
+         const apiTolerance = selectedNames.map(val => {
+           if (mapToUse) {
+             const found = Object.values(mapToUse).find(v => {
+               const valStr = entry.field === "zoning_ids"
+                 ? String(v.code || v.name || v.id || '')
+                 : String(v.name || v.code || v.id || '');
+               return valStr === val;
+             });
+             return found ? String(found.id || '') : val;
+           }
+           return val;
+         }).filter(Boolean);
+
          return create(ComparableCriteriaSchema, {
            attribute: attr,
-           categoricalTolerance: Array.isArray(row.value) ? row.value : []
+           categoricalTolerance: apiTolerance
          });
        }
     }).filter(Boolean) as ComparableCriteria[];
@@ -1265,8 +1289,12 @@ async function findCompsImpl() {
       }
       
       const deltas = criteriaFields.map((entry) => {
-        const compVal = getFieldValue(feature, entry.field);
-        const subjVal = getFieldValue(subjectFeature, entry.field);
+        let compVal = getFieldValue(feature, entry.field);
+        let subjVal = getFieldValue(subjectFeature, entry.field);
+        if (compStore.isCivil) {
+          compVal = resolveCategoricalValue(compStore, entry.field, compVal);
+          subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
+        }
         return buildDelta(compVal, subjVal, entry.type);
       });
 
@@ -1288,81 +1316,12 @@ async function findCompsImpl() {
       Object.values(eqRes.parcels || {}).forEach(mergeComp);
       Object.values(saleRes.parcels || {}).forEach(mergeComp);
 
-      // Now fetch full parcel details using GetParcelsById for all comps + subject!
-      const compParcelIds = comps.map(c => c.parcelId).filter(Boolean);
-      if (subjectParcelId) {
-        compParcelIds.push(subjectParcelId);
-      }
-      
-      if (compParcelIds.length > 0) {
-        const getParcelsReq = create(GetParcelsByIdRequestSchema, { parcelIds: compParcelIds });
-        const parcelsRes = await client.getParcelsById(getParcelsReq);
-        
-        Object.entries(parcelsRes.parcels || {}).forEach(([pid, parcel]) => {
-          let targetFeature: any = null;
-          if (pid === subjectParcelId && subject) {
-            targetFeature = subject.feature;
-          } else {
-            const comp = comps.find(c => c.parcelId === pid);
-            if (comp) {
-              targetFeature = comp.feature;
-              if (parcel.formattedAddress) {
-                comp.address = parcel.formattedAddress;
-              }
-            }
-          }
-          
-          if (targetFeature) {
-            targetFeature.properties = targetFeature.properties || {};
-            
-            // 1. Merge explicit fields
-            if (parcel.landAreaSqFt !== undefined && parcel.landAreaSqFt !== null) {
-              targetFeature.properties.land_area_sq_ft = parcel.landAreaSqFt;
-            }
-            if (parcel.frontageFt !== undefined && parcel.frontageFt !== null) {
-              targetFeature.properties.frontage_ft = parcel.frontageFt;
-            }
-            if (parcel.depthFt !== undefined && parcel.depthFt !== null) {
-              targetFeature.properties.depth_ft = parcel.depthFt;
-            }
-            if (parcel.landUseId) {
-              targetFeature.properties.land_use_id = parcel.landUseId;
-            }
-            if (parcel.zoningIds && parcel.zoningIds.length > 0) {
-              targetFeature.properties.zoning_ids = parcel.zoningIds;
-            }
-            if (parcel.improvementSummary) {
-              targetFeature.properties.improvement_area_sq_ft = parcel.improvementSummary.totalAreaSqFt;
-              targetFeature.properties.improvement_year_built = parcel.improvementSummary.newestYearBuilt || parcel.improvementSummary.oldestYearBuilt;
-              targetFeature.properties.improvement_effective_year_built = parcel.improvementSummary.newestYearBuilt;
-              targetFeature.properties.bedrooms = parcel.improvementSummary.totalBedrooms;
-              targetFeature.properties.bathrooms = parcel.improvementSummary.totalBathrooms;
-              targetFeature.properties.units = parcel.improvementSummary.totalUnits;
-              targetFeature.properties.condition_id = parcel.improvementSummary.worstConditionId || parcel.improvementSummary.bestConditionId;
-            }
-            
-            // 2. Parse and merge properties JSON
-            if (parcel.properties) {
-              try {
-                const parsed = JSON.parse(parcel.properties);
-                Object.assign(targetFeature.properties, parsed);
-                // Also merge under snake_case keys if any are camelCase
-                Object.entries(parsed).forEach(([k, val]) => {
-                  const snake = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
-                  if (targetFeature.properties[snake] === undefined) {
-                    targetFeature.properties[snake] = val;
-                  }
-                });
-              } catch (e) {
-                // ignore
-              }
-            }
-          }
-        });
-      }
-
-      // Re-trigger updateCompMarkers after properties & addresses are resolved
+      // Re-trigger updateCompMarkers immediately
       updateCompMarkers();
+      setTimeout(updateCompMarkers, 500);
+      setTimeout(updateCompMarkers, 1500);
+      setTimeout(updateCompMarkers, 3000);
+      
       registerMapCompEvents();
     } catch (err) {
       console.error("Failed to fetch civil comps:", err);

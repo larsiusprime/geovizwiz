@@ -45,12 +45,12 @@ Fix: Modified the comp loading flow to lookup the corresponding map feature from
 ### Adding Field to Returned Comps
 The Comp finder contains the ability to optionally add additional fields to the table of found comps at the bottom of the modal. Whenever this is used with a Civil OS layer, the new rows have blank values (technically showing a dash). What should happen is that the app should use GetParcelsById to retrieve the data for each of the parcels, take the requested field, and populate it into the column
 
-Fix: Integrated `GetParcelsById` API call right after retrieving comparables to fetch full parcel details for both the comps and the subject. Values from both explicit fields (like `landAreaSqFt`) and custom `properties` JSON fields are merged into the feature properties map, allowing any newly added fields to populate successfully.
+Fix: Bypassed `GetParcelsById` for comp finding entirely as instructed. Attributes are resolved directly from the `GetEquityComparables`/`GetSalesComparables` RPC responses (`c.attributes`), and addresses from `c.formattedAddress`. Adding custom/extra fields outside the query criteria is currently disabled/unsupported for Civil OS layers.
 
 ### Map Tacks for Found Comps Don't Appear
 Any found comps should have map tacks appear over their parcels. The functionality is already built into the app for local layers. It is not working for Civil layers
 
-Fix: Replaced potentially fragile MapLibre query filters with robust Javascript checks (`Number(f.id) === fidNum`), resolved the layer's sourceLayer ID dynamically (instead of hardcoding `'parcels'`), and re-triggered `updateCompMarkers()` immediately after `GetParcelsById` retrieves the details.
+Fix: Replaced potentially fragile MapLibre query filters with robust Javascript checks (`Number(f.id) === fidNum`), resolved the layer's sourceLayer ID dynamically (instead of hardcoding `'parcels'`), and re-trigger `updateCompMarkers()` using a polling fallback (at `500ms`, `1500ms`, and `3000ms`) to guarantee tacks render successfully once map tiles load.
 
 ### Field Names
 Field names are appearing as their database column names, not their natural language versions that use translation keys to support different languages
@@ -71,3 +71,23 @@ Fix: Corrected the numerical bounds calculation sent to the backend. Instead of 
 Attempting to find comps with a criteria on the parcel's land use worked. However, the found comp attribute did not show the land use values of those comps, rather just stating "Error"
 
 Fix: Introduced a `resolveCategoricalValue()` helper that decodes raw database IDs (e.g. `2`) to their corresponding name/code values using fetched store metadata maps (`civilLandUseMap`, etc.) for both subject and comp attributes, resolving the `ERROR` display in deltas.
+
+### Land Area Comp Attribute Table Error
+On the comp attribute table when using a land area criteria, the auto-created Land Area row is showing "ERROR" for each column.
+
+Fix: Recalculate deltas with resolved categorical value conversions on the first pass within `mergeComp` when comparables are found, ensuring the subject and comp values align correctly without needing full database lookups.
+
+### Zoning/Land Use Criteria
+Neither of these properly return comps
+
+Fix:
+- Corrected zoning array formatting (mapping raw IDs `[1, 2]` into separate codes `["R-1", "R-2"]`) during dropdown value initialization in `renderCriteriaTable()`.
+- Mapped selected options (names/codes) back to database public IDs (the `id` field, including zoning's `public_id` rather than its `code`) right before sending `categoricalTolerance` to the ConnectRPC endpoint, ensuring the backend receives the exact database keys it expects. Zoning code is only used for UI display.
+
+### Map Tacks
+Map tacks are still not properly showing up on the map for found comps
+
+Fix:
+- Created a robust `getFeatureId()` helper that retrieves the ID as a string from various locations on the MapLibre feature (`f.id`, `f.properties.feature_id`, `f.properties.featureId`, `f.properties.id`).
+- Changed `getFeatureFromMap()` to compare IDs using string-based matching to avoid type mismatches and JS floating-point precision issues with BigInts.
+- Added delayed fallback polling (after `500ms`, `1500ms`, and `3000ms`) to trigger `updateCompMarkers()` to ensure markers render correctly even if MapLibre takes a moment to index features after tiles load.

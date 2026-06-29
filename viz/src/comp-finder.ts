@@ -1319,8 +1319,15 @@ async function findCompsImpl() {
         ...Object.values(eqRes.parcels || {}),
         ...Object.values(saleRes.parcels || {})
       ];
-      const subjComp = allParcels.find(c => c.parcelId === subjectParcelId);
+      const subjectFeatureIdNum = subjectFeature.id !== undefined && subjectFeature.id !== null ? Number(subjectFeature.id) : null;
+      const subjComp = allParcels.find(c => 
+        c.parcelId === subjectParcelId || 
+        (subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum)
+      );
       if (subjComp) {
+        if (!subject.address && subjComp.formattedAddress) {
+          subject.address = subjComp.formattedAddress;
+        }
         subjComp.attributes.forEach((attr: any) => {
           let key = ParcelAttribute[attr.attribute]?.toLowerCase();
           if (key === 'zoning_id') key = 'zoning_ids';
@@ -1629,11 +1636,16 @@ export function setCompFinderSubject(feature: GeoJSON.Feature, layerId: string) 
   const center = getFeatureCenter(feature);
   if (!center) return;
 
+  let parcelIdStr = String(getFieldValue(feature, store.parcelIdField) ?? '');
+  if (store.isCivil && store.civilFeatureToParcelIdMap && feature.id !== undefined && feature.id !== null) {
+    parcelIdStr = store.civilFeatureToParcelIdMap.get(Number(feature.id)) || parcelIdStr;
+  }
+
   subject = {
     feature,
     dataStoreId: store.id,
     layerId,
-    parcelId: String(getFieldValue(feature, store.parcelIdField) ?? ''),
+    parcelId: parcelIdStr,
     address: String(getFieldValue(feature, store.addressField) ?? ''),
     center,
   };

@@ -1384,6 +1384,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
     
     const syntheticProperties: any = {};
     (c.attributes || []).forEach((attr: any) => {
+       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] attr raw: ${JSON.stringify(attr)}`);
        let key = getAttributeKey(attr.attribute);
        if (key === 'zoning_id') key = 'zoning_ids';
        if (key) {
@@ -1394,6 +1395,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
            ? attr.categoricalValue 
            : attr.categorical_value;
          syntheticProperties[key] = numVal !== undefined && numVal !== null ? numVal : catVal;
+         (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] attr mapped key: ${key} = ${syntheticProperties[key]}`);
        }
     });
 

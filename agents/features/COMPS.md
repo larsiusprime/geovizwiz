@@ -131,3 +131,18 @@ As well as fixing this issue, list out every single assumption that findCompsImp
 [Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
 [Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
 [Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+
+### Error on Numeric Parcel Values
+[Renderer][INFO] [CompFinder Debug] Received response. Equity: 13 parcels, Sales: 11 parcels
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=8871.46170855645 (raw: 8871.46170855645)

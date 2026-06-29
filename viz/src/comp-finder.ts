@@ -1488,7 +1488,13 @@ async function findCompsImpl() {
 
   const compLayer = getCompLayer();
   const compStore = getCompDataStore();
-  if (!compLayer || (!compStore?.geojson && !compStore?.isCivil)) return;
+  
+  (window as any).desktopApi?.log?.('info', `[CompFinder Debug] findCompsImpl early exit check: compLayer exists: ${!!compLayer}, compStore exists: ${!!compStore}, compStore.geojson exists: ${!!compStore?.geojson}, compStore.isCivil: ${compStore?.isCivil}`);
+  
+  if (!compLayer || (!compStore?.geojson && !compStore?.isCivil)) {
+    (window as any).desktopApi?.log?.('warn', `[CompFinder Debug] findCompsImpl early exit triggered! compLayer: ${!!compLayer}, geojson: ${!!compStore?.geojson}, isCivil: ${compStore?.isCivil}`);
+    return;
+  }
 
   setFinding(true);
   await new Promise((resolve) => setTimeout(resolve, 0));

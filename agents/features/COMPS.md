@@ -102,3 +102,8 @@ When clicking the "Find Comps" button, the app instantly claims "No Comps Found"
 
 ### Refactor findCompsImpl in comp-finder.ts
 Refactor findCompsImpl, splitting it up so that it handles finding comps for Civil OS and local layers in two different functions. They should then return a standard format of comparison parcels, columns, and values that can be read by the UI controller logic and populated. The only hiccup to watch out for is using translation keys for column names when operating on Civil OS layers, and the actual column name in the DuckDB when dealing with local layers.
+
+### Continued Early Exit on Find Comps
+It is still doing an early exit on find comps, very likely due to that compLayer and compStore check.
+
+As well as fixing this issue, list out every single assumption that findCompsImpl makes on the current state of the Civil OS layer and data store configuration, and what data is present in the tiles it is dealing with.

@@ -4,6 +4,7 @@ import { createLayerState, registerLayer } from './layers.js';
 import { addOrUpdateSourceForLayer } from './rendering.js';
 import { renderSettingsDataSourcesSection, revealUI } from './main.js';
 import { whenProjectLoaded } from './desktop-bootstrap.js';
+import { fitBoundsInVisibleMapArea } from './map-viewport.js';
 import {
   btnNewCivilOSDataSource,
   civilSetupOverlay,
@@ -143,12 +144,65 @@ export async function triggerOIDCRedirect(gatewayUrl: string, authIssuerUrl: str
   }
 }
 
+export async function zoomToCivilExtent(store: DataStore): Promise<void> {
+  if (!store.isCivil || !store.civilGateway) return;
+
+  try {
+    const url = `${store.civilGateway}/civil.public.parcels.v1.ParcelsService/GetEstimatedParcelsExtentWGS84`;
+    const headers = {
+      'Content-Type': 'application/json',
+    } as any;
+    if (store.civilToken) {
+      headers['Authorization'] = `Bearer ${store.civilToken}`;
+    }
+
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to fetch extent: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    const minX = data.minX !== undefined ? data.minX : data.min_x;
+    const minY = data.minY !== undefined ? data.minY : data.min_y;
+    const maxX = data.maxX !== undefined ? data.maxX : data.max_x;
+    const maxY = data.maxY !== undefined ? data.maxY : data.max_y;
+
+    if (
+      minX !== undefined &&
+      minY !== undefined &&
+      maxX !== undefined &&
+      maxY !== undefined &&
+      [minX, minY, maxX, maxY].every(Number.isFinite) &&
+      (minX !== 0 || minY !== 0 || maxX !== 0 || maxY !== 0)
+    ) {
+      fitBoundsInVisibleMapArea([[minX, minY], [maxX, maxY]], { inset: 16, duration: 800 });
+    } else {
+      throw new Error("Invalid extent bounds returned from gateway");
+    }
+  } catch (err: any) {
+    console.error("Failed to zoom to Civil OS layer extent:", err);
+    const civilSetupOverlay = document.getElementById('civilSetupOverlay');
+    const civilSetupError = document.getElementById('civilSetupError');
+    if (civilSetupOverlay && civilSetupError) {
+      civilSetupError.textContent = `Failed to get initial map extent: ${err.message || err}`;
+      civilSetupError.style.display = 'block';
+      civilSetupOverlay.classList.add('show');
+    }
+  }
+}
+
 export function createCivilLayer(store: DataStore) {
   const layer = createLayerState(store.name, store.id);
   registerLayer(layer);
   
   const setupSource = () => {
     addOrUpdateSourceForLayer(layer, null as any);
+    void zoomToCivilExtent(store);
   };
 
   if (S.map) {

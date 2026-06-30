@@ -19,7 +19,7 @@ import { createDataStore, createLayerState, registerLayer, renderDataStoreList, 
 import { addOrUpdateSourceForLayer, applyGrayRendering, scheduleUpdate, computeAndApplyAutoMultiplier } from './rendering.js';
 import { buildProjectFile, deserializeLayer, applyRestoredCollections } from './metadata.js';
 import type { DataStore, ProjectFileV1, SerializedDataSource } from './types.js';
-import { prepullAllCivilStoresLookups } from './civil-integration.js';
+import { prepullAllCivilStoresLookups, zoomToCivilExtent } from './civil-integration.js';
 import { perfLog, perfNow } from './perf.js';
 
 /** Above this many features in view, skip the heavy geometry fetch and ask the
@@ -488,6 +488,10 @@ async function restoreProjectAppState(app: ProjectFileV1): Promise<boolean> {
       });
       if (civilLayers.length > 0) {
         setCurrentLayer(civilLayers[0].id);
+        const store = S.dataStores.get(civilLayers[0].dataStoreId);
+        if (store) {
+          void zoomToCivilExtent(store);
+        }
       }
       applyLayerOrderToMap();
       host?.revealUI();
@@ -768,12 +772,13 @@ async function loadProjectSources() {
     return;
   }
   if (loadCancelled) return;
-  const hasCivilSource = Array.from(S.dataStores.values()).some(ds => ds.isCivil);
-  if (hasCivilSource) {
+  const civilStore = Array.from(S.dataStores.values()).find(ds => ds.isCivil);
+  if (civilStore) {
     hidePicker();
     host?.revealUI();
     markProjectLoaded();
     host?.onProjectLoaded?.();
+    void zoomToCivilExtent(civilStore);
     return;
   }
   const withGeom = sources.find((s) => s.hasGeometry) ?? sources[0];

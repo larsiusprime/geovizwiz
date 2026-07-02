@@ -33,3 +33,14 @@ When a user toggles the inspect tool, a new panel should appear in the top left 
 As is standard, all text values not retrieved from the Civil OS instance should be encoded as translation keys, which are swapped with text values conforming to the user's system/browser language at runtime.
 
 ## Changes/Fixes
+### Neighborhood and Zoning Not Showing Up on Pop Up Panel
+Even when a neighborhood definition is selected, neither the neighborhood name nor zoning name appear on the pop up panel when inspecting the parcel. Sometimes the row name is there with a "-" to indicate no value, and other times the row isn't present at all. This is despite me confirming on the selected parcels that the API is returning the neighborhood and zoning IDs through a manual API call.
+
+### Valuation Changes
+Move the improvement and land valuations to their own separate header in the inspect parcel pop up panel. Reformat the displayed valuations to follow traditional USD conventions (dollar sign in front and two decimal places). Add a total market value and total assessed value row by adding up both market values and assessed values.
+
+### Year Built Changes
+Ensure that year built is formatted as a simple number without commas between the thousands and hundreds place. Also, use the new effective year built field added to the improvement summary in GetParcels APIs, showing it on the screen in the same way as year built.
+
+### Civil Settings Panel
+Keep the Inspect Settings Panel the same, except remove it from being completely tied to the Inspect tool and rename it to "Civil OS Settings" (as a translation key, of course). It should have its own button on the sidebar like the other tools/settings pages, and therefore be able to opened and closed separately from the inspect tool. Furthermore, move the Civil OS endpoint and login configuration UI from the normal settings panel to this panel.

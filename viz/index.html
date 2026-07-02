@@ -67,6 +67,10 @@
           <span class="hotkey">T</span>
         </button>
         
+        <button id="civilSettingsToolButton" class="toolbar-button" title="Civil OS Settings">
+          <img src="./src/svg/globe.svg" alt="Civil OS Settings" />
+        </button>
+
         <button id="settingsToolButton" class="toolbar-button" title="Settings">
           <img src="./src/svg/settings.svg" alt="Settings" />
           <span class="hotkey">S</span>
@@ -789,7 +793,7 @@
 
   <div id="inspectConfigControls" class="viz-window" style="position: absolute; top: 10px; left: 10px; width: 340px; min-width: 300px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header">
-      <div style="font-weight: 600; font-size: 13px;">Inspect Settings</div>
+      <div id="civilSettingsPanelTitle" style="font-weight: 600; font-size: 13px;">Civil OS Settings</div>
       <div class="window-actions">
         <button id="btnPinInspectConfig" class="window-pin" type="button" title="Pin" aria-pressed="false">
           <img alt="Pin menu" />

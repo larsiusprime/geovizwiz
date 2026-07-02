@@ -872,7 +872,10 @@ const inspectWin = createWindowManager({
 
 const inspectConfigWin = createWindowManager({
   getMinimized: () => S.ui.isInspectConfigMinimized,
-  setMinimized: (v) => { S.ui.isInspectConfigMinimized = v; },
+  setMinimized: (v) => {
+    S.ui.isInspectConfigMinimized = v;
+    updateToolbarButtonStates();
+  },
   contentEl: inspectConfigContent,
   controlsEl: inspectConfigControlsEl,
   contentDisplay: 'block',
@@ -1648,7 +1651,12 @@ function refreshInspectConfigPanel() {
   const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
   const isCivil = store?.isCivil || false;
 
-  if (S.isInfoToolActive && isCivil && store) {
+  const titleEl = document.getElementById('civilSettingsPanelTitle');
+  if (titleEl) {
+    titleEl.textContent = getLocalizedFieldName('civil_settings_title');
+  }
+
+  if (isCivil && store) {
     const valSelect = inspectConfigValuationSelect;
     const oldVal = S.civilValuationId || '';
     valSelect.replaceChildren();
@@ -1707,7 +1715,9 @@ function refreshInspectConfigPanel() {
       legalInput.value = '';
     }
 
-    inspectConfigWin.show();
+    if (!S.ui.isInspectConfigMinimized) {
+      inspectConfigWin.show();
+    }
   } else {
     inspectConfigWin.minimize();
   }
@@ -2438,11 +2448,22 @@ function updateLastPickedProps(parcelId: string, field: string, value: any) {
   }
 }
 
-function formatPopupValue(fieldType: 'numeric' | 'categorical', value: any): string {
+function formatUSD(value: any): string {
+  if (value === undefined || value === null || value === '' || value === '—') return '—';
+  const num = parseFloat(String(value).replace(/[^0-9.-]/g, ''));
+  if (isNaN(num)) return '—';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+}
+
+function formatPopupValue(fieldType: 'numeric' | 'categorical', value: any, fieldName?: string): string {
   if (value === null || value === undefined || value === '') return '—';
   if (fieldType === 'numeric') {
     const num = Number(value);
-    return Number.isFinite(num) ? fmt(num) : '—';
+    if (!Number.isFinite(num)) return '—';
+    if (fieldName && (fieldName.includes('year') || fieldName.includes('Year') || fieldName === 'primary_year_built' || fieldName === 'primary_effective_year_built' || fieldName === 'improvement_year_built' || fieldName === 'improvement_effective_year_built')) {
+      return String(num);
+    }
+    return fmt(num);
   }
   return String(value);
 }
@@ -2474,7 +2495,11 @@ function addPopupEditFunctionality(parcelId: string) {
       row.style.background = '';
       const valueCell = row.querySelector('[data-value-cell]') as HTMLTableCellElement | null;
       if (valueCell) {
-        valueCell.textContent = formatPopupValue(fieldType, displayValue);
+        if (['market_land_value', 'assessed_land_value', 'total_market_improvement_value', 'total_assessed_improvement_value'].includes(field)) {
+          valueCell.textContent = formatUSD(displayValue);
+        } else {
+          valueCell.textContent = formatPopupValue(fieldType, displayValue, field);
+        }
       }
       const editButton = row.querySelector('.popup-edit-btn') as HTMLButtonElement | null;
       setEditButtonToPencil(editButton);
@@ -2675,11 +2700,19 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
   const isCivil = store?.isCivil || false;
 
+  const valFields = [
+    'market_land_value',
+    'assessed_land_value',
+    'total_market_improvement_value',
+    'total_assessed_improvement_value'
+  ];
+
   let fieldsToShow: string[];
   if (isCivil) {
     fieldsToShow = Object.keys(props).filter(k => {
       if (k === 'properties') return false;
-      if (k === 'zoning_ids' || k === 'zoningIds' || k === 'land_use_id' || k === 'landUseId' || k === 'primary_condition_id' || k === 'primaryConditionId') return true;
+      if (valFields.includes(k)) return false;
+      if (k === 'zoning_ids' || k === 'zoningIds' || k === 'land_use_id' || k === 'landUseId' || k === 'primary_condition_id' || k === 'primaryConditionId' || k === 'neighborhood_id' || k === 'neighborhoodId') return true;
       const lower = k.toLowerCase();
       const isId = lower === 'id' || lower.endsWith('_id') || lower.endsWith('_ids') || k.endsWith('Id') || k.endsWith('Ids');
       return !isId;
@@ -2693,7 +2726,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
     ]));
   }
 
-  const rows = fieldsToShow.map(k => {
+  let rows = fieldsToShow.map(k => {
     const fieldType = getPopupFieldType(k);
     const patch = getParcelPatchEntry(parcelId, k);
     let v = patch ? patch.current : (props as any)[k];
@@ -2722,7 +2755,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
       }
     }
 
-    const printable = escapeHtml(formatPopupValue(fieldType, v));
+    const printable = escapeHtml(formatPopupValue(fieldType, v, k));
     const changed = isFieldChanged(parcelId, k, fieldType);
     const rowStyle = changed ? 'background: rgba(255, 0, 0, 0.08);' : '';
     const nameStyle = changed ? 'font-weight:700;' : '';
@@ -2742,6 +2775,84 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
         </td>
       </tr>`;
   }).join('');
+
+  if (isCivil) {
+    const getValNum = (key: string) => {
+      const patch = getParcelPatchEntry(parcelId, key);
+      const rawVal = patch ? patch.current : props[key];
+      if (rawVal === undefined || rawVal === null || rawVal === '' || rawVal === '—') return 0;
+      const parsed = parseFloat(String(rawVal).replace(/[^0-9.-]/g, ''));
+      return isNaN(parsed) ? 0 : parsed;
+    };
+
+    const marketLand = getValNum('market_land_value');
+    const marketImp = getValNum('total_market_improvement_value');
+    const totalMarket = marketLand + marketImp;
+
+    const assessedLand = getValNum('assessed_land_value');
+    const assessedImp = getValNum('total_assessed_improvement_value');
+    const totalAssessed = assessedLand + assessedImp;
+
+    const headerRow = `
+      <tr class="table-section-header" style="border-top: 2px solid #ddd; background: rgba(0, 0, 0, 0.03);">
+        <td colspan="4" style="padding: 6px 8px; font-weight: bold; text-align: left; font-size: 12px; color: #555;">
+          ${escapeHtml(getLocalizedFieldName('valuations_header'))}
+        </td>
+      </tr>`;
+
+    const valRowsList = valFields.map(k => {
+      const fieldType = getPopupFieldType(k);
+      const patch = getParcelPatchEntry(parcelId, k);
+      let v = patch ? patch.current : (props as any)[k];
+
+      const formattedVal = formatUSD(v);
+      const changed = isFieldChanged(parcelId, k, fieldType);
+      const rowStyle = changed ? 'background: rgba(255, 0, 0, 0.08);' : '';
+      const nameStyle = changed ? 'font-weight:700;' : '';
+
+      return `
+        <tr data-field="${escapeHtml(k)}" data-field-type="${fieldType}" style="${rowStyle}">
+          <td style="padding:2px 4px; text-align:left; white-space:nowrap; vertical-align:top;">
+            <button type="button" class="popup-edit-btn" title="Edit value" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;">✏️</button>
+          </td>
+          <td style="padding:2px 4px; text-align:left; white-space:nowrap; vertical-align:top;">
+            <button type="button" class="popup-reset-btn" title="Reset to original" style="background:none;border:none;cursor:pointer;font-size:12px;line-height:1;${changed ? '' : 'display:none;'}">↩</button>
+          </td>
+          <td style="padding:2px 6px; overflow-wrap:anywhere; vertical-align:top;">
+            <code style="white-space:normal;${nameStyle}">${escapeHtml(getLocalizedFieldName(k))}</code>
+          </td>
+          <td style="padding:2px 6px; text-align:right; white-space:normal; overflow-wrap:anywhere;" data-value-cell>
+            ${escapeHtml(formattedVal)}
+          </td>
+        </tr>`;
+    }).join('');
+
+    const totalMarketRow = `
+      <tr style="border-top: 1px solid #eee;">
+        <td style="padding:2px 4px;"></td>
+        <td style="padding:2px 4px;"></td>
+        <td style="padding:2px 6px; vertical-align:top;">
+          <code style="white-space:normal; font-weight: bold;">${escapeHtml(getLocalizedFieldName('total_market_value'))}</code>
+        </td>
+        <td style="padding:2px 6px; text-align:right; white-space:normal; font-weight: bold; overflow-wrap:anywhere;">
+          ${escapeHtml(formatUSD(totalMarket))}
+        </td>
+      </tr>`;
+      
+    const totalAssessedRow = `
+      <tr>
+        <td style="padding:2px 4px;"></td>
+        <td style="padding:2px 4px;"></td>
+        <td style="padding:2px 6px; vertical-align:top;">
+          <code style="white-space:normal; font-weight: bold;">${escapeHtml(getLocalizedFieldName('total_assessed_value'))}</code>
+        </td>
+        <td style="padding:2px 6px; text-align:right; white-space:normal; font-weight: bold; overflow-wrap:anywhere;">
+          ${escapeHtml(formatUSD(totalAssessed))}
+        </td>
+      </tr>`;
+
+    rows = rows + headerRow + valRowsList + totalMarketRow + totalAssessedRow;
+  }
 
   const showInlinePin = !isInspectPinned();
   const popupContainerStyle = showInlinePin
@@ -3636,6 +3747,20 @@ refreshScatterPanel();
 refreshLandSchedulePanel();
 refreshTimeAdjustmentPanel();
 
+function toggleCivilSettings() {
+  const currentLayer = getCurrentLayer();
+  const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
+  const isCivil = store?.isCivil || false;
+  if (!isCivil) return;
+
+  if (S.ui.isInspectConfigMinimized) {
+    inspectConfigWin.show();
+    refreshInspectConfigPanel();
+  } else {
+    inspectConfigWin.minimize();
+  }
+}
+
 /* ---------------- Vertical Toolbar (see ./toolbar.ts) ---------------- */
 
 // Wire callbacks into the toolbar module
@@ -3651,6 +3776,7 @@ initToolbarCallbacks({
   toggleWriteMenu: toggleWrite,
   showWriteMenu: showWrite,
   refreshInspectConfigPanel: refreshInspectConfigPanel,
+  toggleCivilSettings: toggleCivilSettings,
 });
 
 // Initialize toolbar when DOM is ready

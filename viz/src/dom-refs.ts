@@ -331,5 +331,8 @@ export const btnMinimizeInspectConfig = document.getElementById('btnMinimizeInsp
 export const inspectConfigValuationSelect = document.getElementById('inspectConfigValuation') as HTMLSelectElement;
 export const inspectConfigNeighborhoodDefSelect = document.getElementById('inspectConfigNeighborhoodDef') as HTMLSelectElement;
 export const inspectConfigLegalAsOfInput = document.getElementById('inspectConfigLegalAsOf') as HTMLInputElement;
+export const civilSettingsToolButton = document.getElementById('civilSettingsToolButton') as HTMLButtonElement;
+export const civilSettingsPanelTitle = document.getElementById('civilSettingsPanelTitle') as HTMLDivElement;
+
 
 

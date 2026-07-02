@@ -22,6 +22,7 @@ let _showCompFinderMenu: () => void = () => {};
 let _toggleWriteMenu: () => void = () => {};
 let _showWriteMenu: () => void = () => {};
 let _refreshInspectConfigPanel: () => void = () => {};
+let _toggleCivilSettings: () => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
@@ -35,6 +36,7 @@ export interface ToolbarCallbacks {
   toggleWriteMenu: () => void;
   showWriteMenu: () => void;
   refreshInspectConfigPanel: () => void;
+  toggleCivilSettings: () => void;
 }
 
 export function initToolbarCallbacks(cb: ToolbarCallbacks) {
@@ -49,6 +51,7 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _toggleWriteMenu = cb.toggleWriteMenu;
   _showWriteMenu = cb.showWriteMenu;
   _refreshInspectConfigPanel = cb.refreshInspectConfigPanel;
+  _toggleCivilSettings = cb.toggleCivilSettings;
 }
 
 /* ---------- DOM elements ---------- */
@@ -65,6 +68,7 @@ const landScheduleToolButton = document.getElementById('landScheduleToolButton')
 const timeAdjustmentToolButton = document.getElementById('timeAdjustmentToolButton') as HTMLButtonElement;
 const compFinderToolButton = document.getElementById('compFinderToolButton') as HTMLButtonElement;
 const writeToolButton = document.getElementById('writeToolButton') as HTMLButtonElement;
+const civilSettingsToolButton = document.getElementById('civilSettingsToolButton') as HTMLButtonElement;
 
 /* ---------- Constants ---------- */
 
@@ -350,6 +354,15 @@ export function updateToolbarButtonStates() {
     writeToolButton.classList.add('active');
   }
 
+  if (civilSettingsToolButton) {
+    if (S.ui.isInspectConfigMinimized) {
+      civilSettingsToolButton.classList.add('inactive');
+      civilSettingsToolButton.classList.remove('active');
+    } else {
+      civilSettingsToolButton.classList.remove('inactive');
+      civilSettingsToolButton.classList.add('active');
+    }
+  }
 }
 
 /* ---------- Initialize ---------- */
@@ -506,6 +519,14 @@ export function initializeToolbar() {
     closeAllSubmenus();
     _toggleTimeAdjustment();
   });
+
+  if (civilSettingsToolButton) {
+    civilSettingsToolButton.addEventListener('click', (e) => {
+      e.stopPropagation();
+      closeAllSubmenus();
+      _toggleCivilSettings();
+    });
+  }
 
   // Handle submenu button clicks
   submenuButtons.forEach(button => {

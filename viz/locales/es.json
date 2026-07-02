@@ -24,5 +24,10 @@
   "total_units": "Unidades",
   "primary_condition_id": "Condición",
   "total_market_improvement_value": "Valor de Construcción de Mercado",
-  "total_assessed_improvement_value": "Valor de Construcción Evaluado"
+  "total_assessed_improvement_value": "Valor de Construcción Evaluado",
+  "neighborhood_id": "Vecindario",
+  "valuations_header": "Valuaciones",
+  "total_market_value": "Valor Total de Mercado",
+  "total_assessed_value": "Valor Total Evaluado",
+  "civil_settings_title": "Configuración de Civil OS"
 }

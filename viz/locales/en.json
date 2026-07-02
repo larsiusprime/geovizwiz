@@ -24,5 +24,10 @@
   "total_units": "Units",
   "primary_condition_id": "Condition",
   "total_market_improvement_value": "Building Value (Market)",
-  "total_assessed_improvement_value": "Building Value (Assessed)"
+  "total_assessed_improvement_value": "Building Value (Assessed)",
+  "neighborhood_id": "Neighborhood",
+  "valuations_header": "Valuations",
+  "total_market_value": "Total Value (Market)",
+  "total_assessed_value": "Total Value (Assessed)",
+  "civil_settings_title": "Civil OS Settings"
 }

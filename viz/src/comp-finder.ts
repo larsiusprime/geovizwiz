@@ -1296,7 +1296,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
           props.total_bathrooms = imp.totalBathrooms || 0;
           props.total_bedrooms = imp.totalBedrooms || 0;
           props.total_units = imp.totalUnits || 0;
-          props.primary_year_built = imp.primaryYearBuilt || 0;
+          props.primary_year_built = imp.primaryYearBuilt || '';
           props.primary_effective_year_built = imp.primaryEffectiveYearBuilt || '';
           props.primary_condition_id = imp.primaryConditionId || '';
           props.total_market_improvement_value = imp.totalMarketImprovementValue || '';

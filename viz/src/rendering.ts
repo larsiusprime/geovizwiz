@@ -432,7 +432,7 @@ export function addExtrusionLayer(layer: LayerState) {
                   fullProps.total_bedrooms = imp.totalBedrooms || 0;
                   fullProps.total_units = imp.totalUnits || 0;
                   fullProps.primary_year_built = imp.primaryYearBuilt || 0;
-                  fullProps.primary_effective_year_built = imp.primaryEffectiveYearBuilt || 0;
+                  fullProps.primary_effective_year_built = imp.primaryEffectiveYearBuilt || '';
                   fullProps.primary_condition_id = conditionName;
                   fullProps.total_market_improvement_value = imp.totalMarketImprovementValue || '';
                   fullProps.total_assessed_improvement_value = imp.totalAssessedImprovementValue || '';

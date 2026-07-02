@@ -23,11 +23,17 @@
   "total_bathrooms": "Bathrooms",
   "total_units": "Units",
   "primary_condition_id": "Condition",
+  "primary_effective_year_built": "Effective Year Built",
   "total_market_improvement_value": "Building Value (Market)",
   "total_assessed_improvement_value": "Building Value (Assessed)",
   "neighborhood_id": "Neighborhood",
   "valuations_header": "Valuations",
   "total_market_value": "Total Value (Market)",
   "total_assessed_value": "Total Value (Assessed)",
-  "civil_settings_title": "Civil OS Settings"
+  "civil_settings_title": "Civil OS Settings",
+  "valuation_date_label": "Valuation Date",
+  "neighborhood_definition_label": "Neighborhood Definition",
+  "characteristics_as_of_label": "Characteristics As Of",
+  "data_sources_label": "Data Sources",
+  "new_civil_os_data_source_label": "New Civil OS Data Source"
 }

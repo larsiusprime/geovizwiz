@@ -395,16 +395,7 @@
           <button id="btnImportProject" type="button">Import project…</button>
         </div>
       </fieldset>
-      <fieldset>
-        <div id="settingsDataSourcesToggle" class="settings-data-sources-header">
-          <span id="settingsDataSourcesChevron" class="toggle">▼</span>
-          <span>Data Sources</span>
-        </div>
-        <div id="settingsDataSourcesList" class="settings-data-sources-list"></div>
-        <div class="buttons" style="margin-top: 8px;">
-          <button id="btnNewCivilOSDataSource" type="button">New Civil OS Data Source</button>
-        </div>
-      </fieldset>
+
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
     <div class="window-resize-handle" aria-hidden="true">
@@ -805,17 +796,28 @@
     </div>
     <div id="inspectConfigContent" data-window-content style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <label for="inspectConfigValuation" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Valuation Date</label>
+        <label id="lblValuationDate" for="inspectConfigValuation" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Valuation Date</label>
         <select id="inspectConfigValuation" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text);"></select>
       </div>
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <label for="inspectConfigNeighborhoodDef" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Neighborhood Definition</label>
+        <label id="lblNeighborhoodDef" for="inspectConfigNeighborhoodDef" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Neighborhood Definition</label>
         <select id="inspectConfigNeighborhoodDef" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text);"></select>
       </div>
       <div style="display: flex; flex-direction: column; gap: 4px;">
-        <label for="inspectConfigLegalAsOf" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Legal As Of</label>
+        <label id="lblCharacteristicsAsOf" for="inspectConfigLegalAsOf" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Characteristics As Of</label>
         <input id="inspectConfigLegalAsOf" type="datetime-local" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text);" />
       </div>
+
+      <fieldset id="civilDataSourcesFieldset" style="margin-top: 10px; border: none; padding: 0;">
+        <div id="settingsDataSourcesToggle" class="settings-data-sources-header" style="cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--text-muted);">
+          <span id="settingsDataSourcesChevron" class="toggle">▼</span>
+          <span id="lblDataSources">Data Sources</span>
+        </div>
+        <div id="settingsDataSourcesList" class="settings-data-sources-list" style="margin-top: 6px;"></div>
+        <div class="buttons" style="margin-top: 8px;">
+          <button id="btnNewCivilOSDataSource" type="button" style="width: 100%;">New Civil OS Data Source</button>
+        </div>
+      </fieldset>
     </div>
     <div class="window-resize-edge" aria-hidden="true"></div>
     <div class="window-resize-handle" aria-hidden="true">

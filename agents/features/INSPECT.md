@@ -44,3 +44,6 @@ Ensure that year built is formatted as a simple number without commas between th
 
 ### Civil Settings Panel
 Keep the Inspect Settings Panel the same, except remove it from being completely tied to the Inspect tool and rename it to "Civil OS Settings" (as a translation key, of course). It should have its own button on the sidebar like the other tools/settings pages, and therefore be able to opened and closed separately from the inspect tool. Furthermore, move the Civil OS endpoint and login configuration UI from the normal settings panel to this panel.
+
+### Civil Settings Panel Translation Keys
+Ensure that the civil settings panel field headers are set as translation keys. Rename "Legal As Of" to "Characteristics As Of"

@@ -1656,6 +1656,17 @@ function refreshInspectConfigPanel() {
     titleEl.textContent = getLocalizedFieldName('civil_settings_title');
   }
 
+  const lblValDate = document.getElementById('lblValuationDate');
+  if (lblValDate) lblValDate.textContent = getLocalizedFieldName('valuation_date_label');
+  const lblNhDef = document.getElementById('lblNeighborhoodDef');
+  if (lblNhDef) lblNhDef.textContent = getLocalizedFieldName('neighborhood_definition_label');
+  const lblChar = document.getElementById('lblCharacteristicsAsOf');
+  if (lblChar) lblChar.textContent = getLocalizedFieldName('characteristics_as_of_label');
+  const lblDS = document.getElementById('lblDataSources');
+  if (lblDS) lblDS.textContent = getLocalizedFieldName('data_sources_label');
+  const btnNewDS = document.getElementById('btnNewCivilOSDataSource');
+  if (btnNewDS) btnNewDS.textContent = getLocalizedFieldName('new_civil_os_data_source_label');
+
   if (isCivil && store) {
     const valSelect = inspectConfigValuationSelect;
     const oldVal = S.civilValuationId || '';

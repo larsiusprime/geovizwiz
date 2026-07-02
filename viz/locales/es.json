@@ -23,11 +23,17 @@
   "total_bathrooms": "Baños",
   "total_units": "Unidades",
   "primary_condition_id": "Condición",
+  "primary_effective_year_built": "Año Efectivo de Construcción",
   "total_market_improvement_value": "Valor de Construcción de Mercado",
   "total_assessed_improvement_value": "Valor de Construcción Evaluado",
   "neighborhood_id": "Vecindario",
   "valuations_header": "Valuaciones",
   "total_market_value": "Valor Total de Mercado",
   "total_assessed_value": "Valor Total Evaluado",
-  "civil_settings_title": "Configuración de Civil OS"
+  "civil_settings_title": "Configuración de Civil OS",
+  "valuation_date_label": "Fecha de Valuación",
+  "neighborhood_definition_label": "Definición de Vecindario",
+  "characteristics_as_of_label": "Características Al",
+  "data_sources_label": "Fuentes de Datos",
+  "new_civil_os_data_source_label": "Nueva Fuente de Datos de Civil OS"
 }

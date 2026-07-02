@@ -787,6 +787,38 @@
     </div>
   </div>
 
+  <div id="inspectConfigControls" class="viz-window" style="position: absolute; top: 10px; left: 10px; width: 340px; min-width: 300px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
+    <div class="window-header">
+      <div style="font-weight: 600; font-size: 13px;">Inspect Settings</div>
+      <div class="window-actions">
+        <button id="btnPinInspectConfig" class="window-pin" type="button" title="Pin" aria-pressed="false">
+          <img alt="Pin menu" />
+        </button>
+        <button id="btnMinimizeInspectConfig" class="window-min-btn" title="Close">
+          ❌
+        </button>
+      </div>
+    </div>
+    <div id="inspectConfigContent" data-window-content style="padding: 12px; display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <label for="inspectConfigValuation" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Valuation Date</label>
+        <select id="inspectConfigValuation" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text);"></select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <label for="inspectConfigNeighborhoodDef" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Neighborhood Definition</label>
+        <select id="inspectConfigNeighborhoodDef" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text);"></select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 4px;">
+        <label for="inspectConfigLegalAsOf" style="font-size: 11px; font-weight: 600; color: var(--text-muted);">Legal As Of</label>
+        <input id="inspectConfigLegalAsOf" type="datetime-local" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--input-bg); color: var(--text);" />
+      </div>
+    </div>
+    <div class="window-resize-edge" aria-hidden="true"></div>
+    <div class="window-resize-handle" aria-hidden="true">
+      <img src="./src/svg/expand.svg" alt="" />
+    </div>
+  </div>
+
   <div id="landScheduleControls" class="viz-window" style="position: absolute; top: 10px; left: 1220px; width: min(calc(92vw - 80px), 520px); min-width: 520px; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); display: none; gap: var(--gap); z-index: 10; cursor: move;">
     <div class="window-header">
       <div style="font-weight: 600; font-size: 13px;">Adjustment Schedule</div>

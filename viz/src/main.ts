@@ -1,6 +1,7 @@
 // Imports
 import 'maplibre-gl/dist/maplibre-gl.css';
 import maplibregl from 'maplibre-gl';
+import { timestampDate } from '@bufbuild/protobuf/wkt';
 import { toGeoJson } from 'geoparquet';
 import { compressors } from 'hyparquet-compressors';
 import { parquetMetadataAsync, parquetSchema } from 'hyparquet';
@@ -110,6 +111,13 @@ import {
   floatingLegend,
   btnMinimizeLegend,
   legendContent,
+  inspectConfigControlsEl,
+  inspectConfigContent,
+  btnPinInspectConfig,
+  btnMinimizeInspectConfig,
+  inspectConfigValuationSelect,
+  inspectConfigNeighborhoodDefSelect,
+  inspectConfigLegalAsOfInput,
   compFinderControlsEl,
   compFinderContent,
   btnPinCompFinder,
@@ -862,6 +870,14 @@ const inspectWin = createWindowManager({
   contentDisplay: 'block',
 });
 
+const inspectConfigWin = createWindowManager({
+  getMinimized: () => S.ui.isInspectConfigMinimized,
+  setMinimized: (v) => { S.ui.isInspectConfigMinimized = v; },
+  contentEl: inspectConfigContent,
+  controlsEl: inspectConfigControlsEl,
+  contentDisplay: 'block',
+});
+
 const writeWin = createWindowManager({
   getMinimized: () => S.ui.isWriteMinimized,
   setMinimized: (v) => { S.ui.isWriteMinimized = v; },
@@ -955,6 +971,7 @@ initWindowDocking({
   btnPinLandSchedule,
   btnPinTimeAdjustment,
   btnPinLegend,
+  btnPinInspectConfig,
 ].forEach(initPinButton);
 registerDockableWindow(controlsEl, btnPinLayers);
 registerDockableWindow(settingsControlsEl, btnPinSettings);
@@ -963,6 +980,7 @@ registerDockableWindow(statisticsControlsEl, btnPinStatistics);
 registerDockableWindow(scatterplotControlsEl, btnPinScatterplot);
 registerDockableWindow(compFinderControlsEl, btnPinCompFinder);
 registerDockableWindow(inspectControlsEl, btnPinInspect);
+registerDockableWindow(inspectConfigControlsEl, btnPinInspectConfig);
 registerDockableWindow(export3DControlsEl, btnPinExport3D);
 registerDockableWindow(writeControlsEl, btnPinWrite);
 registerDockableWindow(landScheduleControlsEl, btnPinLandSchedule);
@@ -975,6 +993,7 @@ enableWindowResizing(statisticsControlsEl);
 enableWindowResizing(scatterplotControlsEl);
 enableWindowResizing(compFinderControlsEl);
 enableWindowResizing(inspectControlsEl);
+enableWindowResizing(inspectConfigControlsEl);
 enableWindowResizing(export3DControlsEl);
 enableWindowResizing(writeControlsEl);
 enableWindowResizing(landScheduleControlsEl);
@@ -1094,6 +1113,7 @@ initLayerCallbacks({
   createEyeButton,
   setEyeButtonIcon,
   setBasemapMode,
+  refreshInspectConfigPanel: refreshInspectConfigPanel,
 });
 
 // Initialize metadata module for project save/load
@@ -1620,6 +1640,76 @@ function clearInspectState() {
   removeInspectFocusMarker();
   if (isInspectPinned() && !S.ui.isInspectMinimized) {
     renderInspectPinnedContent();
+  }
+}
+
+function refreshInspectConfigPanel() {
+  const currentLayer = getCurrentLayer();
+  const store = currentLayer ? S.dataStores.get(currentLayer.dataStoreId) : null;
+  const isCivil = store?.isCivil || false;
+
+  if (S.isInfoToolActive && isCivil && store) {
+    const valSelect = inspectConfigValuationSelect;
+    const oldVal = S.civilValuationId || '';
+    valSelect.replaceChildren();
+    
+    const defOpt = new Option('None (Default)', '');
+    if (!oldVal) defOpt.selected = true;
+    valSelect.appendChild(defOpt);
+
+    if (store.civilValuationsMap) {
+      Object.entries(store.civilValuationsMap).forEach(([k, v]: [string, any]) => {
+        if (!v) return;
+        let dateStr = '';
+        if (v.valuationTimestamp) {
+          try {
+            const date = timestampDate(v.valuationTimestamp);
+            dateStr = date.toISOString().split('T')[0];
+          } catch (e) {
+            console.warn("Failed to parse valuation timestamp date:", e);
+          }
+        }
+        const opt = new Option(dateStr || k, k);
+        if (oldVal && oldVal === k) opt.selected = true;
+        valSelect.appendChild(opt);
+      });
+    }
+
+    const ndSelect = inspectConfigNeighborhoodDefSelect;
+    const oldNd = S.civilNeighborhoodDefinitionId || '';
+    ndSelect.replaceChildren();
+
+    const defNdOpt = new Option('None (Default)', '');
+    if (!oldNd) defNdOpt.selected = true;
+    ndSelect.appendChild(defNdOpt);
+
+    if (store.civilNeighborhoodDefinitionsMap) {
+      Object.entries(store.civilNeighborhoodDefinitionsMap).forEach(([k, v]: [string, any]) => {
+        if (!v) return;
+        const opt = new Option(v.name || k, k);
+        if (oldNd && oldNd === k) opt.selected = true;
+        ndSelect.appendChild(opt);
+      });
+    }
+
+    const legalInput = inspectConfigLegalAsOfInput;
+    if (S.civilLegalAsOf) {
+      try {
+        const d = new Date(S.civilLegalAsOf);
+        const tzoffset = d.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(d.getTime() - tzoffset)).toISOString().slice(0, 16);
+        legalInput.value = localISOTime;
+      } catch (e) {
+        console.warn("Failed to parse S.civilLegalAsOf date:", e);
+        legalInput.value = '';
+      }
+    } else {
+      legalInput.value = '';
+    }
+
+    inspectConfigWin.show();
+  } else {
+    inspectConfigWin.minimize();
   }
 }
 
@@ -2589,7 +2679,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   if (isCivil) {
     fieldsToShow = Object.keys(props).filter(k => {
       if (k === 'properties') return false;
-      if (k === 'zoning_ids' || k === 'zoningIds' || k === 'land_use_id' || k === 'landUseId') return true;
+      if (k === 'zoning_ids' || k === 'zoningIds' || k === 'land_use_id' || k === 'landUseId' || k === 'primary_condition_id' || k === 'primaryConditionId') return true;
       const lower = k.toLowerCase();
       const isId = lower === 'id' || lower.endsWith('_id') || lower.endsWith('_ids') || k.endsWith('Id') || k.endsWith('Ids');
       return !isId;
@@ -2976,6 +3066,22 @@ btnMinimizeLandSchedule.addEventListener('click', minimizeLandSchedule);
 btnMinimizeTimeAdjustment.addEventListener('click', minimizeTimeAdjustment);
 btnMinimizeCompFinder.addEventListener('click', minimizeCompFinder);
 btnMinimizeInspect.addEventListener('click', closeInspectMenu);
+btnMinimizeInspectConfig.addEventListener('click', () => {
+  inspectConfigWin.minimize();
+});
+inspectConfigValuationSelect.addEventListener('change', () => {
+  S.civilValuationId = inspectConfigValuationSelect.value || null;
+  persistCurrentLayerState();
+});
+inspectConfigNeighborhoodDefSelect.addEventListener('change', () => {
+  S.civilNeighborhoodDefinitionId = inspectConfigNeighborhoodDefSelect.value || null;
+  persistCurrentLayerState();
+});
+inspectConfigLegalAsOfInput.addEventListener('input', () => {
+  const val = inspectConfigLegalAsOfInput.value;
+  S.civilLegalAsOf = val ? new Date(val).toISOString() : null;
+  persistCurrentLayerState();
+});
 btnMinimizeWrite.addEventListener('click', () => {
   minimizeWrite();
   if (S.isWriteToolActive) activateTool('select');
@@ -3322,6 +3428,7 @@ makeDraggable(export3DControlsEl);
 makeDraggable(writeControlsEl);
 makeDraggable(landScheduleControlsEl);
 makeDraggable(timeAdjustmentControlsEl);
+makeDraggable(inspectConfigControlsEl);
 positionSettingsPanel();
 positionFiltersPanel();
 positionLandSchedulePanel();
@@ -3543,6 +3650,7 @@ initToolbarCallbacks({
   showCompFinderMenu: showCompFinder,
   toggleWriteMenu: toggleWrite,
   showWriteMenu: showWrite,
+  refreshInspectConfigPanel: refreshInspectConfigPanel,
 });
 
 // Initialize toolbar when DOM is ready

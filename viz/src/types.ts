@@ -182,6 +182,9 @@ export type LayerState = {
   filterActionMode: FilterActionMode;
   filterInvert: boolean;
   parcelPatchMap: ParcelPatchMap;
+  civilValuationId?: string;
+  civilNeighborhoodDefinitionId?: string;
+  civilLegalAsOf?: string;
 };
 
 export type DataStore = {
@@ -200,6 +203,9 @@ export type DataStore = {
   civilLandUseTypeMap?: Record<string, any>;
   civilImprovementTypeMap?: Record<string, any>;
   civilImprovementConditionMap?: Record<string, any>;
+  civilValuationsMap?: Record<string, any>;
+  civilNeighborhoodDefinitionsMap?: Record<string, any>;
+  civilNeighborhoodsMap?: Record<string, any>;
   civilFeatureToParcelIdMap?: Map<number, string>;
   geojson: GeoJSON.FeatureCollection | null;
   numericFieldsFromSchema: string[];
@@ -316,6 +322,9 @@ export type SerializedLayer = {
   filterMode: FilterMode;
   filterActionMode: FilterActionMode;
   filterInvert: boolean;
+  civilValuationId?: string;
+  civilNeighborhoodDefinitionId?: string;
+  civilLegalAsOf?: string;
 };
 
 export type ProjectFileV1 = {

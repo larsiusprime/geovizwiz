@@ -21,6 +21,7 @@ let _toggleTimeAdjustment: () => void = () => {};
 let _showCompFinderMenu: () => void = () => {};
 let _toggleWriteMenu: () => void = () => {};
 let _showWriteMenu: () => void = () => {};
+let _refreshInspectConfigPanel: () => void = () => {};
 
 export interface ToolbarCallbacks {
   showLayers: () => void;
@@ -33,6 +34,7 @@ export interface ToolbarCallbacks {
   showCompFinderMenu: () => void;
   toggleWriteMenu: () => void;
   showWriteMenu: () => void;
+  refreshInspectConfigPanel: () => void;
 }
 
 export function initToolbarCallbacks(cb: ToolbarCallbacks) {
@@ -46,6 +48,7 @@ export function initToolbarCallbacks(cb: ToolbarCallbacks) {
   _showCompFinderMenu = cb.showCompFinderMenu;
   _toggleWriteMenu = cb.toggleWriteMenu;
   _showWriteMenu = cb.showWriteMenu;
+  _refreshInspectConfigPanel = cb.refreshInspectConfigPanel;
 }
 
 /* ---------- DOM elements ---------- */
@@ -268,6 +271,8 @@ export function activateTool(tool: 'pan' | 'info' | 'select' | 'comp-finder' | '
 
   // Update cursor
   updateCursor();
+
+  _refreshInspectConfigPanel();
 
   // Close popup if info tool is deactivated
   if (!S.isInfoToolActive && S.activePopup) {

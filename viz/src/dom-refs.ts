@@ -323,3 +323,13 @@ export const civilSetupError = document.getElementById('civilSetupError') as HTM
 export const btnCancelCivilSetup = document.getElementById('btnCancelCivilSetup') as HTMLButtonElement;
 export const btnConfirmCivilSetup = document.getElementById('btnConfirmCivilSetup') as HTMLButtonElement;
 
+// --- Inspect Config Panel elements ---
+export const inspectConfigControlsEl = document.getElementById('inspectConfigControls') as HTMLDivElement;
+export const inspectConfigContent = document.getElementById('inspectConfigContent') as HTMLDivElement;
+export const btnPinInspectConfig = document.getElementById('btnPinInspectConfig') as HTMLButtonElement;
+export const btnMinimizeInspectConfig = document.getElementById('btnMinimizeInspectConfig') as HTMLButtonElement;
+export const inspectConfigValuationSelect = document.getElementById('inspectConfigValuation') as HTMLSelectElement;
+export const inspectConfigNeighborhoodDefSelect = document.getElementById('inspectConfigNeighborhoodDef') as HTMLSelectElement;
+export const inspectConfigLegalAsOfInput = document.getElementById('inspectConfigLegalAsOf') as HTMLInputElement;
+
+

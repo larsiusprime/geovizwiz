@@ -14,6 +14,27 @@ import {
   btnConfirmCivilSetup
 } from './dom-refs.js';
 
+import { createClient } from "@connectrpc/connect";
+import { createConnectTransport } from "@connectrpc/connect-web";
+import { ValuationService, NeighborhoodService } from "@civil-labs/civil-api-js";
+
+export function getCivilClient(service: any, gateway: string, token?: string) {
+  const cleanGateway = gateway.replace(/\/$/, '');
+  const transport = createConnectTransport({
+    baseUrl: cleanGateway,
+    fetch: (url, options) => {
+      options = options || {};
+      const headers = new Headers(options?.headers);
+      if (token) {
+        headers.set("Authorization", `Bearer ${token}`);
+      }
+      options.headers = headers;
+      return fetch(url, options);
+    }
+  });
+  return createClient(service, transport);
+}
+
 export function normalizeDomain(domain: string): string {
   let clean = domain.trim();
   if (!/^https?:\/\//i.test(clean)) {
@@ -608,6 +629,33 @@ export async function prepullCivilLookupData(store: DataStore) {
     }
   } catch (err) {
     console.error("Failed to fetch improvement condition lookups:", err);
+  }
+
+  // 6. Fetch Valuations
+  try {
+    const valClient = getCivilClient(ValuationService, store.civilGateway, store.civilToken) as any;
+    const valRes = await valClient.getValuations({});
+    store.civilValuationsMap = valRes.valuations || {};
+  } catch (err) {
+    console.error("Failed to fetch valuations lookups:", err);
+  }
+
+  // 7. Fetch Neighborhood Definitions
+  try {
+    const nhClient = getCivilClient(NeighborhoodService, store.civilGateway, store.civilToken) as any;
+    const ndRes = await nhClient.getNeighborhoodDefinitions({});
+    store.civilNeighborhoodDefinitionsMap = ndRes.neighborhoods || {};
+  } catch (err) {
+    console.error("Failed to fetch neighborhood definitions lookups:", err);
+  }
+
+  // 8. Fetch Neighborhoods
+  try {
+    const nhClient = getCivilClient(NeighborhoodService, store.civilGateway, store.civilToken) as any;
+    const nhRes = await nhClient.getNeighborhoods({});
+    store.civilNeighborhoodsMap = nhRes.neighborhoods || {};
+  } catch (err) {
+    console.error("Failed to fetch neighborhoods lookups:", err);
   }
 }
 

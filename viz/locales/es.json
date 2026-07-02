@@ -16,5 +16,13 @@
   "bathrooms": "Baños",
   "units": "Unidades",
   "condition_id": "Condición",
-  "improvement_type_id": "Tipo de Construcción"
+  "improvement_type_id": "Tipo de Construcción",
+  "total_area_sq_ft": "Área de Construcción (pies cuadrados)",
+  "primary_year_built": "Año de Construcción",
+  "total_bedrooms": "Habitaciones",
+  "total_bathrooms": "Baños",
+  "total_units": "Unidades",
+  "primary_condition_id": "Condición",
+  "total_market_improvement_value": "Valor de Construcción de Mercado",
+  "total_assessed_improvement_value": "Valor de Construcción Evaluado"
 }

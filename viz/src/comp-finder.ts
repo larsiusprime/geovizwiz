@@ -11,7 +11,9 @@ import { centerOnLngLatInVisibleMapArea, fitBoundsInVisibleMapArea } from './map
 import {
   makeDistanceCircleFeature, getFeatureCenter, isValidLngLat, distanceMeters, getPageTokens, getDeltaClass, buildDelta,
 } from './comp-finder-helpers';
-import { ParcelAttribute } from "@civil-labs/civil-api-js";
+import { ParcelAttribute, ParcelsService } from "@civil-labs/civil-api-js";
+import { getCivilClient } from "./civil-integration";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import { resolveCivilSelectionIds } from './selection';
 import enTranslations from '../locales/en.json';
 import esTranslations from '../locales/es.json';
@@ -1239,36 +1241,45 @@ async function findCivilComps(): Promise<StandardCompResults> {
   const gateway = compStore.civilGateway!.replace(/\/$/, '');
   const token = compStore.civilToken!;
 
-  // Fetch the subject parcel data so we can calculate absolute tolerances
+  // Fetch the subject parcel data
   if (subjectFeatureIdNum !== null) {
     try {
       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCivilComps fetching subject parcel for feature ID: ${subjectFeatureIdNum}...`);
       
-      const res = await fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetParcelByFeatureId`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          featureId: String(subjectFeatureIdNum)
-        })
-      });
-      if (!res.ok) {
-        throw new Error(`GetParcelByFeatureId HTTP ${res.status}: ${res.statusText}`);
+      const client = getCivilClient(ParcelsService, gateway, token) as any;
+      const req: any = {
+        featureIds: [BigInt(subjectFeatureIdNum)]
+      };
+
+      if (S.civilValuationId) {
+        req.valuationId = S.civilValuationId;
       }
-      const data = await res.json();
-      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] GetParcelByFeatureId returned: ${JSON.stringify(data)}`);
+      if (S.civilNeighborhoodDefinitionId) {
+        req.neighborhoodDefinitionId = S.civilNeighborhoodDefinitionId;
+      }
+      if (S.civilLegalAsOf) {
+        try {
+          req.legalAsOf = timestampFromDate(new Date(S.civilLegalAsOf));
+        } catch (e) {
+          console.warn("Failed to parse S.civilLegalAsOf:", e);
+        }
+      }
+
+      const res = await client.getParcelsWithImprovementSummaryByFeatureId(req);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] getParcelsWithImprovementSummaryByFeatureId returned: ${JSON.stringify(res)}`);
       
-      if (data.parcel) {
-        const p = data.parcel;
+      const parcelSummary = Object.values(res.parcels || {})[0] as any;
+      if (parcelSummary && parcelSummary.parcelDetails) {
+        const p = parcelSummary.parcelDetails;
+        const imp = parcelSummary.improvementSummary;
+
         subject!.parcelId = p.parcelId;
         subject!.address = p.formattedAddress || '';
         
         subject!.feature = { ...subject!.feature, properties: { ...(subject!.feature.properties || {}) } };
         const mutableSubjectFeature = subject!.feature;
         const props = mutableSubjectFeature.properties!;
-
+ 
         if (p.landAreaSqFt !== undefined) props.land_area_sq_ft = p.landAreaSqFt;
         if (p.frontageFt !== undefined) props.frontage_ft = p.frontageFt;
         if (p.depthFt !== undefined) props.depth_ft = p.depthFt;
@@ -1279,11 +1290,23 @@ async function findCivilComps(): Promise<StandardCompResults> {
             Object.assign(props, JSON.parse(p.properties));
           } catch (e) {}
         }
+
+        if (imp) {
+          props.total_area_sq_ft = imp.totalAreaSqFt || 0;
+          props.total_bathrooms = imp.totalBathrooms || 0;
+          props.total_bedrooms = imp.totalBedrooms || 0;
+          props.total_units = imp.totalUnits || 0;
+          props.primary_year_built = imp.primaryYearBuilt || 0;
+          props.primary_condition_id = imp.primaryConditionId || '';
+          props.total_market_improvement_value = imp.totalMarketImprovementValue || '';
+          props.total_assessed_improvement_value = imp.totalAssessedImprovementValue || '';
+        }
+
         (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Mapped subject attributes: ${JSON.stringify(props)}`);
       }
     } catch (err: any) {
-      (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] findCivilComps GetParcelByFeatureId failed: ${err?.message || err}`);
-      console.error("Failed to fetch subject parcel attributes via GetParcelByFeatureId", err);
+      (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] findCivilComps getParcelsWithImprovementSummaryByFeatureId failed: ${err?.message || err}`);
+      console.error("Failed to fetch subject parcel attributes via getParcelsWithImprovementSummaryByFeatureId", err);
     }
   }
 

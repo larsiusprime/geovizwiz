@@ -1,7 +1,7 @@
 {
   "dependencies": {
     "@bufbuild/protobuf": "^2.12.1",
-    "@civil-labs/civil-api-js": "github:civil-labs/civil-api-js",
+    "@civil-labs/civil-api-js": "file:../../civil-api-js",
     "@connectrpc/connect": "^2.1.2",
     "@connectrpc/connect-web": "^2.1.2",
     "@duckdb/node-api": "1.5.3-r.3",

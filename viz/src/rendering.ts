@@ -7,6 +7,9 @@ import type { Expression } from 'maplibre-gl';
 
 import { S } from './state';
 import type { LayerState, QualityMode, UpdateMode, MetricUnitKey } from './types';
+import { ParcelsService } from "@civil-labs/civil-api-js";
+import { getCivilClient } from "./civil-integration";
+import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
   COLOR_RAMPS, UNIT_TO_METERS,
   HEIGHT_CAP_METERS, HEIGHT_PCTL,
@@ -279,22 +282,28 @@ async function getParcelByFeatureId(
   token: string,
   featureId: number | string
 ) {
-  const url = `${gateway}/civil.public.parcels.v1.ParcelsService/GetParcelByFeatureId`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      featureId: String(featureId)
-    })
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to fetch parcel by feature ID: ${response.statusText}`);
+  const client = getCivilClient(ParcelsService, gateway, token) as any;
+  
+  const req: any = {
+    featureIds: [BigInt(featureId)]
+  };
+
+  if (S.civilValuationId) {
+    req.valuationId = S.civilValuationId;
   }
-  const data = await response.json();
-  return data;
+  if (S.civilNeighborhoodDefinitionId) {
+    req.neighborhoodDefinitionId = S.civilNeighborhoodDefinitionId;
+  }
+  if (S.civilLegalAsOf) {
+    try {
+      req.legalAsOf = timestampFromDate(new Date(S.civilLegalAsOf));
+    } catch (e) {
+      console.warn("Failed to parse S.civilLegalAsOf:", e);
+    }
+  }
+
+  const res = await client.getParcelsWithImprovementSummaryByFeatureId(req);
+  return res;
 }
 
 export function addExtrusionLayer(layer: LayerState) {
@@ -367,34 +376,67 @@ export function addExtrusionLayer(layer: LayerState) {
           getParcelByFeatureId(store.civilGateway, store.civilToken, featureId)
             .then(res => {
               _hideRenderingToast();
-              const parcel = res.parcel;
-              if (parcel) {
+              const parcelSummary = Object.values(res.parcels || {})[0] as any;
+              if (parcelSummary && parcelSummary.parcelDetails) {
+                const details = parcelSummary.parcelDetails;
+                const imp = parcelSummary.improvementSummary;
                 let extraProps = {};
-                if (parcel.properties) {
+                if (details.properties) {
                   try {
-                    extraProps = JSON.parse(parcel.properties);
+                    extraProps = JSON.parse(details.properties);
                   } catch (err) {
                     console.warn("Failed to parse parcel properties JSON", err);
                   }
                 }
-                const fullProps = {
-                  parcel_id: parcel.parcelId || parcel.parcel_id || '',
-                  feature_id: Number(parcel.featureId || parcel.feature_id || featureId),
-                  formatted_address: parcel.formattedAddress || parcel.formatted_address || '',
-                  address_id: parcel.addressId || parcel.address_id || '',
-                  primary_owner_name: parcel.primaryOwnerName || parcel.primary_owner_name || '',
-                  primary_owner_address: parcel.primaryOwnerAddress || parcel.primary_owner_address || '',
-                  party_ids: parcel.partyIds || parcel.party_id || [],
-                  land_use_id: parcel.landUseId || parcel.land_use_id || '',
-                  neighborhood_id: parcel.neighborhoodId || parcel.neighborhood_id || '',
-                  land_area_sq_ft: parcel.landAreaSqFt || parcel.land_area_sq_ft || 0,
-                  frontage_ft: parcel.frontageFt || parcel.frontage_sub || 0,
-                  depth_ft: parcel.depthFt || parcel.depth_sub || 0,
-                  zoning_ids: parcel.zoningIds || parcel.zoning_id || [],
-                  market_land_value: parcel.marketLandValue || parcel.market_land_value || '',
-                  assessed_land_value: parcel.assessedLandValue || parcel.assessed_land_value || '',
+
+                let neighborhoodName = details.neighborhoodId || '';
+                if (store.civilNeighborhoodsMap && details.neighborhoodId) {
+                  const nh = store.civilNeighborhoodsMap[details.neighborhoodId];
+                  if (nh && nh.name) {
+                    neighborhoodName = nh.name;
+                  }
+                }
+
+                const fullProps: any = {
+                  parcel_id: details.parcelId || '',
+                  feature_id: Number(details.featureId || featureId),
+                  formatted_address: details.formattedAddress || '',
+                  address_id: details.addressId || '',
+                  primary_owner_name: details.primaryOwnerName || '',
+                  primary_owner_address: details.primaryOwnerAddress || '',
+                  party_ids: details.partyIds || [],
+                  land_use_id: details.landUseId || '',
+                  neighborhood_id: neighborhoodName,
+                  land_area_sq_ft: details.landAreaSqFt || 0,
+                  frontage_ft: details.frontageFt || 0,
+                  depth_ft: details.depthFt || 0,
+                  zoning_ids: details.zoningIds || [],
+                  market_land_value: details.marketLandValue || '',
+                  assessed_land_value: details.assessedLandValue || '',
                   ...extraProps
                 };
+
+                if (imp) {
+                  let conditionName = imp.primaryConditionId || '';
+                  if (store.civilImprovementConditionMap && imp.primaryConditionId) {
+                    const cond = store.civilImprovementConditionMap[imp.primaryConditionId];
+                    if (cond && cond.name) {
+                      conditionName = cond.name;
+                    }
+                  }
+
+                  fullProps.improvement_ids = imp.improvementIds || [];
+                  fullProps.primary_improvement_id = imp.primaryImprovementId || '';
+                  fullProps.total_area_sq_ft = imp.totalAreaSqFt || 0;
+                  fullProps.total_bathrooms = imp.totalBathrooms || 0;
+                  fullProps.total_bedrooms = imp.totalBedrooms || 0;
+                  fullProps.total_units = imp.totalUnits || 0;
+                  fullProps.primary_year_built = imp.primaryYearBuilt || 0;
+                  fullProps.primary_condition_id = conditionName;
+                  fullProps.total_market_improvement_value = imp.totalMarketImprovementValue || '';
+                  fullProps.total_assessed_improvement_value = imp.totalAssessedImprovementValue || '';
+                }
+
                 const focusLngLat = getFeatureInspectFocusLngLat(f as GeoJSON.Feature, e.lngLat);
                 _showPopup(fullProps, focusLngLat, fullProps.parcel_id);
               } else {

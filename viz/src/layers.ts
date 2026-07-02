@@ -61,6 +61,7 @@ let _closeAddLayerModal: () => void;
 let _createEyeButton: (isHidden: boolean, title: string) => HTMLButtonElement;
 let _setEyeButtonIcon: (button: HTMLButtonElement, isHidden: boolean) => void;
 let _setBasemapMode: (mode: BasemapMode) => void;
+let _refreshInspectConfigPanel: () => void = () => {};
 
 export function initLayerCallbacks(cbs: {
   setSizeState: (bldgField: string | null, bldgUnit: string | null, landField: string | null, landUnit: string | null) => void;
@@ -84,6 +85,7 @@ export function initLayerCallbacks(cbs: {
   createEyeButton: (isHidden: boolean, title: string) => HTMLButtonElement;
   setEyeButtonIcon: (button: HTMLButtonElement, isHidden: boolean) => void;
   setBasemapMode: (mode: BasemapMode) => void;
+  refreshInspectConfigPanel?: () => void;
 }) {
   _setSizeState = cbs.setSizeState;
   _populateFieldDropdownFromList = cbs.populateFieldDropdownFromList;
@@ -106,6 +108,9 @@ export function initLayerCallbacks(cbs: {
   _createEyeButton = cbs.createEyeButton;
   _setEyeButtonIcon = cbs.setEyeButtonIcon;
   _setBasemapMode = cbs.setBasemapMode;
+  if (cbs.refreshInspectConfigPanel) {
+    _refreshInspectConfigPanel = cbs.refreshInspectConfigPanel;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -315,7 +320,10 @@ export function createLayerState(name: string, dataStoreId: string): LayerState 
     filterMode: 'none',
     filterActionMode: 'none',
     filterInvert: false,
-    parcelPatchMap: new Map()
+    parcelPatchMap: new Map(),
+    civilValuationId: undefined,
+    civilNeighborhoodDefinitionId: undefined,
+    civilLegalAsOf: undefined
   };
 }
 
@@ -356,6 +364,9 @@ export function persistCurrentLayerState() {
   layer.filterActionMode = S.filterActionMode;
   layer.filterInvert = S.filterInvert;
   layer.parcelPatchMap = S.parcelPatchMap;
+  layer.civilValuationId = S.civilValuationId || undefined;
+  layer.civilNeighborhoodDefinitionId = S.civilNeighborhoodDefinitionId || undefined;
+  layer.civilLegalAsOf = S.civilLegalAsOf || undefined;
 }
 
 export function applyLayerState(layer: LayerState) {
@@ -396,6 +407,9 @@ export function applyLayerState(layer: LayerState) {
   if (_filtersInvertToggle) {
     _filtersInvertToggle.checked = S.filterInvert;
   }
+  S.civilValuationId = layer.civilValuationId || null;
+  S.civilNeighborhoodDefinitionId = layer.civilNeighborhoodDefinitionId || null;
+  S.civilLegalAsOf = layer.civilLegalAsOf || null;
   S.currentDataStoreId = layer.dataStoreId;
   const store = S.dataStores.get(layer.dataStoreId);
   if (store) {
@@ -576,6 +590,7 @@ export function setCurrentLayer(layerId: string) {
   if (!layer) return;
   S.currentLayerId = layerId;
   applyLayerState(layer);
+  _refreshInspectConfigPanel();
   renderLayerList();
   if (S.currentGeoJSON && S.currentField) {
     _applyExtrusionWithVisibility();

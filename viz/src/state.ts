@@ -42,6 +42,11 @@ export const S = {
   currentStats: null as { min: number; max: number } | null,
   parcelPatchMap: new Map() as ParcelPatchMap,
 
+  // --- New global Civil OS layer config options ---
+  civilValuationId: null as string | null,
+  civilNeighborhoodDefinitionId: null as string | null,
+  civilLegalAsOf: null as string | null,
+
   // --- Visualization ---
   normalizationMode: 'asis' as 'asis' | 'perLand' | 'perBuilding',
   colorMode: 'quantiles' as ColorMode,
@@ -125,6 +130,7 @@ export const S = {
     isTimeAdjustmentFiltersCollapsed: true,
     isCompFinderMinimized: true,
     isInspectMinimized: true,
+    isInspectConfigMinimized: true,
     isWriteMinimized: true,
     isExport3DMinimized: true,
     isCompFinderSubjectCollapsed: false,

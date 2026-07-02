@@ -94,7 +94,10 @@ function serializeLayer(layer: LayerState): SerializedLayer {
     filters: layer.filters.map(f => ({...f})),
     filterMode: layer.filterMode,
     filterActionMode: layer.filterActionMode,
-    filterInvert: layer.filterInvert
+    filterInvert: layer.filterInvert,
+    civilValuationId: layer.civilValuationId,
+    civilNeighborhoodDefinitionId: layer.civilNeighborhoodDefinitionId,
+    civilLegalAsOf: layer.civilLegalAsOf
   };
 }
 
@@ -241,7 +244,10 @@ export function deserializeLayer(serialized: SerializedLayer): Partial<LayerStat
     filterActionMode: serialized.filterActionMode,
     filterInvert: serialized.filterInvert,
     selectedParcels: new Set(),  // Runtime state
-    parcelPatchMap: new Map()    // Runtime state (future: deserialize if present)
+    parcelPatchMap: new Map(),    // Runtime state (future: deserialize if present)
+    civilValuationId: serialized.civilValuationId,
+    civilNeighborhoodDefinitionId: serialized.civilNeighborhoodDefinitionId,
+    civilLegalAsOf: serialized.civilLegalAsOf
   };
 }
 

@@ -2471,7 +2471,7 @@ function formatPopupValue(fieldType: 'numeric' | 'categorical', value: any, fiel
   if (fieldType === 'numeric') {
     const num = Number(value);
     if (!Number.isFinite(num)) return '—';
-    if (fieldName && (fieldName.includes('year') || fieldName.includes('Year') || fieldName === 'primary_year_built' || fieldName === 'primary_effective_year_built' || fieldName === 'improvement_year_built' || fieldName === 'improvement_effective_year_built')) {
+    if (fieldName && (fieldName.includes('year') || fieldName.includes('Year') || fieldName === 'primary_year_built' || fieldName === 'primary_effective_year_built' || fieldName === 'primary_improvement_year_built' || fieldName === 'primary_improvement_effective_year_built')) {
       return String(num);
     }
     return fmt(num);

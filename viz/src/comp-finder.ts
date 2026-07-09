@@ -35,15 +35,15 @@ function getParcelAttributeForField(field: string): ParcelAttribute | null {
     case "frontage_ft": return ParcelAttribute.FRONTAGE_FT;
     case "depth_ft": return ParcelAttribute.DEPTH_FT;
     case "improvement_area_sq_ft": return ParcelAttribute.IMPROVEMENT_AREA_SQ_FT;
-    case "improvement_year_built": return ParcelAttribute.IMPROVEMENT_YEAR_BUILT;
-    case "improvement_effective_year_built": return ParcelAttribute.IMPROVEMENT_EFFECTIVE_YEAR_BUILT;
+    case "primary_improvement_year_built": return ParcelAttribute.PRIMARY_IMPROVEMENT_YEAR_BUILT;
+    case "primary_improvement_effective_year_built": return ParcelAttribute.PRIMARY_IMPROVEMENT_EFFECTIVE_YEAR_BUILT;
     case "bedrooms": return ParcelAttribute.BEDROOMS;
     case "bathrooms": return ParcelAttribute.BATHROOMS;
     case "units": return ParcelAttribute.UNITS;
     case "land_use_id": return ParcelAttribute.LAND_USE_ID;
     case "zoning_ids": return ParcelAttribute.ZONING_ID;
-    case "condition_id": return ParcelAttribute.CONDITION_ID;
-    case "improvement_type_id": return ParcelAttribute.IMPROVEMENT_TYPE_ID;
+    case "primary_improvement_condition_id": return ParcelAttribute.PRIMARY_IMPROVEMENT_CONDITION_ID;
+    case "primary_improvement_type_id": return ParcelAttribute.PRIMARY_IMPROVEMENT_TYPE_ID;
   }
   return null;
 }
@@ -225,6 +225,52 @@ let criteria: Criterion[] = [];
 let extraFields: Array<{ field: string; type: 'numeric' | 'categorical' }> = [];
 let comps: CompRow[] = [];
 
+let fetchedExtraFieldValues: Record<string, Record<string, any>> = {};
+
+const fieldToClientMethod: Record<string, string> = {
+  "land_area_sq_ft": "getLandAreaSqftByParcelId",
+  "frontage_ft": "getFrontageFtByParcelId",
+  "depth_ft": "getDepthFtByParcelId",
+  "land_use_id": "getLandUseIdSqftByParcelId",
+  "zoning_ids": "getZoningIdByParcelId",
+  "improvement_area_sq_ft": "getImprovementAreaSqftByParcelId",
+  "bedrooms": "getBedroomsByParcelId",
+  "bathrooms": "getBathroomsByParcelId",
+  "units": "getUnitsByParcelId",
+  "primary_improvement_year_built": "getPrimaryImprovementYearBuiltByParcelId",
+  "primary_improvement_effective_year_built": "getPrimaryImprovementEffectiveYearBuiltByParcelId",
+  "primary_improvement_condition_id": "getPrimaryImprovementConditionIdByParcelId",
+  "primary_improvement_type_id": "getPrimaryImprovementTypeIdByParcelId"
+};
+
+async function fetchExtraFieldValues(field: string) {
+  const compStore = getCompDataStore();
+  if (!compStore || !compStore.isCivil) return;
+
+  const compIds = comps.map((c) => c.parcelId).filter(Boolean);
+  if (subject && subject.parcelId) {
+    compIds.push(subject.parcelId);
+  }
+
+  if (compIds.length === 0) return;
+
+  const methodName = fieldToClientMethod[field];
+  if (!methodName) return;
+
+  const gateway = compStore.civilGateway!.replace(/\/$/, '');
+  const token = compStore.civilToken!;
+
+  try {
+    const client = getCivilClient(ParcelsService, gateway, token) as any;
+    const res = await client[methodName]({ parcelIds: compIds });
+    if (res && res.values) {
+      fetchedExtraFieldValues[field] = res.values;
+    }
+  } catch (err) {
+    console.error(`Failed to fetch values for field ${field}:`, err);
+  }
+}
+
 function getFeatureFromMap(featureId: number | string | bigint): GeoJSON.Feature | null {
   const compStore = getCompDataStore();
   if (!compStore) return null;
@@ -316,11 +362,11 @@ function resolveCategoricalValue(store: DataStore, field: string, rawVal: any): 
     });
     return codes.filter(Boolean).join(', ') || '—';
   }
-  if (field === 'improvement_type_id') {
+  if (field === 'improvement_type_id' || field === 'primary_improvement_type_id') {
     const lookup = store.civilImprovementTypeMap?.[rawVal];
     return lookup ? (lookup.name || lookup.code || String(rawVal)) : String(rawVal);
   }
-  if (field === 'condition_id') {
+  if (field === 'condition_id' || field === 'primary_improvement_condition_id') {
     const lookup = store.civilImprovementConditionMap?.[rawVal];
     return lookup ? (lookup.name || lookup.code || String(rawVal)) : String(rawVal);
   }
@@ -570,8 +616,8 @@ function getAvailableFieldsForDataStore(dataStore: DataStore | null) {
       "frontage_ft",
       "depth_ft",
       "improvement_area_sq_ft",
-      "improvement_year_built",
-      "improvement_effective_year_built",
+      "primary_improvement_year_built",
+      "primary_improvement_effective_year_built",
       "bedrooms",
       "bathrooms",
       "units"
@@ -580,8 +626,8 @@ function getAvailableFieldsForDataStore(dataStore: DataStore | null) {
     const categorical = [
       "land_use_id",
       "zoning_ids",
-      "condition_id",
-      "improvement_type_id"
+      "primary_improvement_condition_id",
+      "primary_improvement_type_id"
     ];
 
     return { numeric, categorical };
@@ -614,8 +660,19 @@ function getFieldType(field: string): 'numeric' | 'categorical' | null {
 
 function formatSubjectValue(field: string | null, type: 'numeric' | 'categorical' | null): string {
   if (!subject || !field || !type) return '—';
-  const value = getFieldValue(subject.feature, field);
+  let value = getFieldValue(subject.feature, field);
+  const compStore = getCompDataStore();
+  if (compStore && compStore.isCivil && fetchedExtraFieldValues[field] && subject.parcelId) {
+    const fetchedVal = fetchedExtraFieldValues[field][subject.parcelId];
+    if (fetchedVal !== undefined) {
+      value = fetchedVal;
+    }
+  }
   if (value === null || value === undefined || value === '') return '—';
+  if (type === 'categorical') {
+    const resolved = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, field, value) : value;
+    return String(resolved);
+  }
   return type === 'numeric' ? fmt(value) : String(value);
 }
 
@@ -642,8 +699,8 @@ function getCategoricalValuesForField(field: string): Array<{value: string, labe
     let mapToUse: Record<string, any> | undefined;
     if (field === "zoning_ids") mapToUse = store.civilZoningMap;
     else if (field === "land_use_id") mapToUse = store.civilLandUseMap;
-    else if (field === "improvement_type_id") mapToUse = store.civilImprovementTypeMap;
-    else if (field === "condition_id") mapToUse = store.civilImprovementConditionMap;
+    else if (field === "improvement_type_id" || field === "primary_improvement_type_id") mapToUse = store.civilImprovementTypeMap;
+    else if (field === "condition_id" || field === "primary_improvement_condition_id") mapToUse = store.civilImprovementConditionMap;
     
     if (mapToUse) {
       return Object.values(mapToUse).map((v: any) => {
@@ -1147,9 +1204,56 @@ function renderCompsTable() {
         const cls = getDeltaClass(delta || {});
         if (cls) td.classList.add(cls);
       } else {
-        const val = getFieldValue(comp.feature, entry.field);
-        const resolved = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, entry.field, val) : val;
-        text = resolved === null || resolved === undefined || resolved === '' ? '—' : (entry.type === 'numeric' ? fmt(resolved) : String(resolved));
+        let subjVal = subject ? getFieldValue(subject.feature, entry.field) : null;
+        if (subject && compStore && compStore.isCivil && fetchedExtraFieldValues[entry.field] && subject.parcelId) {
+          const fetchedVal = fetchedExtraFieldValues[entry.field][subject.parcelId];
+          if (fetchedVal !== undefined) {
+            subjVal = fetchedVal;
+          }
+        }
+
+        let compVal = getFieldValue(comp.feature, entry.field);
+        if (compStore && compStore.isCivil && fetchedExtraFieldValues[entry.field]) {
+          const fetchedVal = fetchedExtraFieldValues[entry.field][comp.parcelId];
+          if (fetchedVal !== undefined) {
+            compVal = fetchedVal;
+          }
+        }
+
+        if (compVal === null || compVal === undefined || compVal === '') {
+          text = '—';
+        } else if (subjVal === null || subjVal === undefined || subjVal === '') {
+          const resolved = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, entry.field, compVal) : compVal;
+          text = entry.type === 'numeric' ? fmt(resolved) : String(resolved);
+        } else {
+          if (entry.type === 'numeric') {
+            const compNum = Number(compVal);
+            const subjNum = Number(subjVal);
+            if (isNaN(compNum) || isNaN(subjNum)) {
+              text = 'ERROR';
+              td.title = 'Invalid numeric value';
+              td.classList.add('comp-finder-delta-negative');
+            } else {
+              const diff = compNum - subjNum;
+              if (diff === 0) {
+                text = '=';
+              } else {
+                const sign = diff > 0 ? '+' : '';
+                text = `${sign}${fmt(diff)}`;
+                td.classList.add(diff > 0 ? 'comp-finder-delta-positive' : 'comp-finder-delta-negative');
+              }
+            }
+          } else {
+            const compStr = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, entry.field, compVal) : String(compVal);
+            const subjStr = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, entry.field, subjVal) : String(subjVal);
+            if (compStr === subjStr) {
+              text = '=';
+            } else {
+              text = `${compStr} (Different)`;
+              td.classList.add('comp-finder-delta-negative');
+            }
+          }
+        }
       }
       td.appendChild(buildCompColumnButton(text, comp));
       row.appendChild(td);
@@ -1337,8 +1441,8 @@ async function findCivilComps(): Promise<StandardCompResults> {
        let mapToUse: Record<string, any> | undefined;
        if (entry.field === "zoning_ids") mapToUse = compStore.civilZoningMap;
        else if (entry.field === "land_use_id") mapToUse = compStore.civilLandUseMap;
-       else if (entry.field === "improvement_type_id") mapToUse = compStore.civilImprovementTypeMap;
-       else if (entry.field === "condition_id") mapToUse = compStore.civilImprovementConditionMap;
+       else if (entry.field === "improvement_type_id" || entry.field === "primary_improvement_type_id") mapToUse = compStore.civilImprovementTypeMap;
+       else if (entry.field === "condition_id" || entry.field === "primary_improvement_condition_id") mapToUse = compStore.civilImprovementConditionMap;
 
        const apiTolerance = selectedNames.map(val => {
          if (mapToUse) {
@@ -1601,6 +1705,7 @@ async function findComps() {
 
 async function findCompsImpl() {
   (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCompsImpl ENTERED! subject exists: ${!!subject}`);
+  fetchedExtraFieldValues = {};
   if (!subject) return;
   (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] findCompsImpl checking threshold. hasAnyThresholdEnabled: ${hasAnyThresholdEnabled()}`);
   if (!hasAnyThresholdEnabled()) {
@@ -1991,12 +2096,22 @@ export function initCompFinderElements() {
     findComps();
   });
 
-  els.addFieldButton.addEventListener('click', () => {
+  els.addFieldButton.addEventListener('click', async () => {
     const field = els.addFieldSelect.value;
     if (!field) return;
     const type = getFieldType(field);
     if (!type) return;
     if (extraFields.some((entry) => entry.field === field)) return;
+
+    els.addFieldButton.disabled = true;
+    try {
+      await fetchExtraFieldValues(field);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      els.addFieldButton.disabled = false;
+    }
+
     extraFields.push({ field, type });
     renderCriteriaTable();
     renderCompsTable();

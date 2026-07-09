@@ -29,6 +29,10 @@ function t(key: string): string {
   return langDict[key] || key;
 }
 
+function safeStringify(obj: any): string {
+  return JSON.stringify(obj, (_key, value) => typeof value === 'bigint' ? value.toString() : value);
+}
+
 function getParcelAttributeForField(field: string): ParcelAttribute | null {
   switch (field) {
     case "land_area_sq_ft": return ParcelAttribute.LAND_AREA_SQ_FT;
@@ -277,7 +281,7 @@ async function fetchExtraFieldValues(field: string) {
     }
     (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Calling client.${methodName} on ${gateway} with ${JSON.stringify({ parcelIds: compIds })}`);
     const res = await client[methodName]({ parcelIds: compIds });
-    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] client.${methodName} response: ${JSON.stringify(res)}`);
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] client.${methodName} response: ${safeStringify(res)}`);
     if (res && res.values) {
       fetchedExtraFieldValues[field] = res.values;
     } else {
@@ -1390,7 +1394,17 @@ async function findCivilComps(): Promise<StandardCompResults> {
       }
 
       const res = await client.getParcelsWithImprovementSummaryByFeatureId(req);
-      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] getParcelsWithImprovementSummaryByFeatureId returned: ${JSON.stringify(res)}`);
+      if (res.parcels) {
+        for (const key of Object.keys(res.parcels)) {
+          const parcelSummary = res.parcels[key];
+          if (parcelSummary.parcelDetails) {
+            const p = parcelSummary.parcelDetails;
+            if (p.featureId !== undefined && p.featureId !== null) p.featureId = Number(p.featureId) as any;
+            if (p.feature_id !== undefined && p.feature_id !== null) p.feature_id = Number(p.feature_id) as any;
+          }
+        }
+      }
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] getParcelsWithImprovementSummaryByFeatureId returned: ${safeStringify(res)}`);
       
       const parcelSummary = Object.values(res.parcels || {})[0] as any;
       if (parcelSummary && parcelSummary.parcelDetails) {
@@ -1550,7 +1564,15 @@ async function findCivilComps(): Promise<StandardCompResults> {
     return r.json();
   });
 
-  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Raw eqRes: ${JSON.stringify(eqRes)}`);
+  if (eqRes.parcels) {
+    for (const key of Object.keys(eqRes.parcels)) {
+      const parcel = eqRes.parcels[key];
+      if (parcel.featureId !== undefined && parcel.featureId !== null) parcel.featureId = Number(parcel.featureId);
+      if (parcel.feature_id !== undefined && parcel.feature_id !== null) parcel.feature_id = Number(parcel.feature_id);
+    }
+  }
+
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Raw eqRes: ${safeStringify(eqRes)}`);
 
   const allParcels = Object.values(eqRes.parcels || {}) as any[];
 
@@ -1563,7 +1585,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
     return matchesUUID || matchesFeatureId;
   });
 
-  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] subjComp: ${JSON.stringify(subjComp)}`);
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] subjComp: ${safeStringify(subjComp)}`);
 
   if (subjComp) {
     const sParcelId = subjComp.parcelId || subjComp.parcel_id;
@@ -1612,7 +1634,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
     
     const syntheticProperties: any = {};
     (c.attributes || []).forEach((attr: any) => {
-       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate ${cParcelId} attr raw: ${JSON.stringify(attr)}`);
+       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate ${cParcelId} attr raw: ${safeStringify(attr)}`);
        let key = getAttributeKey(attr.attribute);
        if (key === 'zoning_id') key = 'zoning_ids';
        if (key) {

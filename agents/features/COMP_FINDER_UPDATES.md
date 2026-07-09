@@ -15,3 +15,21 @@ Refer to the SKILL.md in this folder for details on how to use this file.
 - Updated `comp-finder.ts` and `main.ts` to map and format using the new keys.
 - Implemented asynchronous attribute fetching for extra fields via client single-attribute gRPC endpoints.
 - Calculated and rendered deviations in the comps table for numeric extra fields, and appended a `(Different)` marker for categorical differences.
+
+### Add Comp Finding Debug
+Instrument the code that implements the comp table and its logic with debug code to help deal with issues involving populating it
+- Added detailed log outputs tracing candidate attributes, mapping keys, API response structures, and single-attribute fetching.
+
+### Do Not Retrieve Both Equity and Sales Comps
+For now, only retrieve equity comps by calling GetEquityComparables
+- Removed the `GetSalesComparables` call and refined the mapping logic to only retrieve comps from `GetEquityComparables`.
+
+### Post-Search Attribute Adding to Comp Table Empty
+When adding a new attribute row to the comp table, it is still failing to actually populate a value. Instead, numeric rows have "-" for every column, and categorical rows have "=" for every column except for the Subject column, which is "-"
+- Fixed key resolution for candidates (handling both `parcelId`/`parcel_id`, `featureId`/`feature_id`, and `formattedAddress`/`formatted_address` mapping casing in JSON responses) so that IDs are properly collected and passed.
+- Added mapped attributes directly to the subject's feature properties block to ensure consistency with comp parcels.
+
+### Attribute Rows Returned by Initial Comp query showing "ERROR"
+Apart from the problem of getting attribute values after the comp search, any attribute values that should have been returned by the comp search (in the response of GetEquityComparables, which is determined by the filters added to the request) are having values of "ERROR" on the comp table, except for the address and the parcel ID
+- Aligned field names between subject fallback attributes and comp attributes (mapping `total_bedrooms` to `bedrooms`, `total_bathrooms` to `bathrooms`, etc. in subject mapping).
+- Added an extra client query calling `getPrimaryImprovementTypeIdByParcelId` for the subject parcel to correctly fetch and map `primary_improvement_type_id`.

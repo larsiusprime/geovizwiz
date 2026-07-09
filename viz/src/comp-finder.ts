@@ -247,26 +247,39 @@ async function fetchExtraFieldValues(field: string) {
   const compStore = getCompDataStore();
   if (!compStore || !compStore.isCivil) return;
 
-  const compIds = comps.map((c) => c.parcelId).filter(Boolean);
-  if (subject && subject.parcelId) {
+  const compIds = comps.map((c) => c.parcelId).filter(pid => pid && pid !== '—');
+  if (subject && subject.parcelId && subject.parcelId !== '—') {
     compIds.push(subject.parcelId);
   }
 
-  if (compIds.length === 0) return;
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] fetchExtraFieldValues for field: ${field}, compIds: ${JSON.stringify(compIds)}`);
+
+  if (compIds.length === 0) {
+    (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] fetchExtraFieldValues: no valid parcel IDs to query.`);
+    return;
+  }
 
   const methodName = fieldToClientMethod[field];
-  if (!methodName) return;
+  if (!methodName) {
+    (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] fetchExtraFieldValues: method name not found for field ${field}`);
+    return;
+  }
 
   const gateway = compStore.civilGateway!.replace(/\/$/, '');
   const token = compStore.civilToken!;
 
   try {
     const client = getCivilClient(ParcelsService, gateway, token) as any;
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Calling client.${methodName} on ${gateway} with ${JSON.stringify({ parcelIds: compIds })}`);
     const res = await client[methodName]({ parcelIds: compIds });
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] client.${methodName} response: ${JSON.stringify(res)}`);
     if (res && res.values) {
       fetchedExtraFieldValues[field] = res.values;
+    } else {
+      (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] client.${methodName} returned no values.`);
     }
-  } catch (err) {
+  } catch (err: any) {
+    (window as any).vizDesktop?.log?.('error', `[CompFinder Debug] Failed to fetch values for field ${field}: ${err?.message || err}`);
     console.error(`Failed to fetch values for field ${field}:`, err);
   }
 }
@@ -1220,6 +1233,8 @@ function renderCompsTable() {
           }
         }
 
+        (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] renderCompsTable extra field ${entry.field}: comp=${comp.parcelId}, compVal=${compVal}, subjVal=${subjVal}`);
+
         if (compVal === null || compVal === undefined || compVal === '') {
           text = '—';
         } else if (subjVal === null || subjVal === undefined || subjVal === '') {
@@ -1405,6 +1420,26 @@ async function findCivilComps(): Promise<StandardCompResults> {
           props.primary_condition_id = imp.primaryConditionId || '';
           props.total_market_improvement_value = imp.totalMarketImprovementValue || '';
           props.total_assessed_improvement_value = imp.totalAssessedImprovementValue || '';
+
+          // Add consistent mapping for comp-finder field names
+          props.improvement_area_sq_ft = imp.totalAreaSqFt || 0;
+          props.bathrooms = imp.totalBathrooms || 0;
+          props.bedrooms = imp.totalBedrooms || 0;
+          props.units = imp.totalUnits || 0;
+          props.primary_improvement_year_built = imp.primaryYearBuilt || '';
+          props.primary_improvement_effective_year_built = imp.primaryEffectiveYearBuilt || '';
+          props.primary_improvement_condition_id = imp.primaryConditionId || '';
+        }
+
+        if (subject!.parcelId) {
+          try {
+            const typeRes = await client.getPrimaryImprovementTypeIdByParcelId({ parcelIds: [subject!.parcelId] });
+            if (typeRes && typeRes.values && typeRes.values[subject!.parcelId]) {
+              props.primary_improvement_type_id = typeRes.values[subject!.parcelId];
+            }
+          } catch (e) {
+            (window as any).vizDesktop?.log?.('warn', `[CompFinder Debug] Failed to fetch subject primary improvement type ID: ${e}`);
+          }
         }
 
         (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Mapped subject attributes: ${JSON.stringify(props)}`);
@@ -1478,52 +1513,45 @@ async function findCivilComps(): Promise<StandardCompResults> {
     ? Array.from(selectedParcels).map(fid => compStore.civilFeatureToParcelIdMap?.get(Number(fid))).filter(Boolean) as string[]
     : [];
 
-  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Sending GetEquityComparables and GetSalesComparables... WKT: ${wkt}, criteria: ${JSON.stringify(criteriaArr)}`);
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Sending GetEquityComparables... WKT: ${wkt}, criteria: ${JSON.stringify(criteriaArr)}, selected: ${JSON.stringify(selectedParcelIds)}`);
 
   const headers = {
     'Content-Type': 'application/json',
     'Authorization': `Bearer ${token}`
   };
 
-  const [eqRes, saleRes] = await Promise.all([
-    fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetEquityComparables`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds })
-    }).then(r => {
-      if (!r.ok) throw new Error(`GetEquityComparables HTTP ${r.status}: ${r.statusText}`);
-      return r.json();
-    }),
-    fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetSalesComparables`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds })
-    }).then(r => {
-      if (!r.ok) throw new Error(`GetSalesComparables HTTP ${r.status}: ${r.statusText}`);
-      return r.json();
-    })
-  ]);
+  const eqRes = await fetch(`${gateway}/civil.public.parcels.v1.ParcelsService/GetEquityComparables`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ wktPolygon: wkt, criteria: criteriaArr, selectedParcelIds })
+  }).then(r => {
+    if (!r.ok) throw new Error(`GetEquityComparables HTTP ${r.status}: ${r.statusText}`);
+    return r.json();
+  });
 
-  const allParcels = [
-    ...Object.values(eqRes.parcels || {}),
-    ...Object.values(saleRes.parcels || {})
-  ] as any[];
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Raw eqRes: ${JSON.stringify(eqRes)}`);
 
-  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Received response. Equity: ${Object.keys(eqRes.parcels || {}).length} parcels, Sales: ${Object.keys(saleRes.parcels || {}).length} parcels`);
+  const allParcels = Object.values(eqRes.parcels || {}) as any[];
+
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Received response. Equity: ${allParcels.length} parcels`);
 
   // Try to find subject parcel and map attributes
   const subjComp = allParcels.find(c => {
-    const matchesUUID = c.parcelId === subjectParcelId;
-    const matchesFeatureId = subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum;
+    const matchesUUID = (c.parcelId || c.parcel_id) === subjectParcelId;
+    const matchesFeatureId = subjectFeatureIdNum !== null && (c.featureId || c.feature_id) !== undefined && Number(c.featureId || c.feature_id) === subjectFeatureIdNum;
     return matchesUUID || matchesFeatureId;
   });
 
+  (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] subjComp: ${JSON.stringify(subjComp)}`);
+
   if (subjComp) {
-    if (!subject!.address && subjComp.formattedAddress) {
-      subject!.address = subjComp.formattedAddress;
+    const sParcelId = subjComp.parcelId || subjComp.parcel_id;
+    const sFormattedAddress = subjComp.formattedAddress || subjComp.formatted_address;
+    if (!subject!.address && sFormattedAddress) {
+      subject!.address = sFormattedAddress;
     }
-    if (!subject!.parcelId && subjComp.parcelId) {
-      subject!.parcelId = subjComp.parcelId;
+    if (!subject!.parcelId && sParcelId) {
+      subject!.parcelId = sParcelId;
     }
     subject!.feature = { ...subject!.feature, properties: { ...(subject!.feature.properties || {}) } };
     const subjectFeatureRef = subject!.feature;
@@ -1547,17 +1575,23 @@ async function findCivilComps(): Promise<StandardCompResults> {
 
   const fetchedIds = new Set<string>();
   for (const c of allParcels) {
-    if (subject!.parcelId && c.parcelId === subject!.parcelId) continue;
-    if (subjectFeatureIdNum !== null && c.featureId !== undefined && Number(c.featureId) === subjectFeatureIdNum) continue;
-    if (fetchedIds.has(c.parcelId)) continue;
-    fetchedIds.add(c.parcelId);
+    const cParcelId = c.parcelId || c.parcel_id;
+    const cFeatureId = c.featureId || c.feature_id;
+    const cFormattedAddress = c.formattedAddress || c.formatted_address;
 
-    const featureIdStr = String(c.featureId);
-    let baseFeature = getFeatureFromMap(c.featureId);
+    (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate: id=${cParcelId}, featureId=${cFeatureId}, address=${cFormattedAddress}`);
+
+    if (subject!.parcelId && cParcelId === subject!.parcelId) continue;
+    if (subjectFeatureIdNum !== null && cFeatureId !== undefined && Number(cFeatureId) === subjectFeatureIdNum) continue;
+    if (cParcelId && fetchedIds.has(cParcelId)) continue;
+    if (cParcelId) fetchedIds.add(cParcelId);
+
+    const featureIdStr = cFeatureId !== undefined ? String(cFeatureId) : '';
+    let baseFeature = getFeatureFromMap(cFeatureId);
     
     const syntheticProperties: any = {};
     (c.attributes || []).forEach((attr: any) => {
-       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] attr raw: ${JSON.stringify(attr)}`);
+       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate ${cParcelId} attr raw: ${JSON.stringify(attr)}`);
        let key = getAttributeKey(attr.attribute);
        if (key === 'zoning_id') key = 'zoning_ids';
        if (key) {
@@ -1568,7 +1602,7 @@ async function findCivilComps(): Promise<StandardCompResults> {
            ? attr.categoricalValue 
            : attr.categorical_value;
          syntheticProperties[key] = numVal !== undefined && numVal !== null ? numVal : catVal;
-         (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] attr mapped key: ${key} = ${syntheticProperties[key]}`);
+         (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate ${cParcelId} mapped key: ${key} = ${syntheticProperties[key]}`);
        }
     });
 
@@ -1597,13 +1631,14 @@ async function findCivilComps(): Promise<StandardCompResults> {
       compVal = resolveCategoricalValue(compStore, entry.field, compVal);
       subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
       deltas[entry.field] = buildDelta(compVal, subjVal, entry.type);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate ${cParcelId} delta for ${entry.field}: compVal=${compVal}, subjVal=${subjVal}, delta=${JSON.stringify(deltas[entry.field])}`);
     });
 
-    const parcelRowId = c.parcelId || uid('comp');
+    const parcelRowId = cParcelId || uid('comp');
     resultParcels.push({
       id: parcelRowId,
-      parcelId: c.parcelId || '—',
-      address: c.formattedAddress || '—',
+      parcelId: cParcelId || '—',
+      address: cFormattedAddress || '—',
       feature,
       featureId: featureIdStr
     });

@@ -1,5 +1,11 @@
 import { S } from './state.js';
 import type { DataStore } from './types.js';
+
+const urlParamsInit = new URLSearchParams(window.location.search);
+if (urlParamsInit.has('code') && urlParamsInit.has('state')) {
+  (window as any)._isProcessingOIDCCallback = true;
+}
+
 import { createLayerState, registerLayer } from './layers.js';
 import { addOrUpdateSourceForLayer } from './rendering.js';
 import { renderSettingsDataSourcesSection, revealUI } from './main.js';
@@ -242,54 +248,56 @@ export async function handleOIDCCallback() {
 
   if (!code || !state) return;
 
-  // Wait for project bootstrap to complete in desktop mode
-  await whenProjectLoaded();
+  (window as any)._isProcessingOIDCCallback = true;
 
-  const storedState = localStorage.getItem('civil_oidc_state');
-  const verifier = localStorage.getItem('civil_oidc_verifier');
-  const gateway = localStorage.getItem('civil_oidc_gateway');
-  const issuer = localStorage.getItem('civil_oidc_issuer');
-  const configStr = localStorage.getItem('civil_oidc_config');
+  try {
+    // Wait for project bootstrap to complete in desktop mode
+    await whenProjectLoaded();
 
-  // Clear OIDC flow details from local storage
-  localStorage.removeItem('civil_oidc_state');
-  localStorage.removeItem('civil_oidc_verifier');
-  localStorage.removeItem('civil_oidc_gateway');
-  localStorage.removeItem('civil_oidc_issuer');
-  localStorage.removeItem('civil_oidc_config');
+    const storedState = localStorage.getItem('civil_oidc_state');
+    const verifier = localStorage.getItem('civil_oidc_verifier');
+    const gateway = localStorage.getItem('civil_oidc_gateway');
+    const issuer = localStorage.getItem('civil_oidc_issuer');
+    const configStr = localStorage.getItem('civil_oidc_config');
 
-  // Clean parameters from browser URL bar
-  window.history.replaceState({}, document.title, window.location.pathname);
+    // Clear OIDC flow details from local storage
+    localStorage.removeItem('civil_oidc_state');
+    localStorage.removeItem('civil_oidc_verifier');
+    localStorage.removeItem('civil_oidc_gateway');
+    localStorage.removeItem('civil_oidc_issuer');
+    localStorage.removeItem('civil_oidc_config');
 
-  if (state !== storedState || !verifier || !gateway || !issuer || !configStr) {
-    if (window.location.href.startsWith('file://')) {
-      const msg = `OIDC state mismatch or missing stored verifier inside the Electron app context. State: ${state}, StoredState: ${storedState}`;
-      window.vizDesktop?.log('warn', msg);
-      console.warn(msg, {
-        state, storedState, verifier, gateway, issuer, configStr
-      });
+    // Clean parameters from browser URL bar
+    window.history.replaceState({}, document.title, window.location.pathname);
+
+    if (state !== storedState || !verifier || !gateway || !issuer || !configStr) {
+      if (window.location.href.startsWith('file://')) {
+        const msg = `OIDC state mismatch or missing stored verifier inside the Electron app context. State: ${state}, StoredState: ${storedState}`;
+        window.vizDesktop?.log('warn', msg);
+        console.warn(msg, {
+          state, storedState, verifier, gateway, issuer, configStr
+        });
+        return;
+      }
+
+      console.warn("OIDC state mismatch or missing stored verifier locally. Attempting to forward to local desktop app callback server...");
+      try {
+        const forwardUrl = `http://localhost:5173/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
+        await fetch(forwardUrl, { mode: 'no-cors' });
+        document.body.innerHTML = `
+          <div style="font-family: sans-serif; text-align: center; padding-top: 50px; background: #0f172a; color: #f8fafc; height: 100vh; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+            <h2 style="color: #38bdf8; margin-bottom: 8px;">Forwarded to Desktop App</h2>
+            <p style="color: #94a3b8; font-size: 14px;">The authentication has been sent to your OpenCAMA desktop application. You can close this tab now.</p>
+          </div>
+        `;
+      } catch (err) {
+        console.error("Failed to forward OIDC callback to local desktop server:", err);
+      }
       return;
     }
 
-    console.warn("OIDC state mismatch or missing stored verifier locally. Attempting to forward to local desktop app callback server...");
-    try {
-      const forwardUrl = `http://localhost:5173/?code=${encodeURIComponent(code)}&state=${encodeURIComponent(state)}`;
-      await fetch(forwardUrl, { mode: 'no-cors' });
-      document.body.innerHTML = `
-        <div style="font-family: sans-serif; text-align: center; padding-top: 50px; background: #0f172a; color: #f8fafc; height: 100vh; margin: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-          <h2 style="color: #38bdf8; margin-bottom: 8px;">Forwarded to Desktop App</h2>
-          <p style="color: #94a3b8; font-size: 14px;">The authentication has been sent to your OpenCAMA desktop application. You can close this tab now.</p>
-        </div>
-      `;
-    } catch (err) {
-      console.error("Failed to forward OIDC callback to local desktop server:", err);
-    }
-    return;
-  }
+    const oidcConfig = JSON.parse(configStr);
 
-  const oidcConfig = JSON.parse(configStr);
-
-  try {
     const tokenEndpoint = oidcConfig.token_endpoint;
     const redirectUri = getOIDCRedirectUri();
 
@@ -458,6 +466,8 @@ export async function handleOIDCCallback() {
     }
     console.error("Failed OIDC token exchange:", err);
     alert("Failed to sign in to Civil OS instance.");
+  } finally {
+    (window as any)._isProcessingOIDCCallback = false;
   }
 }
 
@@ -467,6 +477,9 @@ export function initCivilIntegration() {
   window.fetch = async function(input, init) {
     const response = await originalFetch(input, init);
     if (response.status === 401) {
+      if ((window as any)._isProcessingOIDCCallback) {
+        return response;
+      }
       // If we are currently handling an OIDC redirect callback, do not trigger a redirect again
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.has('code')) {

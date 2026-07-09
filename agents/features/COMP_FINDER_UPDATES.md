@@ -52,3 +52,29 @@ OIDC Desktop redirect server listening on port 5173
 - Wrapped the OIDC callback logic in a `try...finally` block to guarantee `_isProcessingOIDCCallback` is reset only when token exchange is completed.
 - Prevented the 401 fetch interceptor from triggering a login redirect while the callback is actively processing the token exchange.
 PS C:\Users\jacks\development\geovizwiz\viz>
+
+### Add comp attribute error
+[Renderer][ERROR] [CompFinder Debug] Failed to fetch values for field land_area_sq_ft: d[a] is not a function
+[Renderer][INFO] [CompFinder Debug] renderCompsTable extra field land_area_sq_ft: comp=068c7ef8-9fe3-48ae-a277-ffaa7c7e5376, compVal=undefined, subjVal=undefined
+[Renderer][INFO] [CompFinder Debug] renderCompsTable extra field land_area_sq_ft: comp=0e0cbe23-a69b-4319-b360-d5d07d2921ca, compVal=undefined, subjVal=undefined
+[Renderer][INFO] [CompFinder Debug] renderCompsTable extra field land_area_sq_ft: comp=118a6107-d1cb-44e0-a25e-7abccf66ed33, compVal=undefined, subjVal=undefined
+- Added reflection logs to output client and service methods to diagnose dynamic calling mechanism.
+
+### Returned comp attribute error
+[Renderer][INFO] [CompFinder Debug] candidate: id=ebfa3c88-c013-47af-a299-96dd2ac769f3, featureId=8303652851611119, address=1951 DEER PARK AVE, Louisville, KY
+[Renderer][INFO] [CompFinder Debug] getFeatureFromMap: fidNum=8303652851611119, sourceId=gp-source-layer-1, sourceLayer=parcels, layerId=gp-extrusions-layer-1
+[Renderer][INFO] [CompFinder Debug] querySourceFeatures count: 447
+[Renderer][INFO] [CompFinder Debug] querySourceFeatures sample ids: 1771141077708688, 3297346143172814, 2188336391740173, 1732332712851990, 4283449563365236
+[Renderer][INFO] [CompFinder Debug] Found feature in querySourceFeatures! Keys: type,_vectorTileFeature,properties,id,tile, type: Feature, hasGeometry: true
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=null (raw: ΓÇö)
+[Renderer][INFO] [CompFinder Debug] candidate ebfa3c88-c013-47af-a299-96dd2ac769f3 delta for land_area_sq_ft: compVal=ΓÇö, subjVal=ΓÇö, delta={"text":"ERROR","error":"Missing numeric value","sign":"error"}
+[Renderer][INFO] [CompFinder Debug] candidate: id=f08eb111-b0a2-4919-8d02-6dd0e2ba24ac, featureId=4747553589068980, address=1927 DEER PARK AVE, Louisville, KY
+[Renderer][INFO] [CompFinder Debug] getFeatureFromMap: fidNum=4747553589068980, sourceId=gp-source-layer-1, sourceLayer=parcels, layerId=gp-extrusions-layer-1
+[Renderer][INFO] [CompFinder Debug] querySourceFeatures count: 447
+[Renderer][INFO] [CompFinder Debug] querySourceFeatures sample ids: 1771141077708688, 3297346143172814, 2188336391740173, 1732332712851990, 4283449563365236
+[Renderer][INFO] [CompFinder Debug] Found feature in querySourceFeatures! Keys: type,_vectorTileFeature,properties,id,tile, type: Feature, hasGeometry: true
+[Renderer][ERROR] [CompFinder Debug] buildDelta ERROR (numeric): compVal=null (raw: ΓÇö), subjVal=null (raw: ΓÇö)
+[Renderer][INFO] [CompFinder Debug] candidate f08eb111-b0a2-4919-8d02-6dd0e2ba24ac delta for land_area_sq_ft: compVal=ΓÇö, subjVal=ΓÇö, delta={"text":"ERROR","error":"Missing numeric value","sign":"error"}
+- Supported both camelCase and snake_case properties in the subject parcel details response to ensure correct values are retrieved and mapped.
+- Restricted `resolveCategoricalValue` calls in candidate/comps table rendering loops to `type === 'categorical'` to prevent missing numeric values from being converted to `'—'`, allowing `buildDelta` to handle empty values cleanly.
+- Wrapped logs inside `buildDelta` in `typeof window !== 'undefined'` checks to prevent test crashes in non-browser runner environments.

@@ -270,6 +270,11 @@ async function fetchExtraFieldValues(field: string) {
 
   try {
     const client = getCivilClient(ParcelsService, gateway, token) as any;
+    if (typeof window !== 'undefined') {
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] ParcelsService exists: ${!!ParcelsService}, methods keys: ${Object.keys(ParcelsService?.methods || {})}`);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] client exists: ${!!client}, keys: ${Object.keys(client || {})}`);
+      (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] typeof client[${methodName}]: ${typeof client[methodName]}`);
+    }
     (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] Calling client.${methodName} on ${gateway} with ${JSON.stringify({ parcelIds: compIds })}`);
     const res = await client[methodName]({ parcelIds: compIds });
     (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] client.${methodName} response: ${JSON.stringify(res)}`);
@@ -1238,7 +1243,7 @@ function renderCompsTable() {
         if (compVal === null || compVal === undefined || compVal === '') {
           text = '—';
         } else if (subjVal === null || subjVal === undefined || subjVal === '') {
-          const resolved = compStore && compStore.isCivil ? resolveCategoricalValue(compStore, entry.field, compVal) : compVal;
+          const resolved = (entry.type === 'categorical' && compStore && compStore.isCivil) ? resolveCategoricalValue(compStore, entry.field, compVal) : compVal;
           text = entry.type === 'numeric' ? fmt(resolved) : String(resolved);
         } else {
           if (entry.type === 'numeric') {
@@ -1399,11 +1404,17 @@ async function findCivilComps(): Promise<StandardCompResults> {
         const mutableSubjectFeature = subject!.feature;
         const props = mutableSubjectFeature.properties!;
  
-        if (p.landAreaSqFt !== undefined) props.land_area_sq_ft = p.landAreaSqFt;
-        if (p.frontageFt !== undefined) props.frontage_ft = p.frontageFt;
-        if (p.depthFt !== undefined) props.depth_ft = p.depthFt;
-        if (p.zoningIds && p.zoningIds.length > 0) props.zoning_ids = p.zoningIds;
-        if (p.landUseId) props.land_use_id = p.landUseId;
+        const landArea = p.landAreaSqFt !== undefined ? p.landAreaSqFt : p.land_area_sq_ft;
+        const frontage = p.frontageFt !== undefined ? p.frontageFt : p.frontage_ft;
+        const depth = p.depthFt !== undefined ? p.depthFt : p.depth_ft;
+        const zoningIds = p.zoningIds !== undefined ? p.zoningIds : p.zoning_ids;
+        const landUseId = p.landUseId !== undefined ? p.landUseId : p.land_use_id;
+
+        if (landArea !== undefined) props.land_area_sq_ft = landArea;
+        if (frontage !== undefined) props.frontage_ft = frontage;
+        if (depth !== undefined) props.depth_ft = depth;
+        if (zoningIds && zoningIds.length > 0) props.zoning_ids = zoningIds;
+        if (landUseId) props.land_use_id = landUseId;
         if (p.properties) {
           try {
             Object.assign(props, JSON.parse(p.properties));
@@ -1411,24 +1422,34 @@ async function findCivilComps(): Promise<StandardCompResults> {
         }
 
         if (imp) {
-          props.total_area_sq_ft = imp.totalAreaSqFt || 0;
-          props.total_bathrooms = imp.totalBathrooms || 0;
-          props.total_bedrooms = imp.totalBedrooms || 0;
-          props.total_units = imp.totalUnits || 0;
-          props.primary_year_built = imp.primaryYearBuilt || '';
-          props.primary_effective_year_built = imp.primaryEffectiveYearBuilt || '';
-          props.primary_condition_id = imp.primaryConditionId || '';
-          props.total_market_improvement_value = imp.totalMarketImprovementValue || '';
-          props.total_assessed_improvement_value = imp.totalAssessedImprovementValue || '';
+          const totalAreaSqFt = imp.totalAreaSqFt !== undefined ? imp.totalAreaSqFt : imp.total_area_sq_ft;
+          const totalBathrooms = imp.totalBathrooms !== undefined ? imp.totalBathrooms : imp.total_bathrooms;
+          const totalBedrooms = imp.totalBedrooms !== undefined ? imp.totalBedrooms : imp.total_bedrooms;
+          const totalUnits = imp.totalUnits !== undefined ? imp.totalUnits : imp.total_units;
+          const primaryYearBuilt = imp.primaryYearBuilt !== undefined ? imp.primaryYearBuilt : imp.primary_year_built;
+          const primaryEffectiveYearBuilt = imp.primaryEffectiveYearBuilt !== undefined ? imp.primaryEffectiveYearBuilt : imp.primary_effective_year_built;
+          const primaryConditionId = imp.primaryConditionId !== undefined ? imp.primaryConditionId : imp.primary_condition_id;
+          const totalMarketValue = imp.totalMarketImprovementValue !== undefined ? imp.totalMarketImprovementValue : imp.total_market_improvement_value;
+          const totalAssessedValue = imp.totalAssessedImprovementValue !== undefined ? imp.totalAssessedImprovementValue : imp.total_assessed_improvement_value;
+
+          props.total_area_sq_ft = totalAreaSqFt || 0;
+          props.total_bathrooms = totalBathrooms || 0;
+          props.total_bedrooms = totalBedrooms || 0;
+          props.total_units = totalUnits || 0;
+          props.primary_year_built = primaryYearBuilt || '';
+          props.primary_effective_year_built = primaryEffectiveYearBuilt || '';
+          props.primary_condition_id = primaryConditionId || '';
+          props.total_market_improvement_value = totalMarketValue || '';
+          props.total_assessed_improvement_value = totalAssessedValue || '';
 
           // Add consistent mapping for comp-finder field names
-          props.improvement_area_sq_ft = imp.totalAreaSqFt || 0;
-          props.bathrooms = imp.totalBathrooms || 0;
-          props.bedrooms = imp.totalBedrooms || 0;
-          props.units = imp.totalUnits || 0;
-          props.primary_improvement_year_built = imp.primaryYearBuilt || '';
-          props.primary_improvement_effective_year_built = imp.primaryEffectiveYearBuilt || '';
-          props.primary_improvement_condition_id = imp.primaryConditionId || '';
+          props.improvement_area_sq_ft = totalAreaSqFt || 0;
+          props.bathrooms = totalBathrooms || 0;
+          props.bedrooms = totalBedrooms || 0;
+          props.units = totalUnits || 0;
+          props.primary_improvement_year_built = primaryYearBuilt || '';
+          props.primary_improvement_effective_year_built = primaryEffectiveYearBuilt || '';
+          props.primary_improvement_condition_id = primaryConditionId || '';
         }
 
         if (subject!.parcelId) {
@@ -1628,8 +1649,10 @@ async function findCivilComps(): Promise<StandardCompResults> {
     criteriaFields.forEach(entry => {
       let compVal = getFieldValue(feature, entry.field);
       let subjVal = getFieldValue(subject!.feature, entry.field);
-      compVal = resolveCategoricalValue(compStore, entry.field, compVal);
-      subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
+      if (entry.type === 'categorical') {
+        compVal = resolveCategoricalValue(compStore, entry.field, compVal);
+        subjVal = resolveCategoricalValue(compStore, entry.field, subjVal);
+      }
       deltas[entry.field] = buildDelta(compVal, subjVal, entry.type);
       (window as any).vizDesktop?.log?.('info', `[CompFinder Debug] candidate ${cParcelId} delta for ${entry.field}: compVal=${compVal}, subjVal=${subjVal}, delta=${JSON.stringify(deltas[entry.field])}`);
     });

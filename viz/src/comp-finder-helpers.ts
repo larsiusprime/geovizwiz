@@ -82,7 +82,9 @@ export function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'cat
     const compVal = numOrNull(value);
     const subjVal = numOrNull(subjectValue);
     if (compVal === null || subjVal === null) {
-      (window as any).vizDesktop?.log('error', `[CompFinder Debug] buildDelta ERROR (numeric): compVal=${compVal} (raw: ${value}), subjVal=${subjVal} (raw: ${subjectValue})`);
+      if (typeof window !== 'undefined') {
+        (window as any).vizDesktop?.log('error', `[CompFinder Debug] buildDelta ERROR (numeric): compVal=${compVal} (raw: ${value}), subjVal=${subjVal} (raw: ${subjectValue})`);
+      }
       return { text: 'ERROR', error: 'Missing numeric value', sign: 'error' as const };
     }
     const delta = compVal - subjVal;
@@ -91,7 +93,9 @@ export function buildDelta(value: any, subjectValue: any, type: 'numeric' | 'cat
     return { text: `${sign}${fmt(delta)}`, sign: delta > 0 ? 'positive' as const : 'negative' as const };
   }
   if (value === null || value === undefined || subjectValue === null || subjectValue === undefined) {
-    (window as any).vizDesktop?.log('error', `[CompFinder Debug] buildDelta ERROR (categorical): compVal=${value}, subjVal=${subjectValue}`);
+    if (typeof window !== 'undefined') {
+      (window as any).vizDesktop?.log('error', `[CompFinder Debug] buildDelta ERROR (categorical): compVal=${value}, subjVal=${subjectValue}`);
+    }
     return { text: 'ERROR', error: 'Missing categorical value', sign: 'error' as const };
   }
   if (String(value) === String(subjectValue)) return { text: '=', sign: 'neutral' as const };

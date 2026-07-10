@@ -596,7 +596,7 @@ export function buildCategoricalColorPairs(): Array<[string, string]> {
     if (currentLayer && S.map && S.map.getLayer(currentLayer.layerId)) {
       const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
       for (const f of features) {
-        const pid = getParcelId(f.properties || {});
+        const pid = getParcelId(f);
         if (pid) {
           const cached = S.civilAttributeCache.get(pid);
           const val = cached ? cached[S.currentField] : undefined;
@@ -787,12 +787,21 @@ export function buildNumericColorExpression(): Expression {
 /*  Rendering application                                              */
 /* ================================================================== */
 
+export function logDebug(level: 'info' | 'error' | 'warn', message: string) {
+  (window as any).vizDesktop?.log?.(level, `[Map Painting] ${message}`);
+  console.log(`[Map Painting] [${level.toUpperCase()}] ${message}`);
+}
+
 export function applyGrayRendering() {
   const store = getActiveDataStore();
   const isCivil = store?.isCivil || false;
+  logDebug('info', `applyGrayRendering: isCivil=${isCivil}`);
   if (!isCivil && !S.currentGeoJSON) return;
   const ids = _getCurrentLayerIds();
-  if (!ids) return;
+  if (!ids) {
+    logDebug('warn', 'applyGrayRendering: _getCurrentLayerIds returned null');
+    return;
+  }
 
   // Apply gray color when no field is selected, but preserve selected-feature highlighting.
   const grayWithSelectionColor: Expression = ['case',
@@ -801,9 +810,11 @@ export function applyGrayRendering() {
   ] as any;
 
   if (isCivil) {
+    logDebug('info', `applyGrayRendering: setting fill paint properties for layer "${ids.layerId}"`);
     S.map.setPaintProperty(ids.layerId, 'fill-color', grayWithSelectionColor);
     S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
   } else {
+    logDebug('info', `applyGrayRendering: setting fill-extrusion paint properties for layer "${ids.layerId}"`);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', grayWithSelectionColor);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
     S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
@@ -820,15 +831,20 @@ export function applyGrayRendering() {
 export function applyExtrusion() {
   const store = getActiveDataStore();
   const isCivil = store?.isCivil || false;
+  logDebug('info', `applyExtrusion: isCivil=${isCivil}, currentField=${S.currentField}, currentFieldType=${S.currentFieldType}, is3DMode=${S.is3DMode}`);
   if (!isCivil && !S.currentGeoJSON) return;
   const ids = _getCurrentLayerIds();
-  if (!ids) return;
+  if (!ids) {
+    logDebug('warn', 'applyExtrusion: _getCurrentLayerIds returned null');
+    return;
+  }
 
   const currentLayer = _getCurrentLayer();
   if (isCivil && currentLayer) {
     const mapLayer = S.map.getLayer(ids.layerId);
     const expectedType = S.is3DMode ? 'fill-extrusion' : 'fill';
     if (mapLayer && mapLayer.type !== expectedType) {
+      logDebug('info', `applyExtrusion: Recreating Civil OS layer from type "${mapLayer.type}" to "${expectedType}"`);
       // Recreate the layer!
       S.map.removeLayer(ids.layerId);
       const outlineLayerId = `${ids.layerId}-outline`;
@@ -840,11 +856,13 @@ export function applyExtrusion() {
   }
 
   if (isCivil && !isFetchingCivilAttributes) {
+    logDebug('info', 'applyExtrusion: Triggering checkAndFetchCivilAttributes');
     void checkAndFetchCivilAttributes();
   }
 
   // If no field is selected, apply gray rendering
   if (!S.currentField) {
+    logDebug('info', 'applyExtrusion: No field selected. Falling back to gray rendering.');
     applyGrayRendering();
     return;
   }
@@ -852,11 +870,14 @@ export function applyExtrusion() {
   if (S.currentFieldType === 'categorical') {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
+    logDebug('info', `applyExtrusion (categorical): colorExpr=${JSON.stringify(colorExpr)}`);
 
     if (isCivil && !S.is3DMode) {
+      logDebug('info', `applyExtrusion (categorical): setting fill paint properties for layer "${ids.layerId}"`);
       S.map.setPaintProperty(ids.layerId, 'fill-color', colorExpr);
       S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
     } else {
+      logDebug('info', `applyExtrusion (categorical): setting fill-extrusion paint properties for layer "${ids.layerId}"`);
       S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
       S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', 0);
       S.map.setPaintProperty(ids.layerId, 'fill-extrusion-opacity', parseFloat(_opacityInput.value));
@@ -865,8 +886,10 @@ export function applyExtrusion() {
     // For numeric fields, use the new color expression builder
     const colorExpr = buildNumericColorExpression();
     const valueExpr = buildValueExpression();
+    logDebug('info', `applyExtrusion (numeric): colorExpr=${JSON.stringify(colorExpr)}, valueExpr=${JSON.stringify(valueExpr)}`);
 
     if (isCivil && !S.is3DMode) {
+      logDebug('info', `applyExtrusion (numeric): setting fill paint properties for layer "${ids.layerId}"`);
       S.map.setPaintProperty(ids.layerId, 'fill-color', colorExpr);
       S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
     } else {
@@ -874,6 +897,7 @@ export function applyExtrusion() {
       const multiplier = Number.isFinite(rawMult) ? rawMult : 0;
       const unitFactor = UNIT_TO_METERS[_unitsSelect.value as keyof typeof UNIT_TO_METERS] ?? 1;
       const heightExpr: Expression = S.is3DMode ? ['*', valueExpr, multiplier * unitFactor] as any : 0;
+      logDebug('info', `applyExtrusion (numeric): setting fill-extrusion paint properties for layer "${ids.layerId}" with heightExpr=${JSON.stringify(heightExpr)}`);
 
       S.map.setPaintProperty(ids.layerId, 'fill-extrusion-color', colorExpr);
       S.map.setPaintProperty(ids.layerId, 'fill-extrusion-height', heightExpr);
@@ -1226,12 +1250,17 @@ export async function fetchAndCacheCivilAttributes(
   token: string
 ) {
   const methodName = getSingleAttributeMethodForField(field);
-  if (!methodName) return;
+  if (!methodName) {
+    logDebug('warn', `No attribute API method mapped for field "${field}"`);
+    return;
+  }
 
+  logDebug('info', `Fetching ${field} via ${methodName} for ${parcelIds.length} parcels...`);
   const client = getCivilClient(ParcelsService, gateway, token) as any;
   try {
     const res = await client[methodName]({ parcelIds });
     if (res && res.values) {
+      let count = 0;
       for (const [pid, val] of Object.entries(res.values)) {
         let cached = S.civilAttributeCache.get(pid);
         if (!cached) {
@@ -1239,29 +1268,47 @@ export async function fetchAndCacheCivilAttributes(
           S.civilAttributeCache.set(pid, cached);
         }
         cached[field] = val;
+        count++;
       }
+      logDebug('info', `Successfully fetched and cached ${field} values for ${count} parcels.`);
+    } else {
+      logDebug('warn', `API response empty or missing values for ${field}`);
     }
-  } catch (err) {
+  } catch (err: any) {
+    logDebug('error', `Failed to fetch civil attribute for ${field}: ${err?.message || err}`);
     console.error(`Failed to fetch civil attribute for ${field}:`, err);
   }
 }
 
 export function updateCivilFeatureStates() {
   const currentLayer = _getCurrentLayer();
-  if (!currentLayer) return;
+  if (!currentLayer) {
+    logDebug('warn', 'updateCivilFeatureStates: currentLayer is null');
+    return;
+  }
   const store = S.dataStores.get(currentLayer.dataStoreId);
   if (!store?.isCivil) return;
 
-  if (!S.currentField) return;
+  if (!S.currentField) {
+    logDebug('info', 'updateCivilFeatureStates: S.currentField is null');
+    return;
+  }
 
-  if (!S.map || !S.map.getLayer(currentLayer.layerId)) return;
+  if (!S.map || !S.map.getLayer(currentLayer.layerId)) {
+    logDebug('warn', `updateCivilFeatureStates: map layer "${currentLayer.layerId}" not found`);
+    return;
+  }
 
   const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+  logDebug('info', `updateCivilFeatureStates: querying rendered features. Found ${features.length} features.`);
+  let matchedCount = 0;
+  let setStatesCount = 0;
   for (const f of features) {
-    const pid = getParcelId(f.properties || {});
+    const pid = getParcelId(f);
     const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
     const numericFid = fid ? Number(fid) : null;
     if (pid && numericFid) {
+      matchedCount++;
       const cached = S.civilAttributeCache.get(pid);
       const val = cached ? cached[S.currentField] : undefined;
       if (val !== undefined && val !== null) {
@@ -1269,28 +1316,46 @@ export function updateCivilFeatureStates() {
           { source: currentLayer.sourceId, sourceLayer: f.sourceLayer, id: numericFid },
           { [S.currentField]: val }
         );
+        setStatesCount++;
       }
     }
   }
+  logDebug('info', `updateCivilFeatureStates: processed ${matchedCount} valid parcel/feature matches. Set feature-state for ${setStatesCount} features.`);
 }
 
 let isFetchingCivilAttributes = false;
 
 export async function checkAndFetchCivilAttributes() {
-  if (isFetchingCivilAttributes) return;
+  if (isFetchingCivilAttributes) {
+    logDebug('info', 'checkAndFetchCivilAttributes: already fetching. Skipping.');
+    return;
+  }
   const currentLayer = _getCurrentLayer();
-  if (!currentLayer) return;
+  if (!currentLayer) {
+    logDebug('warn', 'checkAndFetchCivilAttributes: currentLayer is null');
+    return;
+  }
   const store = S.dataStores.get(currentLayer.dataStoreId);
-  if (!store?.isCivil || !store?.civilGateway || !store?.civilToken) return;
+  if (!store?.isCivil || !store?.civilGateway || !store?.civilToken) {
+    logDebug('warn', 'checkAndFetchCivilAttributes: store is not civil or missing gateway/token credentials');
+    return;
+  }
 
-  if (!S.currentField) return;
+  if (!S.currentField) {
+    logDebug('info', 'checkAndFetchCivilAttributes: S.currentField is null');
+    return;
+  }
 
-  if (!S.map || !S.map.getLayer(currentLayer.layerId)) return;
+  if (!S.map || !S.map.getLayer(currentLayer.layerId)) {
+    logDebug('warn', `checkAndFetchCivilAttributes: map layer "${currentLayer.layerId}" not found`);
+    return;
+  }
 
   const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+  logDebug('info', `checkAndFetchCivilAttributes: found ${features.length} rendered features. Checking cached attributes for field "${S.currentField}".`);
   const parcelIdsToFetch = new Set<string>();
   for (const f of features) {
-    const pid = getParcelId(f.properties || {});
+    const pid = getParcelId(f);
     if (pid) {
       const cached = S.civilAttributeCache.get(pid);
       if (!cached || cached[S.currentField] === undefined) {
@@ -1299,7 +1364,10 @@ export async function checkAndFetchCivilAttributes() {
     }
   }
 
+  logDebug('info', `checkAndFetchCivilAttributes: ${parcelIdsToFetch.size} parcel IDs need attribute fetching.`);
+
   if (parcelIdsToFetch.size === 0) {
+    logDebug('info', 'checkAndFetchCivilAttributes: all features are already cached. Applying feature states.');
     updateCivilFeatureStates();
     return;
   }
@@ -1318,14 +1386,16 @@ export async function checkAndFetchCivilAttributes() {
       );
     }
 
+    logDebug('info', 'Finished fetching all chunks. Setting feature states...');
     updateCivilFeatureStates();
 
     // Recompute stats/breaks/categories for the visible features
     const visibleFeatures = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+    logDebug('info', `Recomputing statistics for ${visibleFeatures.length} visible features...`);
     if (S.currentFieldType === 'numeric') {
       const vals: number[] = [];
       for (const f of visibleFeatures) {
-        const pid = getParcelId(f.properties || {});
+        const pid = getParcelId(f);
         if (pid) {
           const cached = S.civilAttributeCache.get(pid);
           const val = cached ? cached[S.currentField] : undefined;
@@ -1340,14 +1410,18 @@ export async function checkAndFetchCivilAttributes() {
           min: Math.min(...vals),
           max: Math.max(...vals)
         };
+        logDebug('info', `Computed new stats: min=${S.currentStats.min}, max=${S.currentStats.max}`);
       } else {
         S.currentStats = { min: 0, max: 1 };
+        logDebug('info', 'No valid numeric values found in cached attributes. Set default stats 0-1.');
       }
     }
 
+    logDebug('info', 'Applying style rules and updating legend.');
     applyExtrusion();
     updateFloatingLegend();
-  } catch (err) {
+  } catch (err: any) {
+    logDebug('error', `Error in checkAndFetchCivilAttributes: ${err?.message || err}`);
     console.error("Error in checkAndFetchCivilAttributes:", err);
   } finally {
     isFetchingCivilAttributes = false;

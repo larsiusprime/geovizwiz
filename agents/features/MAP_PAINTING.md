@@ -17,3 +17,13 @@ Refer to the SKILL.md in this folder for details on how to use this file.
 - Updated MapLibre's `feature-state` for visible features on the fly, allowing style paint expressions (`fill-color`, `fill-opacity`, `fill-extrusion-color`, `fill-extrusion-height`) to fetch value from `['feature-state', S.currentField]` and paint dynamically.
 - Implemented automatic 2D/3D type switching for Civil OS layers: when 3D mode is toggled, the map layer is recreated as a `fill-extrusion` type, successfully painting 3D parcel structures.
 - Added localization integration inside the info/inspect popup, merging properties from the attribute cache for the hovered/inspected parcel.
+
+### Debug
+- Implemented a unified `logDebug` helper in `rendering.ts` logging to both `(window as any).vizDesktop` (desktop environment logs) and `console.log` (browser).
+- Added comprehensive logging throughout `applyExtrusion`, `applyGrayRendering`, `fetchAndCacheCivilAttributes`, `updateCivilFeatureStates`, and `checkAndFetchCivilAttributes`.
+- Prints details on active field, field types, 3D mode state, queried features, cache status, pending requests, chunks fetched, and computed min/max statistics.
+
+### Field Visualization Not Working
+- Identified a bug where `getParcelId` was called with `f.properties || {}` instead of the feature object `f` itself in four crucial lookup/cache updates within `rendering.ts`.
+- Because `getParcelId` checks `feature.properties` first, passing `f.properties` caused `feature.properties` to evaluate to `undefined`, yielding empty parcel IDs and preventing attribute fetching and cached styling.
+- Resolved this by updating all calls to pass the full feature object `f`, successfully restoring on-demand attribute querying, caching, and color coloring/extrusion paint applications.

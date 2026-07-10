@@ -231,6 +231,7 @@ import {
   getParcelId, findFeatureByParcelId,
   addParcelToSelection, clearAllSelections,
   updateSelectionControls,
+  getActiveDataStore,
 } from './selection';
 import {
   initLegendCallbacks,
@@ -267,6 +268,7 @@ import {
   getNumericValuesNormalized,
   update3DUI, updateFieldTypeUI,
   setPerspective, setOrtho, setView,
+  checkAndFetchCivilAttributes,
 } from './rendering';
 import { startHexUpdateIfActive, cancelHexUpdate, getCommittedHexState } from './hex-layer';
 import { initExport3DMenu, refreshExport3DMenu } from './export-3d';
@@ -345,6 +347,22 @@ S.map = new maplibregl.Map({
 S.map.addControl(new maplibregl.ScaleControl({ unit: 'metric' }), 'bottom-left');
 S.map.on('load', () => {
   initScatterplotMapLayers();
+
+  S.map.on('moveend', () => {
+    const store = getActiveDataStore();
+    if (store?.isCivil) {
+      void checkAndFetchCivilAttributes();
+    }
+  });
+
+  S.map.on('sourcedata', (e) => {
+    if (e.isSourceLoaded) {
+      const store = getActiveDataStore();
+      if (store?.isCivil) {
+        void checkAndFetchCivilAttributes();
+      }
+    }
+  });
   // Desktop mode: show the project picker and stream geometry from the project
   // DB. Gated so the browser build is entirely unaffected.
   if (isDesktopMode()) {
@@ -2718,9 +2736,17 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
     'total_assessed_improvement_value'
   ];
 
+  let propsToUse = { ...props };
+  if (isCivil) {
+    const cached = S.civilAttributeCache.get(parcelId);
+    if (cached) {
+      propsToUse = { ...propsToUse, ...cached };
+    }
+  }
+
   let fieldsToShow: string[];
   if (isCivil) {
-    fieldsToShow = Object.keys(props).filter(k => {
+    fieldsToShow = Object.keys(propsToUse).filter(k => {
       if (k === 'properties') return false;
       if (valFields.includes(k)) return false;
       if (k === 'zoning_ids' || k === 'zoningIds' || k === 'land_use_id' || k === 'landUseId' || k === 'primary_condition_id' || k === 'primaryConditionId' || k === 'neighborhood_id' || k === 'neighborhoodId') return true;
@@ -2740,7 +2766,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   let rows = fieldsToShow.map(k => {
     const fieldType = getPopupFieldType(k);
     const patch = getParcelPatchEntry(parcelId, k);
-    let v = patch ? patch.current : (props as any)[k];
+    let v = patch ? patch.current : (propsToUse as any)[k];
 
     if (isCivil && store) {
       if (k === 'land_use_id' || k === 'landUseId') {
@@ -2790,7 +2816,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
   if (isCivil) {
     const getValNum = (key: string) => {
       const patch = getParcelPatchEntry(parcelId, key);
-      const rawVal = patch ? patch.current : props[key];
+      const rawVal = patch ? patch.current : propsToUse[key];
       if (rawVal === undefined || rawVal === null || rawVal === '' || rawVal === '—') return 0;
       const parsed = parseFloat(String(rawVal).replace(/[^0-9.-]/g, ''));
       return isNaN(parsed) ? 0 : parsed;
@@ -2814,7 +2840,7 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
     const valRowsList = valFields.map(k => {
       const fieldType = getPopupFieldType(k);
       const patch = getParcelPatchEntry(parcelId, k);
-      let v = patch ? patch.current : (props as any)[k];
+      let v = patch ? patch.current : (propsToUse as any)[k];
 
       const formattedVal = formatUSD(v);
       const changed = isFieldChanged(parcelId, k, fieldType);
@@ -3596,9 +3622,21 @@ opacityInput.addEventListener('input', () => {
   persistCurrentLayerState();
 });
 
+function getCivilFieldType(field: string): 'numeric' | 'categorical' {
+  const categoricalFields = [
+    'land_use_id',
+    'zoning_ids',
+    'primary_improvement_condition_id',
+    'primary_improvement_type_id'
+  ];
+  return categoricalFields.includes(field) ? 'categorical' : 'numeric';
+}
+
 fieldSelect.addEventListener('change', () => {
   S.currentField = fieldSelect.value || null;
-  if (!S.currentGeoJSON) return;
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!S.currentGeoJSON && !isCivil) return;
   
   if (!S.currentField) {
     // No field selected - apply gray rendering
@@ -3616,7 +3654,9 @@ fieldSelect.addEventListener('change', () => {
   }
   
   // Determine field type
-  if (S.chosenNumericFields.includes(S.currentField)) {
+  if (isCivil) {
+    S.currentFieldType = getCivilFieldType(S.currentField);
+  } else if (S.chosenNumericFields.includes(S.currentField)) {
     S.currentFieldType = 'numeric';
   } else if (S.chosenCategoricalFields.includes(S.currentField)) {
     S.currentFieldType = 'categorical';

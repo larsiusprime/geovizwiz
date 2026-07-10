@@ -2,6 +2,18 @@ Refer to the SKILL.md in this folder for details on how to use this file.
 
 ## Feature
 ### Requirement Summary
-- 
+- Wire up the "Field to visualize" to show options based on the values of the civil-blueprints ParcelAttributes enum
+- Utilize localization keys for the option values
+- Depending on the selected visualization field option, using the single attribute APIs to make calls to the Civil OS instance for the data for the currently rendered parcels
+- Once the attribute data is returned, store it in internal cache maps to allow for easy re-retrieval of the data for the parcels if they are de-rendered and re-rendered without calling the API again
+- Once the data is loaded, utilize the existing "Paint" logic and options to color the parcels based on their returned value 
+- Ensure that 3D visualization is still supported for Civil OS layers
 
 ## Changes/Fixes
+### July 10, 2026
+- Wired the "Field to visualize" dropdown to populate with the 13 options based on the `ParcelAttribute` enum when a Civil OS layer is active.
+- Integrated translation-based localization mapping inside the option building logic to map raw snake_case keys to their human-readable translations.
+- Configured dynamic background on-demand fetching when the map pans/zooms/renders: queries rendered vector features in the viewport, identifies missing attributes, fetches them in chunked gRPC requests, and merges them in a newly defined global `civilAttributeCache` map.
+- Updated MapLibre's `feature-state` for visible features on the fly, allowing style paint expressions (`fill-color`, `fill-opacity`, `fill-extrusion-color`, `fill-extrusion-height`) to fetch value from `['feature-state', S.currentField]` and paint dynamically.
+- Implemented automatic 2D/3D type switching for Civil OS layers: when 3D mode is toggled, the map layer is recreated as a `fill-extrusion` type, successfully painting 3D parcel structures.
+- Added localization integration inside the info/inspect popup, merging properties from the attribute cache for the hovered/inspected parcel.

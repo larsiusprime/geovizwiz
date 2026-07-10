@@ -8,6 +8,18 @@ import type { Expression } from 'maplibre-gl';
 import { S } from './state';
 import type { LayerState, QualityMode, UpdateMode, MetricUnitKey } from './types';
 import { ParcelsService } from "@civil-labs/civil-api-js";
+import enTranslations from '../locales/en.json';
+import esTranslations from '../locales/es.json';
+
+function getLocalizedFieldName(field: string): string {
+  const lang = (localStorage.getItem('language') || 'en').split('-')[0].toLowerCase();
+  const translations: Record<string, Record<string, string>> = {
+    en: enTranslations,
+    es: esTranslations
+  };
+  const langDict = translations[lang] || translations['en'];
+  return langDict[field] || field;
+}
 import { getCivilClient } from "./civil-integration";
 import { timestampFromDate } from "@bufbuild/protobuf/wkt";
 import {
@@ -313,9 +325,9 @@ export function addExtrusionLayer(layer: LayerState) {
 
   const layerDef: any = {
     id: layer.layerId,
-    type: isCivil ? 'fill' : 'fill-extrusion',
+    type: (isCivil && !S.is3DMode) ? 'fill' : 'fill-extrusion',
     source: layer.sourceId,
-    paint: isCivil ? {
+    paint: (isCivil && !S.is3DMode) ? {
       'fill-color': ['case',
         ['boolean', ['feature-state', 'selected'], false], S.highlightColor,
         '#e5e7eb'
@@ -552,6 +564,13 @@ export function buildValueExpression(): Expression {
   if (S.hexMode && S.hexGeoJSON) return ['to-number', ['get', 'hexMetric']] as any;
 
   if (!S.currentField) return ['literal', 0] as any;
+
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (isCivil) {
+    return ['to-number', ['coalesce', ['feature-state', S.currentField], 0]] as any;
+  }
+
   // Single source of truth (shared with the legend visibility filter) for the
   // per-feature normalized value. Invalid denominators collapse to 0 (flat).
   return normalizedValueExpression(S.currentField, S.normalizationMode);
@@ -566,14 +585,33 @@ export function buildValueExpression(): Expression {
 
 
 export function buildCategoricalColorPairs(): Array<[string, string]> {
-  if (!S.currentField || !S.currentGeoJSON) return [];
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!S.currentField || (!S.currentGeoJSON && !isCivil)) return [];
 
   // Collect unique categories
   const categories = new Set<string>();
-  for (const feature of S.currentGeoJSON.features) {
-    const value = feature.properties?.[S.currentField];
-    if (value != null && value !== '' && value !== undefined) {
-      categories.add(String(value));
+  if (isCivil) {
+    const currentLayer = _getCurrentLayer();
+    if (currentLayer && S.map && S.map.getLayer(currentLayer.layerId)) {
+      const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+      for (const f of features) {
+        const pid = getParcelId(f.properties || {});
+        if (pid) {
+          const cached = S.civilAttributeCache.get(pid);
+          const val = cached ? cached[S.currentField] : undefined;
+          if (val !== undefined && val !== null && val !== '') {
+            categories.add(String(val));
+          }
+        }
+      }
+    }
+  } else {
+    for (const feature of S.currentGeoJSON!.features) {
+      const value = feature.properties?.[S.currentField];
+      if (value != null && value !== '' && value !== undefined) {
+        categories.add(String(value));
+      }
     }
   }
 
@@ -619,7 +657,9 @@ export function buildCategoricalColorPairs(): Array<[string, string]> {
 }
 
 export function buildCategoricalColorExpression(): Expression {
-  if (!S.currentField || !S.currentGeoJSON) return ['literal', '#888'] as any;
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!S.currentField || (!S.currentGeoJSON && !isCivil)) return ['literal', '#888'] as any;
 
   // Get the base color pairs from the inner function
   const pairs = buildCategoricalColorPairs();
@@ -637,7 +677,9 @@ export function buildCategoricalColorExpression(): Expression {
       return ['literal', fallbackColor] as any;
     }
   }
-  const val = ['to-string', ['coalesce', ['get', S.currentField], '']] as any;
+  const val = isCivil
+    ? ['to-string', ['coalesce', ['feature-state', S.currentField], '']] as any
+    : ['to-string', ['coalesce', ['get', S.currentField], '']] as any;
 
   // Build the final expression with fallback
   const flattenedPairs = pairs.flat();
@@ -656,7 +698,9 @@ export function buildCategoricalColorExpression(): Expression {
 }
 
 export function buildNumericColorRanges(): Array<{ min: number; max: number; color: string; rangeKey: string }> {
-  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return [];
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!S.currentField || (!S.currentGeoJSON && !isCivil) || !S.currentStats) return [];
 
   const ramp = COLOR_RAMPS[_rampSelect.value] || COLOR_RAMPS['Magma'];
   let ranges: Array<{ min: number; max: number; color: string; rangeKey: string }> = [];
@@ -693,7 +737,9 @@ export function buildNumericColorRanges(): Array<{ min: number; max: number; col
 }
 
 export function buildNumericColorExpression(): Expression {
-  if (!S.currentField || !S.currentGeoJSON || !S.currentStats) return ['literal', '#888'] as any;
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!S.currentField || (!S.currentGeoJSON && !isCivil) || !S.currentStats) return ['literal', '#888'] as any;
 
   const ranges = buildNumericColorRanges();
   if (ranges.length === 0) {
@@ -778,6 +824,25 @@ export function applyExtrusion() {
   const ids = _getCurrentLayerIds();
   if (!ids) return;
 
+  const currentLayer = _getCurrentLayer();
+  if (isCivil && currentLayer) {
+    const mapLayer = S.map.getLayer(ids.layerId);
+    const expectedType = S.is3DMode ? 'fill-extrusion' : 'fill';
+    if (mapLayer && mapLayer.type !== expectedType) {
+      // Recreate the layer!
+      S.map.removeLayer(ids.layerId);
+      const outlineLayerId = `${ids.layerId}-outline`;
+      if (S.map.getLayer(outlineLayerId)) {
+        S.map.removeLayer(outlineLayerId);
+      }
+      addExtrusionLayer(currentLayer);
+    }
+  }
+
+  if (isCivil && !isFetchingCivilAttributes) {
+    void checkAndFetchCivilAttributes();
+  }
+
   // If no field is selected, apply gray rendering
   if (!S.currentField) {
     applyGrayRendering();
@@ -788,7 +853,7 @@ export function applyExtrusion() {
     // For categorical fields, no extrusion - just color
     const colorExpr = buildCategoricalColorExpression();
 
-    if (isCivil) {
+    if (isCivil && !S.is3DMode) {
       S.map.setPaintProperty(ids.layerId, 'fill-color', colorExpr);
       S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
     } else {
@@ -801,7 +866,7 @@ export function applyExtrusion() {
     const colorExpr = buildNumericColorExpression();
     const valueExpr = buildValueExpression();
 
-    if (isCivil) {
+    if (isCivil && !S.is3DMode) {
       S.map.setPaintProperty(ids.layerId, 'fill-color', colorExpr);
       S.map.setPaintProperty(ids.layerId, 'fill-opacity', parseFloat(_opacityInput.value));
     } else {
@@ -883,7 +948,9 @@ export function computeExtrusionHeightMeters(metricValue: number): number {
 
 // Queue an update; newer calls replace older ones.
 export function scheduleUpdate(mode: UpdateMode, refreshLegend = false, debounceMs = 80) {
-  if (!S.currentGeoJSON) return;   // <- hard stop until data exists
+  const store = getActiveDataStore();
+  const isCivil = store?.isCivil || false;
+  if (!S.currentGeoJSON && !isCivil) return;   // <- hard stop until data exists
 
   S._pendingMode = mode;
   S._pendingRefreshLegend = refreshLegend;
@@ -936,7 +1003,9 @@ export function populateFieldDropdownFromList(list: string[]) {
   if (!list.length) _fieldSelect.append(new Option('No fields selected', ''));
   else {
     _fieldSelect.append(new Option('— choose —', ''));
-    for (const n of list) _fieldSelect.append(new Option(n, n));
+    for (const n of list) {
+      _fieldSelect.append(new Option(getLocalizedFieldName(n), n));
+    }
   }
 }
 
@@ -1129,4 +1198,158 @@ export function updateFieldTypeUI() {
   // height. Re-fit the Layers window so the chrome grows/shrinks to match
   // (otherwise docked, the content spills until you drag the resize grabber).
   refreshWindowMinHeight(controlsEl);
+}
+
+function getSingleAttributeMethodForField(field: string): string | null {
+  switch (field) {
+    case "land_area_sq_ft": return "getLandAreaSqftByParcelId";
+    case "frontage_ft": return "getFrontageFtByParcelId";
+    case "depth_ft": return "getDepthFtByParcelId";
+    case "improvement_area_sq_ft": return "getImprovementAreaSqftByParcelId";
+    case "primary_improvement_year_built": return "getPrimaryImprovementYearBuiltByParcelId";
+    case "primary_improvement_effective_year_built": return "getPrimaryImprovementEffectiveYearBuiltByParcelId";
+    case "bedrooms": return "getBedroomsByParcelId";
+    case "bathrooms": return "getBathroomsByParcelId";
+    case "units": return "getUnitsByParcelId";
+    case "land_use_id": return "getLandUseIdSqftByParcelId";
+    case "zoning_ids": return "getZoningIdByParcelId";
+    case "primary_improvement_condition_id": return "getPrimaryImprovementConditionIdByParcelId";
+    case "primary_improvement_type_id": return "getPrimaryImprovementTypeIdByParcelId";
+  }
+  return null;
+}
+
+export async function fetchAndCacheCivilAttributes(
+  field: string,
+  parcelIds: string[],
+  gateway: string,
+  token: string
+) {
+  const methodName = getSingleAttributeMethodForField(field);
+  if (!methodName) return;
+
+  const client = getCivilClient(ParcelsService, gateway, token) as any;
+  try {
+    const res = await client[methodName]({ parcelIds });
+    if (res && res.values) {
+      for (const [pid, val] of Object.entries(res.values)) {
+        let cached = S.civilAttributeCache.get(pid);
+        if (!cached) {
+          cached = {};
+          S.civilAttributeCache.set(pid, cached);
+        }
+        cached[field] = val;
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to fetch civil attribute for ${field}:`, err);
+  }
+}
+
+export function updateCivilFeatureStates() {
+  const currentLayer = _getCurrentLayer();
+  if (!currentLayer) return;
+  const store = S.dataStores.get(currentLayer.dataStoreId);
+  if (!store?.isCivil) return;
+
+  if (!S.currentField) return;
+
+  if (!S.map || !S.map.getLayer(currentLayer.layerId)) return;
+
+  const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+  for (const f of features) {
+    const pid = getParcelId(f.properties || {});
+    const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
+    const numericFid = fid ? Number(fid) : null;
+    if (pid && numericFid) {
+      const cached = S.civilAttributeCache.get(pid);
+      const val = cached ? cached[S.currentField] : undefined;
+      if (val !== undefined && val !== null) {
+        S.map.setFeatureState(
+          { source: currentLayer.sourceId, sourceLayer: f.sourceLayer, id: numericFid },
+          { [S.currentField]: val }
+        );
+      }
+    }
+  }
+}
+
+let isFetchingCivilAttributes = false;
+
+export async function checkAndFetchCivilAttributes() {
+  if (isFetchingCivilAttributes) return;
+  const currentLayer = _getCurrentLayer();
+  if (!currentLayer) return;
+  const store = S.dataStores.get(currentLayer.dataStoreId);
+  if (!store?.isCivil || !store?.civilGateway || !store?.civilToken) return;
+
+  if (!S.currentField) return;
+
+  if (!S.map || !S.map.getLayer(currentLayer.layerId)) return;
+
+  const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+  const parcelIdsToFetch = new Set<string>();
+  for (const f of features) {
+    const pid = getParcelId(f.properties || {});
+    if (pid) {
+      const cached = S.civilAttributeCache.get(pid);
+      if (!cached || cached[S.currentField] === undefined) {
+        parcelIdsToFetch.add(pid);
+      }
+    }
+  }
+
+  if (parcelIdsToFetch.size === 0) {
+    updateCivilFeatureStates();
+    return;
+  }
+
+  isFetchingCivilAttributes = true;
+  try {
+    const ids = Array.from(parcelIdsToFetch);
+    const chunkSize = 200;
+    for (let i = 0; i < ids.length; i += chunkSize) {
+      const chunk = ids.slice(i, i + chunkSize);
+      await fetchAndCacheCivilAttributes(
+        S.currentField,
+        chunk,
+        store.civilGateway,
+        store.civilToken
+      );
+    }
+
+    updateCivilFeatureStates();
+
+    // Recompute stats/breaks/categories for the visible features
+    const visibleFeatures = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
+    if (S.currentFieldType === 'numeric') {
+      const vals: number[] = [];
+      for (const f of visibleFeatures) {
+        const pid = getParcelId(f.properties || {});
+        if (pid) {
+          const cached = S.civilAttributeCache.get(pid);
+          const val = cached ? cached[S.currentField] : undefined;
+          if (val !== undefined && val !== null) {
+            const num = Number(val);
+            if (Number.isFinite(num)) vals.push(num);
+          }
+        }
+      }
+      if (vals.length > 0) {
+        S.currentStats = {
+          min: Math.min(...vals),
+          max: Math.max(...vals)
+        };
+      } else {
+        S.currentStats = { min: 0, max: 1 };
+      }
+    }
+
+    applyExtrusion();
+    updateFloatingLegend();
+  } catch (err) {
+    console.error("Error in checkAndFetchCivilAttributes:", err);
+  } finally {
+    isFetchingCivilAttributes = false;
+  }
 }

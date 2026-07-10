@@ -41,6 +41,7 @@ export const S = {
   currentFieldType: null as 'numeric' | 'categorical' | null,
   currentStats: null as { min: number; max: number } | null,
   parcelPatchMap: new Map() as ParcelPatchMap,
+  civilAttributeCache: new Map<string, Record<string, any>>(),
 
   // --- New global Civil OS layer config options ---
   civilValuationId: null as string | null,

@@ -445,15 +445,36 @@ export function applyLayerState(layer: LayerState) {
   _setSizeState(S.bldgSizeField, S.bldgSizeUnitLabel, S.landSizeField, S.landSizeUnitLabel);
 
   if (_fieldSelect) {
-    if (!S.currentGeoJSON) {
+    const store = S.dataStores.get(layer.dataStoreId);
+    const isCivil = store?.isCivil || false;
+    if (!S.currentGeoJSON && !isCivil) {
       _fieldSelect.replaceChildren(new Option('— load a file first —', ''));
       _fieldSelect.value = '';
     } else {
-      const allAvailableFields = [
-        ...fieldsForPicker(S.chosenNumericFields, S.currentGeoJSON),
-        ...fieldsForPicker(S.chosenCategoricalFields, S.currentGeoJSON)
-      ];
-      _populateFieldDropdownFromList(allAvailableFields);
+      if (isCivil) {
+        const civilFields = [
+          'land_area_sq_ft',
+          'frontage_ft',
+          'depth_ft',
+          'land_use_id',
+          'zoning_ids',
+          'improvement_area_sq_ft',
+          'bedrooms',
+          'bathrooms',
+          'units',
+          'primary_improvement_year_built',
+          'primary_improvement_effective_year_built',
+          'primary_improvement_condition_id',
+          'primary_improvement_type_id'
+        ];
+        _populateFieldDropdownFromList(civilFields);
+      } else {
+        const allAvailableFields = [
+          ...fieldsForPicker(S.chosenNumericFields, S.currentGeoJSON),
+          ...fieldsForPicker(S.chosenCategoricalFields, S.currentGeoJSON)
+        ];
+        _populateFieldDropdownFromList(allAvailableFields);
+      }
       _fieldSelect.value = S.currentField ?? '';
     }
   }

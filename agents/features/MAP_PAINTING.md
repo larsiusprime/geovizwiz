@@ -47,3 +47,10 @@ The map attempts to lookup, but gets an endless loop of this:
 [Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...
 [Renderer][INFO] [Map Painting] Successfully fetched and cached land_area_sq_ft values for 0 features.
 [Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...
+
+### Invalid Feature IDs
+- **Root Cause**: MapLibre auto-generates internal sequential integer feature IDs (like `500744`) if `promoteId` is not specified in the source. Because the code queried the backend database with these internal MapLibre IDs, the database returned empty datasets, resulting in endless querying cycles.
+- **Resolution**:
+  1. Configured `promoteId: 'feature_id'` on the vector map source configuration in `rendering.ts`.
+  2. Prioritized `feature.properties.feature_id` and `feature.properties.featureId` in `getParcelId` in `selection.ts`, `checkAndFetchCivilAttributes` in `rendering.ts`, and selection routines.
+  3. Added a strict validation check `hasRealFeatureId` in the feature processors to check for the presence of the `feature_id`/`featureId` properties or valid numeric database feature IDs (> 1000000), filtering out any raw MapLibre auto-generated IDs.

@@ -84,7 +84,7 @@ function getViewportPoint(e: MouseEvent): maplibregl.Point {
 export function getParcelId(feature: any): string {
   const store = getActiveDataStore();
   if (store?.isCivil && store.civilFeatureToParcelIdMap) {
-    const fid = feature.id || feature.properties?.feature_id || feature.properties?.featureId;
+    const fid = feature.properties?.feature_id || feature.properties?.featureId || feature.id;
     const numericFid = fid ? Number(fid) : null;
     if (numericFid) {
       const mappedPid = store.civilFeatureToParcelIdMap.get(numericFid);
@@ -131,8 +131,11 @@ export function addParcelToSelection(feature: any) {
   updateSelectionControls();
 
   const store = getActiveDataStore();
-  if (store?.isCivil && feature.id !== undefined) {
-    void resolveCivilSelectionIds([feature.id]);
+  if (store?.isCivil) {
+    const fid = feature.properties?.feature_id || feature.properties?.featureId || feature.id;
+    if (fid !== undefined && fid !== null) {
+      void resolveCivilSelectionIds([fid]);
+    }
   }
 }
 

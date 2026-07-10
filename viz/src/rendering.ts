@@ -239,6 +239,7 @@ export function addOrUpdateSourceForLayer(layer: LayerState, fc: GeoJSON.Feature
 
       S.map.addSource(layer.sourceId, {
         type: 'vector',
+        promoteId: 'feature_id',
         ...tileJson
       });
     } else {
@@ -1318,18 +1319,23 @@ export function updateCivilFeatureStates() {
   let matchedCount = 0;
   let setStatesCount = 0;
   for (const f of features) {
-    const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
+    const fid = f.properties?.feature_id || f.properties?.featureId || f.id;
     const numericFid = fid ? Number(fid) : null;
     if (numericFid) {
-      matchedCount++;
-      const cached = S.civilAttributeCache.get(String(numericFid));
-      const val = cached ? cached[S.currentField] : undefined;
-      if (val !== undefined && val !== null) {
-        S.map.setFeatureState(
-          { source: currentLayer.sourceId, sourceLayer: f.sourceLayer, id: numericFid },
-          { [S.currentField]: val }
-        );
-        setStatesCount++;
+      const hasRealFeatureId = (f.properties?.feature_id !== undefined && f.properties?.feature_id !== null) ||
+                               (f.properties?.featureId !== undefined && f.properties?.featureId !== null) ||
+                               (numericFid > 1000000);
+      if (hasRealFeatureId) {
+        matchedCount++;
+        const cached = S.civilAttributeCache.get(String(numericFid));
+        const val = cached ? cached[S.currentField] : undefined;
+        if (val !== undefined && val !== null) {
+          S.map.setFeatureState(
+            { source: currentLayer.sourceId, sourceLayer: f.sourceLayer, id: numericFid },
+            { [S.currentField]: val }
+          );
+          setStatesCount++;
+        }
       }
     }
   }
@@ -1364,12 +1370,17 @@ export async function checkAndFetchCivilAttributes() {
 
   const featureIdsToFetch = new Set<number>();
   for (const f of features) {
-    const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
+    const fid = f.properties?.feature_id || f.properties?.featureId || f.id;
     const numericFid = fid ? Number(fid) : null;
     if (numericFid) {
-      const cached = S.civilAttributeCache.get(String(numericFid));
-      if (!cached || cached[S.currentField] === undefined) {
-        featureIdsToFetch.add(numericFid);
+      const hasRealFeatureId = (f.properties?.feature_id !== undefined && f.properties?.feature_id !== null) ||
+                               (f.properties?.featureId !== undefined && f.properties?.featureId !== null) ||
+                               (numericFid > 1000000);
+      if (hasRealFeatureId) {
+        const cached = S.civilAttributeCache.get(String(numericFid));
+        if (!cached || cached[S.currentField] === undefined) {
+          featureIdsToFetch.add(numericFid);
+        }
       }
     }
   }
@@ -1405,14 +1416,19 @@ export async function checkAndFetchCivilAttributes() {
     if (S.currentFieldType === 'numeric') {
       const vals: number[] = [];
       for (const f of visibleFeatures) {
-        const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
+        const fid = f.properties?.feature_id || f.properties?.featureId || f.id;
         const numericFid = fid ? Number(fid) : null;
         if (numericFid) {
-          const cached = S.civilAttributeCache.get(String(numericFid));
-          const val = cached ? cached[S.currentField] : undefined;
-          if (val !== undefined && val !== null) {
-            const num = Number(val);
-            if (Number.isFinite(num)) vals.push(num);
+          const hasRealFeatureId = (f.properties?.feature_id !== undefined && f.properties?.feature_id !== null) ||
+                                   (f.properties?.featureId !== undefined && f.properties?.featureId !== null) ||
+                                   (numericFid > 1000000);
+          if (hasRealFeatureId) {
+            const cached = S.civilAttributeCache.get(String(numericFid));
+            const val = cached ? cached[S.currentField] : undefined;
+            if (val !== undefined && val !== null) {
+              const num = Number(val);
+              if (Number.isFinite(num)) vals.push(num);
+            }
           }
         }
       }

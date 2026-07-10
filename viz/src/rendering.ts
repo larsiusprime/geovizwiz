@@ -1226,26 +1226,26 @@ export function updateFieldTypeUI() {
 
 function getSingleAttributeMethodForField(field: string): string | null {
   switch (field) {
-    case "land_area_sq_ft": return "getLandAreaSqftByParcelId";
-    case "frontage_ft": return "getFrontageFtByParcelId";
-    case "depth_ft": return "getDepthFtByParcelId";
-    case "improvement_area_sq_ft": return "getImprovementAreaSqftByParcelId";
-    case "primary_improvement_year_built": return "getPrimaryImprovementYearBuiltByParcelId";
-    case "primary_improvement_effective_year_built": return "getPrimaryImprovementEffectiveYearBuiltByParcelId";
-    case "bedrooms": return "getBedroomsByParcelId";
-    case "bathrooms": return "getBathroomsByParcelId";
-    case "units": return "getUnitsByParcelId";
-    case "land_use_id": return "getLandUseIdSqftByParcelId";
-    case "zoning_ids": return "getZoningIdByParcelId";
-    case "primary_improvement_condition_id": return "getPrimaryImprovementConditionIdByParcelId";
-    case "primary_improvement_type_id": return "getPrimaryImprovementTypeIdByParcelId";
+    case "land_area_sq_ft": return "getLandAreaSqftByFeatureId";
+    case "frontage_ft": return "getFrontageFtByFeatureId";
+    case "depth_ft": return "getDepthFtByFeatureId";
+    case "improvement_area_sq_ft": return "getImprovementAreaSqftByFeatureId";
+    case "primary_improvement_year_built": return "getPrimaryImprovementYearBuiltByFeatureId";
+    case "primary_improvement_effective_year_built": return "getPrimaryImprovementEffectiveYearBuiltByFeatureId";
+    case "bedrooms": return "getBedroomsByFeatureId";
+    case "bathrooms": return "getBathroomsByFeatureId";
+    case "units": return "getUnitsByFeatureId";
+    case "land_use_id": return "getLandUseIdSqftByFeatureId";
+    case "zoning_ids": return "getZoningIdByFeatureId";
+    case "primary_improvement_condition_id": return "getPrimaryImprovementConditionIdByFeatureId";
+    case "primary_improvement_type_id": return "getPrimaryImprovementTypeIdByFeatureId";
   }
   return null;
 }
 
 export async function fetchAndCacheCivilAttributes(
   field: string,
-  parcelIds: string[],
+  featureIds: number[],
   gateway: string,
   token: string
 ) {
@@ -1255,22 +1255,23 @@ export async function fetchAndCacheCivilAttributes(
     return;
   }
 
-  logDebug('info', `Fetching ${field} via ${methodName} for ${parcelIds.length} parcels...`);
+  logDebug('info', `Fetching ${field} via ${methodName} for ${featureIds.length} features...`);
   const client = getCivilClient(ParcelsService, gateway, token) as any;
   try {
-    const res = await client[methodName]({ parcelIds });
+    const res = await client[methodName]({ featureIds: featureIds.map(BigInt) });
     if (res && res.values) {
       let count = 0;
-      for (const [pid, val] of Object.entries(res.values)) {
-        let cached = S.civilAttributeCache.get(pid);
+      for (const [fidStr, val] of Object.entries(res.values)) {
+        const fid = String(fidStr);
+        let cached = S.civilAttributeCache.get(fid);
         if (!cached) {
           cached = {};
-          S.civilAttributeCache.set(pid, cached);
+          S.civilAttributeCache.set(fid, cached);
         }
         cached[field] = val;
         count++;
       }
-      logDebug('info', `Successfully fetched and cached ${field} values for ${count} parcels.`);
+      logDebug('info', `Successfully fetched and cached ${field} values for ${count} features.`);
     } else {
       logDebug('warn', `API response empty or missing values for ${field}`);
     }
@@ -1304,12 +1305,11 @@ export function updateCivilFeatureStates() {
   let matchedCount = 0;
   let setStatesCount = 0;
   for (const f of features) {
-    const pid = getParcelId(f);
     const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
     const numericFid = fid ? Number(fid) : null;
-    if (pid && numericFid) {
+    if (numericFid) {
       matchedCount++;
-      const cached = S.civilAttributeCache.get(pid);
+      const cached = S.civilAttributeCache.get(String(numericFid));
       const val = cached ? cached[S.currentField] : undefined;
       if (val !== undefined && val !== null) {
         S.map.setFeatureState(
@@ -1320,7 +1320,7 @@ export function updateCivilFeatureStates() {
       }
     }
   }
-  logDebug('info', `updateCivilFeatureStates: processed ${matchedCount} valid parcel/feature matches. Set feature-state for ${setStatesCount} features.`);
+  logDebug('info', `updateCivilFeatureStates: processed ${matchedCount} valid feature matches. Set feature-state for ${setStatesCount} features.`);
 }
 
 let isFetchingCivilAttributes = false;
@@ -1346,27 +1346,24 @@ export async function checkAndFetchCivilAttributes() {
     return;
   }
 
-  if (!S.map || !S.map.getLayer(currentLayer.layerId)) {
-    logDebug('warn', `checkAndFetchCivilAttributes: map layer "${currentLayer.layerId}" not found`);
-    return;
-  }
-
   const features = S.map.queryRenderedFeatures({ layers: [currentLayer.layerId] });
   logDebug('info', `checkAndFetchCivilAttributes: found ${features.length} rendered features. Checking cached attributes for field "${S.currentField}".`);
-  const parcelIdsToFetch = new Set<string>();
+
+  const featureIdsToFetch = new Set<number>();
   for (const f of features) {
-    const pid = getParcelId(f);
-    if (pid) {
-      const cached = S.civilAttributeCache.get(pid);
+    const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
+    const numericFid = fid ? Number(fid) : null;
+    if (numericFid) {
+      const cached = S.civilAttributeCache.get(String(numericFid));
       if (!cached || cached[S.currentField] === undefined) {
-        parcelIdsToFetch.add(pid);
+        featureIdsToFetch.add(numericFid);
       }
     }
   }
 
-  logDebug('info', `checkAndFetchCivilAttributes: ${parcelIdsToFetch.size} parcel IDs need attribute fetching.`);
+  logDebug('info', `checkAndFetchCivilAttributes: ${featureIdsToFetch.size} feature IDs need attribute fetching.`);
 
-  if (parcelIdsToFetch.size === 0) {
+  if (featureIdsToFetch.size === 0) {
     logDebug('info', 'checkAndFetchCivilAttributes: all features are already cached. Applying feature states.');
     updateCivilFeatureStates();
     return;
@@ -1374,7 +1371,7 @@ export async function checkAndFetchCivilAttributes() {
 
   isFetchingCivilAttributes = true;
   try {
-    const ids = Array.from(parcelIdsToFetch);
+    const ids = Array.from(featureIdsToFetch);
     const chunkSize = 200;
     for (let i = 0; i < ids.length; i += chunkSize) {
       const chunk = ids.slice(i, i + chunkSize);
@@ -1395,9 +1392,10 @@ export async function checkAndFetchCivilAttributes() {
     if (S.currentFieldType === 'numeric') {
       const vals: number[] = [];
       for (const f of visibleFeatures) {
-        const pid = getParcelId(f);
-        if (pid) {
-          const cached = S.civilAttributeCache.get(pid);
+        const fid = f.id || f.properties?.feature_id || f.properties?.featureId;
+        const numericFid = fid ? Number(fid) : null;
+        if (numericFid) {
+          const cached = S.civilAttributeCache.get(String(numericFid));
           const val = cached ? cached[S.currentField] : undefined;
           if (val !== undefined && val !== null) {
             const num = Number(val);

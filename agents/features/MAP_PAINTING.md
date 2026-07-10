@@ -27,3 +27,9 @@ Refer to the SKILL.md in this folder for details on how to use this file.
 - Identified a bug where `getParcelId` was called with `f.properties || {}` instead of the feature object `f` itself in four crucial lookup/cache updates within `rendering.ts`.
 - Because `getParcelId` checks `feature.properties` first, passing `f.properties` caused `feature.properties` to evaluate to `undefined`, yielding empty parcel IDs and preventing attribute fetching and cached styling.
 - Resolved this by updating all calls to pass the full feature object `f`, successfully restoring on-demand attribute querying, caching, and color coloring/extrusion paint applications.
+
+### Direct ByFeatureId Attribute Retrieval
+- Removed the intermediate selection mapping step (`resolveCivilSelectionIds`).
+- Switched all single-attribute fetch methods in `getSingleAttributeMethodForField` to their corresponding `ByFeatureId` endpoints (e.g. `getLandAreaSqftByFeatureId`, `getBedroomsByFeatureId`, etc.).
+- The single attribute fetching now accepts numeric map feature IDs directly, removing the need for parcel UUID translation.
+- Updated `civilAttributeCache` keys to be stringified feature IDs (`numericFid`), allowing direct state updates, stats computations, and inspect popup merges based on feature IDs.

@@ -82,6 +82,16 @@ function getViewportPoint(e: MouseEvent): maplibregl.Point {
 /* ------------------------------------------------------------------ */
 
 export function getParcelId(feature: any): string {
+  const store = getActiveDataStore();
+  if (store?.isCivil && store.civilFeatureToParcelIdMap) {
+    const fid = feature.id || feature.properties?.feature_id || feature.properties?.featureId;
+    const numericFid = fid ? Number(fid) : null;
+    if (numericFid) {
+      const mappedPid = store.civilFeatureToParcelIdMap.get(numericFid);
+      if (mappedPid) return mappedPid;
+    }
+  }
+
   if (feature.properties && feature.properties.parcel_id) {
     return feature.properties.parcel_id.toString();
   }

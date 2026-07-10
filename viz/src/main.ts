@@ -2738,9 +2738,12 @@ function buildPopupHTML(props: Record<string, any>, parcelId: string): string {
 
   let propsToUse = { ...props };
   if (isCivil) {
-    const cached = S.civilAttributeCache.get(parcelId);
-    if (cached) {
-      propsToUse = { ...propsToUse, ...cached };
+    const fid = props.feature_id || props.featureId;
+    if (fid) {
+      const cached = S.civilAttributeCache.get(String(fid));
+      if (cached) {
+        propsToUse = { ...propsToUse, ...cached };
+      }
     }
   }
 

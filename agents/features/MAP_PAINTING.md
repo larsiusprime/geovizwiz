@@ -33,3 +33,17 @@ Refer to the SKILL.md in this folder for details on how to use this file.
 - Switched all single-attribute fetch methods in `getSingleAttributeMethodForField` to their corresponding `ByFeatureId` endpoints (e.g. `getLandAreaSqftByFeatureId`, `getBedroomsByFeatureId`, etc.).
 - The single attribute fetching now accepts numeric map feature IDs directly, removing the need for parcel UUID translation.
 - Updated `civilAttributeCache` keys to be stringified feature IDs (`numericFid`), allowing direct state updates, stats computations, and inspect popup merges based on feature IDs.
+
+### Endless Loop
+The map attempts to lookup, but gets an endless loop of this:
+
+[Renderer][INFO] [Map Painting] Successfully fetched and cached land_area_sq_ft values for 0 features.
+[Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...
+[Renderer][INFO] [Map Painting] Successfully fetched and cached land_area_sq_ft values for 0 features.
+[Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...
+[Renderer][INFO] [Map Painting] Successfully fetched and cached land_area_sq_ft values for 0 features.
+[Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...
+[Renderer][INFO] [Map Painting] Successfully fetched and cached land_area_sq_ft values for 0 features.
+[Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...
+[Renderer][INFO] [Map Painting] Successfully fetched and cached land_area_sq_ft values for 0 features.
+[Renderer][INFO] [Map Painting] Fetching land_area_sq_ft via getLandAreaSqftByFeatureId for 200 features...

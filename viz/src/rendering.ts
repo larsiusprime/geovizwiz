@@ -828,10 +828,10 @@ export function applyGrayRendering() {
   if (S.lastPicked) _refreshInspectView();
 }
 
-export function applyExtrusion() {
+export function applyExtrusion(skipFetch = false) {
   const store = getActiveDataStore();
   const isCivil = store?.isCivil || false;
-  logDebug('info', `applyExtrusion: isCivil=${isCivil}, currentField=${S.currentField}, currentFieldType=${S.currentFieldType}, is3DMode=${S.is3DMode}`);
+  logDebug('info', `applyExtrusion: isCivil=${isCivil}, currentField=${S.currentField}, currentFieldType=${S.currentFieldType}, is3DMode=${S.is3DMode}, skipFetch=${skipFetch}`);
   if (!isCivil && !S.currentGeoJSON) return;
   const ids = _getCurrentLayerIds();
   if (!ids) {
@@ -855,7 +855,7 @@ export function applyExtrusion() {
     }
   }
 
-  if (isCivil && !isFetchingCivilAttributes) {
+  if (isCivil && !isFetchingCivilAttributes && !skipFetch) {
     logDebug('info', 'applyExtrusion: Triggering checkAndFetchCivilAttributes');
     void checkAndFetchCivilAttributes();
   }
@@ -1255,6 +1255,19 @@ export async function fetchAndCacheCivilAttributes(
     return;
   }
 
+  // Pre-populate cache with null to prevent duplicate/endless loops for missing values
+  for (const fid of featureIds) {
+    const fidStr = String(fid);
+    let cached = S.civilAttributeCache.get(fidStr);
+    if (!cached) {
+      cached = {};
+      S.civilAttributeCache.set(fidStr, cached);
+    }
+    if (cached[field] === undefined) {
+      cached[field] = null;
+    }
+  }
+
   logDebug('info', `Fetching ${field} via ${methodName} for ${featureIds.length} features...`);
   const client = getCivilClient(ParcelsService, gateway, token) as any;
   try {
@@ -1416,7 +1429,7 @@ export async function checkAndFetchCivilAttributes() {
     }
 
     logDebug('info', 'Applying style rules and updating legend.');
-    applyExtrusion();
+    applyExtrusion(true);
     updateFloatingLegend();
   } catch (err: any) {
     logDebug('error', `Error in checkAndFetchCivilAttributes: ${err?.message || err}`);

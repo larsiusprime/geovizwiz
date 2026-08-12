@@ -54,3 +54,9 @@ The map attempts to lookup, but gets an endless loop of this:
   1. Configured `promoteId: 'feature_id'` on the vector map source configuration in `rendering.ts`.
   2. Prioritized `feature.properties.feature_id` and `feature.properties.featureId` in `getParcelId` in `selection.ts`, `checkAndFetchCivilAttributes` in `rendering.ts`, and selection routines.
   3. Added a strict validation check `hasRealFeatureId` in the feature processors to check for the presence of the `feature_id`/`featureId` properties or valid numeric database feature IDs (> 1000000), filtering out any raw MapLibre auto-generated IDs.
+
+### No Data Retrieval Attempts Made
+- **Root Cause**: The PostGIS MVT tiles encode `pg.feature_id` directly as the MVT feature's top-level `id` rather than as a property under `properties`. When `promoteId: 'feature_id'` was configured on the MapLibre source, MapLibre searched for a non-existent `properties.feature_id` field, which failed and caused MapLibre to assign small auto-generated sequential IDs (such as `0` or `1`). As a result, the `hasRealFeatureId` check (`numericFid > 1000000`) evaluated to `false` for all features, preventing any data retrieval.
+- **Resolution**:
+  1. Removed `promoteId: 'feature_id'` from the vector source setup in `rendering.ts`. This allows MapLibre to natively map the MVT feature ID to `f.id` (yielding the correct database feature IDs like `1771141077708688`).
+  2. Simplified the validation checks to verify that `numericFid` is a valid number greater than `1000000`, successfully separating actual database feature IDs from small base map or auto-generated sequential IDs.
